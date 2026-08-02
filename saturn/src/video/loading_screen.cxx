@@ -17,7 +17,6 @@
 #include "input.h"
 #include "saturn_keyboard.h"
 #include <srl.hpp>
-#include "text_map.h"
 
 extern "C" {
 #include "display.h"
@@ -277,7 +276,7 @@ static void loading_screen_type(char lines[LOADING_TEXT_LINES][LOADING_TEXT_COLS
     /* Phase 1: switched on. No waits at all, so this costs a single frame and the
        fade-in ramp below has the whole block already on screen to rise over. */
     for (int row = 0; row < LOADING_ROW_LOAD; row++)
-        if (lines[row][0]) text_print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
+        if (lines[row][0]) SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
 
     /* Phase 2: somebody types. */
     const char *load = lines[LOADING_ROW_LOAD];
@@ -288,13 +287,13 @@ static void loading_screen_type(char lines[LOADING_TEXT_LINES][LOADING_TEXT_COLS
     for (int c = 1; c <= len && !skipped; c++) {
         for (int j = 0; j < c; j++) buf[j] = load[j];
         buf[c] = '\0';
-        text_print(0, LOADING_TEXT_TOP_ROW + LOADING_ROW_LOAD, "%s", buf);
+        SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + LOADING_ROW_LOAD, "%s", buf);
         skipped = loading_screen_wait(type_hold());
     }
 
     /* Phase 3: the drive answers, a whole line at a time. */
     for (int row = LOADING_ROW_LOAD + 1; row < LOADING_TEXT_LINES && !skipped; row++) {
-        if (lines[row][0]) text_print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
+        if (lines[row][0]) SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
         skipped = loading_screen_wait(TYPE_REPLY_MIN + (int) (type_rng() % TYPE_REPLY_SPAN));
     }
 
@@ -304,7 +303,7 @@ static void loading_screen_type(char lines[LOADING_TEXT_LINES][LOADING_TEXT_COLS
            text is filled in rather than finished at typing speed. */
         if (g_fade_in_left > 0) { g_fade_in_left = 0; loading_screen_set_offset(0); }
         for (int row = 0; row < LOADING_TEXT_LINES; row++)
-            text_print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
+            SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
     }
 }
 
@@ -367,7 +366,7 @@ extern "C" void loading_screen_begin(const char *name) {
 extern "C" void loading_screen_tick(void) {
 #ifdef DEBUG
     /* Row 22, below the boot block's eleven rows and clear of it. Debug builds
-       only, and the format is limited to %d on purpose -- text_print
+       only, and the format is limited to %d on purpose -- SRL::Debug::Print
        supports %c/%s/%d/%0Nd and one stray %6d garbles the whole line.
          loop  -- times the cue has come round.
          of    -- how far into the current pass, in video fields, against how
@@ -378,7 +377,7 @@ extern "C" void loading_screen_tick(void) {
                   it did not. */
     int l = 0, f = 0, span = 0;
     loading_music_debug(&l, &f, &span);
-    text_print(0, 22, "loop %d  %d of %d fields    ", l, f, span);
+    SRL::Debug::Print(0, 22, "loop %d  %d of %d fields    ", l, f, span);
 #endif
 }
 

@@ -18,7 +18,6 @@
  ----------------------*/
 
 #include <srl.hpp>
-#include "text_map.h"
 #include <setjmp.h>
 
 extern "C" {
@@ -300,8 +299,6 @@ static unsigned int boot_entropy(void) {
  ----------------------*/
 int main(void) {
     SRL::Core::Initialize(HighColor::Colors::Black);
-    text_map_init();       // before anything prints: draws land in the shadow and
-                           // reach VRAM on the vblank the next Synchronize waits for
     title_bg_fade_arm();   // hold black over the pre-splash CD work below; the
                            // splash re-arms and owns the screen from there
     saturn_bup_init();
@@ -329,7 +326,7 @@ int main(void) {
 
     music_reset();
 
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r <= 28; r++) SRL::Debug::PrintClearLine(r);
 
     splash_show_once();
 
@@ -544,7 +541,7 @@ int main(void) {
     mojo_run();
 
     render_console();
-    text_print(1, 27, "(press any key/button for the title screen)");
+    SRL::Debug::Print(1, 27, "(press any key/button for the title screen)");
     menu_wait();
     soft_reset_to_title();
     return 0;

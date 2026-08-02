@@ -41,7 +41,6 @@
 #include "input.h"
 #include "saturn_keyboard.h"
 #include <srl.hpp>
-#include "text_map.h"
 
 /*----------------------
  | SPLASH_FADE_FRAMES / SPLASH_SETTLE_FRAMES
@@ -185,7 +184,7 @@ void splash_show_once(void) {
 
     boot_music_load();   // first thing: resident in RAM before any other splash CD read
 
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r <= 28; r++) SRL::Debug::PrintClearLine(r);
 
     bool have_logo = title_bg_show_oneoff("SUINE.TGA");
 

@@ -16,7 +16,6 @@
 #include "saturn_keyboard.h"
 #include "game_catalog.h"
 #include <srl.hpp>
-#include "text_map.h"
 #include <string.h>
 
 /*----------------------
@@ -76,8 +75,8 @@ extern GfsDirTbl g_z3_tbl;
  | Returns: N/A
  ----------------------*/
 void title_draw_art(void) {
-    text_print(13, 12, "Z - A T U R N");
-    text_print(4, 15, "Saturn port (c) 2026 by Suinevere");
+    SRL::Debug::Print(13, 12, "Z - A T U R N");
+    SRL::Debug::Print(4, 15, "Saturn port (c) 2026 by Suinevere");
 }
 
 /*----------------------
@@ -756,8 +755,8 @@ bool title_bg_show(const char *file) {
             return false;
         }
         SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
-        text_clear_line(20);
-        text_clear_line(21);
+        SRL::Debug::PrintClearLine(20);
+        SRL::Debug::PrintClearLine(21);
         int k = 0;
         for (; file[k] && k < (int) sizeof(loaded) - 1; k++) loaded[k] = file[k];
         loaded[k] = '\0';
@@ -1016,7 +1015,7 @@ void title_bg_dyn_fade(int level) {
 int title_and_seed(void) {
     int frames = 0;
     int reset_hold = 0;
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r <= 28; r++) SRL::Debug::PrintClearLine(r);
     SRL::Core::Synchronize();
     for (;;) {
         reset_hold = soft_reset_chord_held() ? (reset_hold + 1) : 0;
@@ -1030,7 +1029,7 @@ int title_and_seed(void) {
             (saturn_keyboard_poll().kind != SATURN_KEY_NONE);
         if (advance) break;
         title_draw_art();
-        text_print(8, 18, "Press any button to begin");
+        SRL::Debug::Print(8, 18, "Press any button to begin");
         menu_sync();   // not a bare Synchronize: the title track needs the mixer ticked
         frames++;
     }

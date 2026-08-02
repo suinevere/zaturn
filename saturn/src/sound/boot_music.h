@@ -45,7 +45,7 @@ void boot_music_load(void);
 
 /*----------------------
  | the two fades, and why they work differently
- | Description: The jingle fades in by rewriting the sample data (boot_music_fade_in)
+ | Description: The jingle's level is shaped by the caller (boot_music_set_level)
  |   and fades out by lowering the sound driver's master volume (boot_music_set_level).
  |   Neither is the obvious choice, and the obvious choice is why. SRL::Sound::Pcm::
  |   SetVolumePan -- slPCMParmChange under it, the only per-channel volume control
@@ -63,23 +63,11 @@ void boot_music_load(void);
  | Author: suinevere
  ----------------------*/
 
-/*----------------------
- | boot_music_fade_in
- | Description: Scales the first `frames` frames' worth of the loaded sample by a
- |   rising ramp, so playback starts from silence and reaches full at the end of the
- |   ramp. Call after boot_music_load and BEFORE boot_music_play -- it edits the
- |   buffer the SCSP is about to be handed, so it has no effect once that buffer is
- |   playing. A no-op if nothing was loaded. Not idempotent: calling it twice ramps
- |   the ramp.
- | Author: suinevere
- | Dependencies: none
- ----------------------*/
-void boot_music_fade_in(int frames);
 
 /*----------------------
  | boot_music_play
  | Description: Plays the loaded sample once on a free PCM channel at full level.
- |   Any fade-in must already be baked into the sample (boot_music_fade_in). A no-op
+ |   Any fade-in is the caller's, via boot_music_set_level. A no-op
  |   if nothing was loaded or a channel is already playing it.
  | Author: suinevere
  | Dependencies: SRL (Sound::Pcm)

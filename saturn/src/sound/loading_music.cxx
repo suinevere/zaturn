@@ -224,7 +224,7 @@ extern "C" void loading_music_load(void) {
 
     uint32_t size = (uint32_t) file.Size.Bytes;
     if (size > LOADING_MUSIC_MAX_BYTES) size = LOADING_MUSIC_MAX_BYTES;
-    uint32_t play = size < 0x900 ? 0x900 : size;   // slPCMOn's minimum
+    uint32_t play = size < 0x900 ? 0x900 : size;
     int8_t* buf = (int8_t *) SRL::Memory::LowWorkRam::Malloc(play);
     if (!buf) { loading_music_cd_restore(); return; }
 
@@ -240,7 +240,7 @@ extern "C" void loading_music_load(void) {
     g_loading_music_size = play;
     g_loading_music_head = 0;
     g_loading_music_pcm.set(buf, play, LOADING_MUSIC_RATE);
-    loading_music_hook();   // inert until loading_music_play arms it
+    loading_music_hook();
 }
 
 /*----------------------
@@ -266,7 +266,7 @@ extern "C" void loading_music_fade_in(int frames) {
     if (n > g_loading_music_size) n = g_loading_music_size;
 
     uint32_t seg = n / LOADING_FADE_STEPS;
-    if (seg == 0) return;   // ramp too short to segment; leave it at full
+    if (seg == 0) return;
 
     for (uint32_t s = 0; s < LOADING_FADE_STEPS; s++) {
         int32_t  gain = (int32_t) s;
@@ -275,7 +275,7 @@ extern "C" void loading_music_fade_in(int frames) {
             g_loading_music_buf[i] = (int8_t) (((int32_t) g_loading_music_buf[i] * gain) >> 8);
     }
 
-    g_loading_music_head = LOADING_FADE_STEPS * seg;   // where a repeat starts
+    g_loading_music_head = LOADING_FADE_STEPS * seg;
 }
 
 /*----------------------
@@ -292,10 +292,6 @@ extern "C" void loading_music_play(void) {
     int8_t ch = g_loading_music_pcm.Play(LOADING_MUSIC_LEVEL_MAX);
     if (ch < 0) return;
 
-    // Counters before the channel, and the channel last: the channel number is
-    // what arms the V-blank handler, so everything it reads has to be true
-    // before it can run. The reverse order leaves a field in which the handler
-    // sees a live channel against a stale span.
     g_loading_music_frames      = 0;
     g_loading_music_span_frames = loading_music_span_frames(g_loading_music_size);
     g_loading_music_channel     = ch;
@@ -341,33 +337,23 @@ static void loading_music_vblank(void) {
     g_loading_music_frames = f;
     if (f < g_loading_music_span_frames) return;
 
-    // Stop on the field the pass expires and start on the next one, rather than
-    // both in one go. Play() takes the first channel slPCMStat calls free, and
-    // slPCMOff is a command to the sound driver rather than something that has
-    // taken effect by the time it returns -- so a same-field restart can find
-    // its own channel still busy, land on a different one, and walk through all
-    // four. One field of silence at the seam is the price, and against a loop
-    // seam that is already a waveform discontinuity it is not the audible part.
     if (f == g_loading_music_span_frames) {
         SRL::Sound::Pcm::StopSound((uint8_t) g_loading_music_channel);
         return;
     }
 
     uint32_t from = g_loading_music_head;
-    if (from >= g_loading_music_size) from = 0;          // nothing left past the fade
+    if (from >= g_loading_music_size) from = 0;
     uint32_t len  = g_loading_music_size - from;
-    if (len < 0x900) { from = 0; len = g_loading_music_size; }   // slPCMOn's minimum
+    if (len < 0x900) { from = 0; len = g_loading_music_size; }
 
     g_loading_music_pcm.set(g_loading_music_buf + from, len, LOADING_MUSIC_RATE);
 
-    // Only adopt a channel we actually got, but restart the count either way: a
-    // failed repeat that left the deadline behind would retry on every field
-    // from then on, hammering the driver for the rest of the load.
     int8_t ch = g_loading_music_pcm.Play(LOADING_MUSIC_LEVEL_MAX);
     if (ch >= 0) g_loading_music_channel = ch;
     g_loading_music_frames      = 0;
     g_loading_music_span_frames = loading_music_span_frames(len);
-    g_dbg_loops = g_dbg_loops + 1;   // not ++: deprecated on a volatile in C++20
+    g_dbg_loops = g_dbg_loops + 1;
 }
 
 /*----------------------
@@ -446,10 +432,6 @@ extern "C" void loading_music_set_level(int level) {
 extern "C" void loading_music_stop(void) {
     loading_master_restore();
 
-    // Disarm before touching anything else, in the opposite order to
-    // loading_music_play: clearing the channel is what stands the V-blank
-    // handler down, and it has to be standing down before the buffer it plays
-    // from is freed underneath it.
     int ch = g_loading_music_channel;
     g_loading_music_channel     = -1;
     g_loading_music_span_frames = 0;

@@ -47,7 +47,7 @@ SOURCES += $(filter-out $(NETBIN_ONLY_SOURCES),$(patsubst ./%,%,$(shell find src
 # docs/superpowers/specs/2026-07-25-netbin-minimal-design.md.
 #
 # The list is explicit rather than a `find`: the whole point of this target is
-# that 22 of the CD build's 41 objects are absent (19 netbin objects, 2 of
+# that 22 of the CD build's 40 objects are absent (18 netbin objects, 2 of
 # which -- main_netbin.cxx and netbin_pages.cxx -- are netbin-only and never
 # reach the CD build at all). tests/test_netbin_sources.py gates it against
 # the spec.
@@ -65,7 +65,6 @@ SOURCES = src/main_netbin.cxx \
           src/video/console_view.cxx \
           src/video/console.c \
           src/video/display.c \
-          src/video/text_map.cxx \
           src/menu/menu.cxx \
           src/menu/menu_layout.c \
           src/menu/options.cxx \

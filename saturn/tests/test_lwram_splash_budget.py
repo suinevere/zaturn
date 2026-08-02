@@ -8,7 +8,14 @@ any more: the preload is gone (thirty-seven pictures will not fit a 1 MB zone at
 ~72 KB each), and title.cxx now keeps TGA_CACHE_SLOTS pictures filled on demand,
 allocated after splash_show_once() has already called boot_music_stop().
 
-What can still fail silently is different, and there are two of them:
+The preload is back, but it is bounded rather than total: splash_show_once() calls
+display_preload_categories() at peak brightness, which fills slots with one picture
+per category and stops as soon as tga_cache_slot refuses to grow. It runs while the
+boot jingle is still resident, so the jingle's ~409 KB is what decides how many get
+in -- and if that number ever reaches zero the preload silently becomes a no-op and
+the title screen goes back to reading the disc for its own picture.
+
+What can still fail silently is different, and there are three of them:
 
   1. A picture whose read span exceeds TGA_PLANE_MAX can never take a cache slot.
      tga_decode refuses it -- correctly, since a short plane would render as a
@@ -22,8 +29,13 @@ What can still fail silently is different, and there are two of them:
      constant would be describing a cache that cannot exist, and eviction would
      start thrashing earlier than anyone reading title.cxx would expect.
 
-Neither shows up as an error at runtime, which is why they need a test rather
-than a comment.
+  3. The jingle growing until no cache slot can be granted beside it. The preload
+     would still be called, still walk every category, and still cache nothing --
+     no error, no log, just a title screen that reads the CD again and a splash
+     that is over as soon as the trie is read.
+
+None of the three shows up as an error at runtime, which is why they need a test
+rather than a comment.
 
 Run: python saturn/tests/test_lwram_splash_budget.py
 """
@@ -75,9 +87,11 @@ def cdefines(path):
 def main():
     title = SRC / "video" / "title.cxx"
     d = cdefines(title)
+    d.update(cdefines(SRC / "sound" / "boot_music.cxx"))
 
     need = ["LWRAM_TOTAL", "TGA_CACHE_SLOTS", "TGA_PLANE_MAX",
-            "TGA_PAL_BYTES", "TGA_SLOT_BYTES", "TGA_CACHE_FLOOR"]
+            "TGA_PAL_BYTES", "TGA_SLOT_BYTES", "TGA_CACHE_FLOOR",
+            "BOOT_MUSIC_MAX_BYTES"]
     missing = [n for n in need if n not in d]
     if missing:
         print(f"could not read {', '.join(missing)} from title.cxx", file=sys.stderr)
@@ -88,6 +102,13 @@ def main():
     plane = d["TGA_PLANE_MAX"]
     slot_bytes = d["TGA_SLOT_BYTES"]
     floor = d["TGA_CACHE_FLOOR"]
+    jingle = d["BOOT_MUSIC_MAX_BYTES"]
+
+    # Mirror tga_cache_slot(): grow only while free >= one slot + the floor.
+    free_now, grantable = lwram - jingle, 0
+    while grantable < slots and free_now >= slot_bytes + floor:
+        free_now -= slot_bytes
+        grantable += 1
 
     if not TGA_DIR.is_dir():
         print("no cd/data/TGA to measure", file=sys.stderr)
@@ -113,6 +134,8 @@ def main():
     print("  total               %8d  of %d" % (resident + floor, lwram))
     print("  largest of %d TGAs   %8d  (%s), against a %d plane"
           % (len(art), biggest_span, biggest.name, plane))
+    print("  boot jingle         %8d" % jingle)
+    print("  -> slots grantable beside the jingle: %d of %d" % (grantable, slots))
 
     fails = 0
 
@@ -132,6 +155,14 @@ def main():
               "reaching TGA_CACHE_SLOTS, so that constant would be describing a\n"
               "cache that cannot exist. Lower TGA_CACHE_SLOTS or TGA_CACHE_FLOOR "
               "in title.cxx." % (slots, over, over / 1024.0), file=sys.stderr)
+        fails += 1
+
+    if grantable < 1:
+        print("\ntest_lwram_splash_budget: FAILED -- the boot jingle (%d bytes) leaves "
+              "no room for even one cache slot, so display_preload_categories()\n"
+              "during the splash caches nothing and the title screen reads the disc "
+              "for its own picture again.\nLower BOOT_MUSIC_MAX_SECONDS or "
+              "TGA_CACHE_FLOOR." % jingle, file=sys.stderr)
         fails += 1
 
     if fails:

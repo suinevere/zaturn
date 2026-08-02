@@ -276,6 +276,90 @@ int main(void) {
        above about the truncation rather than about the keyword. */
     CHECK(text_classify_room("Forest Path\nA cave.") == TC_WILDERNESS);
 
+    /* ---- the banner is not the room title ----
+       Turn one prints the game's banner above the first room, so the first line
+       of text was "ZORK I: The Great Underground Empire" and the title weight
+       landed on "underground": West of House opened in a bunker. The interpreter
+       now hands over the location object's short name, which nothing can precede.
+       Pinned with the real banner because the failure needs the word "Underground"
+       to actually appear in it, which a paraphrase would not keep. */
+    {
+        const char *first_turn =
+            "ZORK I: The Great Underground Empire\n"
+            "Copyright (c) 1981, 1982, 1983 Infocom, Inc. All rights reserved.\n"
+            "ZORK is a registered trademark of Infocom, Inc.\n"
+            "Revision 88 / Serial number 840726\n"
+            "\n"
+            "West of House\n"
+            "You are standing in an open field west of a white house, with a boarded\n"
+            "front door.\nThere is a small mailbox here.";
+
+        music_note_room_title("West of House");
+        CHECK(text_classify_room(first_turn) == TC_HOUSE);
+
+        /* Without a supplied name the first line is all there is to go on, which
+           is what every test above relies on, so that path has to stay. */
+        music_note_room_title(0);
+        CHECK(text_classify_room(first_turn) == TC_UNDERGROUND);
+
+        /* A supplied name is what gets weighted, not the first line: here the text
+           names no place at all, so the verdict can only have come from the name. */
+        music_note_room_title("Cellar");
+        CHECK(text_classify_room("Somewhere\nThere is nothing in particular here.")
+              == TC_UNDERGROUND);
+
+        /* Still only weight 2, though. A name worth 2 does not beat two agreeing
+           description words, and the tie falls to whichever is earlier in the enum. */
+        music_note_room_title("Cellar");
+        CHECK(text_classify_room("Forest\nThis is a forest, with trees all around.")
+              == TC_WILDERNESS);
+
+        /* music_reset clears it, so one game's room cannot leak into the next. */
+        music_reset();
+        CHECK(text_classify_room("Forest\nThis is a forest, with trees all around.")
+              == TC_WILDERNESS);
+    }
+
+    /* ---- a room change can be run to completion before its text is drawn ----
+       The interpreter prints a whole turn without advancing a frame, so at the
+       read opcode the new text exists but has never been rendered. The client
+       flushes the settle there and ticks the fade out, and only renders once it is
+       over -- which is what puts the picture and the track up BEFORE the
+       description instead of a second and a half after it. */
+    music_set_fade_fn(rec_lv);
+    music_set_fade_frames(4);
+    music_set_debounce_frames(90);
+    music_reset();
+    music_note_room_title("Cellar");
+    music_note_output("Cellar\nA damp cave.", 19);
+    music_on_turn(200);                     /* first room: commits at once */
+    g_ncat = 0; g_nlv = 0;
+
+    music_note_room_title("Forest");
+    music_note_output("Forest\nTrees in all directions.", 30);
+    music_on_turn(201);                     /* armed, 90 frames of settle owed */
+    CHECK(music_transition_active());       /* something is owed */
+    CHECK(g_ncat == 0);                     /* and it has not happened yet */
+
+    music_transition_flush();               /* the player has stopped; go now */
+    {
+        int guard = 0;
+        while (music_transition_active() && guard < 600) { music_tick(); guard++; }
+        CHECK(guard < 600);                 /* it terminates */
+    }
+    CHECK(!music_transition_active());      /* ...and is fully done */
+    CHECK(g_ncat == 1 && g_cats[0] == TC_WILDERNESS);
+    CHECK(last_lv() == 255);                /* brightness restored, not left dim */
+
+    /* Nothing owed means nothing to run, so the caller does not stall a turn that
+       never changed mood. */
+    CHECK(!music_transition_active());
+    music_transition_flush();
+    CHECK(!music_transition_active());
+
+    music_set_fade_frames(0);
+    music_set_debounce_frames(3);
+
     printf(fails ? "\n%d FAILURES\n" : "\nALL PASS\n", fails);
     return fails ? 1 : 0;
 }

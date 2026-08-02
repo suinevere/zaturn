@@ -193,6 +193,39 @@ static void submit_command(KeyboardState &k, const char *cmd) {
 }
 
 /*----------------------
+ | run_room_transition
+ | Description: Runs an armed mood change to completion before the turn's text is
+ |   drawn, so a new room's picture and track come up first and the description
+ |   arrives onto them.
+ |
+ |   It works only because of where it sits. The interpreter prints a whole turn
+ |   into the console buffer without advancing a frame, so at this point the new
+ |   text exists but has never been rendered and the screen still holds the
+ |   previous turn. Synchronizing here without calling render_console therefore
+ |   fades the OLD screen out, swaps the picture at the bottom, and fades the new
+ |   one in against a console that on_text_category cleared -- and the caller's
+ |   first render_console after this is what finally puts the new text on it.
+ |
+ |   Costs the player the fade before they can type. That is the ask, and
+ |   MUSIC_FADE_FRAMES in main.cxx is the number to cut if it reads sluggish.
+ | Author: suinevere
+ | Dependencies: music.h, SRL
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void run_room_transition(void) {
+    if (!music_transition_active()) return;
+    music_transition_flush();
+    int guard = 0;
+    while (music_transition_active() && guard < 600) {
+        music_tick();
+        SRL::Core::Synchronize();
+        guard++;
+    }
+}
+
+/*----------------------
  | saturn_readline
  | Description: The interpreter's line-input hook, and the local game loop. First
  |   disarms any unspent quick-save destination (F5 arms and submits in one
@@ -235,6 +268,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         buf[n] = '\n'; buf[n + 1] = '\0';
         return;
     }
+    run_room_transition();
     ensure_typeahead();
     typeahead_scan_screen(g_typeahead_root);
 
@@ -261,15 +295,6 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
 
         if ((pad && g_pad->WasPressed(Button::START)) || ke.kind == SATURN_KEY_ESCAPE
             || ke.kind == SATURN_KEY_F10) {
-            // Hold the music where it stands for as long as the menu is up, and
-            // pick the track up from that same frame on the way out. The Sound
-            // page resumes it itself if the player goes that way -- it is judged
-            // by ear, so it is the one page that cannot open in silence. Save/Load
-            // are the exception: picking one here only closes the Options box --
-            // the device/slot picker still has to run inside the interpreter's
-            // save/restore hook, so resuming right here would restart the drive
-            // before that picker is even open. saturn_save_blob/saturn_load_blob
-            // call music_resume() themselves once THAT closes instead.
             music_pause();
             int om = options_menu();
             if (om != OM_SAVE && om != OM_RESTORE) music_resume();

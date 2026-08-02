@@ -18,7 +18,6 @@
  ----------------------*/
 
 #include <srl.hpp>
-#include "text_map.h"
 #include <setjmp.h>
 
 extern "C" {
@@ -100,6 +99,14 @@ using namespace SRL::Types;
  |   that fails to load takes the same colour-preset fallback every other display
  |   change does, instead of this path inventing its own.
  |
+ |   Wipes the console rows in-game because this runs at the BOTTOM of the fade,
+ |   with the screen black: without it the ramp back up would reveal the new
+ |   picture underneath the PREVIOUS turn's text, which is still on the text layer
+ |   because run_room_transition deliberately does not render during the fade. The
+ |   wipe costs nothing, since render_console repaints from the scrollback the
+ |   moment the transition ends. Menus are excluded -- the console is not the
+ |   visible view there, and clearing would take the menu's own rows with it.
+ |
  |   May read the disc. Only a handful of the thirty-seven pictures are held in Low
  |   Work RAM at once (TGA_CACHE_SLOTS in title.cxx), so a mood the player has not
  |   been in lately costs one read, and a read stops CD-DA. That is survivable only
@@ -116,9 +123,12 @@ using namespace SRL::Types;
  ----------------------*/
 static void on_text_category(int cat) {
     display_set_dynamic_category(cat);
+    if (g_in_game) {
+        for (int r = 0; r < console_height(); r++) SRL::Debug::PrintClearLine(r);
+    }
     if (g_display.palette != DISP_PAL_DYNAMIC) return;
     int slot = display_dynamic_slot();
-    if (slot == DISP_IMAGE_NONE) return;      // disc carries no art
+    if (slot == DISP_IMAGE_NONE) return;
     g_display.image = slot;
     display_apply();
 }
@@ -300,10 +310,7 @@ static unsigned int boot_entropy(void) {
  ----------------------*/
 int main(void) {
     SRL::Core::Initialize(HighColor::Colors::Black);
-    text_map_init();       // before anything prints: draws land in the shadow and
-                           // reach VRAM on the vblank the next Synchronize waits for
-    title_bg_fade_arm();   // hold black over the pre-splash CD work below; the
-                           // splash re-arms and owns the screen from there
+    title_bg_fade_arm();
     saturn_bup_init();
     cd_capture_root();
     display_scan_images();
@@ -322,39 +329,27 @@ int main(void) {
     g_menu_backing_depth = 0;
     g_in_game = false;
     slScrWindowModeNbg0(0);
-    title_bg_fade_arm();     // a reset chord can fire mid-ramp, so overwrite any held
-                             // offset -- with black, not with clear: nothing between
-                             // here and the first fade-in below is meant to be seen
+    title_bg_fade_arm();
     console_init();
 
     music_reset();
 
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r <= 28; r++) SRL::Debug::PrintClearLine(r);
 
-    splash_show_once();
-
-    text_set_color(DISP_RGB555(0xFF, 0xFF, 0xFF));
-    title_bg_fade_arm();          // black out first, so the title is composed unseen
-
-    // A different house behind the title each time it is reached -- cold boot or
-    // soft-reset return, since boot_entropy re-reads the clock either way. The
-    // Dynamic slot is moved with it so the menu underneath resolves TC_HOUSE to the
-    // same picture: without that, the wallpaper would jump to a different house the
-    // moment the title faded out and display_apply ran.
     display_shuffle_category(TC_HOUSE, boot_entropy());
     display_set_dynamic_category(TC_HOUSE);
     if (g_display.palette == DISP_PAL_DYNAMIC) {
         int slot = display_dynamic_slot();
         if (slot != DISP_IMAGE_NONE) g_display.image = slot;
     }
+
+    splash_show_once();
+
+    text_set_color(DISP_RGB555(0xFF, 0xFF, 0xFF));
+    title_bg_fade_arm();
+
     title_bg_show(display_category_image(TC_HOUSE));
 
-    preload_game_catalog();       // the last CD read before CD-DA starts, and still
-                                  // behind black -- so the ramp below is uninterrupted
-
-    // The backend goes in here rather than at game start, because the menu track
-    // below is the engine's now too -- that is what makes it obey the cycle rule
-    // instead of repeating one track forever.
     music_set_backend(music_cdda_play_mode);
     music_set_isplaying(music_cdda_is_playing);
     music_set_isshort(music_cdda_is_short);
@@ -362,70 +357,41 @@ int main(void) {
 
     music_set_level(g_music_level);
     music_set_mix(g_mix_mode, g_sel_track);
-    // Down to the floor BEFORE the track is issued, or its first frames play at
-    // whatever the player's saved level is and the ramp starts from full. Floor 1
-    // and never 0: music_set_volume(0) calls StopPause() with no way back up (see
-    // on_music_fade), so a fade that bottomed out at 0 would have nothing to raise.
     if (g_music_level > 0) music_set_volume(1);
-    music_start_menu();
 
-    // Picture and track come up together, on one counter. No title_draw_art()
-    // ahead of this any more: the text used to fade up underneath the image, and
-    // the ask is that nothing is written on screen until the screen is fully lit.
-    // title_and_seed() draws it on its first frame, which is the frame after this.
     title_bg_fade_in_ex(TITLE_FADE_FRAMES, on_title_fade);
 
     int seed = title_and_seed();
     title_bg_fade_out(TITLE_FADE_FRAMES);
-    display_apply();              // set the menu's background image/colour + text
-    // Subscribed here rather than beside the other music callbacks above, and
-    // deliberately after this display_apply: the title screen picks and shows its
-    // own house, and music_start_menu() announces the neutral category, and
-    // neither is meant to repaint the title out from under itself.
+    display_apply();
     music_set_category_fn(on_text_category);
     music_set_rotate_fn(on_text_rotate);
     music_set_fade_fn(on_music_fade);
     music_set_fade_frames(MUSIC_FADE_FRAMES);
-    menu_intro_fade_arm();        // ...then hold it black across the swap so the
-                                  // menu is composed unseen (display_apply lit the
-                                  // backdrop; this re-darkens it with no frame shown)
-    g_menu_intro_fade = TITLE_FADE_FRAMES;   // first menu_select fades the menu up
+    menu_intro_fade_arm();
+    g_menu_intro_fade = TITLE_FADE_FRAMES;
 
     static const char *modes[] = { "Single Player", "Online (Netlink)",
                                    "Load Save Game", "Options", "Credits" };
     const char* game_file = nullptr;
 
-    // Menu-phase navigation fades are on for the whole loop: the mode menu,
-    // Options and its pages, and the game/save pickers all fade between screens.
-    // Cleared to 0 before gameplay so the in-game F10/F11/F12 menus stay instant.
-    // game_select() and choose_dest() are entered at normal brightness and every
-    // return leaves the screen faded to black -- so on a cancel the mode menu is
-    // faded back in (g_menu_intro_fade), and on a pick the black simply carries
-    // through the CD load into the instant reveal below.
     g_menu_page_fade = QUICK_FADE_FRAMES;
 
     for (;;) {
         int mode = menu_select("Z-ATURN", modes, 5);
         if (mode < 0) continue;
         if (mode == 3) {
-            menu_fade_out(QUICK_FADE_FRAMES);      // mode-select dims to black
-            // Silent for the duration, exactly as the in-game Options menu is
-            // (saturn_glue.cxx:264). Not cosmetic symmetry: Display -> Palette can
-            // land on Dynamic, whose picture may not be cache-resident, and a
-            // wallpaper read stops the CD-DA head. Held rather than stopped, so
-            // the mode menu picks the same track back up where it left it.
-            // sound_options_page() lifts this for its own duration -- every row on
-            // it is judged by ear -- and puts it back on the way out.
+            menu_fade_out(QUICK_FADE_FRAMES);
             music_pause();
-            options_menu();                        // Options + sub-pages fade in/out
+            options_menu();
             music_resume();
-            g_menu_intro_fade = QUICK_FADE_FRAMES; // mode-select fades back in
+            g_menu_intro_fade = QUICK_FADE_FRAMES;
             continue;
         }
         if (mode == 4) {
-            menu_fade_out(QUICK_FADE_FRAMES);      // mode-select dims to black
-            credits_page();                        // Credits fades in/out itself
-            g_menu_intro_fade = QUICK_FADE_FRAMES; // mode-select fades back in
+            menu_fade_out(QUICK_FADE_FRAMES);
+            credits_page();
+            g_menu_intro_fade = QUICK_FADE_FRAMES;
             continue;
         }
         if (mode == 1) { online_mode(); continue; }
@@ -446,15 +412,8 @@ int main(void) {
         break;
     }
     g_story_filename = game_file;
-    g_menu_page_fade = 0;   // leaving the menu phase; in-game menus stay instant
+    g_menu_page_fade = 0;
 
-    // Up it goes, and it stays up: everything from here to loading_screen_end
-    // happens with the boot block lit on screen and LOADCD.PCM running under it.
-    // No progress text is printed into it -- the block is the progress report,
-    // and a raw "loading ZORK1.Z3..." would break the fiction it is selling.
-    // The disc's 8.3 name, not the catalogue's display title: the block this
-    // types is a LOAD line, and a LOAD line names a file. "LOAD ZORK1.Z3,8,1"
-    // is the thing being quoted; "LOAD ZORK I,8,1" is a title dressed up as one.
     loading_screen_begin(game_file);
 
     uint8_t *story = nullptr;
@@ -466,19 +425,12 @@ int main(void) {
         if (ssz == 2048 && bytes > 0 && bytes <= 0x40000) {
             uint8_t *buf = (uint8_t *) SRL::Memory::HighWorkRam::Malloc((uint32_t) bytes);
             if (buf != nullptr && f.Open()) {
-                // A chunk at a time rather than one Read of the whole story.
-                // The cue no longer depends on this -- it loops from the V-blank
-                // interrupt and does not care whether the main line is blocked
-                // (see loading_music.h) -- but reading in STORY_READ_CHUNK
-                // pieces costs nothing, the same sectors in the same order, and
-                // it keeps the screen's DEBUG readout advancing through what is
-                // otherwise the longest blind stretch of the load.
                 int32_t got = 0;
                 while (got < bytes) {
                     int32_t want = bytes - got;
                     if (want > STORY_READ_CHUNK) want = STORY_READ_CHUNK;
                     int32_t n = f.Read(want, buf + got);
-                    if (n <= 0) break;      // short read: fall through to the retry
+                    if (n <= 0) break;
                     got += n;
                     loading_screen_tick();
                     SRL::Core::Synchronize();
@@ -491,9 +443,6 @@ int main(void) {
         for (int i = 0; i < 8; i++) { loading_screen_tick(); SRL::Core::Synchronize(); }
     }
     if (story == nullptr) {
-        // Take the screen down properly first: saturn_die's message has to land
-        // on a cleared, un-held screen, and menu_fade_clear alone would only
-        // release the hold and leave the boot block sitting under the error.
         loading_screen_end();
         menu_fade_clear();
         saturn_die("Could not load %s from CD", game_file);
@@ -507,21 +456,12 @@ int main(void) {
         char blb[16]; int i = 0;
         for (; g_story_filename[i] && g_story_filename[i] != '.' && i < 11; i++) blb[i] = g_story_filename[i];
         blb[i] = '.'; blb[i+1] = 'B'; blb[i+2] = 'L'; blb[i+3] = 'B'; blb[i+4] = '\0';
-        // Still under the loading screen: this is a second CD read of its own and
-        // belongs inside the cover, not after it. Ticked either side rather than
-        // through the middle -- it is a run of short index reads rather than one
-        // long transfer, so there is no seam inside it worth reaching into
-        // sound.cxx for.
         loading_screen_tick();
         sound_init(blb);
         sound_set_level(g_pcm_level);
         loading_screen_tick();
     }
 
-    // The game is built and every disc read is done, so the screen and the cue
-    // bow out together. The music engine starts after that rather than before:
-    // music_start puts the CD-DA head to work, and doing it while the loading
-    // cue is still fading would have the two overlap.
     loading_screen_end();
 
     {
@@ -533,10 +473,6 @@ int main(void) {
         music_start();
     }
 
-    // loading_screen_end left the screen faded to black. Clear the stale text,
-    // then cut instantly to the game: the story's first screen renders at full
-    // brightness once mojo_run starts. (The game itself is not faded in -- that
-    // would need a hook inside the interpreter's output path.)
     menu_clear();
     menu_fade_clear();
 
@@ -544,7 +480,7 @@ int main(void) {
     mojo_run();
 
     render_console();
-    text_print(1, 27, "(press any key/button for the title screen)");
+    SRL::Debug::Print(1, 27, "(press any key/button for the title screen)");
     menu_wait();
     soft_reset_to_title();
     return 0;

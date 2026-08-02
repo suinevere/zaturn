@@ -179,6 +179,20 @@ int title_and_seed(void);
  ----------------------*/
 void display_scan_images(void);
 
+/*----------------------
+ | display_preload_categories
+ | Description: Warms the background-art cache with one picture per text category,
+ |   in an order that puts the title screen's own picture first, and stops as soon
+ |   as Low Work RAM will not spare another slot.
+ |
+ |   Reads the disc, so it must be called somewhere a stalled drive does not
+ |   matter. The splash is that place: its jingle plays from RAM rather than CD-DA,
+ |   so reads underneath it are inaudible, and covering a load is what the splash
+ |   is for. Safe to call more than once -- pictures already held are skipped.
+ | Author: suinevere
+ ----------------------*/
+void display_preload_categories(int max_slots);
+
 /* display_preload_images() is gone. It decoded every registered background into
    Low Work RAM during the boot splash, so that cycling pictures in the Options
    menu never read the disc. That was affordable at eight pictures and is not at

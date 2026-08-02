@@ -145,6 +145,28 @@ void music_set_backend(music_play_fn play);
 void music_set_game(unsigned int release, const char* serial);
 void music_note_output(const char* str, unsigned int len);
 void music_on_turn(unsigned int room);
+
+/*----------------------
+ | music_note_room_title
+ | Description: Hands the engine the room name the interpreter decoded from the
+ |   location object, to be used as the title for the next classification instead
+ |   of the first line of printed text; call it before music_on_turn. Passing NULL
+ |   or "" falls back to that first line.
+ | Author: suinevere
+ ----------------------*/
+void music_note_room_title(const char* title);
+
+/*----------------------
+ | music_transition_active / music_transition_flush
+ | Description: active reports whether a Dynamic mood change is still owed frames
+ |   (armed, or mid-fade); flush drops its remaining settle so it begins at once.
+ |   Together they let the client run a room's picture-and-track change to
+ |   completion before that room's text is drawn, rather than printing the text and
+ |   changing the mood underneath it a second and a half later.
+ | Author: suinevere
+ ----------------------*/
+int  music_transition_active(void);
+void music_transition_flush(void);
 void music_refresh(void);   /* re-assert the current room's track (after a preview) */
 void music_seed(unsigned int s);            /* seed the track-pool RNG */
 int  music_category_track(int category);    /* random track from the category pool; 0 if none */

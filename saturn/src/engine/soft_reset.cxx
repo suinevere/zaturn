@@ -14,7 +14,6 @@
  ----------------------*/
 
 #include <srl.hpp>
-#include "text_map.h"
 
 #include "soft_reset.h"
 #include "menu.h"
@@ -200,10 +199,10 @@ bool confirm_return_to_title(const char *question) {
         render_console();
         menu_frame(x0, y0, w, h, "RETURN TO TITLE");
         int cx = x0 + 2, cy = y0 + 3;
-        text_print(cx, cy, "%s", question);
-        if (!g_kbd_visible) text_print(cx, cy + 2, "1) Yes    2) No");
-        text_print(cx, cy + 3, "%s", hint("(A) (C) (Start) = yes", "Y / Enter = yes"));
-        text_print(cx, cy + 4, "%s", hint("(B) = no", "N / Esc = no"));
+        SRL::Debug::Print(cx, cy, "%s", question);
+        if (!g_kbd_visible) SRL::Debug::Print(cx, cy + 2, "1) Yes    2) No");
+        SRL::Debug::Print(cx, cy + 3, "%s", hint("(A) (C) (Start) = yes", "Y / Enter = yes"));
+        SRL::Debug::Print(cx, cy + 4, "%s", hint("(B) = no", "N / Esc = no"));
         menu_sync();
     }
 }

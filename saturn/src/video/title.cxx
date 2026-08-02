@@ -9,15 +9,18 @@
 #include "title.h"
 #include "app_state.h"
 #include "display.h"
+#include "sound/music.h"   /* TC_*: the categories the preload walks */
 #include "menu.h"
 #include "console_view.h"
 #include "input.h"
 #include "soft_reset.h"
 #include "saturn_keyboard.h"
 #include "game_catalog.h"
+#include "online.h"
 #include <srl.hpp>
-#include "text_map.h"
 #include <string.h>
+
+#include "boot_music.h"
 
 /*----------------------
  | SOFT_RESET_HOLD
@@ -76,8 +79,8 @@ extern GfsDirTbl g_z3_tbl;
  | Returns: N/A
  ----------------------*/
 void title_draw_art(void) {
-    text_print(13, 12, "Z - A T U R N");
-    text_print(4, 15, "Saturn port (c) 2026 by Suinevere");
+    SRL::Debug::Print(13, 12, "Z - A T U R N");
+    SRL::Debug::Print(4, 15, "Saturn port (c) 2026 by Suinevere");
 }
 
 /*----------------------
@@ -221,7 +224,7 @@ void display_scan_images(void) {
             }
             nm[j] = '\0';
             if (!tga_name_is_usable(nm)) continue;
-            if (strcmp(nm, "SUINE.TGA") == 0) continue;  // boot splash logo, not a selectable background
+            if (strcmp(nm, "SUINE.TGA") == 0) continue;
             int k = 0;
             for (; nm[k] && k < (int) sizeof(g_image_name[0]) - 1; k++) g_image_name[found][k] = nm[k];
             g_image_name[found][k] = '\0';
@@ -445,10 +448,6 @@ static void tga_image_free(TgaImage *img) {
  |   allocated) or untouched apart from Name (reusing mode)
  ----------------------*/
 static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out) {
-    /* Captured before the blanking below, which would otherwise drop the very
-       buffers this is meant to refill. Both blocks have to be there, not just a
-       capacity: half a slot would blank one pointer and then write through the
-       other, leaking it. */
     const bool reusing = (out->Cap > 0 && out->Pixels != nullptr
                           && out->Colors != nullptr);
     const uint32_t               reuse_cap = reusing ? out->Cap    : 0;
@@ -500,8 +499,6 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
     const uint32_t span    = skip + npix;
     const uint32_t palsize = 256 * sizeof(SRL::Types::HighColor);
     if (reuse_pix != nullptr) {
-        /* Refusing rather than truncating: a short plane would render as a band of
-           the previous picture across the bottom of this one. */
         if (span > reuse_cap) return false;
     } else {
         if (span + palsize > limit)                     return false;
@@ -525,7 +522,6 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
 
     uint8_t *pix = reuse_pix;
     if (pix == nullptr) pix = (uint8_t *) tga_alloc(span, low);
-    // LoadBytes wants a long-aligned destination; refuse rather than corrupt.
     if (pix == nullptr || ((unsigned int) pix & 3) != 0) {
         if (reuse_pix == nullptr) { tga_free(pix, low); tga_free(colors, low); }
         return false;
@@ -549,8 +545,6 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
 
     out->Pixels = pix;
     out->Colors = colors;
-    // A reused slot already paid for its buffers when they were taken and does not
-    // pay again per picture, so its cost stays whatever the slot cost.
     if (reuse_pix == nullptr) out->Bytes = span + palsize;
     out->W      = (uint16_t) w;
     out->H      = (uint16_t) h;
@@ -571,8 +565,6 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
  | Returns: true on success, false if the throwaway palette could not be made
  ----------------------*/
 static bool tga_blit_nbg0(const TgaImage *img) {
-    // SRL::Bitmap::Palette deletes the colors it is handed, so hand it a copy
-    // and leave the cached palette alone.
     SRL::Types::HighColor *colors = new SRL::Types::HighColor[256];
     if (colors == nullptr) return false;
     for (int i = 0; i < 256; i++) colors[i] = img->Colors[i];
@@ -647,9 +639,6 @@ static TgaImage *tga_cache_slot(void) {
             TgaImage *slot = &g_cache[g_cache_count];
             slot->Pixels = (uint8_t *) tga_alloc(TGA_PLANE_MAX, true);
             slot->Colors = (SRL::Types::HighColor *) tga_alloc(TGA_PAL_BYTES, true);
-            // LoadBytes wants a long-aligned destination, and a slot that cannot
-            // give it one is worse than no slot: it would fail every decode
-            // forever. Hand the memory straight back and fall through to eviction.
             if (slot->Pixels != nullptr && slot->Colors != nullptr
                 && ((unsigned int) slot->Pixels & 3) == 0) {
                 slot->Cap     = TGA_PLANE_MAX;
@@ -693,14 +682,59 @@ static const TgaImage *tga_cache_admit(const char *file) {
     TgaImage *slot = tga_cache_slot();
     if (slot == nullptr) return nullptr;
 
-    // Cap is set, so this decodes into the slot's own buffers and allocates
-    // nothing. It clears Name before it can fail, which is what stops a slot
-    // holding the previous picture's pixels under the previous picture's name
-    // from being handed out as a hit afterwards.
     if (!tga_decode(file, true, TGA_SLOT_BYTES, slot)) return nullptr;
 
     slot->LastUse = ++g_cache_clock;
     return slot;
+}
+
+/*----------------------
+ | display_preload_categories
+ | Description: Fills cache slots with one picture per text category, stopping the
+ |   moment the cache will not grow any further.
+ |
+ |   Stopping rather than continuing is the whole point. tga_cache_admit falls back
+ |   to evicting once the cache is full, so walking all twelve categories into eight
+ |   slots would read twelve pictures off the disc to keep the last eight -- four
+ |   reads spent on pictures thrown away before the splash even ends. Watching
+ |   g_cache_count is what tells the two apart: unchanged means it evicted.
+ |
+ |   TC_HOUSE goes first because it is the picture the title screen shows on the
+ |   very next frame, so caching it is what makes the title appear without a read.
+ |   How many of the rest get in is decided by Low Work RAM, not by this loop: the
+ |   boot jingle is still resident during the splash and holds ~409 KB of the zone,
+ |   which leaves room for about four slots.
+ |
+ |   Which is why title_and_seed calls this a second time, straight after
+ |   boot_music_stop has handed that 409 KB back and before music_start_menu has
+ |   started CD-DA. The remaining slots fill in a window with no audio to interrupt;
+ |   left to fill on demand instead, each one would cost a CD read at a mood change
+ |   with the track already playing.
+ | Author: suinevere
+ | Dependencies: display.h (display_category_image), sound/music.h (TC_*), SRL
+ | Globals: g_cache_count
+ | Params: max_slots -- stop after taking this many fresh slots; 0 or less for as
+ |   many as Low Work RAM allows
+ | Returns: N/A
+ ----------------------*/
+void display_preload_categories(int max_slots) {
+    static const int ORDER[] = {
+        TC_HOUSE, TC_WILDERNESS, TC_UNDERGROUND, TC_WATER, TC_NAUTICAL, TC_TOWN,
+        TC_DUNGEON, TC_DESERT, TC_MAGIC, TC_SCIFI, TC_HORROR, TC_MYSTERY
+    };
+    int taken = 0;
+    cd_enter_tga();
+    for (unsigned i = 0; i < sizeof(ORDER) / sizeof(ORDER[0]); i++) {
+        if (max_slots > 0 && taken >= max_slots) break;
+        const char *file = display_category_image(ORDER[i]);
+        if (file == nullptr) continue;
+        if (tga_cache_find(file) != nullptr) continue;
+        const int before = g_cache_count;
+        if (tga_cache_admit(file) == nullptr) break;
+        if (g_cache_count == before) break;
+        taken++;
+    }
+    bitmap_read_end();
 }
 
 /*----------------------
@@ -731,12 +765,6 @@ bool title_bg_show(const char *file) {
         if (loaded[i] == '\0') break;
     }
     if (!same) {
-        // A cached image uploads straight from RAM with no CD access. A miss reads
-        // the disc and takes a slot; the one-off below is the last resort for when
-        // even a slot could not be had (Low Work RAM too full to grow the cache and
-        // nothing in it to evict), and is decoded into High Work RAM and dropped
-        // again. Cap 0 marks it as owning its own exact-fit plane rather than
-        // borrowing a slot's.
         TgaImage        oneoff   = { nullptr, nullptr, 0, 0, 0, 0, false, 0, { '\0' } };
         bool            borrowed = false;
         const TgaImage *img      = tga_cache_find(file);
@@ -756,8 +784,8 @@ bool title_bg_show(const char *file) {
             return false;
         }
         SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
-        text_clear_line(20);
-        text_clear_line(21);
+        SRL::Debug::PrintClearLine(20);
+        SRL::Debug::PrintClearLine(21);
         int k = 0;
         for (; file[k] && k < (int) sizeof(loaded) - 1; k++) loaded[k] = file[k];
         loaded[k] = '\0';
@@ -863,15 +891,6 @@ static void title_fade_set(int v) {
 static void title_fade_engage(void) {
     SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
-    // Two fade systems share NBG0 and the last engage owns it. Claiming the layer
-    // for channel A drops title_bg_dyn_fade's claim on channel B, so its next
-    // disengage does not reach in and pull NBG0 back off A. That is not
-    // hypothetical: a soft reset taken mid-transition runs title_bg_fade_arm()
-    // (main.cxx:150) and then music_reset(), whose brightness restore calls
-    // title_bg_dyn_fade(255) -- which, still believing it held the layer, would
-    // undo the blackout for the wallpaper alone and show the previous room's
-    // picture at full brightness under black text, in the window that comment
-    // says is not meant to be seen.
     g_dyn_faded = false;
 }
 
@@ -905,8 +924,6 @@ void title_bg_fade_in_ex(int frames, TitleFadeStep step) {
     for (int i = 0; i <= frames; i++) {
         const int level = (255 * i) / frames;
         title_fade_set(-255 + level);
-        /* Before the Synchronize, not after: the callback's job is to have the
-           sound at this brightness's level by the time this frame is shown. */
         if (step != nullptr) step(level);
         SRL::Core::Synchronize();
     }
@@ -992,7 +1009,6 @@ void title_bg_dyn_fade(int level) {
     }
 
     if (!g_dyn_faded) {
-        // Take NBG3 off both channels BEFORE putting NBG0 on B -- see above.
         SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
         SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetB);
         g_dyn_faded = true;
@@ -1003,10 +1019,30 @@ void title_bg_dyn_fade(int level) {
 }
 
 /*----------------------
+ | TITLE_JINGLE_FADE_FRAMES
+ | Description: How long the splash jingle takes to fade once a button is pressed,
+ |   45 fields being three quarters of a second.
+ |
+ |   It fades HERE and nowhere earlier. The splash's own exit ramps the picture
+ |   alone, so the jingle carries across the image fade and the whole title screen
+ |   at full level; this is the first and only place it comes down, which is what
+ |   makes the boot read as one piece of music rather than two.
+ | Author: suinevere
+ ----------------------*/
+#define TITLE_JINGLE_FADE_FRAMES 45
+
+/*----------------------
  | title_and_seed
- | Description: Displays the title screen with a "Press any button" prompt and waits
- |   for user input. Returns a random seed based on the number of elapsed frames.
- |   Also handles soft reset chords while waiting on this screen.
+ | Description: Finishes the boot's loading, then displays the title screen with a
+ |   "Press any button" prompt and waits for input, returning a seed made from the
+ |   frames the player took. Also handles soft reset chords while waiting.
+ |
+ |   The loading comes first and the prompt does not exist until it is done, so the
+ |   press can never be the thing that starts a CD read -- it used to be, and the
+ |   pause after it was the whole of that read. Everything called here is
+ |   idempotent, which is what lets the splash do as much or as little as it likes:
+ |   on an unskipped logo most of this finds its work already done, and on a
+ |   skipped one it does all of it.
  | Author: suinevere
  | Dependencies: console_view.h, input.h, SRL
  | Globals: g_pad
@@ -1016,8 +1052,14 @@ void title_bg_dyn_fade(int level) {
 int title_and_seed(void) {
     int frames = 0;
     int reset_hold = 0;
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
-    SRL::Core::Synchronize();
+    for (int r = 0; r <= 28; r++) SRL::Debug::PrintClearLine(r);
+    title_draw_art();
+    menu_sync();
+
+    ensure_online_typeahead();
+    preload_game_catalog();
+    display_preload_categories(0);
+
     for (;;) {
         reset_hold = soft_reset_chord_held() ? (reset_hold + 1) : 0;
         if (reset_hold >= SOFT_RESET_HOLD) {
@@ -1030,9 +1072,17 @@ int title_and_seed(void) {
             (saturn_keyboard_poll().kind != SATURN_KEY_NONE);
         if (advance) break;
         title_draw_art();
-        text_print(8, 18, "Press any button to begin");
-        menu_sync();   // not a bare Synchronize: the title track needs the mixer ticked
+        SRL::Debug::Print(8, 18, "Press any button to begin");
+        menu_sync();
         frames++;
     }
+
+    for (int i = TITLE_JINGLE_FADE_FRAMES; i >= 0; i--) {
+        boot_music_set_level((BOOT_MUSIC_LEVEL_MAX * i) / TITLE_JINGLE_FADE_FRAMES);
+        SRL::Core::Synchronize();
+    }
+    boot_music_stop();
+    preload_game_catalog();
+    music_start_menu();
     return frames | 1;
 }

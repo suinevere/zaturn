@@ -47,13 +47,21 @@
  |   want ~318 KB. Nineteen seconds is ~419 KB, so the pair sits comfortably
  |   under the megabyte with the art no longer in the argument.
  |
- |   It costs nothing audible either way: the splash is ten seconds of hold plus
- |   its two 90-frame ramps, and boot_music_stop scrubs the sample to silence
- |   and stops the channel at the end of it, so the tail past that was never
- |   reaching a speaker. A shorter file than the cap is used whole.
+ |   Twenty-two seconds because SPLASH.PCM is 21.03, and the cap has to clear the
+ |   file rather than merely be generous. It used to be nineteen, which was
+ |   harmless while the jingle was stopped at the end of the splash -- the tail
+ |   past the cut never reached a speaker -- and became audible the moment the
+ |   jingle started looping across the title screen: the loop returned from a
+ |   waveform two seconds short of the end straight to the head, mid-phrase, which
+ |   is a discontinuity no seam handling can disguise. Covering the file makes the
+ |   loop point the composer's own end-to-start.
+ |
+ |   Affordable: the pair still sits ~238 KB under the megabyte, and the art cache
+ |   still gets its four slots beside the jingle (test_lwram_splash_budget.py
+ |   computes both). A shorter file than the cap is used whole.
  | Author: suinevere
  ----------------------*/
-#define BOOT_MUSIC_MAX_SECONDS 19u
+#define BOOT_MUSIC_MAX_SECONDS 22u
 #define BOOT_MUSIC_MAX_BYTES   (BOOT_MUSIC_MAX_SECONDS * (uint32_t) BOOT_MUSIC_RATE)
 
 /*----------------------
@@ -85,6 +93,88 @@ static BootMusicPcm g_boot_music_pcm;
 static int          g_boot_music_channel = -1;
 
 /*----------------------
+ | BOOT_MUSIC_FPS / g_boot_music_frames / g_boot_music_span_frames /
+ |   g_boot_music_looping / g_boot_music_hooked
+ | Description: The loop's state: the field rate the sample's duration is counted
+ |   in, how many fields the current pass has run and how many it lasts, whether
+ |   the V-blank handler is armed, and whether it has been subscribed yet.
+ | Author: suinevere
+ ----------------------*/
+#define BOOT_MUSIC_FPS 60
+static volatile int32_t g_boot_music_frames      = 0;
+static volatile int32_t g_boot_music_span_frames = 0;
+static volatile bool    g_boot_music_looping     = false;
+static bool             g_boot_music_hooked      = false;
+
+/*----------------------
+ | boot_music_span_frames
+ | Description: How many video fields a run of PCM bytes lasts at this rate.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: bytes -- length of the run
+ | Returns: its duration in fields
+ ----------------------*/
+static int32_t boot_music_span_frames(uint32_t bytes) {
+    return (int32_t) ((bytes * (uint32_t) BOOT_MUSIC_FPS) / (uint32_t) BOOT_MUSIC_RATE);
+}
+
+/*----------------------
+ | boot_music_vblank
+ | Description: Re-triggers the sample when its run is up, so the jingle carries
+ |   across the splash and the whole of the title screen rather than stopping at
+ |   BOOT_MUSIC_MAX_SECONDS. Every pass starts where the music does: the entry ramp
+ |   shapes the output level rather than the sample, so no part is pre-ducked and
+ |   none has to be skipped.
+ |
+ |   The stop and the restart are deliberately a frame apart, matching
+ |   loading_music_vblank. Doing both in one pass sounds wrong: StopSound does not
+ |   flush what the driver has already staged, so the fresh Play bleeds the tail of
+ |   the pass that just ended over the head of the next one. Spending one field
+ |   with the channel stopped is what makes the seam a seam rather than an overlap.
+ | Author: suinevere
+ | Dependencies: SRL (Sound::Pcm)
+ | Globals: g_boot_music_*, g_boot_music_pcm
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void boot_music_vblank(void) {
+    if (!g_boot_music_looping || !g_boot_music_buf || g_boot_music_channel < 0) return;
+    if (g_boot_music_span_frames <= 0) return;
+
+    int32_t f = g_boot_music_frames + 1;
+    g_boot_music_frames = f;
+    if (f < g_boot_music_span_frames) return;
+
+    if (f == g_boot_music_span_frames) {
+        SRL::Sound::Pcm::StopSound((uint8_t) g_boot_music_channel);
+        return;
+    }
+
+    g_boot_music_pcm.set(g_boot_music_buf, g_boot_music_size, BOOT_MUSIC_RATE);
+    int8_t ch = g_boot_music_pcm.Play(BOOT_MUSIC_LEVEL_MAX);
+    if (ch >= 0) g_boot_music_channel = ch;
+    g_boot_music_frames      = 0;
+    g_boot_music_span_frames = boot_music_span_frames(g_boot_music_size);
+}
+
+/*----------------------
+ | boot_music_hook
+ | Description: Subscribes boot_music_vblank once; inert until boot_music_play
+ |   arms it.
+ | Author: suinevere
+ | Dependencies: SRL (Core::OnVblank)
+ | Globals: g_boot_music_hooked
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void boot_music_hook(void) {
+    if (g_boot_music_hooked) return;
+    SRL::Core::OnVblank += boot_music_vblank;
+    g_boot_music_hooked = true;
+}
+
+/*----------------------
  | boot_music_load
  | Description: See boot_music.h.
  | Author: suinevere
@@ -94,7 +184,7 @@ static int          g_boot_music_channel = -1;
  | Returns: N/A
  ----------------------*/
 extern "C" void boot_music_load(void) {
-    if (g_boot_music_buf) return;   // already loaded (soft-reset re-entry)
+    if (g_boot_music_buf) return;
 
     cd_enter_root();
     if (!cd_enter_msc()) { cd_enter_root(); return; }
@@ -104,7 +194,7 @@ extern "C" void boot_music_load(void) {
 
     uint32_t size = (uint32_t) file.Size.Bytes;
     if (size > BOOT_MUSIC_MAX_BYTES) size = BOOT_MUSIC_MAX_BYTES;
-    uint32_t play = size < 0x900 ? 0x900 : size;   // slPCMOn's minimum
+    uint32_t play = size < 0x900 ? 0x900 : size;
     int8_t* buf = (int8_t *) SRL::Memory::LowWorkRam::Malloc(play);
     if (!buf) { cd_enter_root(); return; }
 
@@ -122,38 +212,6 @@ extern "C" void boot_music_load(void) {
 }
 
 /*----------------------
- | boot_music_fade_in
- | Description: See boot_music.h. Scales the head of the sample in place with a
- |   rising ramp, in BOOT_FADE_STEPS constant-gain segments rather than a gain
- |   per sample -- a divide per sample over ~33k samples is real time on an SH-2,
- |   and 256 steps across a 1.5s ramp changes gain about every 6ms, far below
- |   anything a listener can pick out as stepping.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_boot_music_buf, g_boot_music_size
- | Params: frames -- ramp length in 60Hz frames
- | Returns: N/A
- ----------------------*/
-#define BOOT_FADE_STEPS 256
-
-extern "C" void boot_music_fade_in(int frames) {
-    if (!g_boot_music_buf || frames <= 0) return;
-
-    uint32_t n = (uint32_t) frames * (BOOT_MUSIC_RATE / 60);
-    if (n > g_boot_music_size) n = g_boot_music_size;
-
-    uint32_t seg = n / BOOT_FADE_STEPS;
-    if (seg == 0) return;   // ramp too short to segment; leave it at full
-
-    for (uint32_t s = 0; s < BOOT_FADE_STEPS; s++) {
-        int32_t  gain = (int32_t) s;                  // s/256 of full
-        uint32_t end  = (s + 1) * seg;
-        for (uint32_t i = s * seg; i < end; i++)
-            g_boot_music_buf[i] = (int8_t) (((int32_t) g_boot_music_buf[i] * gain) >> 8);
-    }
-}
-
-/*----------------------
  | boot_music_play
  | Description: See boot_music.h. Opens the channel at full level, which is the
  |   one PCM call this codebase has ever heard come out of a speaker. Anything
@@ -167,7 +225,13 @@ extern "C" void boot_music_fade_in(int frames) {
  ----------------------*/
 extern "C" void boot_music_play(void) {
     if (!g_boot_music_buf || g_boot_music_channel >= 0) return;
-    g_boot_music_channel = g_boot_music_pcm.Play(BOOT_MUSIC_LEVEL_MAX);
+    g_boot_music_frames      = 0;
+    g_boot_music_span_frames = boot_music_span_frames(g_boot_music_size);
+    g_boot_music_channel     = g_boot_music_pcm.Play(BOOT_MUSIC_LEVEL_MAX);
+    if (g_boot_music_channel >= 0) {
+        boot_music_hook();
+        g_boot_music_looping = true;
+    }
 }
 
 /*----------------------
@@ -279,6 +343,8 @@ extern "C" void boot_music_set_level(int level) {
  | Returns: N/A
  ----------------------*/
 extern "C" void boot_music_stop(void) {
+    g_boot_music_looping = false;
+
     if (g_boot_music_channel >= 0 && g_boot_music_buf) {
         for (uint32_t i = 0; i < g_boot_music_size; i++) g_boot_music_buf[i] = 0;
         for (int i = 0; i < BOOT_SCRUB_FRAMES; i++) SRL::Core::Synchronize();

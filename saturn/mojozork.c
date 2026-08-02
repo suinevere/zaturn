@@ -1310,9 +1310,26 @@ static void opcode_read(void)
     {
         // Dynamic room music: classify the just-printed room (global 0 = the
         // current location object) before we block for the player's command.
+        // The room NAME as well as its number: the classifier weights title words
+        // above description words, and the printed text is not a safe place to
+        // find the title. Zork I prints its banner above the first room, so the
+        // first printed line is "ZORK I: The Great Underground Empire" and West
+        // of House classified as underground. The location object's short name is
+        // what the status bar shows and cannot be preceded by anything.
         extern void music_on_turn(unsigned int room);
+        extern void music_note_room_title(const char *title);
         const uint8 *rmaddr = varAddress(0x10, 0, 0);   /* READUI16 is a statement macro, read by hand */
-        music_on_turn(((unsigned int) rmaddr[0] << 8) | (unsigned int) rmaddr[1]);
+        const uint16 rmobj = ((uint16) rmaddr[0] << 8) | (uint16) rmaddr[1];
+        const uint8 *rmzstr = getObjectShortName(rmobj);
+        char rmname[64];
+        rmname[0] = '\0';
+        if (rmzstr) {
+            uintptr decoded = sizeof (rmname) - 1;
+            decode_zscii(rmzstr, 0, rmname, &decoded);
+            rmname[(decoded < sizeof (rmname)) ? decoded : sizeof (rmname) - 1] = '\0';
+        }
+        music_note_room_title(rmname);
+        music_on_turn((unsigned int) rmobj);
     }
 #endif
 

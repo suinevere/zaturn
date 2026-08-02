@@ -117,6 +117,38 @@ static int has_word(const char* text, const char* word) {
 #define TEXT_TITLE_WEIGHT 2
 
 /*----------------------
+ | g_room_title
+ | Description: The room name the interpreter decoded for this turn, empty when
+ |   nothing supplied one.
+ | Author: suinevere
+ ----------------------*/
+static char g_room_title[TEXT_TITLE_MAX];
+
+/*----------------------
+ | music_note_room_title
+ | Description: Records the authoritative room name for the turn about to be
+ |   classified, which the interpreter reads off the location object rather than
+ |   guessing from printed text.
+ |
+ |   It exists because the printed text lies on turn one. Zork I opens with its
+ |   banner -- "ZORK I: The Great Underground Empire" -- above the room, so the
+ |   first-line heuristic below read that as the title, handed "underground" the
+ |   title weight, and put West of House in a bunker. Any game whose banner names a
+ |   place does the same, and so does any turn that prints something before the
+ |   room description.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_room_title
+ | Params: title -- the room name, truncated to TEXT_TITLE_MAX-1; NULL clears it
+ | Returns: N/A
+ ----------------------*/
+void music_note_room_title(const char* title) {
+    int i = 0;
+    if (title) for (; title[i] && i < TEXT_TITLE_MAX - 1; i++) g_room_title[i] = title[i];
+    g_room_title[i] = 0;
+}
+
+/*----------------------
  | text_room_title
  | Description: Copies the first non-blank line of a turn's text into `out` (at
  |   most TEXT_TITLE_MAX-1 chars), which on the turn a room is entered is the room
@@ -156,21 +188,21 @@ static void text_room_title(const char* text, char* out) {
  ----------------------*/
 int text_classify_room(const char* text) {
     if (!text) return TC_NEUTRAL;
-    char title[TEXT_TITLE_MAX];
+    char firstline[TEXT_TITLE_MAX];
+    const char* title;
     int counts[TEXT_NUM_CATEGORIES];
     for (int i = 0; i < TEXT_NUM_CATEGORIES; i++) counts[i] = 0;
-    text_room_title(text, title);
+    if (g_room_title[0] != 0) {
+        title = g_room_title;
+    } else {
+        text_room_title(text, firstline);
+        title = firstline;
+    }
     int nk = 0; const TextKeyword* kw = text_keywords(&nk);
     for (int i = 0; i < nk; i++) {
-        /* The title is part of the text, so a title word scores in both passes --
-           1 + TEXT_TITLE_WEIGHT -- while a description-only word scores 1. */
         if (has_word(text,  kw[i].word)) counts[kw[i].cat]++;
         if (has_word(title, kw[i].word)) counts[kw[i].cat] += TEXT_TITLE_WEIGHT;
     }
-    /* Starts past TC_NEUTRAL on purpose: it is the nothing-matched answer, not
-       something a keyword can vote for, so a hit scored into it could never be
-       acted on. TC_HOUSE exists precisely so the domestic words have a real
-       category to win -- see the keyword block in music_data.c. */
     int best = TC_NEUTRAL, bestn = 0;
     for (int c = TC_WILDERNESS; c <= TC_PLACE_LAST; c++)
         if (counts[c] > bestn) { bestn = counts[c]; best = c; }
@@ -490,7 +522,7 @@ static void commit_pending(void) {
     int rotate = g_pending_rotate;
     g_active_cat = g_pending_cat;
     g_pending_cat = -1; g_pending_track = 0; g_pending_rotate = 0;
-    g_same_cat_rooms = 0;          // the walk that earned this rotation is spent
+    g_same_cat_rooms = 0;
     if (rotate) notify_rotate(g_active_cat);
     else        notify_cat(g_active_cat);
     play_dyn(t, 1);
@@ -513,9 +545,42 @@ static void fade_out_step(void) {
     if (g_fade_i > 0) g_fade_i--;
     fade_emit((255 * g_fade_i) / g_fade_frames);
     if (g_fade_i <= 0) {
-        commit_pending();          // swap at the bottom, where nothing shows it
+        commit_pending();
         g_phase = MP_FADE_IN;
     }
+}
+
+/*----------------------
+ | music_transition_active
+ | Description: Whether a Dynamic mood change is armed or part-way through its
+ |   fade, so a caller can run it to completion before drawing anything.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pending_cat, g_phase
+ | Params: N/A
+ | Returns: nonzero while a switch is still owed some frames
+ ----------------------*/
+int music_transition_active(void) {
+    return (g_pending_cat >= 0 || g_phase != MP_IDLE) ? 1 : 0;
+}
+
+/*----------------------
+ | music_transition_flush
+ | Description: Drops the remaining settle so an armed mood change starts fading on
+ |   the next tick instead of waiting out MUSIC_DEBOUNCE_FRAMES.
+ |
+ |   The settle exists to stop fast movement through a corridor from thrashing the
+ |   music, and it is still what governs a change noticed mid-turn. This is for the
+ |   one moment it has nothing to protect against: the interpreter has finished the
+ |   turn and is about to block for input, so the player has by definition stopped.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pending_frames
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void music_transition_flush(void) {
+    if (g_pending_cat >= 0) g_pending_frames = 0;
 }
 
 /*----------------------
@@ -531,6 +596,7 @@ static void fade_out_step(void) {
  ----------------------*/
 void music_reset(void) {
     g_have_room = 0; g_cur_room = 0; g_base_cat = TC_NEUTRAL; g_event_cat = -1;
+    g_room_title[0] = 0;
     g_active_track = 0; g_turn_len = 0; g_turn_text[0] = 0;
     for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
     g_active_cat = -1; g_pending_cat = -1; g_pending_track = 0; g_pending_frames = 0;
@@ -538,14 +604,9 @@ void music_reset(void) {
     g_seq_track = MUSIC_TRACK_MIN;
     g_await_play = 0;
     g_dyn_pass = 0;
-    g_paused = 0;   // a soft reset can land here with a menu still nominally open
-    if (g_phase != MP_IDLE) fade_emit(255);   // mid-ramp: nothing else would lift it
+    g_paused = 0;
+    if (g_phase != MP_IDLE) fade_emit(255);
     g_phase = MP_IDLE; g_fade_i = 0;
-    // Announce the neutral mood so the track comes off whatever the last room
-    // set. The WALLPAPER deliberately does not follow: TC_NEUTRAL carries no art
-    // (see CATEGORY_IMAGE in display.c), so the picture holds. That is fine on
-    // every path that reaches here -- main.cxx shows the title picture explicitly
-    // straight afterwards, and at game start the loading screen is still up.
     notify_cat(TC_NEUTRAL);
     if (g_play) g_play(0, 0);
 }
@@ -568,7 +629,7 @@ void music_refresh(void) {
     if (g_active_track > 0 && g_play) {
         int loop = (g_mix_mode == MIX_OVERRIDE) ? 1 : 0;
         if (g_mix_mode == MIX_DYNAMIC) g_dyn_pass = 1;
-        g_await_play = 1;   // the drive seeks first; without this the next tick reads that as loop-end
+        g_await_play = 1;
         g_play(g_active_track, loop);
     }
 }
@@ -707,7 +768,7 @@ void music_tick(void) {
         if (g_pending_frames <= 0) {
             if (g_fade_frames > 0) {
                 g_phase = MP_FADE_OUT; g_fade_i = g_fade_frames;
-                fade_out_step();       // the ramp starts on this frame, not the next
+                fade_out_step();
             } else {
                 commit_pending();
             }
@@ -725,8 +786,6 @@ void music_tick(void) {
         } else if (g_mix_mode == MIX_RANDOM) {
             play_random_now();
         } else if (g_mix_mode == MIX_OVERRIDE) {
-            // Override repeats on the drive, so this is only reached after a resume
-            // handed back the tail of a pass rather than an endless one.
             g_active_track = g_override_track;
             g_await_play = 1;
             if (g_play) g_play(g_override_track, 1);
@@ -789,9 +848,6 @@ void music_on_turn(unsigned int room) {
 
     int target = (g_event_cat >= 0) ? g_event_cat : g_base_cat;
     if (target != g_active_cat) {
-        /* A real mood change. It supersedes any rotation that was waiting: the
-           point of the rotation was to relieve an unchanging mood, and the mood
-           just changed. */
         if (g_active_track == 0) {
             g_active_cat = target; g_same_cat_rooms = 0;
             notify_cat(target); play_dyn(pick_prefer_long(target), 1);
@@ -801,14 +857,9 @@ void music_on_turn(unsigned int room) {
             g_pending_rotate = 0;
             g_pending_frames = g_debounce_frames;
         } else if (room_changed) {
-            /* Same target, but they moved again. The rule is "stopped in one room
-               for 1.5s", not "1.5s since the mood first changed" -- without this,
-               walking a corridor of same-mood rooms commits shortly after arriving
-               in one of them rather than after settling in it. */
             g_pending_frames = g_debounce_frames;
         }
     } else {
-        /* The mood they are in is the one already sounding. */
         if (g_pending_cat >= 0 && !g_pending_rotate) {
             g_pending_cat = -1; g_pending_track = 0;   /* they came back; drop it */
         }
@@ -817,9 +868,6 @@ void music_on_turn(unsigned int room) {
             if (g_pending_rotate) {
                 g_pending_frames = g_debounce_frames;  /* still walking: keep settling */
             } else if (g_same_cat_rooms >= MUSIC_ROTATE_ROOMS) {
-                /* Three rooms of one mood. Move to another track in the same
-                   category -- pick_prefer_long steers off what is sounding, so
-                   the change is audible -- and tell the art to move too. */
                 g_pending_cat    = g_active_cat;
                 g_pending_track  = pick_prefer_long(g_active_cat);
                 g_pending_rotate = 1;

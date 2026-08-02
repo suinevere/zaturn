@@ -41,35 +41,50 @@
 #include "input.h"
 #include "saturn_keyboard.h"
 #include <srl.hpp>
-#include "text_map.h"
+
+#include "game_catalog.h"
 
 /*----------------------
- | SPLASH_FADE_FRAMES / SPLASH_SETTLE_FRAMES
- | Description: Fade-in/fade-out length (90 frames = 1.5s at the 60fps NTSC
- |   field rate this codebase already assumes elsewhere, e.g. title.cxx's
- |   SOFT_RESET_HOLD) and the settle pause held at full brightness before the
- |   fade-out begins.
+ | SPLASH_FADE_FRAMES
+ | Description: Fade-in/fade-out length, 90 frames = 1.5s at the 60fps NTSC field
+ |   rate this codebase assumes elsewhere.
  |
- |   The three numbers add up on purpose: 90 + 420 + 90 is 600 fields, ten
- |   seconds, and that is now the whole of what this screen does. It used to be a
- |   cover for real work -- the background art was decoded here, several seconds
- |   of CD reads, and the settle was a flat 2s top-up so that a run finding
- |   everything already cached did not flash the logo past unrecognizably fast.
- |   The art is not decoded here any more (see title.cxx's TGA_CACHE_SLOTS box:
- |   thirty-seven pictures do not fit a 1 MB zone, so they are read on demand
- |   instead), which left the logo appearing and leaving in about three seconds.
- |   So the hold is now the point rather than a top-up, and it is sized to the
- |   duration the screen used to have.
- |
- |   Still a flat number rather than a measured floor. ensure_online_typeahead()
- |   below is opaque frame-count-wise -- there is no counter to read back without
- |   changing its signature, and it blocks in the CD driver where nothing is
- |   ticking a frame count anyway -- so on a first cold boot its read lands on top
- |   of these ten seconds rather than inside them.
+ |   There is no hold constant beside it any more. The screen used to sit at full
+ |   brightness for a flat 420 frames so that the whole splash came to ten seconds,
+ |   which was the length it had back when it covered the background-art decode.
+ |   That was ten seconds of the machine visibly doing nothing. It covers real work
+ |   again now -- the typeahead trie and display_preload_categories() both run at
+ |   peak brightness -- so the screen lasts as long as the load does and not a field
+ |   longer.
  | Author: suinevere
  ----------------------*/
 #define SPLASH_FADE_FRAMES   90
-#define SPLASH_SETTLE_FRAMES 420
+
+/*----------------------
+ | SPLASH_PRELOAD_SLOTS
+ | Description: How many category pictures this screen caches before handing over,
+ |   the rest being left to the title screen.
+ |
+ |   Four is what fits rather than a preference: the jingle is resident through all
+ |   of this and holds ~409 KB of the zone, so tga_cache_slot stops granting after
+ |   the fourth anyway (see test_lwram_splash_budget.py). Saying it out loud keeps
+ |   the splash's length tied to a number someone can read instead of to whatever
+ |   the allocator happened to allow.
+ | Author: suinevere
+ ----------------------*/
+#define SPLASH_PRELOAD_SLOTS 4
+
+/*----------------------
+ | SPLASH_AUDIO_RAMP_FRAMES
+ | Description: How long the jingle takes to reach full level, 24 fields being
+ |   four tenths of a second.
+ |
+ |   Much shorter than the picture's ramp on purpose. Sharing SPLASH_FADE_FRAMES
+ |   made the music creep in over a second and a half, which reads as a fault
+ |   rather than an entrance; the picture wants that long and the sound does not.
+ | Author: suinevere
+ ----------------------*/
+#define SPLASH_AUDIO_RAMP_FRAMES 24
 
 /*----------------------
  | SPLASH_SKIP_FADE_STEP
@@ -117,16 +132,11 @@ static void splash_set_offset(int16_t v) {
 }
 
 /*----------------------
- | splash_set_light / splash_set_step
- | Description: One point on the ramp, where step 0 is black and step
- |   SPLASH_FADE_FRAMES is full. splash_set_light moves the picture alone; that is
- |   all the fade-in needs, because the jingle's rise is already baked into its
- |   sample data before playback (boot_music_fade_in) and re-ramping it live would
- |   square the curve. splash_set_step also pulls the channel level down and is for
- |   the fade-out only -- see the fade box in boot_music.h for why the two
- |   directions do not use the same mechanism.
+ | splash_set_light
+ | Description: One point on the picture's ramp alone, 0 black to
+ |   SPLASH_FADE_FRAMES full; used by the exit, which leaves the jingle at level.
  | Author: suinevere
- | Dependencies: boot_music.h, SRL
+ | Dependencies: SRL
  | Globals: N/A
  | Params: step -- position on the ramp, clamped to 0..SPLASH_FADE_FRAMES
  | Returns: N/A
@@ -137,12 +147,30 @@ static void splash_set_light(int step) {
     splash_set_offset((int16_t) (-255 + (255 * step) / SPLASH_FADE_FRAMES));
 }
 
+/*----------------------
+ | splash_set_step
+ | Description: One point on the entry ramp, moving the picture and the jingle's
+ |   output level -- the sound on its own shorter ramp, full well before the
+ |   picture is.
+ |
+ |   The level rather than the sample, which is the whole point. The rise used to
+ |   be multiplied into the first 1.5 seconds of SPLASH.PCM before playback, so
+ |   those bytes were permanently ducked and the loop had to restart past them --
+ |   every repeat began 1.5 seconds in, at the same wrong place. Shaping the output
+ |   instead leaves the sample intact, so a repeat can start where the music does.
+ | Author: suinevere
+ | Dependencies: boot_music.h, SRL
+ | Globals: N/A
+ | Params: step -- 0 (black/silent) to SPLASH_FADE_FRAMES (full)
+ | Returns: N/A
+ ----------------------*/
 static void splash_set_step(int step) {
     splash_set_light(step);
     if (step < 0) step = 0;
-    if (step > SPLASH_FADE_FRAMES) step = SPLASH_FADE_FRAMES;
-    boot_music_set_level((BOOT_MUSIC_LEVEL_MAX * step) / SPLASH_FADE_FRAMES);
+    if (step > SPLASH_AUDIO_RAMP_FRAMES) step = SPLASH_AUDIO_RAMP_FRAMES;
+    boot_music_set_level((BOOT_MUSIC_LEVEL_MAX * step) / SPLASH_AUDIO_RAMP_FRAMES);
 }
+
 
 /*----------------------
  | splash_skip_pressed
@@ -179,87 +207,41 @@ void splash_show_once(void) {
     }
     g_splash_shown = true;
 
-    // Black before anything else: the jingle read and the logo read below are
-    // seconds of CD work, and there is nothing worth showing during them.
     title_bg_fade_arm();
+    boot_music_load();
 
-    boot_music_load();   // first thing: resident in RAM before any other splash CD read
-
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r <= 28; r++) SRL::Debug::PrintClearLine(r);
 
     bool have_logo = title_bg_show_oneoff("SUINE.TGA");
 
-    // The rise is written into the sample now, while it is still just bytes in
-    // LWRAM; once slPCMOn has the buffer it is too late to shape it. No fade-in
-    // when there is no logo to fade in with.
-    if (have_logo) boot_music_fade_in(SPLASH_FADE_FRAMES);
+    boot_music_set_level(have_logo ? 0 : BOOT_MUSIC_LEVEL_MAX);
     boot_music_play();
 
-    if (!have_logo) {
-        ensure_online_typeahead();
-        boot_music_stop();
-        return;
-    }
+    if (!have_logo) return;
 
-    bool skipped = false;   // a button cut the splash short; drives the fast exit
-    bool loaded  = false;   // ...but the trie read is a separate question: a skip
-                            // during the hold happens AFTER it, and re-running it
-                            // below would read the disc twice behind a black screen
-    int  step    = 0;       // where the ramp is now, so fade-out can pick it up
+    bool skipped = false;
+    int  step    = 0;
 
     for (; step <= SPLASH_FADE_FRAMES; step++) {
-        splash_set_light(step);   // the jingle is rising on its own, from the sample
+        splash_set_step(step);
         SRL::Core::Synchronize();
         if (splash_skip_pressed()) { skipped = true; break; }
     }
     if (step > SPLASH_FADE_FRAMES) step = SPLASH_FADE_FRAMES;
+    boot_music_set_level(BOOT_MUSIC_LEVEL_MAX);
 
-    // The typeahead read is still the one stretch a press cannot be caught in.
-    // Not for want of trying -- four different ways of sampling input during the
-    // boot loads were built and taken back out, and the box in input.h is the
-    // record of each. The short version is that it is blocking CD work with no
-    // seam fine enough to sample a tap at, and abandoning it part-way would leave
-    // a half-built trie.
-    //
-    // Skipping during the fade-in defers it until after the fade-out: the point of
-    // a skip is that the picture starts leaving at once, and this is seconds of
-    // blocking CD work that would strand it on screen.
     if (!skipped) {
         ensure_online_typeahead();
-        loaded = true;
-
-        // Polled, unlike the hold this replaced. That one was two seconds long and
-        // sat right after several seconds of opaque CD work, so honouring a press
-        // inside it and not a moment earlier would have read as a coin toss. This
-        // one is seven seconds of nothing happening on purpose, and making a
-        // player sit through all of it with the machine visibly idle is the worse
-        // trade -- the inconsistency is now confined to a first cold boot, where
-        // the trie read is the only unresponsive stretch left.
-        for (int i = 0; i < SPLASH_SETTLE_FRAMES; i++) {
-            SRL::Core::Synchronize();
-            if (splash_skip_pressed()) { skipped = true; break; }
-        }
+        preload_game_catalog();
+        display_preload_categories(SPLASH_PRELOAD_SLOTS);
     }
 
-    // Down from wherever the ramp got to, so a skip two frames in is a two-frame
-    // fade rather than a jarring full-length one from a nearly black screen --
-    // and in SPLASH_SKIP_FADE_STEP-sized strides if the player asked to move on,
-    // so the exit is half a second instead of a ninety-frame ramp they have
-    // already said they do not want (see that box).
     const int dec = skipped ? SPLASH_SKIP_FADE_STEP : 1;
     for (; step >= 0; step -= dec) {
-        splash_set_step(step);
+        splash_set_light(step);
         SRL::Core::Synchronize();
     }
-    splash_set_step(0);   // a stride that overshot still has to land on black
+    splash_set_light(0);
 
     title_bg_hide();
-    boot_music_stop();
-    // The color offset is left armed at black on purpose: main() blacks out again
-    // immediately (title_bg_fade_arm) to compose HOUSE1.TGA unseen, so clearing it
-    // here would only open a window for a stray bright frame in between.
-
-    if (!loaded) {
-        ensure_online_typeahead();
-    }
 }

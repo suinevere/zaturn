@@ -26,28 +26,27 @@ extern "C" {
  |   and is not any more (see the note where display_preload_images used to be
  |   declared in title.h), which is why the hold is a deliberate ten seconds
  |   rather than a two-second top-up to however long the loads took.
- |   Loads the boot jingle first, before the logo itself, and plays it from
- |   Low Work RAM for the whole splash -- being resident in RAM rather than
- |   streamed, it does not contend with the logo or typeahead CD reads
- |   for the drive -- with its volume on the same ramp as the brightness, so
- |   the two rise and fall together. The screen stays black until the logo is
- |   decoded and uploaded, and is left black on return: main() blacks out
- |   again straight away to compose the title picture unseen, so this does not
- |   clear the offset it armed. Any button or key during the fade-in or the hold
- |   skips ahead, starting the fade-out at once from whatever brightness and
- |   volume the ramp had reached; a skip during the fade-in defers the typeahead
- |   read until afterwards, behind the black screen, since it is required either
- |   way and is seconds of blocking CD work that a skipped logo should not have
- |   to sit through. Runs only once per cold boot: a static flag survives the
- |   soft-reset longjmp back into main()'s setjmp, so a soft-reset return to the
- |   title just runs the typeahead load directly with no splash and no jingle --
- |   it is idempotent and near-instant once cached, so there is nothing
- |   real left to hide. If the splash art itself fails to load (e.g. missing
- |   from the disc), the jingle still plays, and this falls back to running
- |   that load with no fade rather than holding a blank or garbled
- |   screen. The game catalogue scan (preload_game_catalog) is not covered
- |   here -- main() runs it separately, in its own silent beat once the title
- |   picture is showing but before CD-DA starts.
+ |   Loads the boot jingle first, before the logo itself, and plays it from Low
+ |   Work RAM -- being resident rather than streamed, it does not contend with any
+ |   CD read for the drive -- with its level on the brightness ramp, so picture and
+ |   sound rise together. It does NOT fall together: the exit fades the picture
+ |   alone and leaves the jingle at full, because it carries the title screen too
+ |   and title_and_seed is what finally fades it.
+ |
+ |   Loading happens at full brightness and nowhere else. A button during the ramp
+ |   skips straight to the exit, and then this screen loads nothing at all -- the
+ |   title page picks up every piece of it instead. That is the point of the split:
+ |   a player who skips the logo has said they do not want to sit through it, and
+ |   the title page has its own moment to cover the work in. The ramp being cut
+ |   short is also why the level is forced to full afterwards rather than left
+ |   wherever the ramp stopped.
+ |
+ |   The screen stays black until the logo is decoded, and is left black on return:
+ |   main() blacks out again straight away to compose the title picture unseen, so
+ |   this does not clear the offset it armed. Runs only once per cold boot -- a
+ |   static flag survives the soft-reset longjmp back into main()'s setjmp. If the
+ |   splash art fails to load the jingle still plays and this returns at once,
+ |   leaving the title page to do the loading.
  | Author: suinevere
  | Dependencies: title.h, online.h, boot_music.h, SRL
  | Globals: N/A

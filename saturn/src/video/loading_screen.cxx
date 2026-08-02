@@ -17,7 +17,6 @@
 #include "input.h"
 #include "saturn_keyboard.h"
 #include <srl.hpp>
-#include "text_map.h"
 
 extern "C" {
 #include "display.h"
@@ -274,12 +273,9 @@ static void loading_screen_type(char lines[LOADING_TEXT_LINES][LOADING_TEXT_COLS
     bool skipped = false;
     char buf[LOADING_TEXT_COLS + 1];
 
-    /* Phase 1: switched on. No waits at all, so this costs a single frame and the
-       fade-in ramp below has the whole block already on screen to rise over. */
     for (int row = 0; row < LOADING_ROW_LOAD; row++)
-        if (lines[row][0]) text_print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
+        if (lines[row][0]) SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
 
-    /* Phase 2: somebody types. */
     const char *load = lines[LOADING_ROW_LOAD];
     for (const char *p = load; *p; p++) g_type_rng = g_type_rng * 16u + (unsigned char) *p;
 
@@ -288,23 +284,19 @@ static void loading_screen_type(char lines[LOADING_TEXT_LINES][LOADING_TEXT_COLS
     for (int c = 1; c <= len && !skipped; c++) {
         for (int j = 0; j < c; j++) buf[j] = load[j];
         buf[c] = '\0';
-        text_print(0, LOADING_TEXT_TOP_ROW + LOADING_ROW_LOAD, "%s", buf);
+        SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + LOADING_ROW_LOAD, "%s", buf);
         skipped = loading_screen_wait(type_hold());
     }
 
-    /* Phase 3: the drive answers, a whole line at a time. */
     for (int row = LOADING_ROW_LOAD + 1; row < LOADING_TEXT_LINES && !skipped; row++) {
-        if (lines[row][0]) text_print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
+        if (lines[row][0]) SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
         skipped = loading_screen_wait(TYPE_REPLY_MIN + (int) (type_rng() % TYPE_REPLY_SPAN));
     }
 
     if (skipped) {
-        /* A skip during the fade-in abandons the rest of its ramp; land it at
-           once so the filled-in block is actually visible, the same way the
-           text is filled in rather than finished at typing speed. */
         if (g_fade_in_left > 0) { g_fade_in_left = 0; loading_screen_set_offset(0); }
         for (int row = 0; row < LOADING_TEXT_LINES; row++)
-            text_print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
+            SRL::Debug::Print(0, LOADING_TEXT_TOP_ROW + row, "%s", lines[row]);
     }
 }
 
@@ -323,11 +315,6 @@ static bool g_wallpaper_hidden = false;
 extern "C" void loading_screen_begin(const char *name) {
     music_pause();
 
-    /* This screen is black backdrop / white text whatever the player's Display
-       Options theme is, so an image preset's wallpaper has to go too -- the
-       backdrop colour is behind NBG0, not over it, and the boot text would
-       otherwise type out on top of the player's picture. Just a ScrollDisable;
-       the cached image is untouched and comes straight back in _end. */
     g_wallpaper_hidden = display_is_image(&g_display) != 0;
     if (g_wallpaper_hidden) title_bg_hide();
 
@@ -343,16 +330,8 @@ extern "C" void loading_screen_begin(const char *name) {
     loading_screen_fade_in();
     loading_screen_type(lines);
 
-    /* The typing normally spends the whole ramp several times over, and a skip
-       lands it deliberately -- but nothing after this point spends it, so a
-       block short enough to type in under LOADING_FADE_FRAMES would strand the
-       screen part-lit for the entire load with no way back up. Cheap to make
-       that impossible rather than rely on the text staying long. */
     if (g_fade_in_left > 0) { g_fade_in_left = 0; loading_screen_set_offset(0); }
 
-    /* Deliberately no fade-out here: the block stays lit, at full brightness,
-       with the cue still running, and main() reads the story underneath it.
-       loading_screen_end finishes the job once the game is actually ready. */
 }
 
 /*----------------------
@@ -366,19 +345,9 @@ extern "C" void loading_screen_begin(const char *name) {
  ----------------------*/
 extern "C" void loading_screen_tick(void) {
 #ifdef DEBUG
-    /* Row 22, below the boot block's eleven rows and clear of it. Debug builds
-       only, and the format is limited to %d on purpose -- text_print
-       supports %c/%s/%d/%0Nd and one stray %6d garbles the whole line.
-         loop  -- times the cue has come round.
-         of    -- how far into the current pass, in video fields, against how
-                  long the pass is. Both are maintained by the V-blank handler,
-                  so what this reports is whether that handler is running: the
-                  count climbing between two prints means it serviced the cue
-                  across whatever blocked in between, and a frozen count means
-                  it did not. */
     int l = 0, f = 0, span = 0;
     loading_music_debug(&l, &f, &span);
-    text_print(0, 22, "loop %d  %d of %d fields    ", l, f, span);
+    SRL::Debug::Print(0, 22, "loop %d  %d of %d fields    ", l, f, span);
 #endif
 }
 
@@ -395,11 +364,6 @@ extern "C" void loading_screen_end(void) {
     loading_screen_fade_out();
     loading_music_stop();
 
-    /* Put the player's own colours back under the black hold: nothing else
-       restores text_set_color, and the game's first screen is drawn with them
-       the moment main()'s menu_fade_clear releases the hold. The wallpaper
-       comes back the same way -- re-enabled while the screen is still black,
-       so there is no flash. */
     text_set_color(display_text_rgb(g_display.text));
     SRL::VDP2::SetBackColor(HighColor(display_bg_rgb(g_display.bg)));
     if (g_wallpaper_hidden) { SRL::VDP2::NBG0::ScrollEnable(); g_wallpaper_hidden = false; }

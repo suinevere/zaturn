@@ -1,0 +1,22 @@
+# Downloaded / produced artifacts — never committed.
+/game/*
+/audio/*
+/output/*
+/base/*
+/Z3/
+*.zip
+
+# Music pvms.bat fetches from a *_MUSIC_URL and caches here (with a .part sibling
+# mid-fetch). Not committed: these are third-party recordings the disc pulls at
+# build time, exactly like the CD-DA audio above. music/loadCD.ogg stays tracked --
+# its LOADING_MUSIC_URL is empty and it is the one audio source the repo ships,
+# which is also why the loading cue's cache name is not loadCD.ogg: a fetch must
+# never be able to overwrite a tracked source.
+/music/caltheme.wav
+/music/loadcd-fetched.ogg
+/music/*.part
+!Zaturn - Complete (USA) (Netlink Edition)/.gitkeep
+**/*.bin
+
+# Stray artifact from the old games.bat quoting bug; keep it from coming back.
+Matched

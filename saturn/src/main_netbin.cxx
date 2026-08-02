@@ -1,0 +1,281 @@
+/*----------------------
+ | main_netbin.cxx
+ | Description: Entry point for the NETBIN=1 build -- the PlanetWeb 4.0
+ |   .netbin variant, which is a pure multizork telnet client. It re-initializes
+ |   video (the browser hands over with VDP1/VDP2 in an unknown state), drops
+ |   the modem's data session, then loops: dial page, connect, terminal, back to
+ |   the dial page. There is no title screen, no game catalogue, no story file
+ |   and no CD access anywhere in this build; see
+ |   docs/superpowers/specs/2026-07-25-netbin-minimal-design.md.
+ |
+ |   This file also carries the netbin's reset implementation. engine/
+ |   soft_reset.cxx is not linked here -- it is 8.0 KB, it calls into sound.c
+ |   and net_connect.c, and its "return to title" has no meaning in a build with
+ |   no title. The five symbols online.cxx and netbin_pages.cxx call are
+ |   reimplemented against g_netbin_jmp, which lands back on the dial page.
+ | Author: suinevere
+ | Dependencies: online.h, netbin_pages.h, net_connect.h, console.h,
+ |   console_view.h, options.h, display.h, menu.h, input.h, app_state.h,
+ |   saturn_keyboard.h, SRL
+ ----------------------*/
+
+#include <srl.hpp>
+#include "text_map.h"
+#include <setjmp.h>
+
+#include "netbin_pages.h"
+#include "online.h"
+#include "menu.h"
+#include "options.h"
+#include "input.h"
+#include "console_view.h"
+#include "app_state.h"
+#include "saturn_keyboard.h"
+#include "soft_reset.h"
+
+extern "C" {
+#include "console.h"
+#include "display.h"
+#include "net/net_connect.h"
+}
+
+using namespace SRL::Types;
+
+/*----------------------
+ | g_netbin_jmp
+ | Description: Reboot landing point, armed once in main() before the dial
+ |   loop. check_soft_reset and the "reboot" command longjmp here, which is
+ |   this build's whole reset story: there is no title screen to return to, so
+ |   a reset means "hang up and go back to the dial page".
+ | Author: suinevere
+ ----------------------*/
+static jmp_buf g_netbin_jmp;
+/*----------------------
+ | g_netbin_jmp_armed
+ | Description: Whether g_netbin_jmp holds a landing site a reset may jump to.
+ | Author: suinevere
+ ----------------------*/
+static bool    g_netbin_jmp_armed = false;
+
+/*----------------------
+ | typeahead_malloc / typeahead_free
+ | Description: The allocator input/typeahead.c links against. It reaches these
+ |   through TYPEAHEAD_MALLOC/FREE (typeahead.h), so the names never appear in
+ |   any .c file and the netbin's link edge into the dropped
+ |   engine/saturn_glue.cxx hid from every source-level check until the real
+ |   link ran. High Work RAM, not the Low Work RAM the CD build routes to: that
+ |   choice exists because a full story trie is 89-318 KB, and this build never
+ |   has one. online.cxx's ensure_online_typeahead returns straight after
+ |   create_trie_node under NETBIN, so the only live allocation is a single
+ |   empty root node -- a few dozen bytes, and HWRAM asks nothing of a zone the
+ |   netbin's boot path never sets up.
+ | Author: suinevere
+ | Dependencies: srl.hpp (SRL::Memory::HighWorkRam)
+ | Globals: N/A
+ | Params: size -- bytes to allocate / ptr -- allocation to release
+ | Returns: the allocation, or NULL / N/A
+ ----------------------*/
+extern "C" void *typeahead_malloc(unsigned int size) {
+    return SRL::Memory::HighWorkRam::Malloc((uint32_t) size);
+}
+
+extern "C" void typeahead_free(void *ptr) {
+    if (ptr != nullptr) SRL::Memory::HighWorkRam::Free(ptr);
+}
+
+/*----------------------
+ | line_is / is_reboot_command / is_quit_command
+ | Description: Recognizes the typed commands that end a session. Matched
+ |   case-insensitively against the whole line with surrounding spaces ignored.
+ |   Not the same matching contract engine/soft_reset.cxx documents for the CD
+ |   build (no "q" abbreviation, no trailing-punctuation over-matching, exact
+ |   whitespace trim vs. any run) -- see soft_reset.h if that divergence ever
+ |   needs closing.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: line -- the submitted input line
+ | Returns: nonzero on a match
+ ----------------------*/
+static int line_is(const char *line, const char *word) {
+    while (*line == ' ' || *line == '\t') line++;
+    int i = 0;
+    for (; word[i]; i++) {
+        char c = line[i];
+        if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
+        if (c != word[i]) return 0;
+    }
+    while (line[i] == ' ' || line[i] == '\t') i++;
+    return line[i] == '\0';
+}
+
+extern "C" int is_reboot_command(const char *line) { return line_is(line, "reboot"); }
+extern "C" int is_quit_command(const char *line)   { return line_is(line, "quit"); }
+
+/*----------------------
+ | soft_reset_chord_held
+ | Description: True while the A+B+C+Start reset chord is held on the pad.
+ |   Uses IsHeld deliberately -- this is the one place a level test is correct,
+ |   because the chord must be *held*, and all four buttons at once is not a
+ |   pattern an absent peripheral's all-held report can be distinguished from
+ |   anyway. Callers gate it behind an actual connection.
+ | Author: suinevere
+ | Dependencies: input.h (g_pad)
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: true while all four are held
+ ----------------------*/
+extern "C" bool soft_reset_chord_held(void) {
+    if (g_pad == nullptr) return false;
+    return g_pad->IsHeld(Button::A) && g_pad->IsHeld(Button::B)
+        && g_pad->IsHeld(Button::C) && g_pad->IsHeld(Button::START);
+}
+
+/*----------------------
+ | confirm_return_to_title
+ | Description: Asks the player to confirm a reboot and, on yes, hangs up and
+ |   longjmps to the dial page. Never returns true -- it either returns false
+ |   (declined) or does not return at all.
+ | Author: suinevere
+ | Dependencies: menu.c (menu_confirm), net_connect.c
+ | Globals: g_netbin_jmp, g_netbin_jmp_armed
+ | Params: question -- the confirmation prompt
+ | Returns: false if the player declined
+ ----------------------*/
+extern "C" bool confirm_return_to_title(const char *question) {
+    if (!menu_confirm("REBOOT", question)) return false;
+    net_connect_close();
+    if (g_netbin_jmp_armed) longjmp(g_netbin_jmp, 1);
+    return false;
+}
+
+/*----------------------
+ | SOFT_RESET_HOLD
+ | Description: Frames the A+B+C+Start chord must be held before it fires. A
+ |   debounce, not a feature: it rejects the garbage peripheral read on the
+ |   very first frame (before the first vsync has polled real input), which
+ |   otherwise reads as "all held" and resets instantly. This matters more
+ |   here than in the CD build -- the netbin syncs once in netbin_video_init
+ |   and then goes straight into the dial-page loop where check_soft_reset
+ |   first runs, instead of running through several frames of splash/title
+ |   first. ~0.5s is well below any real four-button hold. Mirrors
+ |   engine/soft_reset.cxx's constant of the same name and value.
+ | Author: suinevere
+ ----------------------*/
+static const int SOFT_RESET_HOLD = 30;
+
+/*----------------------
+ | check_soft_reset
+ | Description: Counts consecutive frames the chord is held (a file-static
+ |   counter) and confirms/reboots once it reaches SOFT_RESET_HOLD. Called
+ |   from every screen-holding loop in this build, with the same debounce
+ |   engine/soft_reset.cxx's version applies before it soft-resets to the
+ |   title.
+ | Author: suinevere
+ | Dependencies: menu.c, net_connect.c
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+extern "C" void check_soft_reset(void) {
+    static int hold = 0;
+    hold = soft_reset_chord_held() ? (hold + 1) : 0;
+    if (hold >= SOFT_RESET_HOLD) {
+        // Unlike engine/soft_reset.cxx's accept path (soft_reset_to_title(),
+        // which never returns), confirm_return_to_title() here CAN return --
+        // this build has no title to jump to, only "hang up and dial page".
+        // Without clearing hold, a decline leaves it >= SOFT_RESET_HOLD, and
+        // since B (the confirm's "no") is part of the chord, the dialog
+        // reopens on the very next frame unless all four buttons are released
+        // within a single frame.
+        hold = 0;
+        confirm_return_to_title("reboot back to the dial page?");
+    }
+}
+
+/*----------------------
+ | netbin_video_init
+ | Description: Re-asserts the video mode after PlanetWeb hands over. The
+ |   browser has been driving VDP1/VDP2 and leaves them in a state this build
+ |   cannot predict, so nothing here may assume SRL's own startup values
+ |   survived. Mirrors what SRL::Core::Initialize does for the CD build, then
+ |   forces NBG0's window off and paints the configured back colour.
+ | Author: suinevere
+ | Dependencies: SRL, display.h, options.h
+ | Globals: g_display
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void netbin_video_init(void) {
+    slScrWindowModeNbg0(0);
+    SRL::VDP2::SetBackColor(HighColor(display_bg_rgb(g_display.bg)));
+    text_set_color(display_text_rgb(g_display.text));
+    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    SRL::Core::Synchronize();
+}
+
+/*----------------------
+ | main
+ | Description: The netbin's whole life. Brings up SRL, loads saved settings,
+ |   re-asserts video, clears the modem's inherited data session, then loops
+ |   forever: dial page -> online_mode() -> dial page. online_mode() reports its
+ |   own failures (no modem, no carrier) and returns, so a failed connect simply
+ |   lands back on the dial page with the number still in it.
+ | Author: suinevere
+ | Dependencies: netbin_pages.h, online.h, net_connect.h, console.h, options.h,
+ |   display.h, menu.h, input.h, SRL
+ | Globals: g_display, g_pad, g_menu_page_fade, g_netbin_jmp, g_netbin_jmp_armed,
+ |   g_menu_backing_depth
+ | Params: N/A
+ | Returns: 0 nominally, but it never actually returns
+ ----------------------*/
+int main(void) {
+    SRL::Core::Initialize(HighColor::Colors::Black);
+    text_map_init();
+
+    static MultiPad pads;
+    g_pad = &pads;
+
+    display_defaults(&g_display);
+    options_load();
+
+    netbin_video_init();
+    console_init();
+
+    // PlanetWeb downloaded this executable over the NetLink modem, so the line
+    // is most likely still off-hook in a live data session. In data mode the
+    // modem treats AT as payload and modem_probe() would fail on a perfectly
+    // good modem, so escape and hang up before the first dial ever happens.
+    net_connect_reset();
+
+    // Unlike the CD build, this one has no backdrop image for a fade to hide
+    // behind, and online_mode() (src/net/online.cxx) has no fade-in to pair
+    // with a fade-out -- menu_pages.cxx's page_fade_out/page_fade_in always
+    // come in matched pairs, but netbin_dial_page's accept path fades out and
+    // then online_mode() never fades back in. A nonzero g_menu_page_fade here
+    // would engage colour offset A on NBG0/NBG3 and ramp to black on Dial,
+    // then leave the whole online session -- dialing, "No carrier", the
+    // telnet terminal -- drawing through that offset with nothing left to
+    // clear it. netbin_pages.cxx's page_fade_out/page_fade_in are already
+    // guarded (`if (frames > 0) menu_fade_*(frames)`), so 0 here makes both
+    // literal no-ops: colour offset A is never touched, not engaged-then-
+    // left-black.
+    g_menu_page_fade = 0;
+
+    setjmp(g_netbin_jmp);
+    g_netbin_jmp_armed = true;
+    // The reboot longjmp above lands here skipping the destructor of whatever
+    // MenuBacking scope was active on the ancestor stack (netbin_pages.cxx and
+    // online.cxx both open one around their check_soft_reset() call), which
+    // would otherwise leave g_menu_backing_depth corrupted and the VDP2
+    // image-suppressing window stuck on. Mirrors main.cxx's own post-setjmp
+    // reset of the same global.
+    g_menu_backing_depth = 0;
+
+    for (;;) {
+        menu_clear();
+        netbin_dial_page();
+        online_mode();
+    }
+    return 0;
+}

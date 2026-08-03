@@ -104,6 +104,19 @@ static volatile int     g_loading_music_channel = -1;
 static uint32_t         g_loading_music_head    = 0;
 
 /*----------------------
+ | g_loading_music_armed
+ | Description: Whether the V-blank handler is allowed to run. Set last by
+ |   loading_music_play and cleared first by loading_music_stop, so the handler can
+ |   never open a channel the stop is no longer watching for.
+ |
+ |   The channel number cannot do this job, because the handler assigns to it: using
+ |   it as the disarm signal races the very code it is meant to stop. Mirrors
+ |   g_boot_music_looping.
+ | Author: suinevere
+ ----------------------*/
+static volatile bool    g_loading_music_armed   = false;
+
+/*----------------------
  | LOADING_MUSIC_FPS / g_loading_music_frames / g_loading_music_span_frames
  | Description: How far into the current pass we are and how long that pass
  |   lasts, both counted in video fields, and together the loop's trigger.
@@ -225,6 +238,7 @@ extern "C" void loading_music_load(void) {
     uint32_t size = (uint32_t) file.Size.Bytes;
     if (size > LOADING_MUSIC_MAX_BYTES) size = LOADING_MUSIC_MAX_BYTES;
     uint32_t play = size < 0x900 ? 0x900 : size;   // slPCMOn's minimum
+
     int8_t* buf = (int8_t *) SRL::Memory::LowWorkRam::Malloc(play);
     if (!buf) { loading_music_cd_restore(); return; }
 
@@ -292,13 +306,14 @@ extern "C" void loading_music_play(void) {
     int8_t ch = g_loading_music_pcm.Play(LOADING_MUSIC_LEVEL_MAX);
     if (ch < 0) return;
 
-    // Counters before the channel, and the channel last: the channel number is
-    // what arms the V-blank handler, so everything it reads has to be true
-    // before it can run. The reverse order leaves a field in which the handler
-    // sees a live channel against a stale span.
+    // Counters before the channel and the arming flag last, so everything the
+    // V-blank handler reads is already true by the time it is allowed to run. The
+    // reverse order leaves a field in which the handler sees a live channel against
+    // a stale span.
     g_loading_music_frames      = 0;
     g_loading_music_span_frames = loading_music_span_frames(g_loading_music_size);
     g_loading_music_channel     = ch;
+    g_loading_music_armed       = true;
 }
 
 /*----------------------
@@ -334,6 +349,7 @@ extern "C" void loading_music_play(void) {
  |   g_loading_music_pcm, g_loading_music_channel, g_loading_music_frames
  ----------------------*/
 static void loading_music_vblank(void) {
+    if (!g_loading_music_armed) return;
     if (!g_loading_music_buf || g_loading_music_channel < 0) return;
     if (g_loading_music_span_frames <= 0) return;
 
@@ -444,12 +460,14 @@ extern "C" void loading_music_set_level(int level) {
  | Returns: N/A
  ----------------------*/
 extern "C" void loading_music_stop(void) {
+    // The flag first, before the channel is read or the buffer freed. An interrupt
+    // already past its guard would otherwise Play() and store a new channel after
+    // the main line cleared it, leaking one of the machine's four PCM channels and
+    // leaving g_loading_music_channel non-negative -- which makes every later
+    // loading_music_play return at its first line.
+    g_loading_music_armed = false;
     loading_master_restore();
 
-    // Disarm before touching anything else, in the opposite order to
-    // loading_music_play: clearing the channel is what stands the V-blank
-    // handler down, and it has to be standing down before the buffer it plays
-    // from is freed underneath it.
     int ch = g_loading_music_channel;
     g_loading_music_channel     = -1;
     g_loading_music_span_frames = 0;

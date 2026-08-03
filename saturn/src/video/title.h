@@ -157,7 +157,9 @@ void title_bg_dyn_fade(int level);
  | title_and_seed
  | Description: Displays the title screen with a "Press any button" prompt and waits
  |   for user input. Returns a random seed based on the number of elapsed frames.
- |   Also handles soft reset chords while waiting on this screen.
+ |   Also handles soft reset chords while waiting on this screen. Finishes whatever
+ |   loading the splash left -- everything it calls is idempotent, so on an unskipped
+ |   splash that is nothing -- and fades the splash jingle out on the press.
  | Author: suinevere
  | Dependencies: console_view.h, input.h, SRL
  | Globals: g_pad
@@ -192,6 +194,33 @@ void display_scan_images(void);
  | Author: suinevere
  ----------------------*/
 void display_preload_categories(int max_slots);
+
+/*----------------------
+ | display_warm_cache_random
+ | Description: Fills the background-art cache to its budget with one randomly
+ |   chosen picture per category, categories visited in a random order, stopping
+ |   when Low Work RAM will not spare another slot.
+ |
+ |   Call at game start, with the loading screen still up and before music_start:
+ |   it reads the disc up to eight times, and that is the last window where reading
+ |   is inaudible. This is the fill that matters -- the splash's is a token one taken
+ |   around the still-resident jingle. Shuffles each category as it goes, so the
+ |   picture cached is the one that mood will actually show.
+ | Author: suinevere
+ ----------------------*/
+void display_warm_cache_random(unsigned int seed);
+
+/*----------------------
+ | title_bg_cache_release
+ | Description: Frees every background-art cache slot and empties the cache.
+ |
+ |   For the soft-reset return and nothing else. A session ends with ~580 KB of
+ |   cached art held, which leaves no room for the boot jingle to be reloaded -- so
+ |   without this the title screen comes back silent. What is on NBG0 stays on NBG0;
+ |   only the RAM copies go.
+ | Author: suinevere
+ ----------------------*/
+void title_bg_cache_release(void);
 
 /* display_preload_images() is gone. It decoded every registered background into
    Low Work RAM during the boot splash, so that cycling pictures in the Options

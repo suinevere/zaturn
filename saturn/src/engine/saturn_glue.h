@@ -96,6 +96,30 @@ void saturn_sound_effect(int number, int effect, int volume);
  ----------------------*/
 const uint8_t* saturn_story_data(uint32_t* len_out);
 
+/*----------------------
+ | saturn_typeahead_build
+ | Description: Builds the local prompt's typeahead trie for the story already
+ |   loaded, if it is not built for that story and difficulty already.
+ |
+ |   The prompt would do this itself on the first turn. Calling it at game start
+ |   instead is about allocation order: the trie is several hundred KB of Low Work
+ |   RAM, and the background-art cache is warmed at game start too. Whichever runs
+ |   first gets honest free space and the other has to be guessed at -- so the trie
+ |   goes first, and the cache takes exactly what is genuinely left.
+ | Author: suinevere
+ ----------------------*/
+void saturn_typeahead_build(void);
+
+/*----------------------
+ | saturn_typeahead_release
+ | Description: Frees the local prompt's typeahead trie and forgets the story it
+ |   was built for. Call on the soft reset: the trie is ~300 KB of Low Work RAM
+ |   belonging to a game that has ended, and the boot jingle cannot be reloaded
+ |   beside it and the online trie both. The next game rebuilds on its first turn.
+ | Author: suinevere
+ ----------------------*/
+void saturn_typeahead_release(void);
+
 #ifdef __cplusplus
 }
 #endif

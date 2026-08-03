@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /*----------------------
- | splash_show_once
+ | splash_show
  | Description: Shows the SUINEVERE GAMES logo (SUINE.TGA) full-screen, fading in
  |   over 90 fields, doing the boot's loading at full brightness, then fading out
  |   over 90 more. There is no fixed hold: the screen lasts as long as the work
@@ -41,17 +41,24 @@ extern "C" {
  |
  |   The screen stays black until the logo is decoded, and is left black on return:
  |   main() blacks out again straight away to compose the title picture unseen, so
- |   this does not clear the offset it armed. Runs only once per cold boot -- a
- |   static flag survives the soft-reset longjmp back into main()'s setjmp. If the
- |   splash art fails to load the jingle still plays and this returns at once,
- |   leaving the title page to do the loading.
+ |   this does not clear the offset it armed. If the splash art fails to load the
+ |   jingle still plays and this returns at once, leaving the title page to do the
+ |   loading.
+ |
+ |   Runs in full every time, cold boot or soft-reset return alike. Skipping to a
+ |   music-only branch on the way back would buy a couple of seconds and cost a
+ |   second boot path whose only job is to reproduce by hand what this one already
+ |   does; the skip button is there for anyone who wants the seconds back.
+ |
+ |   Needs Low Work RAM a finished game session does not have spare, so main() calls
+ |   title_bg_cache_release() before every call -- a no-op on the first.
  | Author: suinevere
  | Dependencies: title.h, online.h, boot_music.h, SRL
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
-void splash_show_once(void);
+void splash_show(void);
 
 #ifdef __cplusplus
 }

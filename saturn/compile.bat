@@ -19,7 +19,7 @@ REM step only fires under NETBIN=1. See saturn/tests/test_netbin_sources.py and
 REM docs/superpowers/plans/2026-07-25-netbin-minimal.md for the full rationale.
 REM If the netbin build fails, the CD build is skipped rather than silently running on top
 REM of a known-bad state. For a netbin-only rebuild without the CD pass, use
-REM compile-netbin.bat directly.
+REM compile-netbin.bat directly; for the CD image on its own, compile-cd.bat.
 SETLOCAL
 IF "%~1"=="" (SET "TGT=debug") ELSE (SET "TGT=%~1")
 SET "SRL_INSTALL_ROOT=../SaturnRingLib"

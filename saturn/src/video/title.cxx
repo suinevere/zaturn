@@ -105,8 +105,18 @@ static bool tga_name_is_usable(const char *name) {
 
 /*----------------------
  | cd_capture_root
- | Description: Snapshots the root directory record straight after GFS_Reset()
- |   so that cd_enter_root() can return to it later.
+ | Description: Climbs to the root and snapshots its directory record, so that
+ |   cd_enter_root() can return there later.
+ |
+ |   The climb is not decoration. GFS_LoadDir(0, tbl) does NOT mean "load the root":
+ |   directory ids are relative to the CURRENT directory and 0 is its own "." entry,
+ |   so on its own that call snapshots wherever the drive happens to be standing. At
+ |   a cold boot that is the root and it is right by luck; called again after a game
+ |   has left the drive in /Z3, it captures /Z3 and every later name lookup resolves
+ |   against the wrong directory, silently, for the rest of the session.
+ |
+ |   SRL::Cd::ChangeDir(nullptr) is the supported way up: it walks ".." until a
+ |   directory's own address equals its parent's, which is only true at the root.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: g_root_tbl, g_root_dirnames, g_root_dir_valid
@@ -114,9 +124,14 @@ static bool tga_name_is_usable(const char *name) {
  | Returns: N/A
  ----------------------*/
 void cd_capture_root(void) {
+    if (SRL::Cd::ChangeDir((const char *) nullptr) < 0) {
+        g_root_dir_valid = false;
+        return;
+    }
     GFS_DIRTBL_TYPE(&g_root_tbl)    = GFS_DIR_NAME;
     GFS_DIRTBL_DIRNAME(&g_root_tbl) = g_root_dirnames;
     GFS_DIRTBL_NDIR(&g_root_tbl)    = SRL_MAX_CD_FILES;
+    // >= 0: GFS_LoadDir returns an error code, not a count of records.
     g_root_dir_valid = GFS_LoadDir(0, &g_root_tbl) >= 0;
 }
 
@@ -165,6 +180,29 @@ static void cd_enter_tga(void) {
  ----------------------*/
 void cd_restore_z3(void) {
     if (g_z3_dir_valid) GFS_SetDir(&g_z3_tbl);
+}
+
+/*----------------------
+ | g_nbg0_loaded / nbg0_note_loaded
+ | Description: The filename of the picture currently uploaded to NBG0, and the only
+ |   way to record a new one. title_bg_show compares against it to decide whether a
+ |   request is already on screen and can skip the decode and the upload entirely.
+ |
+ |   Every path that blits NBG0 has to record it here, the one-off logo path
+ |   included -- a note about VRAM that VRAM does not agree with is invisible until
+ |   a later request for that same name short-circuits onto the wrong picture.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_nbg0_loaded
+ | Params: file -- the picture just uploaded, truncated to fit
+ | Returns: N/A
+ ----------------------*/
+static char g_nbg0_loaded[16] = "";
+
+static void nbg0_note_loaded(const char *file) {
+    int k = 0;
+    for (; file[k] && k < (int) sizeof(g_nbg0_loaded) - 1; k++) g_nbg0_loaded[k] = file[k];
+    g_nbg0_loaded[k] = '\0';
 }
 
 /*----------------------
@@ -322,29 +360,34 @@ struct TgaImage {
  |   than merely tolerable, since nothing on the disc is larger (tools/make_tga.py
  |   enforces 320x224).
  |
- |   The other LWRAM residents are why the slot count is what it is. The typeahead
- |   trie, up to ~318 KB for Wishbringer, is allocated during the splash and lives
- |   for the whole session. LOADCD.PCM, the loading screen's cue, peaks at ~172 KB
- |   (LOADING_MUSIC_MAX_BYTES in sound/loading_music.cxx) and is freed before the
- |   game starts. The save/restore scratch is ~47 KB while a save is written. Eight
- |   slots is ~580 KB, which leaves those three fighting over ~440 KB -- so the
- |   cache also refuses to grow a slot that would drop the zone's free space below
- |   TGA_CACHE_FLOOR. That check, not the slot count, is what actually protects
- |   them: it adapts to whichever game is loaded instead of assuming the worst-case
- |   trie on every disc.
+ |   The other LWRAM residents are why the slot count is what it is, and none of them
+ |   is permanent. SPLASH.PCM (~453 KB) is held across the splash and the title
+ |   screen and freed before the mode menu. LOADCD.PCM (~172 KB) is held only across
+ |   a load. The local game's typeahead trie is several hundred KB and lives for the
+ |   session, released by soft_reset_to_title. The save/restore scratch is ~47 KB
+ |   while a save is written. The online trie is larger than any of them, but it is
+ |   only built once the player actually dials (see ensure_online_typeahead), so it
+ |   is not in the budget for an ordinary session at all -- which is where the slots
+ |   below came from.
  |
- |   SPLASH.PCM used to belong in this list, as the one resident held WHILE the
- |   cache was being filled. It is not any more -- nothing fills the cache during
- |   the splash now -- so the jingle has the zone to itself and its
- |   BOOT_MUSIC_MAX_SECONDS cap is no longer load-bearing against the art.
+ |   Only one reserve is needed, because the cache is now filled at a moment when
+ |   nothing else is still owed: display_warm_cache_random runs at game start with
+ |   both cues freed AND the trie already built (main.cxx builds it first, precisely
+ |   so this reading is honest). TGA_CACHE_FLOOR is therefore just the save scratch
+ |   plus a margin, and the free-space check spends everything else on pictures.
+ |
+ |   The splash's own fill is the poor relation and is capped separately: the jingle
+ |   is still resident there and the trie does not exist yet, so it takes a couple of
+ |   slots at most and its real job is the title's own house. Anything it misses the
+ |   game-start warm picks up.
  | Author: suinevere
  ----------------------*/
-#define LWRAM_TOTAL       (1024u * 1024u)
-#define TGA_CACHE_SLOTS   8
-#define TGA_PLANE_MAX     (320u * 224u + 2048u)
-#define TGA_PAL_BYTES     (256u * sizeof(SRL::Types::HighColor))
-#define TGA_SLOT_BYTES    (TGA_PLANE_MAX + TGA_PAL_BYTES)
-#define TGA_CACHE_FLOOR   (256u * 1024u)   /* left for LOADCD.PCM + save scratch */
+#define LWRAM_TOTAL        (1024u * 1024u)
+#define TGA_CACHE_SLOTS    9
+#define TGA_PLANE_MAX      (320u * 224u + 2048u)
+#define TGA_PAL_BYTES      (256u * sizeof(SRL::Types::HighColor))
+#define TGA_SLOT_BYTES     (TGA_PLANE_MAX + TGA_PAL_BYTES)
+#define TGA_CACHE_FLOOR    (96u * 1024u)   /* save scratch + margin */
 
 /*----------------------
  | g_cache / g_cache_count / g_cache_clock
@@ -709,6 +752,19 @@ static const TgaImage *tga_cache_admit(const char *file) {
 }
 
 /*----------------------
+ | CATEGORY_ORDER / CATEGORY_ORDER_N
+ | Description: Every text category that carries art, TC_HOUSE first because it is
+ |   the title screen's own. Shared by the two cache fills so neither can drift out
+ |   of step with the categories music.c can actually announce.
+ | Author: suinevere
+ ----------------------*/
+static const int CATEGORY_ORDER[] = {
+    TC_HOUSE, TC_WILDERNESS, TC_UNDERGROUND, TC_WATER, TC_NAUTICAL, TC_TOWN,
+    TC_DUNGEON, TC_DESERT, TC_MAGIC, TC_SCIFI, TC_HORROR, TC_MYSTERY
+};
+#define CATEGORY_ORDER_N ((int) (sizeof(CATEGORY_ORDER) / sizeof(CATEGORY_ORDER[0])))
+
+/*----------------------
  | display_preload_categories
  | Description: Fills cache slots with one picture per text category, stopping the
  |   moment the cache will not grow any further.
@@ -721,15 +777,11 @@ static const TgaImage *tga_cache_admit(const char *file) {
  |
  |   TC_HOUSE goes first because it is the picture the title screen shows on the
  |   very next frame, so caching it is what makes the title appear without a read.
- |   How many of the rest get in is decided by Low Work RAM, not by this loop: the
- |   boot jingle is still resident during the splash and holds ~409 KB of the zone,
- |   which leaves room for about four slots.
- |
- |   Which is why title_and_seed calls this a second time, straight after
- |   boot_music_stop has handed that 409 KB back and before music_start_menu has
- |   started CD-DA. The remaining slots fill in a window with no audio to interrupt;
- |   left to fill on demand instead, each one would cost a CD read at a mood change
- |   with the track already playing.
+ |   How many of the rest get in is decided by Low Work RAM, not by this loop, and
+ |   max_slots is what keeps that number small on purpose. This runs with the jingle
+ |   resident and before the game's typeahead trie exists, so the free space it can
+ |   see is not the free space that will be left; filling the cache properly is
+ |   display_warm_cache_random's job, at game start, where the reading is honest.
  | Author: suinevere
  | Dependencies: display.h (display_category_image), sound/music.h (TC_*), SRL
  | Globals: g_cache_count
@@ -738,21 +790,107 @@ static const TgaImage *tga_cache_admit(const char *file) {
  | Returns: N/A
  ----------------------*/
 void display_preload_categories(int max_slots) {
-    static const int ORDER[] = {
-        TC_HOUSE, TC_WILDERNESS, TC_UNDERGROUND, TC_WATER, TC_NAUTICAL, TC_TOWN,
-        TC_DUNGEON, TC_DESERT, TC_MAGIC, TC_SCIFI, TC_HORROR, TC_MYSTERY
-    };
     int taken = 0;
     cd_enter_tga();
-    for (unsigned i = 0; i < sizeof(ORDER) / sizeof(ORDER[0]); i++) {
+    for (int i = 0; i < CATEGORY_ORDER_N; i++) {
+        if (g_cache_count >= TGA_CACHE_SLOTS) break;
+        if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
         if (max_slots > 0 && taken >= max_slots) break;
-        const char *file = display_category_image(ORDER[i]);
+        const char *file = display_category_image(CATEGORY_ORDER[i]);
         if (file == nullptr) continue;
         if (tga_cache_find(file) != nullptr) continue;
         const int before = g_cache_count;
         if (tga_cache_admit(file) == nullptr) break;
         if (g_cache_count == before) break;
         taken++;
+    }
+    bitmap_read_end();
+}
+
+/*----------------------
+ | title_bg_cache_release
+ | Description: Hands every cache slot's Low Work RAM back and empties the cache.
+ |
+ |   For the soft-reset return, which is the one moment the zone has to be cleared
+ |   rather than reused. A session ends with the cache full, ~580 KB, and the jingle
+ |   splash_show is about to load wants ~453 KB of the same megabyte -- so a
+ |   return that did not do this would find no room and drop onto a silent title.
+ |   The pictures are cheap to lose: the title reads its own again on the next frame,
+ |   and the next game warms the cache from scratch anyway.
+ |
+ |   Leaves the NBG0 upload alone. title_bg_show tracks what is in VRAM separately,
+ |   so the picture on screen stays up and a re-show of that same file still
+ |   short-circuits without a read.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cache, g_cache_count
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void title_bg_cache_release(void) {
+    for (int i = 0; i < g_cache_count; i++) {
+        tga_image_free(&g_cache[i]);
+        g_cache[i].Name[0] = '\0';
+        g_cache[i].LastUse = 0;
+    }
+    g_cache_count = 0;
+}
+
+/*----------------------
+ | display_warm_cache_random
+ | Description: Fills the art cache to its budget at game start, one randomly chosen
+ |   picture from each category, the categories themselves taken in a random order.
+ |
+ |   This is where the cache is meant to be filled. Every other claimant on Low Work
+ |   RAM has either taken its space or given it back by the time this runs: the
+ |   jingle was freed at the title, LOADCD.PCM at the end of the load, and main.cxx
+ |   builds the typeahead trie immediately before calling this so that it, too, is
+ |   already accounted for. The free-space figure is therefore honest and every slot
+ |   the zone can actually spare goes to pictures.
+ |
+ |   Random, and random per category rather than a random pick over all art, because
+ |   the cache is only useful when what is in it is what gets asked for. Shuffling
+ |   the category first means the picture cached IS the one that mood will show for
+ |   the rest of the session -- a random picture from the whole disc would be a cache
+ |   entry nothing ever requests. TC_HOUSE is left unshuffled: main() already chose
+ |   its picture for this boot and pointed the menu's Dynamic slot at it, and moving
+ |   it here would leave those two disagreeing.
+ |
+ |   Reads the disc once per slot it takes. It must therefore be called with the loading
+ |   screen still up and CD-DA not yet started -- reading is inaudible there, and it
+ |   is the last chance before music_start puts the head to work.
+ | Author: suinevere
+ | Dependencies: display.h (display_shuffle_category, display_category_image),
+ |   sound/music.h (TC_*), SRL
+ | Globals: g_cache_count
+ | Params: seed -- stirs both the category order and the pick within each
+ | Returns: N/A
+ ----------------------*/
+void display_warm_cache_random(unsigned int seed) {
+    int order[CATEGORY_ORDER_N];
+    for (int i = 0; i < CATEGORY_ORDER_N; i++) order[i] = CATEGORY_ORDER[i];
+
+    unsigned int r = seed | 1u;
+    for (int i = CATEGORY_ORDER_N - 1; i > 0; i--) {
+        r = r * 1103515245u + 12345u;
+        int j = (int) ((r >> 16) % (unsigned int) (i + 1));
+        int t = order[i]; order[i] = order[j]; order[j] = t;
+    }
+
+    cd_enter_tga();
+    for (int i = 0; i < CATEGORY_ORDER_N; i++) {
+        if (g_cache_count >= TGA_CACHE_SLOTS) break;
+        if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
+
+        r = r * 1103515245u + 12345u;
+        if (order[i] != TC_HOUSE) display_shuffle_category(order[i], r);
+
+        const char *file = display_category_image(order[i]);
+        if (file == nullptr) continue;
+        if (tga_cache_find(file) != nullptr) continue;
+        const int before = g_cache_count;
+        if (tga_cache_admit(file) == nullptr) break;
+        if (g_cache_count == before) break;   // evicting rather than growing
     }
     bitmap_read_end();
 }
@@ -778,11 +916,10 @@ void display_preload_categories(int max_slots) {
  | Returns: true if the requested display was applied; false if it fell back
  ----------------------*/
 bool title_bg_show(const char *file) {
-    static char loaded[16] = "";
     bool same = true;
-    for (int i = 0; i < (int) sizeof(loaded); i++) {
-        if (loaded[i] != file[i]) { same = false; break; }
-        if (loaded[i] == '\0') break;
+    for (int i = 0; i < (int) sizeof(g_nbg0_loaded); i++) {
+        if (g_nbg0_loaded[i] != file[i]) { same = false; break; }
+        if (g_nbg0_loaded[i] == '\0') break;
     }
     if (!same) {
         // A cached image uploads straight from RAM with no CD access. A miss reads
@@ -812,9 +949,7 @@ bool title_bg_show(const char *file) {
         SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
         text_clear_line(20);
         text_clear_line(21);
-        int k = 0;
-        for (; file[k] && k < (int) sizeof(loaded) - 1; k++) loaded[k] = file[k];
-        loaded[k] = '\0';
+        nbg0_note_loaded(file);
     }
     SRL::VDP2::NBG0::ScrollEnable();
     return true;
@@ -845,6 +980,7 @@ bool title_bg_show_oneoff(const char *file) {
     if (!ok) return false;
 
     SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
+    nbg0_note_loaded(file);
     SRL::VDP2::NBG0::ScrollEnable();
     return true;
 }
@@ -1070,17 +1206,54 @@ void title_bg_dyn_fade(int level) {
 #define TITLE_JINGLE_FADE_FRAMES 45
 
 /*----------------------
+ | title_drain_input
+ | Description: Throws away input that arrived while the caller was blocked, so the
+ |   wait loop starts from what the player is doing now rather than what they did
+ |   during a load.
+ |
+ |   The block above it is CD work with no Synchronize in it, which means no field
+ |   ever ticked and nothing sampled the pads. Two things are then stale at once and
+ |   they need opposite treatment. The keyboard is a QUEUE, so a key struck during
+ |   the load is still sitting in it and the loop's first poll would read it as the
+ |   press that dismisses the title -- the screen would appear and vanish in the
+ |   same breath. The pads are EDGES against the last sample taken, which is now
+ |   minutes old, so a button held across the load reads as freshly pressed. Drain
+ |   the one, and re-baseline the other by spending two fields: the first re-samples
+ |   the pads, the second gives WasPressed a previous-frame state that matches.
+ |
+ |   Runs even when the block above found everything cached and blocked for no time
+ |   at all. What it drops then is the press that skipped the splash, which the
+ |   splash has already consumed and which would otherwise dismiss the title in the
+ |   same breath -- so the case that looks like it does not need this is the one that
+ |   most does.
+ | Author: suinevere
+ | Dependencies: input.h, saturn_keyboard.h, SRL
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void title_drain_input(void) {
+    for (int field = 0; field < 2; field++) {
+        int guard = 0;
+        while (guard < 64 && saturn_keyboard_poll().kind != SATURN_KEY_NONE) guard++;
+        SRL::Core::Synchronize();
+    }
+}
+
+/*----------------------
  | title_and_seed
  | Description: Finishes the boot's loading, then displays the title screen with a
  |   "Press any button" prompt and waits for input, returning a seed made from the
  |   frames the player took. Also handles soft reset chords while waiting.
  |
- |   The loading comes first and the prompt does not exist until it is done, so the
- |   press can never be the thing that starts a CD read -- it used to be, and the
- |   pause after it was the whole of that read. Everything called here is
+ |   The art goes up first and the prompt only once the loading is done, because the
+ |   prompt is a promise that pressing does something. Everything called here is
  |   idempotent, which is what lets the splash do as much or as little as it likes:
- |   on an unskipped logo most of this finds its work already done, and on a
- |   skipped one it does all of it.
+ |   on an unskipped logo the block below finds its work already done and the prompt
+ |   lands in the same frame as the art, and on a skipped one it does all of it and
+ |   the player waits, looking at the title.
+ |
+ |   No cold-boot/return distinction, because the splash runs in full on both.
  | Author: suinevere
  | Dependencies: console_view.h, input.h, online.h, boot_music.h, SRL
  | Globals: g_pad
@@ -1094,9 +1267,12 @@ int title_and_seed(void) {
     title_draw_art();
     menu_sync();
 
-    ensure_online_typeahead();
     preload_game_catalog();
     display_preload_categories(0);
+    title_drain_input();
+
+    text_print(8, 18, "Press any button to begin");
+    menu_sync();
 
     for (;;) {
         reset_hold = soft_reset_chord_held() ? (reset_hold + 1) : 0;
@@ -1115,9 +1291,19 @@ int title_and_seed(void) {
         frames++;
     }
 
-    for (int i = TITLE_JINGLE_FADE_FRAMES; i >= 0; i--) {
-        boot_music_set_level((BOOT_MUSIC_LEVEL_MAX * i) / TITLE_JINGLE_FADE_FRAMES);
-        SRL::Core::Synchronize();
+    // Only when there is something to fade. boot_music_set_level moves the driver's
+    // MASTER volume, and boot_music_stop's restore of it rides on the scrub's sixty
+    // frames -- which boot_music_stop skips when no channel is open. Ramping with
+    // nothing playing therefore walks the master down to zero and issues the restore
+    // in the same field, where this driver drops it (see boot_master_restore), and
+    // the machine is silent from there on: no loading cue on the next game, no PCM
+    // at all. CD-DA is separate hardware, which is why the menu track still plays
+    // and the fault looks like it belongs to the loading screen.
+    if (boot_music_playing()) {
+        for (int i = TITLE_JINGLE_FADE_FRAMES; i >= 0; i--) {
+            boot_music_set_level((BOOT_MUSIC_LEVEL_MAX * i) / TITLE_JINGLE_FADE_FRAMES);
+            SRL::Core::Synchronize();
+        }
     }
     boot_music_stop();
     preload_game_catalog();

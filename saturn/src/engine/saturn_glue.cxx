@@ -94,6 +94,35 @@ static const uint8_t* g_ta_story = nullptr;
 static int g_ta_diff = -1;
 
 /*----------------------
+ | saturn_typeahead_release
+ | Description: Frees the local prompt's trie and forgets the story it was built
+ |   for, so the next game builds its own. For the soft reset, which is the moment
+ |   this stops being a cache and starts being ~300 KB of Low Work RAM held for a
+ |   game that has ended.
+ |
+ |   Not an optimisation. It is what the boot jingle could not fit beside: the
+ |   online trie is legitimately kept across a return -- it is the same Zork I
+ |   dictionary every time and rebuilding it costs a CD read -- but with BOTH tries
+ |   resident the zone was ~653 KB spoken for and SPLASH.PCM's 453 KB Malloc simply
+ |   returned null. A null there is silent by construction, which is why the title
+ |   screen came back mute and stayed that way through the next loading screen.
+ |
+ |   g_ta_story goes with it, and would be worth clearing even if nothing else here
+ |   were: the story image it points at is High Work RAM the reset is about to drop,
+ |   so leaving it set leaves ensure_typeahead comparing against a dangling pointer.
+ | Author: suinevere
+ | Dependencies: typeahead.h
+ | Globals: g_typeahead_root, g_ta_story, g_ta_diff
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+extern "C" void saturn_typeahead_release(void) {
+    if (g_typeahead_root) { destroy_typeahead(g_typeahead_root); g_typeahead_root = nullptr; }
+    g_ta_story = nullptr;
+    g_ta_diff  = -1;
+}
+
+/*----------------------
  | ensure_typeahead
  | Description: Rebuilds g_typeahead_root from the currently loaded story whenever
  |   the story or the difficulty changes (freeing the old trie first), so
@@ -128,6 +157,19 @@ static void ensure_typeahead() {
     typeahead_set_easy(g_difficulty == DIFF_EASY, have_solution);
     g_ta_story = story;
     g_ta_diff = g_difficulty;
+}
+
+/*----------------------
+ | saturn_typeahead_build
+ | Description: See saturn_glue.h.
+ | Author: suinevere
+ | Dependencies: typeahead.h
+ | Globals: g_typeahead_root, g_ta_story, g_ta_diff
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+extern "C" void saturn_typeahead_build(void) {
+    ensure_typeahead();
 }
 
 /*----------------------

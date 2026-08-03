@@ -139,6 +139,38 @@ static TrieNode* g_online_ta = nullptr;
 static int g_online_diff = -1;
 
 /*----------------------
+ | online_typeahead_release
+ | Description: Frees the online trie so the next ensure_online_typeahead rebuilds
+ |   it from the disc. For the soft reset, and it is not a saving -- it is what
+ |   makes the return to title identical to a cold boot.
+ |
+ |   This trie is 625-700 KB, not the ~318 KB the budget comments around this
+ |   codebase have long claimed (measured from the free-space readout on the title
+ |   screen: LWRAM less what the art preload could still take). At that size it is
+ |   the largest single object in the megabyte by a wide margin, and the order it is
+ |   built in relative to SPLASH.PCM decides whether the jingle exists at all.
+ |
+ |   Cold boot gets that order right by accident: boot_music_load runs at the top of
+ |   splash_show and takes its 453 KB out of an empty zone, and this trie is built
+ |   afterwards, around it. A soft-reset return used to arrive with the trie already
+ |   standing, leaving ~423 KB -- thirty-nine short -- so the Malloc returned null,
+ |   and a null there is silent: no jingle, and no loading cue on the next game
+ |   either, for the same reason. Releasing it here restores the cold-boot order
+ |   exactly rather than trying to make a second order work.
+ |
+ |   Costs one ZORK1.Z3 read per return, which the splash logo is there to cover.
+ | Author: suinevere
+ | Dependencies: typeahead.h
+ | Globals: g_online_ta, g_online_diff
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+extern "C" void online_typeahead_release(void) {
+    if (g_online_ta) { destroy_typeahead(g_online_ta); g_online_ta = nullptr; }
+    g_online_diff = -1;
+}
+
+/*----------------------
  | ensure_online_typeahead
  | Description: Rebuilds g_online_ta from ZORK1.Z3 whenever it is missing or the
  |   difficulty changed; frees the story bytes afterward since the trie is
@@ -268,6 +300,12 @@ void online_mode(void) {
         return;
     }
     }
+
+    // Built here and not at the splash, because it is the largest single thing in
+    // Low Work RAM -- more than the boot jingle -- and a player who never dials
+    // never needs it. Held back until the carrier is up, the zone stays free for
+    // the art cache and the local game's own trie all session.
+    ensure_online_typeahead();
 
     menu_clear();
 

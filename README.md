@@ -30,6 +30,7 @@ zaturn/
 │   ├── compile.bat           build BOTH targets (debug | release): the CD
 │   │                         image and zaturn.netbin, in that order
 │   ├── compile-netbin.bat    netbin-only rebuild, skips the CD pass
+│   ├── compile-cd.bat        CD-only rebuild, skips the netbin pass
 │   └── clean.bat
 ├── docker/                   self-contained Docker host for the multizork server
 └── docs/                     design specs and notes
@@ -125,6 +126,10 @@ configs share the same `BuildDrop/<CD_NAME>.*` output names, so whichever runs
 last is what's left on disk under those names, and only the CD pass leaves the
 real game there. If you only want to iterate on the netbin without paying for
 a full CD rebuild each time, use `./compile-netbin.bat debug` directly instead.
+`./compile-cd.bat debug` is the other half: the CD image on its own, leaving
+whatever `zaturn.netbin` was already in `BuildDrop/` alone — handy while working
+on the interpreter, but it means a change that breaks only the netbin sources
+goes unnoticed until the next `compile.bat`.
 
 `./clean.bat` removes build output for both targets.
 

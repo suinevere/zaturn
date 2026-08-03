@@ -4,9 +4,8 @@
  |   whole into Low Work RAM from MSC/SPLASH.PCM and played on an SCSP PCM
  |   channel, independent of the CD-DA music engine (music.h) and the CD-DA
  |   hardware channel it drives. Because the sample is fully resident in RAM
- |   before it plays, it is unaffected by the splash's own CD read
- |   (ensure_online_typeahead) -- unlike CD-DA, PCM
- |   playback does not touch the drive.
+ |   before it plays, it is unaffected by the splash's own CD reads -- unlike
+ |   CD-DA, PCM playback does not touch the drive.
  | Author: suinevere
  | Dependencies: none
  ----------------------*/
@@ -17,16 +16,15 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
+
 /*----------------------
  | boot_music_load
  | Description: Loads MSC/SPLASH.PCM into a Low Work RAM buffer, up to the
- |   BOOT_MUSIC_MAX_SECONDS cap -- the buffer shares the zone with the
- |   typeahead trie, which ensure_online_typeahead builds while this one is
- |   still held; see the cap's box in
- |   boot_music.cxx before raising it. Call this before any other splash CD read
- |   (see splash.cxx) so the sample is already resident in memory by the time
- |   boot_music_play runs and by the time the splash's own logo/vocabulary reads
- |   start. A no-op if already loaded (soft-reset re-entry) or if the file is
+ |   BOOT_MUSIC_MAX_SECONDS cap; see that cap's box in boot_music.cxx before
+ |   raising it. Call this before any other splash CD read (see splash.cxx) so the
+ |   sample is resident by the time boot_music_play runs and by the time the
+ |   splash's own logo read starts. A no-op if already loaded or if the file is
  |   missing.
  | Author: suinevere
  | Dependencies: SRL (Cd::File, Memory::LowWorkRam)
@@ -75,6 +73,17 @@ void boot_music_load(void);
 void boot_music_play(void);
 
 /*----------------------
+ | boot_music_playing
+ | Description: Whether a channel is currently carrying the jingle. Ask before any
+ |   fade: boot_music_set_level moves the driver's MASTER volume, so ramping it for
+ |   a sample that is not playing turns the whole machine down for nothing, and the
+ |   restore that would undo it is the one boot_music_stop skips.
+ | Author: suinevere
+ | Dependencies: N/A
+ ----------------------*/
+bool boot_music_playing(void);
+
+/*----------------------
  | boot_music_set_level
  | Description: Turns the sound driver's master volume down to `level`, 0 (silent)
  |   to BOOT_MUSIC_LEVEL_MAX (full) -- the splash's fade-out ramp. See the fade box
@@ -104,6 +113,7 @@ void boot_music_set_level(int level);
  | Dependencies: SRL (Sound::Pcm, Core::Synchronize, Memory)
  ----------------------*/
 void boot_music_stop(void);
+
 
 #ifdef __cplusplus
 }

@@ -273,16 +273,15 @@ static unsigned int boot_entropy(void) {
  |   onward and is only ever lifted by an explicit fade-in, so every CD read on
  |   the way to the first picture -- the image scan here, the splash's own reads,
  |   HOUSE1.TGA -- happens behind black rather than over a bare console. On first
- |   cold boot, splash_show_once() covers
- |   the online-vocabulary read with a fading logo instead
- |   of a silent title picture; the game-catalogue scan (preload_game_catalog)
- |   runs afterward, its own silent beat once HOUSE1.TGA is already showing but
- |   still before the track starts and before title_and_seed()'s "Press any
- |   button" prompt appears. After this the menu never touches the CD, so the
- |   track plays uninterrupted (and on soft-reset re-entry splash_show_once()
- |   takes its no-splash branch and preload_game_catalog() is a cached no-op,
- |   so nothing new needs to run before the music starts). The Z3 load retries
- |   the flaky
+ |   cold boot, splash_show() covers the game-catalogue scan and the first few
+ |   background pictures with a fading logo instead of a silent title picture, and
+ |   title_and_seed() finishes whatever is left with its prompt already on screen.
+ |   After this the menu never touches the CD, so the track plays uninterrupted.
+ |
+ |   A soft-reset re-entry runs exactly the same sequence, deliberately: there is no
+ |   cold-boot/return branch anywhere below. The catalogue is a cached static the
+ |   longjmp did not touch, so a return pays for the logo's fades and refilling the
+ |   emptied art cache and nothing else. The Z3 load retries the flaky
  |   first-access GFS size stat before allocating and reading. Both it and the
  |   sound-blorb read after it run underneath the loading screen, which is
  |   raised before them and not taken down until the game is built -- the
@@ -322,8 +321,7 @@ int main(void) {
     static MultiPad pads;
     g_pad = &pads;
 
-    int cd_reentry = setjmp(g_title_jmp);
-    (void) cd_reentry;
+    setjmp(g_title_jmp);
     g_title_jmp_armed = true;
     GFS_Reset();
     cd_capture_root();
@@ -337,6 +335,12 @@ int main(void) {
     console_init();
 
     music_reset();
+
+    // A finished session leaves the art cache full, and the jingle splash_show is
+    // about to load wants ~453 KB of the same zone. Unconditional: on a cold boot
+    // the cache is empty and this costs nothing, and the sequence below is meant
+    // not to know which boot it is.
+    title_bg_cache_release();
 
     for (int r = 0; r <= 28; r++) text_clear_line(r);
 
@@ -356,7 +360,7 @@ int main(void) {
         if (slot != DISP_IMAGE_NONE) g_display.image = slot;
     }
 
-    splash_show_once();           // does the boot's CD reads, under its own logo
+    splash_show();                // does the boot's CD reads, under its own logo
 
     text_set_color(DISP_RGB555(0xFF, 0xFF, 0xFF));
     title_bg_fade_arm();          // black out first, so the title is composed unseen
@@ -526,11 +530,23 @@ int main(void) {
         loading_screen_tick();
     }
 
-    // The game is built and every disc read is done, so the screen and the cue
-    // bow out together. The music engine starts after that rather than before:
-    // music_start puts the CD-DA head to work, and doing it while the loading
-    // cue is still fading would have the two overlap.
+    // The game is built, so the screen and the cue bow out together. The music
+    // engine starts after that rather than before: music_start puts the CD-DA head
+    // to work, and doing it while the loading cue is still fading would have the
+    // two overlap.
     loading_screen_end();
+
+    // The trie first and the art second, in that order and not the other way. Both
+    // want Low Work RAM and both are sized against whatever is free when they run,
+    // so whichever goes first gets an honest reading and the other has to be
+    // guessed at. The prompt would build this on its first turn anyway.
+    saturn_typeahead_build();
+
+    // Then the art, into what is genuinely left. The screen is still black, both
+    // PCM cues have been freed and CD-DA has not started, so these are the last
+    // reads on this path that cost nothing audible -- every one not taken here is
+    // taken later at a mood change, over a playing track.
+    display_warm_cache_random((unsigned int) seed);
 
     {
         music_set_level(g_music_level);

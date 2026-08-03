@@ -24,8 +24,10 @@ extern "C" {
 #include "menu_layout.h"
 #include "saturn_keyboard.h"
 #include "sound.h"
+#include "saturn_glue.h"
 #include "net/net_connect.h"
 }
+#include "online.h"
 #include "app_state.h"
 
 using namespace SRL::Types;
@@ -110,6 +112,11 @@ int is_quit_command(const char *line) {
 void soft_reset_to_title(void) {
     net_connect_close();
     sound_stop_all();
+    // Both typeahead tries: between them they hold most of Low Work RAM, and they
+    // belong to a session that has ended. The next game builds its own at game
+    // start; the online one is rebuilt only if the player dials again.
+    saturn_typeahead_release();
+    online_typeahead_release();
     if (g_title_jmp_armed) longjmp(g_title_jmp, 1);
     slNMIRequest();
     while (1) {}

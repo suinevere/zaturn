@@ -107,16 +107,6 @@
 #define SPLASH_SKIP_FADE_STEP 3
 
 /*----------------------
- | g_splash_shown
- | Description: True once the splash has run. Plain static RAM, so it
- |   survives the soft-reset longjmp back into main()'s setjmp exactly like
- |   title.cxx's art cache -- a soft reset re-enters with the trie already
- |   built, so there is no real load left to hide.
- | Author: suinevere
- ----------------------*/
-static bool g_splash_shown = false;
-
-/*----------------------
  | splash_set_offset
  | Description: Sets VDP2 color offset A to (v,v,v) on all three channels
  |   and applies it. Offset A must already be enabled on NBG0 via
@@ -193,21 +183,15 @@ static bool splash_skip_pressed(void) {
 }
 
 /*----------------------
- | splash_show_once
+ | splash_show
  | Description: See splash.h.
  | Author: suinevere
  | Dependencies: title.h, online.h, boot_music.h, input.h, saturn_keyboard.h, SRL
- | Globals: g_splash_shown
+ | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
-void splash_show_once(void) {
-    if (g_splash_shown) {
-        ensure_online_typeahead();
-        return;
-    }
-    g_splash_shown = true;
-
+void splash_show(void) {
     // Black before anything else: the jingle read and the logo read below are
     // seconds of CD work, and there is nothing worth showing during them.
     title_bg_fade_arm();
@@ -235,7 +219,6 @@ void splash_show_once(void) {
     boot_music_set_level(BOOT_MUSIC_LEVEL_MAX);
 
     if (!skipped) {
-        ensure_online_typeahead();
         preload_game_catalog();
         display_preload_categories(SPLASH_PRELOAD_SLOTS);
     }

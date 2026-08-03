@@ -25,40 +25,16 @@
 
 /*----------------------
  | BOOT_MUSIC_MAX_SECONDS / BOOT_MUSIC_MAX_BYTES
- | Description: How much of SPLASH.PCM is ever read into Low Work RAM, and the
- |   reason there is a cap at all.
+ | Description: How much of SPLASH.PCM is ever read into Low Work RAM.
  |
- |   The cap was originally sized against the background-art cache. The two used
- |   to be resident together -- the jingle was loaded first, deliberately, and
- |   freed last, with display_preload_images() running in between -- and
- |   uncapped, at 453 KB, the pair ran ~10 KB over the megabyte. tga_decode's
- |   free-space check then failed on the last picture in scan order, the preload
- |   ignored the miss the way it was written to, and that one picture read the
- |   disc every time it was selected. The Saturn plays CD-DA off the head it
- |   reads data with, so the read stopped the menu track, and music_tick read
- |   the stopped drive as loop-end and advanced -- a picture that changed the
- |   music, which is what sent anyone looking here.
+ |   Twenty-two seconds because SPLASH.PCM is 21.03 and the cap has to clear the
+ |   file: the jingle loops across the whole title screen, so a cap short of the
+ |   end would return to the head mid-phrase, which no seam handling can disguise.
+ |   A shorter file than the cap is used whole.
  |
- |   That pairing is gone: nothing decodes art during the splash any more, and
- |   boot_music_stop frees this buffer before splash_show_once returns, so the
- |   first cache slot is taken after the jingle is already out of the zone. What
- |   the cap still guards is the overlap with the typeahead trie, which
- |   ensure_online_typeahead builds while the jingle is playing and which can
- |   want ~318 KB. Nineteen seconds is ~419 KB, so the pair sits comfortably
- |   under the megabyte with the art no longer in the argument.
- |
- |   Twenty-two seconds because SPLASH.PCM is 21.03, and the cap has to clear the
- |   file rather than merely be generous. It used to be nineteen, which was
- |   harmless while the jingle was stopped at the end of the splash -- the tail
- |   past the cut never reached a speaker -- and became audible the moment the
- |   jingle started looping across the title screen: the loop returned from a
- |   waveform two seconds short of the end straight to the head, mid-phrase, which
- |   is a discontinuity no seam handling can disguise. Covering the file makes the
- |   loop point the composer's own end-to-start.
- |
- |   Affordable: the pair still sits ~238 KB under the megabyte, and the art cache
- |   still gets its four slots beside the jingle (test_lwram_splash_budget.py
- |   computes both). A shorter file than the cap is used whole.
+ |   ~453 KB of the megabyte while it is held, which is most of what the art cache
+ |   has to work around during the splash. test_lwram_splash_budget.py holds the
+ |   two against each other.
  | Author: suinevere
  ----------------------*/
 #define BOOT_MUSIC_MAX_SECONDS 22u
@@ -184,7 +160,7 @@ static void boot_music_hook(void) {
  | Returns: N/A
  ----------------------*/
 extern "C" void boot_music_load(void) {
-    if (g_boot_music_buf) return;   // already loaded (soft-reset re-entry)
+    if (g_boot_music_buf) return;
 
     cd_enter_root();
     if (!cd_enter_msc()) { cd_enter_root(); return; }
@@ -195,6 +171,7 @@ extern "C" void boot_music_load(void) {
     uint32_t size = (uint32_t) file.Size.Bytes;
     if (size > BOOT_MUSIC_MAX_BYTES) size = BOOT_MUSIC_MAX_BYTES;
     uint32_t play = size < 0x900 ? 0x900 : size;   // slPCMOn's minimum
+
     int8_t* buf = (int8_t *) SRL::Memory::LowWorkRam::Malloc(play);
     if (!buf) { cd_enter_root(); return; }
 
@@ -263,6 +240,19 @@ extern "C" void boot_music_play(void) {
 static void boot_master_restore(void) {
     SND_SetTlVl((SndTlVl) BOOT_MASTER_NUDGE);
     SND_SetTlVl((SndTlVl) BOOT_MASTER_MAX);
+}
+
+/*----------------------
+ | boot_music_playing
+ | Description: See boot_music.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_boot_music_channel
+ | Params: N/A
+ | Returns: true while a channel is carrying the jingle
+ ----------------------*/
+extern "C" bool boot_music_playing(void) {
+    return g_boot_music_channel >= 0;
 }
 
 /*----------------------
@@ -336,6 +326,9 @@ extern "C" void boot_music_set_level(int level) {
  |   take the menu's CD-DA track with it. The buffer is freed last, after the scrub
  |   has given the pending slPCMOff a full second to land; the driver was still
  |   streaming out of it when this function was entered.
+ |
+ |   The free is what lets the reload find a zone to land in on the way back;
+ |   main() empties the art cache before the splash for the same reason.
  | Author: suinevere
  | Dependencies: SRL (Sound::Pcm, Core::Synchronize, Memory), SGL (SND_SetTlVl)
  | Globals: g_boot_music_buf, g_boot_music_size, g_boot_music_channel

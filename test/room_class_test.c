@@ -1,22 +1,26 @@
-/* Golden-corpus tests for room classification.
-
-   Two suites over one corpus. The SNAPSHOT compares every captured room against
-   the verdict recorded in blessed.inc and fails on any difference, so a keyword
-   or tier edit shows its blast radius across the whole game library instead of
-   only where someone thought to look. The ASSERTIONS pin the specific rooms this
-   work exists to fix.
-
-   Re-blessing is deliberate and reviewable:
-       ./rct --bless > test/corpus/blessed.inc
-   Read the diff. Do not bless to make a red suite green.
-
-   rooms.inc holds decoded game text with embedded escapes; it compiles clean
-   today, and because this file #includes it, this suite is what guards that
-   staying true permanently.
-
-   gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/classify -o /tmp/rct \
-       test/room_class_test.c saturn/src/classify/room_class.c \
-       saturn/src/classify/room_class_data.c && /tmp/rct */
+/*----------------------
+ | room_class_test.c
+ | Description: Golden-corpus tests for room classification. Two suites over one
+ |   corpus. The SNAPSHOT compares every captured room against the verdict
+ |   recorded in blessed.inc and fails on any difference, so a keyword or tier
+ |   edit shows its blast radius across the whole game library instead of only
+ |   where someone thought to look. The ASSERTIONS pin the specific rooms this
+ |   work exists to fix.
+ |
+ |   rooms.inc holds decoded game text with embedded escapes; it compiles clean
+ |   today, and because this file #includes it, this suite is what guards that
+ |   staying true permanently.
+ |
+ |   Re-blessing is deliberate and reviewable:
+ |       ./rct --bless > test/corpus/blessed.inc
+ |   Read the diff. Do not bless to make a red suite green.
+ |
+ |   gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/classify -o /tmp/rct \
+ |       test/room_class_test.c saturn/src/classify/room_class.c \
+ |       saturn/src/classify/room_class_data.c && /tmp/rct
+ | Author: suinevere
+ | Dependencies: classify/room_class.h, corpus/rooms.inc, corpus/blessed.inc
+ ----------------------*/
 #include <stdio.h>
 #include <string.h>
 #include "classify/room_class.h"
@@ -54,6 +58,10 @@ static int bless(void) {
     printf(" |   rooms.inc, in corpus order. Regenerating it is how a deliberate\n");
     printf(" |   change of judgement is recorded; the diff is the review.\n");
     printf(" | Author: suinevere\n");
+    printf(" | Dependencies: N/A\n");
+    printf(" | Globals: N/A\n");
+    printf(" | Params: N/A\n");
+    printf(" | Returns: N/A\n");
     printf(" ----------------------*/\n");
     printf("static const unsigned char BLESSED[CORPUS_N] = {\n");
     for (int i = 0; i < CORPUS_N; i++)

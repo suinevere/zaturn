@@ -5,6 +5,10 @@
  |   rooms.inc, in corpus order. Regenerating it is how a deliberate
  |   change of judgement is recorded; the diff is the review.
  | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
  ----------------------*/
 static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 151001: Alcove */

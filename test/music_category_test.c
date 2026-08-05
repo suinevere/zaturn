@@ -267,17 +267,18 @@ int main(void) {
 
     /* A title longer than TEXT_TITLE_MAX is cut, and a keyword past the cut gets
        no title bonus -- it still counts, but only as ordinary description text.
-       Here "Forest" sits past character 64 and so merely ties with "cave" rather
-       than winning outright, and the tie falls to whichever category is earlier in
-       the enum. Pinned because it is the visible edge of the truncation: no room
-       title in these games is anywhere near this long, and if one ever is, this is
-       what it will do rather than crash or read past the buffer. */
+       "Forest" sits past character 64, so it scores once as Biome while "cave"
+       scores once as Structure, and the tier decides before any count. Pinned
+       because it is the visible edge of the truncation: no room title in these
+       games is anywhere near this long, and if one ever is, this is what it will
+       do rather than crash or read past the buffer. */
     CHECK(text_classify_room(
         "A Room With A Very Long Name Indeed That Runs Well Past Any Sensible "
-        "Title Buffer And Then Says Forest\nA cave.") == TC_WILDERNESS);
-    /* The same keyword inside the cut does win, which is what makes the case
-       above about the truncation rather than about the keyword. */
-    CHECK(text_classify_room("Forest Path\nA cave.") == TC_WILDERNESS);
+        "Title Buffer And Then Says Forest\nA cave.") == TC_UNDERGROUND);
+    /* The same keyword inside the cut still cannot win, which is the point of the
+       tiers: a title names the room, but "cave" names a room harder than "forest"
+       does. The title weight breaks ties within a tier, not across them. */
+    CHECK(text_classify_room("Forest Path\nA cave.") == TC_UNDERGROUND);
 
     /* ---- the banner is not the room title ----
        Turn one prints the game's banner above the first room, so the first line
@@ -301,9 +302,16 @@ int main(void) {
         CHECK(text_classify_room(first_turn) == TC_HOUSE);
 
         /* Without a supplied name the first line is all there is to go on, which
-           is what every test above relies on, so that path has to stay. */
+           is what every test above relies on, so that path has to stay.
+
+           It no longer opens West of House in a bunker, though. "underground" is
+           a Biome word and "house" a Structure one, so the tier decides before
+           the banner's title weight can matter, and the fallback now survives a
+           banner that names a place. The supplied name is still what should be
+           trusted -- it is authoritative rather than merely usually right -- but
+           losing it is no longer the failure it was. */
         music_note_room_title(0);
-        CHECK(text_classify_room(first_turn) == TC_UNDERGROUND);
+        CHECK(text_classify_room(first_turn) == TC_HOUSE);
 
         /* A supplied name is what gets weighted, not the first line: here the text
            names no place at all, so the verdict can only have come from the name. */
@@ -311,11 +319,14 @@ int main(void) {
         CHECK(text_classify_room("Somewhere\nThere is nothing in particular here.")
               == TC_UNDERGROUND);
 
-        /* Still only weight 2, though. A name worth 2 does not beat two agreeing
-           description words, and the tie falls to whichever is earlier in the enum. */
+        /* The title weight lives inside a tier. "Cellar" is Structure and "forest"
+           is Biome, so the supplied name wins here where flat counting once let
+           two agreeing description words beat it. This is the deliberate
+           weakening the tier design called for: a title that names a real place
+           should not lose to the scenery visible from it. */
         music_note_room_title("Cellar");
         CHECK(text_classify_room("Forest\nThis is a forest, with trees all around.")
-              == TC_WILDERNESS);
+              == TC_UNDERGROUND);
 
         /* music_reset clears it, so one game's room cannot leak into the next. */
         music_reset();

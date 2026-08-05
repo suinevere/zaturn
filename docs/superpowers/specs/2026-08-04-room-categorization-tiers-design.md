@@ -1,7 +1,7 @@
 # Room Categorization — Tiers, Spatial Scope and Genre — Design
 
 **Date:** 2026-08-04
-**Status:** Implemented 2026-08-05
+**Status:** Designed
 
 ## Goal
 
@@ -32,11 +32,8 @@ In:
 - A **genre mask** on every keyword, so ambiguous words vote differently per
   game. Genre comes from an authored per-game table, falling back to runtime
   inference for games not in it.
-- A corpus generator that drives host mojozork across all 31 stories in
-  `tools/assets/Z3/`, using each game's walkthrough where one exists plus a
-  fixed wander script everywhere, and emits the captured room text as C
-  fixtures — plus the host test that consumes them.
-- A `GAME_GENRE[]` row for every game in that library.
+- A corpus generator that drives host mojozork with the shipped walkthroughs and
+  emits real room text as C fixtures, plus the host test that consumes them.
 
 Out:
 
@@ -204,24 +201,16 @@ exactly why the bug would survive testing on the shipped disc.
 
 ### Corpus generator
 
-`tools/gen_room_corpus.py`:
+`tools/gen_room_corpus.py`, mirroring `tools/typeahead/gen_all.ps1`:
 
 1. Build host mojozork once with `gcc` (`saturn/mojozork.c` already has a
    `main()` that loads a story file and reads commands from stdin).
-2. Discover **`tools/assets/Z3/*.Z3`** — 31 stories as fetched by
-   `tools/assets/games.bat`: 25 full published titles, two Infocom Samplers,
-   three Mini-Zorks and Hypochondriac. This is the full library, not the three
-   open-sourced Zorks under `saturn/cd/data/Z3/`.
-3. For each game, run **two** capture passes and union the rooms:
-   - **Solution pass**, when a walkthrough exists: replay
-     `tools/typeahead/solutions/<STEM>.WIN`.
-   - **Wander pass**, always: replay a fixed, checked-in direction script
-     (`n s e w ne nw se sw u d in out` cycled to a fixed length). No seed, no
-     randomness — the corpus has to be reproducible byte-for-byte or the
-     snapshot suite is worthless.
-4. Capture output per command, keep the moves that produced a room entry, and
-   dedupe by `(serial, title)` across both passes.
-5. Emit `test/corpus/rooms.inc`: a C array of
+2. Discover `saturn/cd/data/Z3/*.Z3` and pair each with
+   `tools/typeahead/solutions/<STEM>.WIN`, skipping any game with no non-empty
+   walkthrough — the same rule `gen_all.ps1` uses.
+3. Pipe the walkthrough in, capture output per command, keep the moves that
+   produced a room entry, and dedupe by title.
+4. Emit `test/corpus/rooms.inc`: a C array of
    `{ release, serial, title, description }`. **The generator never assigns an
    expected category** — it has no classifier and does not link one. It captures
    text only.
@@ -232,45 +221,8 @@ generator owns *what the games say*, the test owns *what we have agreed the
 answer is*. A room present in `rooms.inc` with no row in `blessed.inc` fails the
 test as unblessed rather than silently passing.
 
-Both files are checked in; the game files are **not** — `tools/assets/.gitignore`
-ignores `/Z3/` because only Zork 1–3 are open-sourced. The corpus is therefore a
-committed generated artifact built from uncommitted inputs, exactly like
-`saturn/src/input/typeahead_solution.c`. Anyone can run the test; regenerating it
-requires having run `games.bat` first. The generator is re-run when the game
-library changes, not on every build.
-
-**Walkthrough pairing is strictly by stem — no alias table.** `<STEM>.Z3` pairs
-with `<STEM>.WIN` or it does not pair. The one file that broke that rule,
-`LRKHOROR.WIN`, is renamed to `LURKING.WIN` as part of this work; it was already
-reaching `typeahead_solution.c` by a hand-passed `gen_solution.py --game
-STORY:WIN` argument rather than by discovery, so the rename costs nothing and
-makes `gen_all.ps1` work unattended for Lurking Horror too.
-
-An alias map was considered and rejected: it is a lookaside that has to be
-maintained in two generators, and it exists only to preserve a filename nobody
-depends on. One-to-one names make the pairing rule checkable by eye.
-
-After the rename, every full published title in the library has a non-empty
-walkthrough. The six games without one are not full titles:
-
-- `INFOSAM5`, `INFOSAM7` — Infocom Sampler demo discs.
-- `MZORKI`, `MZORKI2`, `MZORKII` — Mini-Zork I and II, abridged re-releases
-  whose rooms are subsets of `ZORK1` and `ZORK2`.
-- `HYPOCOND` — Hypochondriac. `HYPOCOND.WIN` exists but is zero bytes, so this
-  is the only titled game in the library carrying an empty solution stub.
-
-All six are still reached by the wander pass, so they contribute rooms even
-without a solution.
-
-The generator prints a per-game line stating which passes ran, and exits
-non-zero if a `.Z3` produced no rooms at all. Silence is never a pass.
-
-**Junk filter.** The wander pass walks into walls, darkness and parser errors,
-and that output must not reach the corpus. A capture is discarded when its first
-line matches a failure phrase (`you can't go that way`, `it is pitch black`,
-`i don't understand`, `that's not a verb`, `you have died`) or when the body is
-under a minimum length. `verbose` is issued as the first command of every pass so
-full descriptions print on re-entry rather than titles alone.
+Both files are checked in. The generator is re-run when a new `.Z3` lands on the
+disc, not on every build.
 
 ### What the test asserts
 
@@ -281,51 +233,31 @@ tests, includes `rooms.inc` and runs two suites:
   in `blessed.inc`. Any diff fails the test, printing room title, blessed
   category and new category. Re-blessing is a deliberate `--bless` run with a
   reviewable diff, so every future keyword edit shows its blast radius across
-  the whole library — several hundred rooms spanning every genre, not the
-  handful a hand-written test would cover.
+  ~150 rooms.
 - **Assertions.** A small hand-written set of rooms that are *wrong today* and
   must flip:
-  - Zork I's West of House → `TC_HOUSE`, not wilderness.
-  - Zork I's Reservoir / Stream View → the containing structure, not the
-    distant water.
+  - West of House → `TC_HOUSE`, not wilderness.
+  - Reservoir / Stream View → the containing structure, not the distant water.
   - Zork II's boat rooms → `TC_NAUTICAL`.
-  - **Starcross's ship interiors → `TC_SCIFI`, not `TC_NAUTICAL`.** This is the
-    bug that started the work and it is asserted against real prose, not a
-    fixture.
-  - Seastalker's sub interiors → `TC_NAUTICAL`, proving the same words still
-    resolve the other way under `GN_MODERN`.
-  - Infidel's desert rooms → `TC_DESERT` despite Feature-tier objects strewn
-    through the descriptions.
-  - Synthetic fixtures for the two paths no game exercises: an unresolved genre
-    where `ship` must abstain rather than vote, and a genre lock that must flush
-    the room cache and re-announce the current category.
+  - Synthetic sci-fi fixtures asserting `ship`/`deck`/`hull` resolve to
+    `TC_SCIFI` under `GN_SCIFI` and `TC_NAUTICAL` under `GN_FANTASY`.
+  - An unresolved-genre fixture asserting `ship` abstains rather than voting.
+  - A genre-lock fixture asserting the room cache is flushed and the category
+    re-announced.
 
 These are the cases the change exists for; the snapshot is what proves it did not
-break every other room on the way.
+break the other 140 rooms on the way.
 
-### Genre coverage
+### Known coverage gap
 
-The library covers every genre the mask distinguishes, so the genre layer is
-testable against real prose rather than fixtures alone:
-
-- **Sci-fi** — `PLNTFALL`, `STATFALL`, `STARCROS`, `SUSPENDD`, `HITCHHKR`.
-  `STARCROS` is the direct test of the motivating bug: it is set aboard a ship
-  and says so constantly.
-- **Fantasy** — `ZORK1/2/3`, `ENCHANTR`, `SORCERER`, `SPLBRKR`, `WISHBRNG`,
-  `ADVENT`.
-- **Modern / mystery** — `DEADLINE`, `WITNESS`, `SUSPECT`, `MOONMIST`,
-  `BALLYHOO`, `CUTHROAT`, `HOLYWOOD`, `LEATHERG`, `PLNDHRTS`.
-- **Horror** — `LURKING`.
-- **Nautical / desert edge cases** — `SEASTLKR` and `INFIDEL`, which are the
-  games most likely to expose a bad tier assignment on `ship`/`deck` and
-  `sand`/`dune`.
-
-Every one of these needs a `GAME_GENRE[]` row, keyed by release + serial read
-from each story's Z-header. That table is authored as part of this work, not
-deferred — with the whole library present there is no reason to lean on
-inference for any
-of them. Inference remains the path for a game a player supplies themselves, and
-the unresolved-genre and cache-flush fixtures are what test it.
+Only `ZORK1.Z3`, `ZORK2.Z3` and `ZORK3.Z3` are on the disc today, and all three
+are fantasy. **The corpus cannot exercise the genre layer against real text
+until a sci-fi story file is present.** `PLNTFALL.WIN`, `STARCROS.WIN`,
+`STATFALL.WIN`, `SUSPENDD.WIN` and `HITCHHKR.WIN` are already in
+`tools/typeahead/solutions/`, so the generator will pick those games up
+automatically the moment their `.Z3` lands. Until then the genre path rests on
+the synthetic fixtures above, and that is a real limit on confidence, not a
+formality.
 
 ### Existing tests
 
@@ -364,13 +296,3 @@ this work.
 - **Music changes with the art.** Every category improvement retunes track
   selection too. That is intended, but it means a bad tier assignment is audible
   as well as visible.
-- **The wander pass must stay deterministic.** A generator whose output shifts
-  between runs turns every snapshot diff into noise and the suite gets ignored
-  within a week. The direction script is checked in and fixed-length, and the
-  junk filter is data rather than heuristics, precisely so a regeneration with
-  no game-library change produces a byte-identical `rooms.inc`. If that ever
-  stops holding, the snapshot suite is broken even while it is passing.
-- **The corpus cannot be rebuilt from a clean clone.** The story files are
-  ignored and fetched by `games.bat` from URLs in `CONFIG.ME`. If those URLs rot,
-  the committed corpus still tests fine but can no longer be regenerated or
-  extended.

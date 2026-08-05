@@ -59,11 +59,15 @@ typedef struct {
  | table accessors (room_class_data.c)
  | Description: text_keywords returns the room-keyword table
  |   (TC_WILDERNESS..TC_PLACE_LAST) and its length; text_events returns the
- |   event-word table (TC_DANGER/TC_TRIUMPH) and its length.
+ |   event-word table (TC_DANGER/TC_TRIUMPH) and its length. text_neg_phrases and
+ |   text_pos_phrases return the spatial-modifier tables a sentence is checked
+ |   against before its keyword hits are counted.
  | Author: suinevere
  ----------------------*/
 const TextKeyword* text_keywords(int* n);
 const TextKeyword* text_events(int* n);
+const char* const* text_neg_phrases(int* n);
+const char* const* text_pos_phrases(int* n);
 
 /*----------------------
  | classifiers

@@ -21,7 +21,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 151001: At East End of Twopit Room */
     5,   /* 151001: At End Of Road */
     9,   /* 151001: At Fork in Path */
-    5,   /* 151001: At Hill In Road */
+    1,   /* 151001: At Hill In Road */
     2,   /* 151001: At Junction With Warm Walls */
     2,   /* 151001: At Reservoir */
     3,   /* 151001: At Slit In Streambed */
@@ -151,7 +151,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 831005: West Lawn */
     12,   /* 831005: West Side of House */
     12,   /* 831005: West of Front Door */
-    1,   /* 860820: Beach */
+    4,   /* 860820: Beach */
     12,   /* 860820: Bedroom */
     0,   /* 860820: Bottomless Pit */
     6,   /* 860820: Cell */
@@ -233,7 +233,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 861215: Southeast Junction */
     12,   /* 861215: Southwest Junction */
     2,   /* 861215: Surface of Grotto Pool */
-    1,   /* 861215: Top Landing */
+    5,   /* 861215: Top Landing */
     2,   /* 861215: Tunnel */
     2,   /* 861215: Underwater Passage */
     12,   /* 861215: West End of Roof */
@@ -391,7 +391,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     3,   /* 860730: Well Bottom */
     0,   /* 870912: Aero Basement */
     0,   /* 870912: Basalt Bowl */
-    2,   /* 870912: Brown Basement */
+    5,   /* 870912: Brown Basement */
     2,   /* 870912: Cluttered Passage */
     5,   /* 870912: Engineering Building */
     5,   /* 870912: Fruits and Nuts */
@@ -410,9 +410,9 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 870912: Steam Tunnel */
     5,   /* 870912: Subbasement */
     2,   /* 870912: Temporary Basement */
-    5,   /* 870912: Temporary Lab */
+    9,   /* 870912: Temporary Lab */
     9,   /* 870912: Terminal Room */
-    5,   /* 870912: Third Floor */
+    9,   /* 870912: Third Floor */
     0,   /* 870912: Top Floor */
     2,   /* 870912: Tunnel Entrance */
     5,   /* 861022: east hall */
@@ -571,7 +571,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 851003: Escalator */
     0,   /* 851003: Fork */
     4,   /* 851003: Gangway */
-    4,   /* 851003: Helicopter */
+    9,   /* 851003: Helicopter */
     0,   /* 851003: Helipad */
     0,   /* 851003: Infirmary */
     12,   /* 851003: Kitchen */
@@ -814,7 +814,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 841005: Circular Driveway */
     5,   /* 841005: Covered Walkway */
     0,   /* 841005: Dance Floor */
-    5,   /* 841005: Dining Room */
+    12,   /* 841005: Dining Room */
     0,   /* 841005: East Bath */
     0,   /* 841005: East Coat Closet */
     5,   /* 841005: East Hall */
@@ -902,7 +902,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 840726: Dam Lobby */
     2,   /* 840726: Damp Cave */
     0,   /* 840726: Dead End */
-    3,   /* 840726: Deep Canyon */
+    0,   /* 840726: Deep Canyon */
     0,   /* 840726: Dome Room */
     2,   /* 840726: Drafty Room */
     2,   /* 840726: East of Chasm */
@@ -1015,7 +1015,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 840727: Crystal Grotto */
     2,   /* 840727: Damp Passage */
     2,   /* 840727: Dead End */
-    9,   /* 840727: East Corridor */
+    5,   /* 840727: East Corridor */
     10,   /* 840727: Endless Stair */
     2,   /* 840727: Foggy Room */
     1,   /* 840727: Hairpin Loop */
@@ -1033,6 +1033,6 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 840727: Tight Squeeze */
     2,   /* 840727: Timber Room */
     3,   /* 840727: Underwater */
-    9,   /* 840727: West Corridor */
+    5,   /* 840727: West Corridor */
     3,   /* 840727: Western Shore */
 };

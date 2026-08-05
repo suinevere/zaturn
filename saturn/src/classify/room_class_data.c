@@ -117,6 +117,28 @@ static const TextKeyword EV[] = {
 };
 
 /*----------------------
+ | NEG / POS
+ | Description: Spatial modifiers, lowercase. A sentence containing a NEG phrase
+ |   describes something the player can see but is not in, so its keyword hits
+ |   are discarded outright. A sentence containing a POS phrase names the room
+ |   itself, so its hits count double.
+ |
+ |   Both lists are deliberately short. "you can see" is NOT here despite being a
+ |   distance idiom: it introduces genuinely present objects far more often than
+ |   distant ones, and discarding those sentences would cost more than the
+ |   occasional distant landmark it catches.
+ | Author: suinevere
+ ----------------------*/
+static const char* const NEG[] = {
+    "in the distance", "far off", "through the window", "painted on",
+    "on the horizon", "beyond the", "you can hear",
+};
+static const char* const POS[] = {
+    "you are in", "you are standing", "you stand", "this is a",
+    "you find yourself", "you are on",
+};
+
+/*----------------------
  | text_keywords / text_events
  | Description: Hand back the room-keyword / event-keyword tables and their
  |   lengths.
@@ -124,3 +146,16 @@ static const TextKeyword EV[] = {
  ----------------------*/
 const TextKeyword* text_keywords(int* n) { *n = (int)(sizeof KW / sizeof KW[0]); return KW; }
 const TextKeyword* text_events(int* n)   { *n = (int)(sizeof EV / sizeof EV[0]); return EV; }
+
+/*----------------------
+ | text_neg_phrases / text_pos_phrases
+ | Description: Hand back the negative / positive spatial-modifier tables and
+ |   their lengths.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: NEG, POS
+ | Params: n -- receives the table length
+ | Returns: the table
+ ----------------------*/
+const char* const* text_neg_phrases(int* n) { *n = (int)(sizeof NEG / sizeof NEG[0]); return NEG; }
+const char* const* text_pos_phrases(int* n) { *n = (int)(sizeof POS / sizeof POS[0]); return POS; }

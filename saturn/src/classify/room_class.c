@@ -17,30 +17,85 @@
 static char lc(char c) { return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c; }
 
 /*----------------------
- | has_word
- | Description: Case-insensitive whole-word search: true when `word` (stored
- |   lowercase) occurs in `text` bounded on both sides by a non-alphabetic char or
- |   a string end, so "cave" does not match "caverns".
+ | has_word_n
+ | Description: Case-insensitive whole-word search within the first `len` bytes
+ |   of `text`, so "cave" does not match "caverns". The bounded form exists so a
+ |   single sentence can be scored without copying it out of the turn buffer.
  | Author: suinevere
- | Dependencies: string.h
+ | Dependencies: N/A
  | Globals: N/A
- | Params: text -- haystack; word -- lowercase needle
+ | Params: text -- haystack; len -- how much of it to search; word -- lowercase needle
  | Returns: 1 on a whole-word match, 0 otherwise
  ----------------------*/
-static int has_word(const char* text, const char* word) {
-    int wl = (int) strlen(word);
-    for (const char* p = text; *p; p++) {
-        int i = 0;
-        while (i < wl && p[i] && lc(p[i]) == word[i]) i++;
+static int has_word_n(const char* text, int len, const char* word) {
+    int wl = (int) strlen(word), p, i;
+    for (p = 0; p + wl <= len; p++) {
+        i = 0;
+        while (i < wl && lc(text[p + i]) == word[i]) i++;
         if (i == wl) {
-            char before = (p == text) ? ' ' : p[-1];
-            char after  = p[wl];
+            char before = (p == 0) ? ' ' : text[p - 1];
+            char after  = (p + wl < len) ? text[p + wl] : ' ';
             int lb = !((before >= 'a' && before <= 'z') || (before >= 'A' && before <= 'Z'));
             int la = !((after  >= 'a' && after  <= 'z') || (after  >= 'A' && after  <= 'Z'));
             if (lb && la) return 1;
         }
     }
     return 0;
+}
+
+/*----------------------
+ | has_word
+ | Description: Case-insensitive whole-word search over the whole of `text`;
+ |   the unbounded form of has_word_n, kept for callers that have no sentence
+ |   boundary to respect (the title, and text_scan_event's full-turn scan).
+ | Author: suinevere
+ | Dependencies: string.h, has_word_n
+ | Globals: N/A
+ | Params: text -- haystack; word -- lowercase needle
+ | Returns: 1 on a whole-word match, 0 otherwise
+ ----------------------*/
+static int has_word(const char* text, const char* word) {
+    return has_word_n(text, (int) strlen(text), word);
+}
+
+/*----------------------
+ | has_phrase_n
+ | Description: Case-insensitive substring search within the first `len` bytes of
+ |   `text`. Not word-bounded, because the modifier phrases contain spaces and
+ |   are matched as written.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: text -- haystack; len -- how much of it to search; phrase -- lowercase needle
+ | Returns: 1 on a match, 0 otherwise
+ ----------------------*/
+static int has_phrase_n(const char* text, int len, const char* phrase) {
+    int pl = (int) strlen(phrase), p, i;
+    for (p = 0; p + pl <= len; p++) {
+        i = 0;
+        while (i < pl && lc(text[p + i]) == phrase[i]) i++;
+        if (i == pl) return 1;
+    }
+    return 0;
+}
+
+/*----------------------
+ | sentence_weight
+ | Description: What one sentence's keyword hits are worth: 0 when it names
+ |   something distant, 2 when it names the room the player is in, 1 otherwise.
+ | Author: suinevere
+ | Dependencies: room_class.h (text_neg_phrases, text_pos_phrases)
+ | Globals: N/A
+ | Params: s -- the sentence; len -- its length
+ | Returns: the multiplier
+ ----------------------*/
+static int sentence_weight(const char* s, int len) {
+    int n = 0, i;
+    const char* const* p = text_neg_phrases(&n);
+    for (i = 0; i < n; i++) if (has_phrase_n(s, len, p[i])) return 0;
+    p = text_pos_phrases(&n);
+    for (i = 0; i < n; i++) if (has_phrase_n(s, len, p[i])) return 2;
+    return 1;
 }
 
 /*----------------------
@@ -160,12 +215,16 @@ static int tier_wins(const unsigned short* a, const unsigned short* b) {
 /*----------------------
  | text_classify_room
  | Description: Scores room text against the keyword table and returns the
- |   winning category, or TC_NEUTRAL when nothing matched. Hits are counted per
- |   tier rather than summed, and the tiers are compared in order, so a keyword
- |   that names the room the player is in beats any amount of scenery mentioned
- |   inside it. Title words count for TEXT_TITLE_WEIGHT extra WITHIN their tier,
- |   so a weighted title can break a tie but can no longer promote a Feature past
- |   a Structure.
+ |   winning category, or TC_NEUTRAL when nothing matched. The text is scored one
+ |   sentence at a time: a sentence naming something distant ("far off, a forest")
+ |   contributes nothing, a sentence naming the room itself ("you are in a cave")
+ |   counts double, and an ordinary sentence counts once, all in place with no
+ |   copy of the sentence out of the turn buffer. Hits are counted per tier rather
+ |   than summed, and the tiers are compared in order, so a keyword that names the
+ |   room the player is in beats any amount of scenery mentioned inside it. Title
+ |   words count for TEXT_TITLE_WEIGHT extra WITHIN their tier, so a weighted
+ |   title (or a doubled positive sentence) can break a tie but can no longer
+ |   promote a Feature past a Structure.
  | Author: suinevere
  | Dependencies: room_class.h (text_keywords, TC_*, KT_*)
  | Globals: g_room_title
@@ -190,10 +249,25 @@ int text_classify_room(const char* text) {
     }
 
     int nk = 0; const TextKeyword* kw = text_keywords(&nk);
-    for (i = 0; i < nk; i++) {
-        if (has_word(text,  kw[i].word)) hits[kw[i].cat][kw[i].tier]++;
-        if (has_word(title, kw[i].word)) hits[kw[i].cat][kw[i].tier] += TEXT_TITLE_WEIGHT;
+    int start = 0, pos = 0;
+    for (;;) {
+        char ch = text[pos];
+        if (ch == 0 || ch == '.' || ch == '!' || ch == '?') {
+            int len = pos - start;
+            if (len > 0) {
+                int w = sentence_weight(text + start, len);
+                if (w > 0)
+                    for (i = 0; i < nk; i++)
+                        if (has_word_n(text + start, len, kw[i].word))
+                            hits[kw[i].cat][kw[i].tier] += (unsigned short) w;
+            }
+            if (ch == 0) break;
+            start = pos + 1;
+        }
+        pos++;
     }
+    for (i = 0; i < nk; i++)
+        if (has_word(title, kw[i].word)) hits[kw[i].cat][kw[i].tier] += TEXT_TITLE_WEIGHT;
 
     /* Starts past TC_NEUTRAL on purpose: it is the nothing-matched answer, not
        something a keyword can vote for. An exact vector tie falls to the lowest

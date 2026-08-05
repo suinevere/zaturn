@@ -124,6 +124,26 @@ static int assertions(void) {
        counting a weighted title word simply won; now the tier decides first. */
     CHECK(classify("Forest Path", "A cave.") == TC_UNDERGROUND);
 
+    /* A landmark named as distant does not get to describe the room. The whole
+       sentence is discarded, because "far off" attaches to the landmark and not
+       to any particular word next to it. */
+    CHECK(classify("Ledge",
+        "You are on a narrow ledge. Far off, a forest covers the valley floor.")
+        == TC_NEUTRAL);
+
+    /* ...and the same sentence without the modifier still votes. */
+    CHECK(classify("Ledge",
+        "You are on a narrow ledge. A forest covers the valley floor.")
+        == TC_WILDERNESS);
+
+    /* A positive phrase doubles its sentence's hits, which breaks a tie WITHIN a
+       tier -- it cannot promote a Feature past a Structure. */
+    CHECK(classify("Junction",
+        "A tunnel leads north. You are in a large cavern.") == TC_UNDERGROUND);
+    CHECK(classify("Junction",
+        "You are in a room with a rug. A cave opens to the north.")
+        == TC_UNDERGROUND);
+
     if (!fails) printf("ASSERTIONS: OK\n");
     return fails;
 }

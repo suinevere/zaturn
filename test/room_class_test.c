@@ -90,8 +90,46 @@ static int snapshot(void) {
     return fails;
 }
 
+#define CHECK(c) do{ if(!(c)){ printf("FAIL line %d: %s\n", __LINE__, #c); fails++; } }while(0)
+
+/* Deliberately does NOT call room_class_reset: from Task 6 that clears the
+   resolved genre, which would undo the room_class_set_game the genre assertions
+   make just before calling here. note_title always overwrites, so there is
+   nothing a reset would add. */
+static int classify(const char* title, const char* text) {
+    room_class_note_title(title);
+    return text_classify_room(text);
+}
+
+static int assertions(void) {
+    int fails = 0;
+
+    /* snapshot() runs first and leaves whatever genre the last corpus row
+       resolved. Clear it so these cases start from a known state. */
+    room_class_reset();
+
+    /* A lake in a cave is a cave. Structure outranks Biome outranks Feature, so
+       no count of scenery can overturn the thing the player is standing in. */
+    CHECK(classify("Cave",
+        "You are in a damp cave. A lake stretches away below, and a forest is "
+        "visible far above through a crack.") == TC_UNDERGROUND);
+
+    /* Features cannot outvote a Biome however many of them there are -- this is
+       the case additive weights got wrong at four features and up. */
+    CHECK(classify("Clearing",
+        "A tree leans over a boulder beside a still pool. A rug of moss covers "
+        "the ground and a desk rots against a stump.") == TC_WILDERNESS);
+
+    /* The title can no longer promote a Feature past a Structure. Under flat
+       counting a weighted title word simply won; now the tier decides first. */
+    CHECK(classify("Forest Path", "A cave.") == TC_UNDERGROUND);
+
+    if (!fails) printf("ASSERTIONS: OK\n");
+    return fails;
+}
+
 static int run_suites(void) {
-    int fails = snapshot();
+    int fails = snapshot() + assertions();
     return fails ? 1 : 0;
 }
 

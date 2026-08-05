@@ -27,12 +27,33 @@ extern "C" {
 #endif
 
 /*----------------------
- | TextKeyword
- | Description: One keyword -> text-category mapping row, used by both the room
- |   and event tables.
+ | KT_* / KT_NUM_TIERS
+ | Description: How reliably a keyword names the room itself. Structure is what
+ |   the player is standing in (cave, house, ship); Biome is the general natural
+ |   area (forest, desert, sea); Feature is a thing that sits inside one of those
+ |   (tree, boulder, rug).
+ |
+ |   The tier is a property of the WORD, not of the category it votes for -- both
+ |   "cave" and "house" are Structure though they vote for different moods. It is
+ |   compared before any count, so one Structure hit beats any number of Biome
+ |   hits: a lake in a cave is a cave, by construction rather than by tuning a
+ |   weight until it happens to come out right.
  | Author: suinevere
  ----------------------*/
-typedef struct { const char* word; unsigned char cat; } TextKeyword;
+enum { KT_STRUCTURE = 0, KT_BIOME = 1, KT_FEATURE = 2 };
+#define KT_NUM_TIERS 3
+
+/*----------------------
+ | TextKeyword
+ | Description: One keyword -> text-category mapping row, used by both the room
+ |   and event tables. `tier` is unused on event rows (KT_FEATURE by convention).
+ | Author: suinevere
+ ----------------------*/
+typedef struct {
+    const char*   word;
+    unsigned char cat;
+    unsigned char tier;
+} TextKeyword;
 
 /*----------------------
  | table accessors (room_class_data.c)

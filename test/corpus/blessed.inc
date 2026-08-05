@@ -11,7 +11,7 @@
  | Returns: N/A
  ----------------------*/
 static const unsigned char BLESSED[CORPUS_N] = {
-    1,   /* 151001: Alcove */
+    2,   /* 151001: Alcove */
     5,   /* 151001: Arched Hall */
     2,   /* 151001: At "Y2" */
     2,   /* 151001: At Breath-Taking View */
@@ -19,11 +19,11 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 151001: At Complex Junction */
     5,   /* 151001: At East End of Long Hall */
     1,   /* 151001: At East End of Twopit Room */
-    1,   /* 151001: At End Of Road */
-    1,   /* 151001: At Fork in Path */
-    1,   /* 151001: At Hill In Road */
+    5,   /* 151001: At End Of Road */
+    9,   /* 151001: At Fork in Path */
+    5,   /* 151001: At Hill In Road */
     2,   /* 151001: At Junction With Warm Walls */
-    3,   /* 151001: At Reservoir */
+    2,   /* 151001: At Reservoir */
     3,   /* 151001: At Slit In Streambed */
     5,   /* 151001: At West End of Hall of Mists */
     5,   /* 151001: At West End of Long Hall */
@@ -39,13 +39,13 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 151001: Dead End, near Vending Machine */
     2,   /* 151001: Dirty Passage */
     0,   /* 151001: Giant Room */
-    1,   /* 151001: Hall of the Mountain King */
+    5,   /* 151001: Hall of the Mountain King */
     2,   /* 151001: Immense N/S Passage */
     1,   /* 151001: In A Valley */
     2,   /* 151001: In Anteroom */
     0,   /* 151001: In Barren Room */
     2,   /* 151001: In Bedquilt */
-    3,   /* 151001: In Cavern With Waterfall */
+    2,   /* 151001: In Cavern With Waterfall */
     6,   /* 151001: In Chamber of Boulders */
     2,   /* 151001: In Cobble Crawl */
     9,   /* 151001: In Corridor */
@@ -74,9 +74,9 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 151001: N/S Canyon */
     2,   /* 151001: N/S and E/W Crossover */
     0,   /* 151001: NE End of Repository */
-    3,   /* 151001: On East Bank of Fissure */
+    5,   /* 151001: On East Bank of Fissure */
     1,   /* 151001: On NE Side of Chasm */
-    1,   /* 151001: On SW Side of Chasm */
+    9,   /* 151001: On SW Side of Chasm */
     6,   /* 151001: Orange River Chamber */
     2,   /* 151001: Oriental Room */
     0,   /* 151001: Outside Grate */
@@ -122,33 +122,33 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 840809: Winding Road */
     5,   /* 840809: Your Room */
     5,   /* 840809: Your Room, on the bed */
-    3,   /* 831005: Behind the Shed */
+    12,   /* 831005: Behind the Shed */
     5,   /* 831005: Bottom of Stairs */
     0,   /* 831005: Closet */
     5,   /* 831005: Corner */
     1,   /* 831005: Dining Room */
-    3,   /* 831005: East Lawn */
+    12,   /* 831005: East Lawn */
     12,   /* 831005: East Side of House */
-    11,   /* 831005: East of Front Door */
+    12,   /* 831005: East of Front Door */
     5,   /* 831005: End of South Hall */
-    1,   /* 831005: Front Path */
-    1,   /* 831005: Garden Path */
+    12,   /* 831005: Front Path */
+    12,   /* 831005: Garden Path */
     0,   /* 831005: Guest Room */
-    5,   /* 831005: Hallway */
+    9,   /* 831005: Hallway */
     12,   /* 831005: Kitchen */
     12,   /* 831005: Master Bathroom */
-    3,   /* 831005: North Lawn */
+    12,   /* 831005: North Lawn */
     5,   /* 831005: North Upstairs Hall */
     5,   /* 831005: North of Foyer */
-    1,   /* 831005: Orchard Path */
+    12,   /* 831005: Orchard Path */
     0,   /* 831005: Pantry */
     1,   /* 831005: Shed */
     0,   /* 831005: South Closet */
-    1,   /* 831005: South Lawn */
+    12,   /* 831005: South Lawn */
     5,   /* 831005: Stairs */
-    5,   /* 831005: Top of Stairs */
+    9,   /* 831005: Top of Stairs */
     0,   /* 831005: Upstairs Closet */
-    3,   /* 831005: West Lawn */
+    12,   /* 831005: West Lawn */
     12,   /* 831005: West Side of House */
     12,   /* 831005: West of Front Door */
     1,   /* 860820: Beach */
@@ -177,7 +177,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 860820: Map Room */
     1,   /* 860820: Meadow */
     1,   /* 860820: Mountain Trail */
-    1,   /* 860820: North Gate */
+    2,   /* 860820: North Gate */
     1,   /* 860820: Outside of Shack */
     1,   /* 860820: Pebbled Path */
     6,   /* 860820: Sacrificial Altar */
@@ -213,7 +213,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 861215: Garden, North */
     1,   /* 861215: Garden, South */
     1,   /* 861215: Garden, West */
-    3,   /* 861215: Grotto, Underwater */
+    2,   /* 861215: Grotto, Underwater */
     12,   /* 861215: Guest Room */
     1,   /* 861215: Hedge Maze */
     0,   /* 861215: In the Chimney */
@@ -230,13 +230,13 @@ static const unsigned char BLESSED[CORPUS_N] = {
     5,   /* 861215: Short Hall */
     2,   /* 861215: Small Passage */
     12,   /* 861215: South Junction */
-    1,   /* 861215: Southeast Junction */
-    1,   /* 861215: Southwest Junction */
-    3,   /* 861215: Surface of Grotto Pool */
+    12,   /* 861215: Southeast Junction */
+    12,   /* 861215: Southwest Junction */
+    2,   /* 861215: Surface of Grotto Pool */
     1,   /* 861215: Top Landing */
     2,   /* 861215: Tunnel */
-    3,   /* 861215: Underwater Passage */
-    4,   /* 861215: West End of Roof */
+    2,   /* 861215: Underwater Passage */
+    12,   /* 861215: West End of Roof */
     0,   /* 870225: Bathroom */
     0,   /* 870225: Guest Room */
     0,   /* 870225: In Bed */
@@ -261,17 +261,17 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 830916: Golden Alcove */
     6,   /* 830916: Golden Room */
     6,   /* 830916: Inner Chamber */
-    1,   /* 830916: Middle Path */
+    7,   /* 830916: Middle Path */
     0,   /* 830916: Narrow Hallway */
     2,   /* 830916: Narrow Passageway */
-    1,   /* 830916: Near the Nile */
+    7,   /* 830916: Near the Nile */
     0,   /* 830916: Northeast Hallway */
     1,   /* 830916: Northern Path */
     0,   /* 830916: Northwest Hallway */
     5,   /* 830916: On the Steep Stairs */
     1,   /* 830916: Outside Supply Tent */
     1,   /* 830916: Outside Work Tent */
-    1,   /* 830916: Outside Your Tent */
+    7,   /* 830916: Outside Your Tent */
     3,   /* 830916: River Bank */
     9,   /* 830916: Room of Isis */
     9,   /* 830916: Room of Neith */
@@ -281,7 +281,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     6,   /* 830916: Silver Room */
     5,   /* 830916: South Landing */
     9,   /* 830916: Southeast Hallway */
-    1,   /* 830916: Southern Path */
+    7,   /* 830916: Southern Path */
     2,   /* 830916: Southwest Hallway */
     6,   /* 830916: Steep Passageway */
     0,   /* 830916: Supply Tent */
@@ -295,16 +295,16 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 850823: Admin Corridor South */
     12,   /* 850823: Attic */
     0,   /* 850823: Broom Closet */
-    1,   /* 850823: Canyon Bottom */
-    1,   /* 850823: Canyon View */
+    3,   /* 850823: Canyon Bottom */
+    2,   /* 850823: Canyon View */
     1,   /* 850823: Clearing */
     9,   /* 850823: Corridor Junction */
     7,   /* 850823: Desert */
     0,   /* 850823: Dorm C */
     9,   /* 850823: Dorm Corridor */
     0,   /* 850823: Dorm D */
-    1,   /* 850823: East of Chasm */
-    1,   /* 850823: End of Rainbow */
+    2,   /* 850823: East of Chasm */
+    3,   /* 850823: End of Rainbow */
     7,   /* 850823: Fire Pit */
     1,   /* 850823: Forest */
     1,   /* 850823: Forest Path */
@@ -312,25 +312,25 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 850823: Mech Corridor */
     9,   /* 850823: Mech Corridor North */
     9,   /* 850823: Mech Corridor South */
-    1,   /* 850823: Middle Path */
-    1,   /* 850823: Near the Nile */
+    7,   /* 850823: Middle Path */
+    7,   /* 850823: Near the Nile */
     12,   /* 850823: North of House */
     1,   /* 850823: Northern Path */
     1,   /* 850823: Outside Supply Tent */
     1,   /* 850823: Outside Work Tent */
-    1,   /* 850823: Outside Your Tent */
+    7,   /* 850823: Outside Your Tent */
     0,   /* 850823: Physical Plant */
-    5,   /* 850823: Reactor Access Stairs */
+    9,   /* 850823: Reactor Access Stairs */
     9,   /* 850823: Reactor Control */
     9,   /* 850823: Reactor Elevator */
     3,   /* 850823: River Bank */
-    9,   /* 850823: Robot Shop */
+    5,   /* 850823: Robot Shop */
     2,   /* 850823: Rocky Ledge */
     0,   /* 850823: SanFac C */
     0,   /* 850823: SanFac D */
     0,   /* 850823: SanFac E */
     12,   /* 850823: South of House */
-    1,   /* 850823: Southern Path */
+    7,   /* 850823: Southern Path */
     0,   /* 850823: Storage East */
     0,   /* 850823: Storage West */
     0,   /* 850823: Studio */
@@ -340,12 +340,12 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 850823: West of House */
     12,   /* 850823: Work Tent */
     0,   /* 850823: Your Tent */
-    1,   /* 870601: Canyon Bottom */
-    1,   /* 870601: Canyon View */
+    3,   /* 870601: Canyon Bottom */
+    2,   /* 870601: Canyon View */
     1,   /* 870601: Clearing */
     0,   /* 870601: Creepy Corner */
-    1,   /* 870601: East of Chasm */
-    1,   /* 870601: End of Rainbow */
+    2,   /* 870601: East of Chasm */
+    3,   /* 870601: End of Rainbow */
     1,   /* 870601: Forest */
     1,   /* 870601: Forest Path */
     0,   /* 870601: Gallery */
@@ -365,10 +365,10 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 860730: Basement */
     12,   /* 860730: Bedroom */
     6,   /* 860730: Burial Chamber */
-    1,   /* 860730: Canalview Mall */
+    7,   /* 860730: Canalview Mall */
     0,   /* 860730: Cleveland */
     4,   /* 860730: Donald Dock */
-    3,   /* 860730: Dunetop */
+    4,   /* 860730: Dunetop */
     5,   /* 860730: Exit Shop */
     0,   /* 860730: Forgotten Storehouse */
     12,   /* 860730: Front Door */
@@ -423,7 +423,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     6,   /* 840207: Altar */
     12,   /* 840207: Attic */
     12,   /* 840207: Behind House */
-    1,   /* 840207: Canyon Bottom */
+    3,   /* 840207: Canyon Bottom */
     2,   /* 840207: Canyon View */
     2,   /* 840207: Coal Mine */
     3,   /* 840207: Dam Base */
@@ -431,7 +431,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 840207: Drafty Room */
     2,   /* 840207: Dusty Cave */
     6,   /* 840207: Egyptian Room */
-    1,   /* 840207: End of Rainbow */
+    3,   /* 840207: End of Rainbow */
     1,   /* 840207: Forest Edge */
     1,   /* 840207: Forest Path */
     3,   /* 840207: Frigid River */
@@ -443,7 +443,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 840207: North of House */
     3,   /* 840207: Reservoir */
     2,   /* 840207: Round Room */
-    3,   /* 840207: Sandy Beach */
+    2,   /* 840207: Sandy Beach */
     2,   /* 840207: Sandy Cave */
     0,   /* 840207: Shaft Room */
     2,   /* 840207: Slide Room */
@@ -461,14 +461,14 @@ static const unsigned char BLESSED[CORPUS_N] = {
     6,   /* 871124: Altar */
     12,   /* 871124: Attic */
     12,   /* 871124: Behind House */
-    1,   /* 871124: Canyon Bottom */
-    1,   /* 871124: Canyon View */
+    3,   /* 871124: Canyon Bottom */
+    2,   /* 871124: Canyon View */
     2,   /* 871124: Coal Mine */
     3,   /* 871124: Dam Base */
     2,   /* 871124: Drafty Cave */
     2,   /* 871124: Drafty Room */
     6,   /* 871124: Egyptian Room */
-    1,   /* 871124: End of Rainbow */
+    3,   /* 871124: End of Rainbow */
     1,   /* 871124: Forest */
     1,   /* 871124: Forest Edge */
     1,   /* 871124: Forest Path */
@@ -481,7 +481,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 871124: Mine Entrance */
     12,   /* 871124: North of House */
     2,   /* 871124: Round Room */
-    3,   /* 871124: Sandy Beach */
+    2,   /* 871124: Sandy Beach */
     2,   /* 871124: Sandy Cave */
     0,   /* 871124: Shaft Room */
     2,   /* 871124: Slide Room */
@@ -497,7 +497,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 871123: Aquarium Room */
     2,   /* 871123: Cerberus Room */
     2,   /* 871123: Circular Room */
-    1,   /* 871123: Cool Room */
+    2,   /* 871123: Cool Room */
     6,   /* 871123: Crypt */
     2,   /* 871123: Dark Tunnel */
     3,   /* 871123: Deep Ford */
@@ -520,7 +520,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     3,   /* 871123: Stone Bridge */
     0,   /* 871123: Tea Room */
     0,   /* 871123: Top of Well */
-    1,   /* 871123: Topiary */
+    2,   /* 871123: Topiary */
     0,   /* 871123: Volcano Bottom */
     8,   /* 871123: Wizard's Workshop */
     5,   /* 870730: Aft Hold */
@@ -529,7 +529,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     4,   /* 870730: Cabin */
     4,   /* 870730: Cabin, on the bed */
     0,   /* 870730: Cell */
-    1,   /* 870730: Clearing */
+    12,   /* 870730: Clearing */
     2,   /* 870730: Corner */
     4,   /* 870730: Crow's Nest */
     0,   /* 870730: East Hallway */
@@ -542,7 +542,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     5,   /* 870730: Hall */
     3,   /* 870730: In the Hedge */
     12,   /* 870730: Kitchen */
-    1,   /* 870730: Main Entrance */
+    12,   /* 870730: Main Entrance */
     2,   /* 870730: North Passage */
     0,   /* 870730: Parlour */
     2,   /* 870730: South Passage */
@@ -595,13 +595,13 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 851003: Radiation Lab */
     6,   /* 851003: Radiation Lock East */
     6,   /* 851003: Radiation Lock West */
-    5,   /* 851003: Reactor Access Stairs */
+    9,   /* 851003: Reactor Access Stairs */
     9,   /* 851003: Reactor Control */
     9,   /* 851003: Reactor Elevator */
     9,   /* 851003: Reactor Lobby */
     9,   /* 851003: Rec Corridor */
     11,   /* 851003: Repair Room */
-    9,   /* 851003: Robot Shop */
+    5,   /* 851003: Robot Shop */
     0,   /* 851003: SanFac A */
     0,   /* 851003: SanFac B */
     0,   /* 851003: SanFac C */
@@ -650,20 +650,20 @@ static const unsigned char BLESSED[CORPUS_N] = {
     6,   /* 851108: Helistar's Quarters */
     2,   /* 851108: Highway */
     0,   /* 851108: Hollow */
-    3,   /* 851108: Lagoon Floor */
+    4,   /* 851108: Lagoon Floor */
     3,   /* 851108: Lagoon Shore */
     11,   /* 851108: Library */
     5,   /* 851108: Lobby */
     2,   /* 851108: Mammoth Cavern */
-    1,   /* 851108: Mine Field */
+    2,   /* 851108: Mine Field */
     3,   /* 851108: Near Stagnant Pool */
     0,   /* 851108: Outside Glass Arch */
     0,   /* 851108: Outside Store */
     1,   /* 851108: Parade Ground */
     2,   /* 851108: Park Entrance */
     6,   /* 851108: Pit of Bones */
-    3,   /* 851108: River Bed */
-    1,   /* 851108: Ruins */
+    2,   /* 851108: River Bed */
+    2,   /* 851108: Ruins */
     0,   /* 851108: Servants' Quarters */
     0,   /* 851108: Shaft Bottom */
     2,   /* 851108: Shaft Top */
@@ -699,7 +699,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 821021: Floating in Air */
     0,   /* 821021: Fore End */
     0,   /* 821021: Garage */
-    1,   /* 821021: Grassland */
+    4,   /* 821021: Grassland */
     4,   /* 821021: Green Dock */
     5,   /* 821021: Green Hall */
     0,   /* 821021: Guard Room */
@@ -710,7 +710,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 821021: Metal Floor */
     1,   /* 821021: On Control Bubble */
     0,   /* 821021: On Drive Bubble */
-    5,   /* 821021: Outskirts of Village */
+    9,   /* 821021: Outskirts of Village */
     5,   /* 821021: Red Hall */
     9,   /* 821021: Room on Ring Four */
     2,   /* 821021: Room on Ring One */
@@ -722,7 +722,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 821021: Umbilical */
     1,   /* 821021: Up a Tree */
     5,   /* 821021: Village Center */
-    5,   /* 821021: Village Suburbs */
+    2,   /* 821021: Village Suburbs */
     4,   /* 821021: Weapons Deck */
     5,   /* 821021: Yellow Hall */
     9,   /* 821021: Zoo */
@@ -734,7 +734,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     5,   /* 870430: Astro Office */
     0,   /* 870430: Auxiliary Barracks */
     0,   /* 870430: Auxiliary SanFac */
-    3,   /* 870430: Bank */
+    5,   /* 870430: Bank */
     0,   /* 870430: Barracks SanFac */
     9,   /* 870430: Bio Lab */
     5,   /* 870430: Bio Office */
@@ -755,7 +755,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 870430: Engineering Lab */
     5,   /* 870430: Engineering Office */
     0,   /* 870430: Female Barracks */
-    1,   /* 870430: Field Office */
+    5,   /* 870430: Field Office */
     5,   /* 870430: File Room */
     4,   /* 870430: Forms Storage Room */
     0,   /* 870430: Fortune Teller */
@@ -812,9 +812,9 @@ static const unsigned char BLESSED[CORPUS_N] = {
     5,   /* 841005: Ballroom, South Entrance */
     0,   /* 841005: Center Entrance */
     12,   /* 841005: Circular Driveway */
-    1,   /* 841005: Covered Walkway */
+    5,   /* 841005: Covered Walkway */
     0,   /* 841005: Dance Floor */
-    1,   /* 841005: Dining Room */
+    5,   /* 841005: Dining Room */
     0,   /* 841005: East Bath */
     0,   /* 841005: East Coat Closet */
     5,   /* 841005: East Hall */
@@ -837,7 +837,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 841005: Kitchen */
     11,   /* 841005: Library */
     0,   /* 841005: Linen Closet */
-    1,   /* 841005: Living Room */
+    5,   /* 841005: Living Room */
     5,   /* 841005: Long Hall Begins */
     5,   /* 841005: Long Hall North */
     5,   /* 841005: Long Hall South */
@@ -853,25 +853,25 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 841005: North of House */
     12,   /* 841005: Outside House */
     12,   /* 841005: Patio */
-    1,   /* 841005: Pond */
+    5,   /* 841005: Pond */
     5,   /* 841005: Sitting Room */
     5,   /* 841005: South Entrance */
     0,   /* 841005: Sun Room */
     0,   /* 841005: West Bath */
     0,   /* 841005: West Coat Closet */
     12,   /* 841005: West End of Hallway */
-    1,   /* 841005: West of Garage */
+    12,   /* 841005: West of Garage */
     12,   /* 841005: West of House */
     0,   /* 840521: Primary Channel */
     0,   /* 840521: Secondary Channel */
     0,   /* 840521: Skywalk Alpha */
     0,   /* 850920: Fog */
     5,   /* 850920: Hilltop */
-    1,   /* 850920: Outside Cemetery */
-    5,   /* 850920: Outside Cottage */
+    5,   /* 850920: Outside Cemetery */
+    12,   /* 850920: Outside Cottage */
     5,   /* 850920: Post Office */
     12,   /* 850920: West of House */
-    1,   /* 840924: back yard */
+    12,   /* 840924: back yard */
     0,   /* 840924: bathroom */
     12,   /* 840924: dining room */
     12,   /* 840924: driveway */
@@ -879,8 +879,8 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 840924: front yard */
     12,   /* 840924: hallway */
     12,   /* 840924: kitchen */
-    1,   /* 840924: office path */
-    1,   /* 840924: rock garden */
+    5,   /* 840924: office path */
+    12,   /* 840924: rock garden */
     0,   /* 840924: storage closet */
     0,   /* 840924: toilet room */
     1,   /* 840924: tub room */
@@ -889,11 +889,11 @@ static const unsigned char BLESSED[CORPUS_N] = {
     3,   /* 840726: Atlantis Room */
     12,   /* 840726: Attic */
     12,   /* 840726: Behind House */
-    1,   /* 840726: Canyon Bottom */
-    1,   /* 840726: Canyon View */
+    3,   /* 840726: Canyon Bottom */
+    2,   /* 840726: Canyon View */
     2,   /* 840726: Cave */
     2,   /* 840726: Cellar */
-    1,   /* 840726: Chasm */
+    2,   /* 840726: Chasm */
     1,   /* 840726: Clearing */
     2,   /* 840726: Coal Mine */
     2,   /* 840726: Cold Passage */
@@ -905,10 +905,10 @@ static const unsigned char BLESSED[CORPUS_N] = {
     3,   /* 840726: Deep Canyon */
     0,   /* 840726: Dome Room */
     2,   /* 840726: Drafty Room */
-    1,   /* 840726: East of Chasm */
+    2,   /* 840726: East of Chasm */
     2,   /* 840726: East-West Passage */
     6,   /* 840726: Egyptian Room */
-    1,   /* 840726: End of Rainbow */
+    3,   /* 840726: End of Rainbow */
     2,   /* 840726: Engravings Cave */
     0,   /* 840726: Entrance to Hades */
     1,   /* 840726: Forest */
@@ -932,7 +932,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     3,   /* 840726: Reservoir South */
     2,   /* 840726: Rocky Ledge */
     2,   /* 840726: Round Room */
-    3,   /* 840726: Sandy Beach */
+    2,   /* 840726: Sandy Beach */
     2,   /* 840726: Sandy Cave */
     0,   /* 840726: Shaft Room */
     3,   /* 840726: Shore */
@@ -952,27 +952,27 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 840726: Treasure Room */
     2,   /* 840726: Twisting Passage */
     12,   /* 840726: West of House */
-    1,   /* 840726: White Cliffs Beach */
+    3,   /* 840726: White Cliffs Beach */
     2,   /* 840726: Winding Passage */
     0,   /* 840904: Aquarium Room */
-    3,   /* 840904: Bank Entrance */
+    5,   /* 840904: Bank Entrance */
     6,   /* 840904: Cerberus Room */
     5,   /* 840904: Chairman's Office */
     0,   /* 840904: Circular Room */
     9,   /* 840904: Cobwebby Corridor */
-    1,   /* 840904: Cool Room */
+    2,   /* 840904: Cool Room */
     2,   /* 840904: Dark Tunnel */
-    3,   /* 840904: Deep Ford */
+    5,   /* 840904: Deep Ford */
     2,   /* 840904: Dragon Room */
     0,   /* 840904: Dragon's Lair */
     0,   /* 840904: East Viewing Room */
     2,   /* 840904: End of Ledge */
     1,   /* 840904: Foot Bridge */
-    1,   /* 840904: Formal Garden */
+    2,   /* 840904: Formal Garden */
     1,   /* 840904: Fresco Room */
     1,   /* 840904: Gazebo */
     2,   /* 840904: Great Cavern */
-    1,   /* 840904: Inside the Barrow */
+    2,   /* 840904: Inside the Barrow */
     0,   /* 840904: Kennel */
     0,   /* 840904: Lava Room */
     0,   /* 840904: Lava Tube */
@@ -983,9 +983,9 @@ static const unsigned char BLESSED[CORPUS_N] = {
     7,   /* 840904: Murky Room */
     0,   /* 840904: Narrow Ledge */
     2,   /* 840904: Narrow Tunnel */
-    1,   /* 840904: North End of Garden */
+    2,   /* 840904: North End of Garden */
     0,   /* 840904: Oddly-angled Room */
-    1,   /* 840904: Path Near Stream */
+    2,   /* 840904: Path Near Stream */
     0,   /* 840904: Pearl Room */
     0,   /* 840904: Pentagram Room */
     3,   /* 840904: Pool Room */
@@ -994,19 +994,19 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 840904: Safety Depository */
     2,   /* 840904: Shallow Ford */
     2,   /* 840904: Stairway */
-    1,   /* 840904: Stone Bridge */
+    2,   /* 840904: Stone Bridge */
     0,   /* 840904: Tea Room */
     0,   /* 840904: Top of Well */
-    1,   /* 840904: Topiary */
+    2,   /* 840904: Topiary */
     8,   /* 840904: Trophy Room */
     0,   /* 840904: Volcano Bottom */
     0,   /* 840904: Volcano Near Small Ledge */
     0,   /* 840904: Volcano Near Wide Ledge */
     0,   /* 840904: Volcano View */
     0,   /* 840904: West Viewing Room */
-    8,   /* 840904: Wizard's Workroom */
+    5,   /* 840904: Wizard's Workroom */
     8,   /* 840904: Wizard's Workshop */
-    3,   /* 840727: Aqueduct */
+    2,   /* 840727: Aqueduct */
     0,   /* 840727: Aqueduct View */
     2,   /* 840727: Barren Area */
     5,   /* 840727: Button Room */
@@ -1017,19 +1017,19 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 840727: Dead End */
     9,   /* 840727: East Corridor */
     10,   /* 840727: Endless Stair */
-    1,   /* 840727: Foggy Room */
+    2,   /* 840727: Foggy Room */
     1,   /* 840727: Hairpin Loop */
     2,   /* 840727: Junction */
     0,   /* 840727: Ladder Bottom */
     0,   /* 840727: Ladder Top */
-    3,   /* 840727: Lake Shore */
-    10,   /* 840727: Land of Shadow */
+    2,   /* 840727: Lake Shore */
+    4,   /* 840727: Land of Shadow */
     3,   /* 840727: On the Lake */
     0,   /* 840727: Prison Cell */
     6,   /* 840727: Room 8 */
     5,   /* 840727: Royal Hall */
     0,   /* 840727: Scenic Vista */
-    3,   /* 840727: Southern Shore */
+    2,   /* 840727: Southern Shore */
     2,   /* 840727: Tight Squeeze */
     2,   /* 840727: Timber Room */
     3,   /* 840727: Underwater */

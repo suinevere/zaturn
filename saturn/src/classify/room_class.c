@@ -139,44 +139,70 @@ static void text_room_title(const char* text, char* out) {
 }
 
 /*----------------------
+ | tier_wins
+ | Description: True when hit vector `a` outranks `b`. Comparison is
+ |   lexicographic over the tiers, so Structure decides before Biome, which
+ |   decides before Feature: the better tier wins outright at any count, and a
+ |   tie at one tier falls to the next tier down. Equal vectors lose, which is
+ |   what leaves an exact tie to the caller's enum order.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: a, b -- per-tier hit counts, KT_NUM_TIERS entries each
+ | Returns: 1 when a outranks b, 0 otherwise
+ ----------------------*/
+static int tier_wins(const unsigned short* a, const unsigned short* b) {
+    for (int t = 0; t < KT_NUM_TIERS; t++)
+        if (a[t] != b[t]) return a[t] > b[t];
+    return 0;
+}
+
+/*----------------------
  | text_classify_room
  | Description: Scores room text against the keyword table and returns the
- |   category with the most keyword hits, defaulting to TC_NEUTRAL on a tie at
- |   zero. Keywords in the room's title count for TEXT_TITLE_WEIGHT more than the
- |   same word in the description -- see that box. This is the fallback when a game
- |   has no per-room category map.
+ |   winning category, or TC_NEUTRAL when nothing matched. Hits are counted per
+ |   tier rather than summed, and the tiers are compared in order, so a keyword
+ |   that names the room the player is in beats any amount of scenery mentioned
+ |   inside it. Title words count for TEXT_TITLE_WEIGHT extra WITHIN their tier,
+ |   so a weighted title can break a tie but can no longer promote a Feature past
+ |   a Structure.
  | Author: suinevere
- | Dependencies: music.h (text_keywords, TC_* / TEXT_NUM_CATEGORIES)
- | Globals: N/A
- | Params: text -- the turn's text, opening with the room title (NULL -> TC_NEUTRAL)
+ | Dependencies: room_class.h (text_keywords, TC_*, KT_*)
+ | Globals: g_room_title
+ | Params: text -- the turn's text, opening with the room title (NULL -> NEUTRAL)
  | Returns: the winning TC_* category
  ----------------------*/
 int text_classify_room(const char* text) {
     if (!text) return TC_NEUTRAL;
     char firstline[TEXT_TITLE_MAX];
     const char* title;
-    int counts[TEXT_NUM_CATEGORIES];
-    for (int i = 0; i < TEXT_NUM_CATEGORIES; i++) counts[i] = 0;
+    unsigned short hits[TEXT_NUM_CATEGORIES][KT_NUM_TIERS];
+    int c, t, i;
+
+    for (c = 0; c < TEXT_NUM_CATEGORIES; c++)
+        for (t = 0; t < KT_NUM_TIERS; t++) hits[c][t] = 0;
+
     if (g_room_title[0] != 0) {
         title = g_room_title;
     } else {
         text_room_title(text, firstline);
         title = firstline;
     }
+
     int nk = 0; const TextKeyword* kw = text_keywords(&nk);
-    for (int i = 0; i < nk; i++) {
-        /* The title is part of the text, so a title word scores in both passes --
-           1 + TEXT_TITLE_WEIGHT -- while a description-only word scores 1. */
-        if (has_word(text,  kw[i].word)) counts[kw[i].cat]++;
-        if (has_word(title, kw[i].word)) counts[kw[i].cat] += TEXT_TITLE_WEIGHT;
+    for (i = 0; i < nk; i++) {
+        if (has_word(text,  kw[i].word)) hits[kw[i].cat][kw[i].tier]++;
+        if (has_word(title, kw[i].word)) hits[kw[i].cat][kw[i].tier] += TEXT_TITLE_WEIGHT;
     }
+
     /* Starts past TC_NEUTRAL on purpose: it is the nothing-matched answer, not
-       something a keyword can vote for, so a hit scored into it could never be
-       acted on. TC_HOUSE exists precisely so the domestic words have a real
-       category to win -- see the keyword block in music_data.c. */
-    int best = TC_NEUTRAL, bestn = 0;
-    for (int c = TC_WILDERNESS; c <= TC_PLACE_LAST; c++)
-        if (counts[c] > bestn) { bestn = counts[c]; best = c; }
+       something a keyword can vote for. An exact vector tie falls to the lowest
+       id, which is what the strict tier_wins gives. */
+    int best = TC_NEUTRAL;
+    unsigned short none[KT_NUM_TIERS] = {0, 0, 0};
+    const unsigned short* bestv = none;
+    for (c = TC_WILDERNESS; c <= TC_PLACE_LAST; c++)
+        if (tier_wins(hits[c], bestv)) { bestv = hits[c]; best = c; }
     return best;
 }
 

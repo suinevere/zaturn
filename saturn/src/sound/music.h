@@ -67,25 +67,13 @@ enum { MIX_DYNAMIC = 0, MIX_OVERRIDE = 1, MIX_SEQUENTIAL = 2, MIX_RANDOM = 3 };
 #define MUSIC_TRACK_MAX 33
 
 /*----------------------
- | TextKeyword
- | Description: One keyword -> text-category mapping row (used by both the
- |   room-keyword and event-keyword tables).
- | Author: suinevere
- ----------------------*/
-typedef struct { const char* word; unsigned char cat; } TextKeyword;
-
-/*----------------------
  | data-table accessors (music_data.c)
- | Description: text_keywords / text_events return the room-keyword
- |   (TC_WILDERNESS..TC_PLACE_LAST) and event-word (TC_DANGER/TC_TRIUMPH) tables
- |   and their lengths; music_category_pool returns a category's track pool (*out)
+ | Description: music_category_pool returns a category's track pool (*out)
  |   and size; text_game_room_category returns a game's authored room category, or
  |   -1 if none. Named rather than numbered because the numbers shifted when
  |   TC_HOUSE was added, and this line read "cats 1..11" for a while afterwards.
  | Author: suinevere
  ----------------------*/
-const TextKeyword* text_keywords(int* n);
-const TextKeyword* text_events(int* n);
 int music_category_pool(int category, const unsigned char** out);
 int text_game_room_category(unsigned int release, const char* serial,
                              unsigned int room);
@@ -187,18 +175,6 @@ void music_set_category_fn(void (*fn)(int cat));       /* announce category chan
 void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-category rotations */
 void music_set_fade_fn(void (*fn)(int level));         /* 0 = black/quiet, 255 = normal */
 void music_set_fade_frames(int n);                     /* ramp length; 0 = instant commit */
-
-/*----------------------
- | classifiers (music.c, exposed for tests)
- | Description: classify_room returns a room's mood from its text -- one of
- |   TC_WILDERNESS..TC_PLACE_LAST, or TC_NEUTRAL when nothing matched; scan_event
- |   returns an event category (TC_DANGER/TC_TRIUMPH) from turn text, or -1.
- |   Spelled with the names rather than raw indices on purpose: the numbers moved
- |   when TC_HOUSE was added, and this comment said "1..11" for a while after.
- | Author: suinevere
- ----------------------*/
-int text_classify_room(const char* text);
-int text_scan_event(const char* text);
 
 /*----------------------
  | CD-DA backend (music_cdda.cxx)

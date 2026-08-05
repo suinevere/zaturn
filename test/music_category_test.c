@@ -5,10 +5,13 @@
    so these tests are really about one question: does the engine tell its
    subscriber the right thing at the right moment, and exactly once?
 
-   gcc -O2 -I saturn/src -o /tmp/mct test/music_category_test.c \
-       saturn/src/sound/music.c saturn/src/sound/music_data.c && /tmp/mct */
+   gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/classify -o /tmp/mct \
+       test/music_category_test.c saturn/src/sound/music.c \
+       saturn/src/sound/music_data.c saturn/src/classify/room_class.c \
+       saturn/src/classify/room_class_data.c && /tmp/mct */
 #include <stdio.h>
 #include "sound/music.h"
+#include "classify/room_class.h"
 
 #define CHECK(c) do{ if(!(c)){ printf("FAIL line %d: %s\n", __LINE__, #c); fails++; } }while(0)
 

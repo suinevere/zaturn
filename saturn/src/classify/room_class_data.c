@@ -8,6 +8,7 @@
  | Dependencies: room_class.h (TextKeyword, TC_*)
  ----------------------*/
 #include "room_class.h"
+#include <string.h>
 
 /*----------------------
  | KW
@@ -18,82 +19,105 @@
  | Author: suinevere
  ----------------------*/
 static const TextKeyword KW[] = {
-    {"forest",TC_WILDERNESS,KT_BIOME},{"tree",TC_WILDERNESS,KT_FEATURE},
-    {"trees",TC_WILDERNESS,KT_FEATURE},{"woods",TC_WILDERNESS,KT_BIOME},
-    {"grove",TC_WILDERNESS,KT_BIOME},{"meadow",TC_WILDERNESS,KT_BIOME},
-    {"field",TC_WILDERNESS,KT_BIOME},{"clearing",TC_WILDERNESS,KT_BIOME},
-    {"path",TC_WILDERNESS,KT_FEATURE},{"hill",TC_WILDERNESS,KT_BIOME},
-    {"mountain",TC_WILDERNESS,KT_BIOME},{"garden",TC_WILDERNESS,KT_BIOME},
+    {"forest",TC_WILDERNESS,KT_BIOME,GN_ANY},{"tree",TC_WILDERNESS,KT_FEATURE,GN_ANY},
+    {"trees",TC_WILDERNESS,KT_FEATURE,GN_ANY},{"woods",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"grove",TC_WILDERNESS,KT_BIOME,GN_ANY},{"meadow",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"field",TC_WILDERNESS,KT_BIOME,GN_ANY},{"clearing",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"path",TC_WILDERNESS,KT_FEATURE,GN_ANY},{"hill",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"mountain",TC_WILDERNESS,KT_BIOME,GN_ANY},{"garden",TC_WILDERNESS,KT_BIOME,GN_ANY},
 
-    {"cave",TC_UNDERGROUND,KT_STRUCTURE},{"cavern",TC_UNDERGROUND,KT_STRUCTURE},
-    {"tunnel",TC_UNDERGROUND,KT_STRUCTURE},{"underground",TC_UNDERGROUND,KT_BIOME},
-    {"cellar",TC_UNDERGROUND,KT_STRUCTURE},{"mine",TC_UNDERGROUND,KT_STRUCTURE},
-    {"passage",TC_UNDERGROUND,KT_STRUCTURE},{"grotto",TC_UNDERGROUND,KT_STRUCTURE},
-    {"crawlway",TC_UNDERGROUND,KT_STRUCTURE},
+    {"cave",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"cavern",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"tunnel",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"underground",TC_UNDERGROUND,KT_BIOME,GN_ANY},
+    {"cellar",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"mine",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"passage",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"grotto",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"crawlway",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
 
-    {"river",TC_WATER,KT_BIOME},{"stream",TC_WATER,KT_BIOME},
-    {"lake",TC_WATER,KT_BIOME},{"pool",TC_WATER,KT_FEATURE},
-    {"water",TC_WATER,KT_FEATURE},{"waterfall",TC_WATER,KT_FEATURE},
-    {"shore",TC_WATER,KT_BIOME},{"bank",TC_WATER,KT_FEATURE},
-    {"underwater",TC_WATER,KT_BIOME},{"flooded",TC_WATER,KT_FEATURE},
+    {"river",TC_WATER,KT_BIOME,GN_ANY},{"stream",TC_WATER,KT_BIOME,GN_ANY},
+    {"lake",TC_WATER,KT_BIOME,GN_ANY},{"pool",TC_WATER,KT_FEATURE,GN_ANY},
+    {"water",TC_WATER,KT_FEATURE,GN_ANY},{"waterfall",TC_WATER,KT_FEATURE,GN_ANY},
+    {"shore",TC_WATER,KT_BIOME,GN_ANY},{"bank",TC_WATER,KT_FEATURE,GN_ANY},
+    {"underwater",TC_WATER,KT_BIOME,GN_ANY},{"flooded",TC_WATER,KT_FEATURE,GN_ANY},
 
-    {"ship",TC_NAUTICAL,KT_STRUCTURE},{"boat",TC_NAUTICAL,KT_STRUCTURE},
-    {"deck",TC_NAUTICAL,KT_STRUCTURE},{"cabin",TC_NAUTICAL,KT_STRUCTURE},
-    {"hull",TC_NAUTICAL,KT_STRUCTURE},{"sea",TC_NAUTICAL,KT_BIOME},
-    {"ocean",TC_NAUTICAL,KT_BIOME},{"dock",TC_NAUTICAL,KT_STRUCTURE},
-    {"harbor",TC_NAUTICAL,KT_BIOME},{"sail",TC_NAUTICAL,KT_FEATURE},
-    {"mast",TC_NAUTICAL,KT_FEATURE},{"submarine",TC_NAUTICAL,KT_STRUCTURE},
+    /* The words that mean two different things. Each reading is its own row, so
+       the table stays declarative and the classifier needs no special cases.
+       A ship in Starcross is a spacecraft; the same word in Zork is a hull on
+       water, and no single-answer row could say both. */
+    {"ship",TC_NAUTICAL,KT_STRUCTURE,GN_FANTASY|GN_MODERN},
+    {"ship",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    {"deck",TC_NAUTICAL,KT_STRUCTURE,GN_FANTASY|GN_MODERN},
+    {"deck",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    {"cabin",TC_NAUTICAL,KT_STRUCTURE,GN_FANTASY|GN_MODERN},
+    {"cabin",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    {"hull",TC_NAUTICAL,KT_STRUCTURE,GN_FANTASY|GN_MODERN},
+    {"hull",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    {"boat",TC_NAUTICAL,KT_STRUCTURE,GN_ANY},{"sea",TC_NAUTICAL,KT_BIOME,GN_ANY},
+    {"ocean",TC_NAUTICAL,KT_BIOME,GN_ANY},{"dock",TC_NAUTICAL,KT_STRUCTURE,GN_ANY},
+    {"harbor",TC_NAUTICAL,KT_BIOME,GN_ANY},{"sail",TC_NAUTICAL,KT_FEATURE,GN_ANY},
+    {"mast",TC_NAUTICAL,KT_FEATURE,GN_ANY},{"submarine",TC_NAUTICAL,KT_STRUCTURE,GN_ANY},
 
     /* A house is not a town. These used to share TC_TOWN, and the art is where
        that showed: TC_HOUSE's pool is single houses (a boarded-up exterior, an
        overgrown one, a dark one) while TC_TOWN's is streets and village lanes.
        Zork I opens on a lone white house in a field, which the street art reads
        completely wrong for. */
-    {"house",TC_HOUSE,KT_STRUCTURE},{"kitchen",TC_HOUSE,KT_STRUCTURE},
-    {"parlor",TC_HOUSE,KT_STRUCTURE},{"bedroom",TC_HOUSE,KT_STRUCTURE},
-    {"attic",TC_HOUSE,KT_STRUCTURE},{"cottage",TC_HOUSE,KT_STRUCTURE},
-    {"farmhouse",TC_HOUSE,KT_STRUCTURE},{"porch",TC_HOUSE,KT_STRUCTURE},
+    {"house",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"kitchen",TC_HOUSE,KT_STRUCTURE,GN_ANY},
+    {"parlor",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"bedroom",TC_HOUSE,KT_STRUCTURE,GN_ANY},
+    {"attic",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"cottage",TC_HOUSE,KT_STRUCTURE,GN_ANY},
+    {"farmhouse",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"porch",TC_HOUSE,KT_STRUCTURE,GN_ANY},
 
     /* Left in TC_TOWN: words that are as much a public building or a settlement as
        a home. "town" and "village" are new -- with the domestic words moved out,
        nothing named the thing the art actually shows. */
-    {"town",TC_TOWN,KT_BIOME},{"village",TC_TOWN,KT_BIOME},
-    {"street",TC_TOWN,KT_BIOME},{"building",TC_TOWN,KT_STRUCTURE},
-    {"hall",TC_TOWN,KT_STRUCTURE},{"office",TC_TOWN,KT_STRUCTURE},
-    {"stairs",TC_TOWN,KT_FEATURE},{"square",TC_TOWN,KT_BIOME},
-    {"market",TC_TOWN,KT_BIOME},{"shop",TC_TOWN,KT_STRUCTURE},
-    {"inn",TC_TOWN,KT_STRUCTURE},{"tavern",TC_TOWN,KT_STRUCTURE},
+    {"town",TC_TOWN,KT_BIOME,GN_ANY},{"village",TC_TOWN,KT_BIOME,GN_ANY},
+    {"street",TC_TOWN,KT_BIOME,GN_ANY},{"building",TC_TOWN,KT_STRUCTURE,GN_ANY},
+    {"hall",TC_TOWN,KT_STRUCTURE,GN_FANTASY|GN_MODERN},
+    {"hall",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    {"office",TC_TOWN,KT_STRUCTURE,GN_ANY},
+    {"stairs",TC_TOWN,KT_FEATURE,GN_ANY},{"square",TC_TOWN,KT_BIOME,GN_ANY},
+    {"market",TC_TOWN,KT_BIOME,GN_ANY},{"shop",TC_TOWN,KT_STRUCTURE,GN_ANY},
+    {"inn",TC_TOWN,KT_STRUCTURE,GN_ANY},{"tavern",TC_TOWN,KT_STRUCTURE,GN_ANY},
 
-    {"temple",TC_DUNGEON,KT_STRUCTURE},{"tomb",TC_DUNGEON,KT_STRUCTURE},
-    {"crypt",TC_DUNGEON,KT_STRUCTURE},{"ruin",TC_DUNGEON,KT_STRUCTURE},
-    {"altar",TC_DUNGEON,KT_FEATURE},{"ancient",TC_DUNGEON,KT_FEATURE},
-    {"chamber",TC_DUNGEON,KT_STRUCTURE},{"dungeon",TC_DUNGEON,KT_STRUCTURE},
-    {"catacomb",TC_DUNGEON,KT_STRUCTURE},{"vault",TC_DUNGEON,KT_STRUCTURE},
+    {"temple",TC_DUNGEON,KT_STRUCTURE,GN_ANY},{"tomb",TC_DUNGEON,KT_STRUCTURE,GN_ANY},
+    {"crypt",TC_DUNGEON,KT_STRUCTURE,GN_ANY},{"ruin",TC_DUNGEON,KT_STRUCTURE,GN_ANY},
+    {"altar",TC_DUNGEON,KT_FEATURE,GN_ANY},{"ancient",TC_DUNGEON,KT_FEATURE,GN_ANY},
+    /* A chamber is a tomb in a pyramid and a compartment on a spacecraft, and
+       both readings are common enough to need their own row. GN_MODERN sits with
+       fantasy rather than sci-fi: Infidel's burial chambers are modern-day
+       archaeology, and dropping them from DUNGEON left six pyramid rooms with
+       nothing to vote for at all. */
+    {"chamber",TC_DUNGEON,KT_STRUCTURE,GN_FANTASY|GN_MODERN},
+    {"chamber",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    {"dungeon",TC_DUNGEON,KT_STRUCTURE,GN_ANY},
+    {"catacomb",TC_DUNGEON,KT_STRUCTURE,GN_ANY},{"vault",TC_DUNGEON,KT_STRUCTURE,GN_ANY},
 
-    {"desert",TC_DESERT,KT_BIOME},{"sand",TC_DESERT,KT_FEATURE},
-    {"dune",TC_DESERT,KT_BIOME},{"oasis",TC_DESERT,KT_BIOME},
-    {"wasteland",TC_DESERT,KT_BIOME},
+    {"desert",TC_DESERT,KT_BIOME,GN_ANY},{"sand",TC_DESERT,KT_FEATURE,GN_ANY},
+    {"dune",TC_DESERT,KT_BIOME,GN_ANY},{"oasis",TC_DESERT,KT_BIOME,GN_ANY},
+    {"wasteland",TC_DESERT,KT_BIOME,GN_ANY},
 
-    {"spell",TC_MAGIC,KT_FEATURE},{"magic",TC_MAGIC,KT_FEATURE},
-    {"enchant",TC_MAGIC,KT_FEATURE},{"wizard",TC_MAGIC,KT_FEATURE},
-    {"scroll",TC_MAGIC,KT_FEATURE},{"rune",TC_MAGIC,KT_FEATURE},
-    {"mystic",TC_MAGIC,KT_FEATURE},{"sorcerer",TC_MAGIC,KT_FEATURE},
+    {"spell",TC_MAGIC,KT_FEATURE,GN_ANY},{"magic",TC_MAGIC,KT_FEATURE,GN_ANY},
+    {"enchant",TC_MAGIC,KT_FEATURE,GN_ANY},{"wizard",TC_MAGIC,KT_FEATURE,GN_ANY},
+    {"scroll",TC_MAGIC,KT_FEATURE,GN_ANY},{"rune",TC_MAGIC,KT_FEATURE,GN_ANY},
+    {"mystic",TC_MAGIC,KT_FEATURE,GN_ANY},{"sorcerer",TC_MAGIC,KT_FEATURE,GN_ANY},
 
-    {"console",TC_SCIFI,KT_FEATURE},{"computer",TC_SCIFI,KT_FEATURE},
-    {"airlock",TC_SCIFI,KT_STRUCTURE},{"panel",TC_SCIFI,KT_FEATURE},
-    {"robot",TC_SCIFI,KT_FEATURE},{"laboratory",TC_SCIFI,KT_STRUCTURE},
-    {"reactor",TC_SCIFI,KT_STRUCTURE},{"corridor",TC_SCIFI,KT_STRUCTURE},
-    {"module",TC_SCIFI,KT_STRUCTURE},{"cockpit",TC_SCIFI,KT_STRUCTURE},
+    {"console",TC_SCIFI,KT_FEATURE,GN_ANY},{"computer",TC_SCIFI,KT_FEATURE,GN_ANY},
+    {"airlock",TC_SCIFI,KT_STRUCTURE,GN_ANY},
+    {"panel",TC_SCIFI,KT_FEATURE,GN_SCIFI|GN_MODERN},
+    {"robot",TC_SCIFI,KT_FEATURE,GN_ANY},{"laboratory",TC_SCIFI,KT_STRUCTURE,GN_ANY},
+    {"reactor",TC_SCIFI,KT_STRUCTURE,GN_ANY},{"corridor",TC_SCIFI,KT_STRUCTURE,GN_ANY},
+    {"module",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    {"cockpit",TC_SCIFI,KT_STRUCTURE,GN_ANY},
 
-    {"corpse",TC_HORROR,KT_FEATURE},{"rotting",TC_HORROR,KT_FEATURE},
-    {"stench",TC_HORROR,KT_FEATURE},{"shadow",TC_HORROR,KT_FEATURE},
-    {"eerie",TC_HORROR,KT_FEATURE},{"decay",TC_HORROR,KT_FEATURE},
-    {"skeleton",TC_HORROR,KT_FEATURE},
+    {"corpse",TC_HORROR,KT_FEATURE,GN_ANY},{"rotting",TC_HORROR,KT_FEATURE,GN_ANY},
+    {"stench",TC_HORROR,KT_FEATURE,GN_ANY},{"shadow",TC_HORROR,KT_FEATURE,GN_ANY},
+    {"eerie",TC_HORROR,KT_FEATURE,GN_ANY},{"decay",TC_HORROR,KT_FEATURE,GN_ANY},
+    {"skeleton",TC_HORROR,KT_FEATURE,GN_ANY},
 
-    {"body",TC_MYSTERY,KT_FEATURE},{"clue",TC_MYSTERY,KT_FEATURE},
-    {"murder",TC_MYSTERY,KT_FEATURE},{"evidence",TC_MYSTERY,KT_FEATURE},
-    {"study",TC_MYSTERY,KT_STRUCTURE},{"library",TC_MYSTERY,KT_STRUCTURE},
-    {"detective",TC_MYSTERY,KT_FEATURE},{"locked",TC_MYSTERY,KT_FEATURE},
+    {"body",TC_MYSTERY,KT_FEATURE,GN_ANY},{"clue",TC_MYSTERY,KT_FEATURE,GN_ANY},
+    {"murder",TC_MYSTERY,KT_FEATURE,GN_ANY},{"evidence",TC_MYSTERY,KT_FEATURE,GN_ANY},
+    {"study",TC_MYSTERY,KT_STRUCTURE,GN_MODERN},
+    {"study",TC_HOUSE,KT_STRUCTURE,GN_FANTASY},
+    {"library",TC_MYSTERY,KT_STRUCTURE,GN_ANY},
+    {"detective",TC_MYSTERY,KT_FEATURE,GN_ANY},{"locked",TC_MYSTERY,KT_FEATURE,GN_ANY},
 };
 
 /*----------------------
@@ -105,15 +129,15 @@ static const TextKeyword KW[] = {
  | Author: suinevere
  ----------------------*/
 static const TextKeyword EV[] = {
-    {"monster",TC_DANGER,KT_FEATURE},{"troll",TC_DANGER,KT_FEATURE},
-    {"grue",TC_DANGER,KT_FEATURE},{"attack",TC_DANGER,KT_FEATURE},
-    {"fight",TC_DANGER,KT_FEATURE},{"flames",TC_DANGER,KT_FEATURE},
-    {"fire",TC_DANGER,KT_FEATURE},{"burning",TC_DANGER,KT_FEATURE},
-    {"scream",TC_DANGER,KT_FEATURE},{"danger",TC_DANGER,KT_FEATURE},
-    {"treasure",TC_TRIUMPH,KT_FEATURE},{"gold",TC_TRIUMPH,KT_FEATURE},
-    {"jewel",TC_TRIUMPH,KT_FEATURE},{"chest",TC_TRIUMPH,KT_FEATURE},
-    {"reward",TC_TRIUMPH,KT_FEATURE},{"gleaming",TC_TRIUMPH,KT_FEATURE},
-    {"victory",TC_TRIUMPH,KT_FEATURE},
+    {"monster",TC_DANGER,KT_FEATURE,GN_ANY},{"troll",TC_DANGER,KT_FEATURE,GN_ANY},
+    {"grue",TC_DANGER,KT_FEATURE,GN_ANY},{"attack",TC_DANGER,KT_FEATURE,GN_ANY},
+    {"fight",TC_DANGER,KT_FEATURE,GN_ANY},{"flames",TC_DANGER,KT_FEATURE,GN_ANY},
+    {"fire",TC_DANGER,KT_FEATURE,GN_ANY},{"burning",TC_DANGER,KT_FEATURE,GN_ANY},
+    {"scream",TC_DANGER,KT_FEATURE,GN_ANY},{"danger",TC_DANGER,KT_FEATURE,GN_ANY},
+    {"treasure",TC_TRIUMPH,KT_FEATURE,GN_ANY},{"gold",TC_TRIUMPH,KT_FEATURE,GN_ANY},
+    {"jewel",TC_TRIUMPH,KT_FEATURE,GN_ANY},{"chest",TC_TRIUMPH,KT_FEATURE,GN_ANY},
+    {"reward",TC_TRIUMPH,KT_FEATURE,GN_ANY},{"gleaming",TC_TRIUMPH,KT_FEATURE,GN_ANY},
+    {"victory",TC_TRIUMPH,KT_FEATURE,GN_ANY},
 };
 
 /*----------------------
@@ -159,3 +183,100 @@ const TextKeyword* text_events(int* n)   { *n = (int)(sizeof EV / sizeof EV[0]);
  ----------------------*/
 const char* const* text_neg_phrases(int* n) { *n = (int)(sizeof NEG / sizeof NEG[0]); return NEG; }
 const char* const* text_pos_phrases(int* n) { *n = (int)(sizeof POS / sizeof POS[0]); return POS; }
+
+/*----------------------
+ | GENRE_KW
+ | Description: Marker words that identify a game's genre, for a story with no
+ |   GAME_GENRE row. Deliberately narrow: a marker only earns its place if it is
+ |   near-impossible in the other genres.
+ | Author: suinevere
+ ----------------------*/
+static const GenreKeyword GENRE_KW[] = {
+    {"airlock",GN_SCIFI},{"hyperspace",GN_SCIFI},{"android",GN_SCIFI},
+    {"spacesuit",GN_SCIFI},{"reactor",GN_SCIFI},{"robot",GN_SCIFI},
+    {"spell",GN_FANTASY},{"elf",GN_FANTASY},{"troll",GN_FANTASY},
+    {"wizard",GN_FANTASY},{"sorcerer",GN_FANTASY},{"scroll",GN_FANTASY},
+    {"telephone",GN_MODERN},{"elevator",GN_MODERN},{"automobile",GN_MODERN},
+    {"cigarette",GN_MODERN},{"newspaper",GN_MODERN},
+};
+
+/*----------------------
+ | GameGenre / GAME_GENRE
+ | Description: The authored genre of each shipped story, keyed by Z-header
+ |   release number and 6-char serial -- the same key SOLUTIONS[] in
+ |   typeahead_solution.c and text_game_room_category use.
+ |
+ |   The two Infocom Samplers are deliberately absent. A sampler carries excerpts
+ |   of several games and genuinely changes genre partway through, so inference
+ |   describes it better than any single tag could.
+ | Author: suinevere
+ ----------------------*/
+typedef struct {
+    unsigned short release;
+    const char*    serial;
+    unsigned char  genre;
+} GameGenre;
+static const GameGenre GAME_GENRE[] = {
+    {   1, "151001", GN_FANTASY },  /* Adventure           */
+    {  97, "851218", GN_MODERN  },  /* Ballyhoo            */
+    {  23, "840809", GN_MODERN  },  /* Cutthroats          */
+    {  27, "831005", GN_MODERN  },  /* Deadline            */
+    {  29, "860820", GN_FANTASY },  /* Enchanter           */
+    {  59, "851108", GN_SCIFI   },  /* Hitchhiker's Guide  */
+    {  37, "861215", GN_MODERN  },  /* Hollywood Hijinx    */
+    {  11, "870225", GN_MODERN  },  /* Hypochondriac       */
+    {  22, "830916", GN_MODERN  },  /* Infidel             */
+    {  59, "860730", GN_SCIFI   },  /* Leather Goddesses   */
+    { 219, "870912", GN_MODERN  },  /* The Lurking Horror  */
+    {   9, "861022", GN_MODERN  },  /* Moonmist            */
+    {   2, "840207", GN_FANTASY },  /* Mini-Zork I         */
+    {  34, "871124", GN_FANTASY },  /* Mini-Zork I         */
+    {   2, "871123", GN_FANTASY },  /* Mini-Zork II        */
+    {  26, "870730", GN_MODERN  },  /* Plundered Hearts    */
+    {  37, "851003", GN_SCIFI   },  /* Planetfall          */
+    {  16, "850603", GN_MODERN  },  /* Seastalker          */
+    {  15, "851108", GN_FANTASY },  /* Sorcerer            */
+    {  87, "860904", GN_FANTASY },  /* Spellbreaker        */
+    {  17, "821021", GN_SCIFI   },  /* Starcross           */
+    { 107, "870430", GN_SCIFI   },  /* Stationfall         */
+    {  14, "841005", GN_MODERN  },  /* Suspect             */
+    {   8, "840521", GN_SCIFI   },  /* Suspended           */
+    {  69, "850920", GN_FANTASY },  /* Wishbringer         */
+    {  22, "840924", GN_MODERN  },  /* The Witness         */
+    {  88, "840726", GN_FANTASY },  /* Zork I              */
+    {  48, "840904", GN_FANTASY },  /* Zork II             */
+    {  17, "840727", GN_FANTASY },  /* Zork III            */
+};
+
+/*----------------------
+ | text_genre_keywords
+ | Description: Hands back the genre-marker table and its length.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: GENRE_KW
+ | Params: n -- receives the table length
+ | Returns: the table
+ ----------------------*/
+const GenreKeyword* text_genre_keywords(int* n) {
+    *n = (int)(sizeof GENRE_KW / sizeof GENRE_KW[0]);
+    return GENRE_KW;
+}
+
+/*----------------------
+ | text_game_genre
+ | Description: Looks up a story's authored genre by release and 6-char serial.
+ | Author: suinevere
+ | Dependencies: string.h (memcmp)
+ | Globals: GAME_GENRE
+ | Params: release -- Z-machine release number; serial -- the 6-char game serial
+ | Returns: the GN_* mask, or 0 when the story is not listed
+ ----------------------*/
+unsigned char text_game_genre(unsigned int release, const char* serial) {
+    int i;
+    if (!serial) return 0;
+    for (i = 0; i < (int)(sizeof GAME_GENRE / sizeof GAME_GENRE[0]); i++)
+        if (GAME_GENRE[i].release == release &&
+            memcmp(GAME_GENRE[i].serial, serial, 6) == 0)
+            return GAME_GENRE[i].genre;
+    return 0;
+}

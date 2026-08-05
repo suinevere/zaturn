@@ -155,18 +155,96 @@ void room_class_note_title(const char* title) {
 }
 
 /*----------------------
+ | GENRE_LOCK_HITS / GENRE_LOCK_MARGIN / GENRE_LOCK_ROOMS
+ | Description: When an inferred genre is settled enough to act on: the leader
+ |   needs this many marker hits, this much of a lead over every other genre, and
+ |   this many classified rooms behind it. Three conditions rather than one
+ |   because a single sci-fi word in a fantasy game's opening room is common, and
+ |   locking on it would be worse than never locking at all.
+ | Author: suinevere
+ ----------------------*/
+#define GENRE_LOCK_HITS   3
+#define GENRE_LOCK_MARGIN 2
+#define GENRE_LOCK_ROOMS  3
+
+/*----------------------
+ | genre state (g_genre .. g_genre_rooms)
+ | Description: g_genre is the resolved genre mask (0 = unresolved); g_genre_lock
+ |   is 1 once it can be acted on and never clears within a game; g_genre_hits
+ |   counts markers per genre for inference; g_genre_rooms counts classified rooms
+ |   so a lock cannot happen on the strength of a single one.
+ | Author: suinevere
+ ----------------------*/
+static unsigned char g_genre = 0;
+static int g_genre_lock = 0;
+static int g_genre_hits[3] = {0, 0, 0};
+static int g_genre_rooms = 0;
+
+/*----------------------
  | room_class_reset
- | Description: Clears the module's per-game state, so a room name recorded for
- |   one story cannot be weighted into the next one's first classification.
+ | Description: Clears the module's per-game state, so neither a room name nor a
+ |   resolved genre recorded for one story can leak into the next.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_room_title
+ | Globals: g_room_title, g_genre, g_genre_lock, g_genre_hits, g_genre_rooms
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void room_class_reset(void) {
+    int i;
     g_room_title[0] = 0;
+    g_genre = 0;
+    g_genre_lock = 0;
+    g_genre_rooms = 0;
+    for (i = 0; i < 3; i++) g_genre_hits[i] = 0;
 }
+
+/*----------------------
+ | genre_slot
+ | Description: The g_genre_hits index for a single-bit genre mask.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: mask -- GN_FANTASY, GN_SCIFI or GN_MODERN
+ | Returns: 0..2, or -1 for anything else
+ ----------------------*/
+static int genre_slot(unsigned char mask) {
+    if (mask == GN_FANTASY) return 0;
+    if (mask == GN_SCIFI)   return 1;
+    if (mask == GN_MODERN)  return 2;
+    return -1;
+}
+
+/*----------------------
+ | room_class_set_game
+ | Description: Looks up the story's authored genre. A listed game resolves at
+ |   load and never infers; an unlisted one starts unresolved with its counters
+ |   cleared, so ambiguous keywords abstain until the markers settle.
+ | Author: suinevere
+ | Dependencies: room_class.h (text_game_genre)
+ | Globals: g_genre, g_genre_lock, g_genre_hits, g_genre_rooms
+ | Params: release -- Z-machine release number; serial -- the 6-char game serial
+ | Returns: N/A
+ ----------------------*/
+void room_class_set_game(unsigned int release, const char* serial) {
+    int i;
+    g_genre = text_game_genre(release, serial);
+    g_genre_lock = g_genre ? 1 : 0;
+    g_genre_rooms = 0;
+    for (i = 0; i < 3; i++) g_genre_hits[i] = 0;
+}
+
+/*----------------------
+ | room_class_genre_locked
+ | Description: 1 once the genre can be acted on, which is the signal to discard
+ |   any category memoized while ambiguous words were abstaining.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_genre_lock
+ | Params: N/A
+ | Returns: 1 when locked, 0 otherwise
+ ----------------------*/
+int room_class_genre_locked(void) { return g_genre_lock; }
 
 /*----------------------
  | text_room_title
@@ -213,6 +291,48 @@ static int tier_wins(const unsigned short* a, const unsigned short* b) {
 }
 
 /*----------------------
+ | genre_accumulate
+ | Description: Counts this room's genre markers and locks the inferred genre
+ |   once all three GENRE_LOCK_* conditions are met. A no-op once locked, which
+ |   includes every game whose genre was authored in GAME_GENRE.
+ | Author: suinevere
+ | Dependencies: room_class.h (text_genre_keywords, GN_*)
+ | Globals: g_genre, g_genre_lock, g_genre_hits, g_genre_rooms
+ | Params: text -- the room's text
+ | Returns: N/A
+ ----------------------*/
+static void genre_accumulate(const char* text) {
+    static const unsigned char MASK[3] = { GN_FANTASY, GN_SCIFI, GN_MODERN };
+    int n = 0, i, lead = 0, second = 0, best = -1;
+    if (g_genre_lock) return;
+    const GenreKeyword* gk = text_genre_keywords(&n);
+    for (i = 0; i < n; i++) {
+        int s = genre_slot(gk[i].genre);
+        if (s >= 0 && has_word(text, gk[i].word)) g_genre_hits[s]++;
+    }
+    g_genre_rooms++;
+    for (i = 0; i < 3; i++) {
+        if (g_genre_hits[i] > lead) { second = lead; lead = g_genre_hits[i]; best = i; }
+        else if (g_genre_hits[i] > second) { second = g_genre_hits[i]; }
+    }
+    if (best >= 0 && g_genre_rooms >= GENRE_LOCK_ROOMS &&
+        lead >= GENRE_LOCK_HITS && lead - second >= GENRE_LOCK_MARGIN) {
+        g_genre = MASK[best];
+        g_genre_lock = 1;
+    }
+}
+
+/*----------------------
+ | KW_VOTES
+ | Description: Whether a keyword row may vote right now: always when it means
+ |   the same thing in every genre, otherwise only once the genre is resolved and
+ |   matches. An ambiguous row abstains while unresolved, because a confidently
+ |   wrong vote costs more than no vote at all.
+ | Author: suinevere
+ ----------------------*/
+#define KW_VOTES(k) ((k).genre == GN_ANY || (g_genre && ((k).genre & g_genre)))
+
+/*----------------------
  | text_classify_room
  | Description: Scores room text against the keyword table and returns the
  |   winning category, or TC_NEUTRAL when nothing matched. The text is scored one
@@ -233,6 +353,7 @@ static int tier_wins(const unsigned short* a, const unsigned short* b) {
  ----------------------*/
 int text_classify_room(const char* text) {
     if (!text) return TC_NEUTRAL;
+    genre_accumulate(text);
     char firstline[TEXT_TITLE_MAX];
     const char* title;
     unsigned short hits[TEXT_NUM_CATEGORIES][KT_NUM_TIERS];
@@ -258,7 +379,7 @@ int text_classify_room(const char* text) {
                 int w = sentence_weight(text + start, len);
                 if (w > 0)
                     for (i = 0; i < nk; i++)
-                        if (has_word_n(text + start, len, kw[i].word))
+                        if (KW_VOTES(kw[i]) && has_word_n(text + start, len, kw[i].word))
                             hits[kw[i].cat][kw[i].tier] += (unsigned short) w;
             }
             if (ch == 0) break;
@@ -267,7 +388,8 @@ int text_classify_room(const char* text) {
         pos++;
     }
     for (i = 0; i < nk; i++)
-        if (has_word(title, kw[i].word)) hits[kw[i].cat][kw[i].tier] += TEXT_TITLE_WEIGHT;
+        if (KW_VOTES(kw[i]) && has_word(title, kw[i].word))
+            hits[kw[i].cat][kw[i].tier] += TEXT_TITLE_WEIGHT;
 
     /* Starts past TC_NEUTRAL on purpose: it is the nothing-matched answer, not
        something a keyword can vote for. An exact vector tie falls to the lowest

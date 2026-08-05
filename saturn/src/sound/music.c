@@ -101,6 +101,10 @@ static int           g_base_cat = TC_NEUTRAL;
 static int           g_event_cat = -1;
 static int           g_active_track = 0;
 static unsigned char g_room_cache[256];
+/* Latches the classifier's genre-lock state. An unlisted game starts unresolved
+   with ambiguous keywords abstaining, so every verdict memoized before the lock
+   was decided on incomplete evidence and has to be thrown away when it fires. */
+static int           g_genre_was_locked = 0;
 static char          g_turn_text[MUSIC_TEXT_MAX];
 static int           g_turn_len = 0;
 
@@ -380,6 +384,8 @@ void music_set_game(unsigned int release, const char* serial) {
     g_release = release;
     for (int i = 0; i < 6 && serial && serial[i]; i++) g_serial[i] = serial[i];
     g_serial[6] = 0;
+    room_class_set_game(g_release, g_serial);
+    g_genre_was_locked = room_class_genre_locked();
 }
 
 /*----------------------
@@ -501,6 +507,7 @@ void music_reset(void) {
     room_class_reset();
     g_active_track = 0; g_turn_len = 0; g_turn_text[0] = 0;
     for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
+    g_genre_was_locked = 0;
     g_active_cat = -1; g_pending_cat = -1; g_pending_track = 0; g_pending_frames = 0;
     g_pending_rotate = 0; g_same_cat_rooms = 0;
     g_seq_track = MUSIC_TRACK_MIN;
@@ -761,6 +768,16 @@ void music_on_turn(unsigned int room) {
             unsigned char cached = (room < 256) ? g_room_cache[room] : 0;
             if (cached) base = cached - 1;
             else { base = text_classify_room(g_turn_text); if (room < 256) g_room_cache[room] = (unsigned char)(base + 1); }
+            /* Everything memoized before the genre settled was decided with the
+               ambiguous words abstaining, so it is all suspect. Drop the lot and
+               redo this room; the target comparison below then announces the new
+               mood on its own, so the picture and the track catch up together. */
+            if (!g_genre_was_locked && room_class_genre_locked()) {
+                g_genre_was_locked = 1;
+                for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
+                base = text_classify_room(g_turn_text);
+                if (room < 256) g_room_cache[room] = (unsigned char)(base + 1);
+            }
         }
         g_cur_room = room; g_have_room = 1; g_base_cat = base; g_event_cat = -1;
     }

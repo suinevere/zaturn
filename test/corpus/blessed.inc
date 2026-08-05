@@ -364,7 +364,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 860730: Base of Tower */
     2,   /* 860730: Basement */
     12,   /* 860730: Bedroom */
-    6,   /* 860730: Burial Chamber */
+    9,   /* 860730: Burial Chamber */
     7,   /* 860730: Canalview Mall */
     0,   /* 860730: Cleveland */
     4,   /* 860730: Donald Dock */
@@ -378,14 +378,14 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 860730: Inside the Tent */
     0,   /* 860730: Joe's Bar */
     0,   /* 860730: Ladder Room */
-    5,   /* 860730: Main Hall of Palace */
+    9,   /* 860730: Main Hall of Palace */
     7,   /* 860730: Martian Desert */
     7,   /* 860730: Martian Dessert */
     7,   /* 860730: Minaret */
     4,   /* 860730: My Kinda Dock! */
     1,   /* 860730: Oriental Garden */
     0,   /* 860730: South Pole */
-    4,   /* 860730: Space Yacht */
+    9,   /* 860730: Space Yacht */
     12,   /* 860730: Teensy-Weensy House */
     4,   /* 860730: Wattz-Upp Dock */
     3,   /* 860730: Well Bottom */
@@ -552,8 +552,8 @@ static const unsigned char BLESSED[CORPUS_N] = {
     5,   /* 870730: Upstairs Hall */
     9,   /* 851003: Admin Corridor South */
     0,   /* 851003: Auxiliary Booth */
-    6,   /* 851003: Bio Lock East */
-    6,   /* 851003: Bio Lock West */
+    9,   /* 851003: Bio Lock East */
+    9,   /* 851003: Bio Lock West */
     9,   /* 851003: Booth 1 */
     9,   /* 851003: Booth 2 */
     9,   /* 851003: Booth 3 */
@@ -561,8 +561,8 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 851003: Computer Room */
     9,   /* 851003: Corridor Junction */
     3,   /* 851003: Crag */
-    4,   /* 851003: Deck Eight */
-    4,   /* 851003: Deck Nine */
+    9,   /* 851003: Deck Eight */
+    9,   /* 851003: Deck Nine */
     0,   /* 851003: Dorm A */
     0,   /* 851003: Dorm B */
     0,   /* 851003: Dorm C */
@@ -570,7 +570,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 851003: Dorm D */
     0,   /* 851003: Escalator */
     0,   /* 851003: Fork */
-    4,   /* 851003: Gangway */
+    9,   /* 851003: Gangway */
     9,   /* 851003: Helicopter */
     0,   /* 851003: Helipad */
     0,   /* 851003: Infirmary */
@@ -585,16 +585,16 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 851003: Mech Corridor South */
     0,   /* 851003: Middle of Strip */
     0,   /* 851003: Miniaturization Booth */
-    4,   /* 851003: Observation Deck */
+    9,   /* 851003: Observation Deck */
     0,   /* 851003: Physical Plant */
-    5,   /* 851003: Plain Hall */
+    9,   /* 851003: Plain Hall */
     2,   /* 851003: Plan Room */
     9,   /* 851003: Project Corridor */
     9,   /* 851003: Project Corridor East */
     9,   /* 851003: Project Corridor West */
     0,   /* 851003: Radiation Lab */
-    6,   /* 851003: Radiation Lock East */
-    6,   /* 851003: Radiation Lock West */
+    9,   /* 851003: Radiation Lock East */
+    9,   /* 851003: Radiation Lock West */
     9,   /* 851003: Reactor Access Stairs */
     9,   /* 851003: Reactor Control */
     9,   /* 851003: Reactor Elevator */
@@ -652,7 +652,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 851108: Hollow */
     4,   /* 851108: Lagoon Floor */
     3,   /* 851108: Lagoon Shore */
-    11,   /* 851108: Library */
+    6,   /* 851108: Library */
     5,   /* 851108: Lobby */
     2,   /* 851108: Mammoth Cavern */
     2,   /* 851108: Mine Field */
@@ -689,19 +689,19 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 821021: Among Debris */
     1,   /* 821021: Base of Tree */
     4,   /* 821021: Blue Dock */
-    5,   /* 821021: Blue Hall */
+    9,   /* 821021: Blue Hall */
     0,   /* 821021: Broken Cage */
     9,   /* 821021: Bubbles */
     6,   /* 821021: Cargo Hold */
     9,   /* 821021: Center of the Warren */
-    4,   /* 821021: Control Room */
+    9,   /* 821021: Control Room */
     1,   /* 821021: Dense Forest */
     0,   /* 821021: Floating in Air */
     0,   /* 821021: Fore End */
     0,   /* 821021: Garage */
-    4,   /* 821021: Grassland */
+    9,   /* 821021: Grassland */
     4,   /* 821021: Green Dock */
-    5,   /* 821021: Green Hall */
+    9,   /* 821021: Green Hall */
     0,   /* 821021: Guard Room */
     0,   /* 821021: In the Warren */
     0,   /* 821021: Inside Grue Cage */
@@ -711,25 +711,25 @@ static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 821021: On Control Bubble */
     0,   /* 821021: On Drive Bubble */
     9,   /* 821021: Outskirts of Village */
-    5,   /* 821021: Red Hall */
+    9,   /* 821021: Red Hall */
     9,   /* 821021: Room on Ring Four */
     2,   /* 821021: Room on Ring One */
     9,   /* 821021: Room on Ring Two */
-    4,   /* 821021: Spherical Ship */
+    9,   /* 821021: Spherical Ship */
     0,   /* 821021: Storage */
     1,   /* 821021: Thin Forest */
     1,   /* 821021: Top of Tree */
     9,   /* 821021: Umbilical */
     1,   /* 821021: Up a Tree */
-    5,   /* 821021: Village Center */
+    9,   /* 821021: Village Center */
     2,   /* 821021: Village Suburbs */
-    4,   /* 821021: Weapons Deck */
-    5,   /* 821021: Yellow Hall */
+    9,   /* 821021: Weapons Deck */
+    9,   /* 821021: Yellow Hall */
     9,   /* 821021: Zoo */
     5,   /* 870430: "Doc" Schuster's */
     0,   /* 870430: Air Shaft */
     0,   /* 870430: Alley */
-    4,   /* 870430: Armory */
+    9,   /* 870430: Armory */
     9,   /* 870430: Astro Lab */
     5,   /* 870430: Astro Office */
     0,   /* 870430: Auxiliary Barracks */
@@ -742,12 +742,12 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 870430: Briefing Room */
     0,   /* 870430: Brig */
     5,   /* 870430: Broadway */
-    4,   /* 870430: Cargo Bay */
-    4,   /* 870430: Cargo Bay Entrance */
+    9,   /* 870430: Cargo Bay */
+    9,   /* 870430: Cargo Bay Entrance */
     0,   /* 870430: Commander's Quarters */
     9,   /* 870430: Computer Control */
-    4,   /* 870430: Deck Twelve */
-    4,   /* 870430: Docking Bay #1 */
+    9,   /* 870430: Deck Twelve */
+    9,   /* 870430: Docking Bay #1 */
     0,   /* 870430: Docking Bay #3 */
     0,   /* 870430: Docking Bay #4 */
     9,   /* 870430: East Junction */
@@ -757,7 +757,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 870430: Female Barracks */
     5,   /* 870430: Field Office */
     5,   /* 870430: File Room */
-    4,   /* 870430: Forms Storage Room */
+    9,   /* 870430: Forms Storage Room */
     0,   /* 870430: Fortune Teller */
     2,   /* 870430: Grimy Passage */
     5,   /* 870430: Grocery */
@@ -775,9 +775,9 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 870430: North Connection */
     9,   /* 870430: North Junction */
     0,   /* 870430: Officers SanFac */
-    4,   /* 870430: Officers' Quarters A */
-    4,   /* 870430: Officers' Quarters B */
-    4,   /* 870430: Officers' Quarters C */
+    9,   /* 870430: Officers' Quarters A */
+    9,   /* 870430: Officers' Quarters B */
+    9,   /* 870430: Officers' Quarters C */
     0,   /* 870430: Opium Den */
     1,   /* 870430: Paper Recycling Plant */
     5,   /* 870430: Pawn Shop */
@@ -796,7 +796,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     5,   /* 870430: The PX */
     0,   /* 870430: Theatre */
     0,   /* 870430: Top of Air Shaft */
-    4,   /* 870430: Trading Post */
+    9,   /* 870430: Trading Post */
     0,   /* 870430: Travel Agency */
     9,   /* 870430: Tube */
     0,   /* 870430: Workshop */

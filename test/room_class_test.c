@@ -43,6 +43,7 @@ static const char* CAT_NAME[TEXT_NUM_CATEGORIES] = {
 
 static int classify_row(const CorpusRoom* r) {
     room_class_reset();
+    room_class_set_game(r->release, r->serial);
     room_class_note_title(r->title);
     return text_classify_room(r->text);
 }
@@ -143,6 +144,53 @@ static int assertions(void) {
     CHECK(classify("Junction",
         "You are in a room with a rug. A cave opens to the north.")
         == TC_UNDERGROUND);
+
+    /* The bug this whole project exists for: the same word, two games, two
+       answers. Neither tiers nor sentence scope could tell these apart -- "ship"
+       is a Structure word in both readings. */
+    room_class_reset();
+    room_class_set_game(17, "821021");            /* Starcross -- sci-fi */
+    CHECK(classify("Airlock",
+        "You are in the airlock of the ship. The hull curves away above you.")
+        == TC_SCIFI);
+
+    room_class_reset();
+    room_class_set_game(88, "840726");            /* Zork I -- fantasy */
+    CHECK(classify("Dock",
+        "A ship is moored here. Its hull is sound and the deck is clear.")
+        == TC_NAUTICAL);
+
+    /* Seastalker is undersea but not a space game, so the same words resolve the
+       other way. Without this, "fix the sci-fi case" could just mean moving every
+       ship to SCIFI and calling it done. */
+    room_class_reset();
+    room_class_set_game(16, "850603");            /* Seastalker -- modern */
+    CHECK(classify("Sub Bay",
+        "You are in the cabin of the submarine. The hull is scarred.")
+        == TC_NAUTICAL);
+
+    /* An unknown game abstains on ambiguous words rather than guessing. Nothing
+       else in this text votes, so the answer must be NEUTRAL -- not a confident
+       wrong answer. */
+    room_class_reset();
+    room_class_set_game(0, "000000");
+    CHECK(room_class_genre_locked() == 0);
+    CHECK(classify("Somewhere",
+        "A ship is here. Its hull is sound and the deck is clear.")
+        == TC_NEUTRAL);
+
+    /* ...and once the markers resolve the genre, the same words vote again. */
+    room_class_reset();
+    room_class_set_game(0, "000000");
+    classify("Bay", "An airlock leads out. A reactor hums. The computer is dark.");
+    classify("Bay", "The airlock is sealed. A robot waits by the console.");
+    classify("Bay", "A panel glows beside the airlock.");
+    CHECK(room_class_genre_locked() == 1);
+    CHECK(classify("Hold", "The ship's hull creaks.") == TC_SCIFI);
+
+    /* A reset must not carry one story's genre into the next. */
+    room_class_reset();
+    CHECK(room_class_genre_locked() == 0);
 
     if (!fails) printf("ASSERTIONS: OK\n");
     return fails;

@@ -32,7 +32,7 @@ In:
 - A **genre mask** on every keyword, so ambiguous words vote differently per
   game. Genre comes from an authored per-game table, falling back to runtime
   inference for games not in it.
-- A corpus generator that drives host mojozork across all 30 games in
+- A corpus generator that drives host mojozork across all 31 stories in
   `tools/assets/Z3/`, using each game's walkthrough where one exists plus a
   fixed wander script everywhere, and emits the captured room text as C
   fixtures — plus the host test that consumes them.
@@ -208,8 +208,9 @@ exactly why the bug would survive testing on the shipped disc.
 
 1. Build host mojozork once with `gcc` (`saturn/mojozork.c` already has a
    `main()` that loads a story file and reads commands from stdin).
-2. Discover **`tools/assets/Z3/*.Z3`** — 30 games as fetched by
-   `tools/assets/games.bat`. This is the full library, not the three
+2. Discover **`tools/assets/Z3/*.Z3`** — 31 stories as fetched by
+   `tools/assets/games.bat`: 25 full published titles, two Infocom Samplers,
+   three Mini-Zorks and Hypochondriac. This is the full library, not the three
    open-sourced Zorks under `saturn/cd/data/Z3/`.
 3. For each game, run **two** capture passes and union the rooms:
    - **Solution pass**, when a walkthrough exists: replay
@@ -238,21 +239,31 @@ committed generated artifact built from uncommitted inputs, exactly like
 requires having run `games.bat` first. The generator is re-run when the game
 library changes, not on every build.
 
-**Walkthrough pairing.** Stem matching is not sufficient and failing quietly
-would be the worst outcome here:
+**Walkthrough pairing is strictly by stem — no alias table.** `<STEM>.Z3` pairs
+with `<STEM>.WIN` or it does not pair. The one file that broke that rule,
+`LRKHOROR.WIN`, is renamed to `LURKING.WIN` as part of this work; it was already
+reaching `typeahead_solution.c` by a hand-passed `gen_solution.py --game
+STORY:WIN` argument rather than by discovery, so the rename costs nothing and
+makes `gen_all.ps1` work unattended for Lurking Horror too.
 
-- `LURKING.Z3`'s walkthrough is `LRKHOROR.WIN`. A naive stem rule silently drops
-  the only horror game in the library — the same class of invisible failure
-  `saturn/tests/test_category_art.py` was written to catch. An explicit alias map
-  handles it, and it is the only alias needed today.
-- `HYPOCOND.WIN` exists but is zero bytes.
-- `INFOSAM5`, `INFOSAM7`, `MZORKI`, `MZORKI2`, `MZORKII` have no walkthrough at
-  all. Their rooms are largely excerpts of, or variants on, games already
-  covered, but the wander pass still reaches them.
+An alias map was considered and rejected: it is a lookaside that has to be
+maintained in two generators, and it exists only to preserve a filename nobody
+depends on. One-to-one names make the pairing rule checkable by eye.
+
+After the rename, every full published title in the library has a non-empty
+walkthrough. The six games without one are not full titles:
+
+- `INFOSAM5`, `INFOSAM7` — Infocom Sampler demo discs.
+- `MZORKI`, `MZORKI2`, `MZORKII` — Mini-Zork I and II, abridged re-releases
+  whose rooms are subsets of `ZORK1` and `ZORK2`.
+- `HYPOCOND` — Hypochondriac. `HYPOCOND.WIN` exists but is zero bytes, so this
+  is the only titled game in the library carrying an empty solution stub.
+
+All six are still reached by the wander pass, so they contribute rooms even
+without a solution.
 
 The generator prints a per-game line stating which passes ran, and exits
-non-zero if a `.Z3` matched neither an alias nor a stem *and* produced no rooms
-from its wander pass. Silence is never a pass.
+non-zero if a `.Z3` produced no rooms at all. Silence is never a pass.
 
 **Junk filter.** The wander pass walks into walls, darkness and parser errors,
 and that output must not reach the corpus. A capture is discarded when its first
@@ -304,14 +315,15 @@ testable against real prose rather than fixtures alone:
   `ADVENT`.
 - **Modern / mystery** — `DEADLINE`, `WITNESS`, `SUSPECT`, `MOONMIST`,
   `BALLYHOO`, `CUTHROAT`, `HOLYWOOD`, `LEATHERG`, `PLNDHRTS`.
-- **Horror** — `LURKING`, reachable only through the `LRKHOROR.WIN` alias.
+- **Horror** — `LURKING`.
 - **Nautical / desert edge cases** — `SEASTLKR` and `INFIDEL`, which are the
   games most likely to expose a bad tier assignment on `ship`/`deck` and
   `sand`/`dune`.
 
 Every one of these needs a `GAME_GENRE[]` row, keyed by release + serial read
 from each story's Z-header. That table is authored as part of this work, not
-deferred — with 30 games present there is no reason to lean on inference for any
+deferred — with the whole library present there is no reason to lean on
+inference for any
 of them. Inference remains the path for a game a player supplies themselves, and
 the unresolved-genre and cache-flush fixtures are what test it.
 

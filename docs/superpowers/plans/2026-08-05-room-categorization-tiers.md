@@ -317,14 +317,59 @@ git commit -m "classify: move room and event classification out of the sound mod
 
 ## Task 2: Corpus generator
 
+**REVISED 2026-08-05 after the first attempt.** The runtime-only capture reached
+119 rooms across 24 games and left 7 stories barren behind a `KNOWN_BARREN`
+allowlist — including `SEASTLKR`, which the spec names as a genre assertion
+target. A probe established that decoding the story files directly is both
+feasible and far better: Z-string decoding of the v3 object table yields room
+titles and, via a per-game description property, the real room prose. Every one
+of the barren games carries prose statically (Sorcerer 79 objects, Seastalker 51,
+Moonmist 27, Witness 17, Suspended 16).
+
+**Static extraction is now the primary source; the runtime capture stays as a
+complement** for rooms whose description is computed by a routine rather than
+stored as a string — the one class static decoding cannot reach.
+
 **Files:**
-- Create: `tools/gen_room_corpus.py`
+- Create: `tools/zstory.py` — v3 story decoding: Z-strings, abbreviations, the
+  object table, property lookup. Pure decoding, no corpus policy.
+- Create: `tools/gen_room_corpus.py` — static extraction + runtime capture, unioned.
 - Create: `tools/wander.txt`
 - Create: `test/corpus/rooms.inc` (generated output, committed)
 
 **Interfaces:**
 - Consumes: nothing from Task 1.
 - Produces: `test/corpus/rooms.inc`, defining `static const CorpusRoom CORPUS[]` with fields `{ unsigned short release; const char* serial; const char* title; const char* text; }` and `#define CORPUS_N <count>`. Task 3 includes this file and relies on exactly those names.
+
+- [ ] **Step 0: Build the static extractor**
+
+A verified working Z-string decoder is at
+`.superpowers/sdd/2026-08-05-room-categorization-tiers/zstring-probe-reference.py`.
+It correctly decodes Zork I's 250 objects and their names. Use it as the
+starting point for `tools/zstory.py` rather than rediscovering the format.
+
+The extraction, per story:
+
+1. Decode the abbreviation table (header `0x18`) and the object table
+   (header `0x0A`: 31 property-default words, then 9-byte v3 object entries of
+   attributes/parent/sibling/child/property-address).
+2. **Detect the description property per game** — it is not a constant (Zork I
+   11, Starcross 13, Seastalker 18). Score each property number by how many
+   objects have a 2-byte value that, read as a packed address, decodes to
+   prose; the highest-scoring number wins. Print the detected number per game
+   so a bad detection is visible rather than silent.
+3. **Identify rooms.** A room is an object carrying the description property
+   plus at least one direction property. Direction-property numbering differs
+   per game, so derive it rather than hardcoding: the direction properties are
+   the high-numbered ones shared by objects that other objects sit inside.
+   Whatever rule you use, validate it — Zork I must yield `West of House`,
+   `Kitchen`, `Cellar`, `Behind House` and `Forest Path` as rooms and must not
+   yield `mouse hole` or `magic boat`.
+4. **Skip routine-described rooms.** When the description property holds a
+   routine address rather than a string, decoding produces garbage. Detect it
+   (the decode fails, or the result fails a printable-prose check) and skip the
+   room rather than admitting noise. **Count the skips and print them per
+   game** — this is the coverage gap and it must be visible.
 
 - [ ] **Step 1: Create `tools/wander.txt`**
 
@@ -557,7 +602,20 @@ if __name__ == "__main__":
 cd /c/Users/saggl/CLionProjects/zaturn && python tools/gen_room_corpus.py
 ```
 
-Expected: a per-game line for each of the 31 stories, then a summary of several hundred rooms. `LURKING` must show `(solution, wander)` — if it shows `wander` only, the rename from Task 0 of the spec did not land.
+Expected: a per-game line for each of the 31 stories showing the detected
+description property, the static room count, the runtime room count, and the
+number of routine-described rooms skipped. `LURKING` must show a solution pass —
+if it shows wander only, the `LURKING.WIN` rename did not land.
+
+**No story may be barren, and there is no allowlist.** The first attempt carried
+a `KNOWN_BARREN` list of seven; static extraction is what removes the need for
+it. If a story still yields nothing, that is a real extraction failure to fix,
+not a fact to record — the two Infocom Samplers are the only stories permitted
+to yield no *rooms*, and even they must decode objects successfully.
+
+The total should be in the many hundreds. If it is not, the room-identification
+rule in Step 0 is too narrow — check it against Zork I, whose room count alone
+should be near a hundred.
 
 - [ ] **Step 4: Verify determinism**
 

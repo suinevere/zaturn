@@ -126,8 +126,28 @@ place or a fixture of one; none is a connector or a surface.
 | `cliff` | 2 | `TC_WILDERNESS` | Biome |
 | `alcove` | 2 | `TC_UNDERGROUND` | Structure |
 
-All carry `GN_ANY`. None is genre-ambiguous; the ones that were (`storage`) are
-excluded rather than guessed at.
+All were designed to carry `GN_ANY`, on the belief that none was genre-ambiguous
+and that the one which was (`storage`) had been excluded rather than guessed at.
+
+**Two of them turned out to be ambiguous, and were split during implementation.**
+The corpus said so plainly once the words were in:
+
+| Word | Split | Evidence |
+|---|---|---|
+| `shaft` | `TC_UNDERGROUND`·Structure for `GN_FANTASY\|GN_MODERN`, `TC_SCIFI`·Structure for `GN_SCIFI` | Zork's and Sorcerer's mine shafts read underground correctly, but Stationfall's ventilation shafts dragged five rooms — and two of those, `Computer Control` and `Shaft at Level Nine`, had already been *correctly* `TC_SCIFI` and were made wrong. A single reading was net-negative. |
+| `maze` | `TC_UNDERGROUND`·Structure for `GN_FANTASY`, `TC_WILDERNESS`·Biome for `GN_MODERN`, **no sci-fi row** | Adventure's and Zork's mazes are caves; Hollywood Hijinx's and Moonmist's are hedge mazes in gardens. The absent sci-fi row is deliberate: both sci-fi occurrences are metaphors — Leather Goddesses' "maze of neon" and Hitchhiker's "maze of twisty little synapses" inside Arthur's brain — and abstaining is the right answer for a word used figuratively. |
+
+The `maze` split goes further than a genre carve-out: for `GN_MODERN` it changes
+**both category and tier**, not just which genre a row votes in. That is a
+larger move than this spec authorised, and it is recorded here rather than left
+in a code comment. It is justified by the evidence above — a hedge maze is a
+garden feature, not a structure — but a reader should know it was a judgement
+made against the corpus during implementation, not a decision this design made in
+advance.
+
+The lesson generalises past these two words: a word's genre-ambiguity is not
+reliably visible before the corpus is run against it. Assuming otherwise in a
+spec's table invites exactly this drift between document and code.
 
 `tent` is worth noting: it gives `TC_DESERT` its **first Structure-tier word**.
 That category previously had only Biome and Feature entries, so any indoor word
@@ -163,6 +183,24 @@ Expected magnitudes, from measuring against the current corpus:
 
 - Commit 1: ~44 rooms, dominated by `passages` (34) and the compounds.
 - Commit 2: ~103 rooms.
+
+**Both estimates were low, and the reason is worth carrying forward.** Actual
+counts were 73 and 133. The estimates counted only rooms rescued *from*
+`TC_NEUTRAL` (46 and 82, both close to prediction); the snapshot counts every
+verdict change, including the 27 and ~51 rooms that moved between two categories
+that were already real. Those between-category moves are the ones needing the
+most judgement, and an estimate that omits them understates the review effort by
+roughly half.
+
+**Where the judgement is recorded.** The per-room reasoning lives in the task
+reports under `.superpowers/sdd/2026-08-06-classification-vocabulary/`, which is
+git-ignored — so it is not in the repository's history. What *is* durable is
+`git log -p test/corpus/blessed.inc`: every verdict change is a committed diff
+line, attributable to the commit that caused it. A future reader can see exactly
+what moved and when, but not the argument for each. If that trail matters more
+than it did here, the fix is to summarise the between-category moves in the
+commit body — which this project's one-sentence commit rule currently forbids,
+so it would be a deliberate exception rather than an oversight to correct.
 
 Assertions to add to `test/room_class_test.c`, beyond the snapshot:
 

@@ -17,6 +17,38 @@
 static char lc(char c) { return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c; }
 
 /*----------------------
+ | is_letter
+ | Description: True for an ASCII letter. What "inside a word" means to every
+ |   matcher here, so the three of them cannot drift apart.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: c -- the byte to test
+ | Returns: 1 for A-Z or a-z, 0 otherwise
+ ----------------------*/
+static int is_letter(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+/*----------------------
+ | matches_at
+ | Description: True when `word` sits at offset p of `text`, compared without
+ |   case. Says nothing about boundaries -- each caller decides what counts as
+ |   the end of a word, which is the only thing that differs between them.
+ | Author: suinevere
+ | Dependencies: lc
+ | Globals: N/A
+ | Params: text -- haystack; p -- offset to test; word -- lowercase needle;
+ |   wl -- its length, passed in because both callers already know it
+ | Returns: 1 on a case-insensitive match at p, 0 otherwise
+ ----------------------*/
+static int matches_at(const char* text, int p, const char* word, int wl) {
+    int i = 0;
+    while (i < wl && lc(text[p + i]) == word[i]) i++;
+    return i == wl;
+}
+
+/*----------------------
  | has_word_n
  | Description: Case-insensitive whole-word search within the first `len` bytes
  |   of `text`, so "cave" does not match "caverns". The bounded form exists so a
@@ -28,16 +60,12 @@ static char lc(char c) { return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') :
  | Returns: 1 on a whole-word match, 0 otherwise
  ----------------------*/
 static int has_word_n(const char* text, int len, const char* word) {
-    int wl = (int) strlen(word), p, i;
+    int wl = (int) strlen(word), p;
     for (p = 0; p + wl <= len; p++) {
-        i = 0;
-        while (i < wl && lc(text[p + i]) == word[i]) i++;
-        if (i == wl) {
+        if (matches_at(text, p, word, wl)) {
             char before = (p == 0) ? ' ' : text[p - 1];
             char after  = (p + wl < len) ? text[p + wl] : ' ';
-            int lb = !((before >= 'a' && before <= 'z') || (before >= 'A' && before <= 'Z'));
-            int la = !((after  >= 'a' && after  <= 'z') || (after  >= 'A' && after  <= 'Z'));
-            if (lb && la) return 1;
+            if (!is_letter(before) && !is_letter(after)) return 1;
         }
     }
     return 0;
@@ -69,10 +97,7 @@ static int has_word(const char* text, const char* word) {
  | Returns: 1 when q is a word boundary, 0 otherwise
  ----------------------*/
 static int at_bound(const char* text, int len, int q) {
-    char c;
-    if (q >= len) return 1;
-    c = text[q];
-    return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+    return (q >= len) || !is_letter(text[q]);
 }
 
 /*----------------------
@@ -93,22 +118,16 @@ static int at_bound(const char* text, int len, int q) {
  |   has_word: events fire on every turn with first-match-wins semantics, and
  |   inflecting them is a different decision from inflecting room keywords.
  | Author: suinevere
- | Dependencies: string.h, at_bound, lc
+ | Dependencies: string.h, matches_at, is_letter, at_bound
  | Globals: N/A
  | Params: text -- haystack; len -- how much of it to search; word -- lowercase needle
  | Returns: 1 on a whole-word or plural match, 0 otherwise
  ----------------------*/
 static int has_word_infl(const char* text, int len, const char* word) {
-    int wl = (int) strlen(word), p, i, e;
+    int wl = (int) strlen(word), p, e;
     for (p = 0; p + wl <= len; p++) {
-        i = 0;
-        while (i < wl && lc(text[p + i]) == word[i]) i++;
-        if (i != wl) continue;
-        {
-            char before = (p == 0) ? ' ' : text[p - 1];
-            if ((before >= 'a' && before <= 'z') ||
-                (before >= 'A' && before <= 'Z')) continue;
-        }
+        if (!matches_at(text, p, word, wl)) continue;
+        if (p > 0 && is_letter(text[p - 1])) continue;
         e = p + wl;
         if (at_bound(text, len, e)) return 1;
         if (lc(text[e]) == 's' && at_bound(text, len, e + 1)) return 1;

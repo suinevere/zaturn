@@ -257,13 +257,12 @@ void display_cycle_palette(DisplayState *d, int dir);
 
 /*----------------------
  | DISP_IMAGE_NAME_MAX
- | Description: The longest image filename stored in a save blob, plus its NUL.
- |   Frozen at the old flat ISO9660 8.3 width (12 usable characters); a
- |   synthesised "MOOD/NN.TGA" path needs strlen(MOOD) + 7, which only fits for
- |   moods of 5 letters or fewer (WATER, TOWN, DUNGN, MAGIC, SCIFI, HOUSE). The
- |   other six (WILDER, DESERT, HORROR, MYSTERY, UNDRGRND, NAUTICAL) truncate on
- |   encode and then fail to resolve on decode; only the legacy "image alongside
- |   a colour preset" blob path can hit this, since Dynamic never stores a name.
+ | Description: The image-name field width in a save blob, plus its NUL. Frozen
+ |   at the old flat ISO9660 8.3 width (12 usable characters) for save-format
+ |   compatibility -- display_encode no longer writes anything into the field
+ |   (see its comment), and a synthesised "MOOD/NN.TGA" path is wider than it
+ |   fits regardless, so this stays exactly as sized rather than growing to
+ |   accommodate a writer that no longer exists.
  | Author: suinevere
  ----------------------*/
 #define DISP_IMAGE_NAME_MAX 13
@@ -271,27 +270,29 @@ void display_cycle_palette(DisplayState *d, int dir);
 /*----------------------
  | DISP_BLOB_BYTES
  | Description: The save-block size and layout: [sentinel=4][palette][bg][text]
- |   [image name, NUL-padded]. bg is always a color and the name says which picture
- |   sits over it (empty for none) -- both stored because they are independent (an
- |   image hides its color, but the color still shows through the menu frames and
- |   survives switching the picture off). palette holds 0xFE for Dynamic, which
- |   stores no name at all because its picture is a consequence of where the player
- |   is standing rather than a setting.
+ |   [image name, NUL-padded]. bg is always a color, stored independently of any
+ |   image because it is what shows through the menu frames and survives
+ |   switching the picture off. palette holds 0xFE for Dynamic, which stores no
+ |   name at all because its picture is a consequence of where the player is
+ |   standing rather than a setting.
  |
- |   Nothing writes 0xFF (the "this named picture" marker) any more, because the
- |   Palette row no longer lets a single picture be chosen. Blobs that already carry
- |   it are still read and land on Dynamic, which is the nearest thing the row still
- |   offers to "I wanted a picture here"; the name they stored is not honoured,
- |   since the mood decides. The name field itself stays in the layout rather than
- |   being reclaimed -- the block size is what older forms are told apart by, and a
- |   shorter sentinel-4 would make an old blob and a new one indistinguishable.
+ |   display_encode always writes the name field empty now (see its comment):
+ |   no UI path can pin a picture to a colour preset any more, and a synthesised
+ |   path is wider than the field regardless. The field stays in the layout
+ |   rather than being reclaimed -- the block size is what older forms are told
+ |   apart by, a shorter sentinel-4 would make an old blob and a new one
+ |   indistinguishable, and display_decode still reads a name out of it for
+ |   blobs written before this change.
  |
  |   Three older forms are still read, and all three predate Dynamic taking palette
  |   index 0 -- so a colour-preset index in any of them is one lower than it should
  |   be now and is shifted up on read. Sentinel 3 is the same layout as 4 without
  |   the Dynamic marker; sentinel 2 packed the image into bg (decoding to that image
  |   over black, losing the color beneath); sentinel 1 is the original four-byte,
- |   no-name form (colors honored, any image reference refused).
+ |   no-name form (colors honored, any image reference refused). Nothing writes
+ |   0xFF (the old "this named picture" marker) any more either; a blob that
+ |   still carries it lands on Dynamic instead, the nearest thing the row still
+ |   offers to "I wanted a picture here."
  | Author: suinevere
  ----------------------*/
 #define DISP_BLOB_BYTES (4 + DISP_IMAGE_NAME_MAX)

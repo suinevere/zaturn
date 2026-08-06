@@ -504,22 +504,21 @@ static void test_decode_truncated_name_block(void) {
 
 static void test_bg_color_under_image_survives_a_save(void) {
     /* The color beneath a picture is what shows through the menu frames, so it
-       has to round-trip independently of the picture. */
+       has to round-trip independently of the picture -- unlike the picture
+       itself, which display_encode no longer stores for a colour preset (see
+       its comment): the image field comes back DISP_IMAGE_NONE regardless of
+       what was saved. */
     DisplayState d, saved;
     unsigned char blob[DISP_BLOB_BYTES];
 
     saved.palette = PAL(0);
     saved.bg      = DISP_BG_BLUE;           /* deliberately not the preset's black */
     saved.text    = DISP_TEXT_WHITE;
-    /* HOUSE, not a longer mood name: "HOUSE/01.TGA" is exactly 12 characters,
-       the most DISP_IMAGE_NAME_MAX's 13-byte field can hold with its NUL --
-       longer names truncate and miss on decode (see DISP_IMAGE_NAME_MAX in
-       display.h). */
     saved.image   = display_slot_make(TC_HOUSE, 1);
     display_encode(&saved, blob);
 
     assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 1);
-    assert(d.image == saved.image);
+    assert(d.image == DISP_IMAGE_NONE);
     assert(d.bg    == DISP_BG_BLUE);
     assert(d.text  == DISP_TEXT_WHITE);
     /* Diverged from the preset's black, so it reads Custom. */
@@ -639,18 +638,24 @@ static void test_blob_roundtrip(void) {
     assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
     assert(b.palette == PAL(5));
 
-    /* A picture carried alongside a colour preset still round-trips by name.
-       Nothing in the UI builds that state any more -- the row has no per-picture
-       entry to reach it from -- but the name field and its resolver are still in
-       the format, and a legacy blob arrives through exactly this path. */
+    /* A picture carried alongside a colour preset does NOT round-trip any
+       more: no UI path can produce that combination (the Palette row offers
+       only Dynamic and colour presets, and a colour preset carries
+       DISP_IMAGE_NONE), so display_encode writes the name field empty
+       regardless of what d->image holds. The blob still round-trips through
+       decode -- palette, bg and text are unaffected, only the image is
+       silently dropped, on purpose. */
     a.palette = PAL(0);
     a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE;
     a.image = display_slot_make(TC_MAGIC, 2);
     display_encode(&a, buf);
+    {
+        int i;
+        for (i = 0; i < DISP_IMAGE_NAME_MAX; i++) assert(buf[4 + i] == 0);
+    }
     assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
     assert(b.palette == PAL(0));
-    assert(b.image == a.image);
-    assert(strcmp(display_image_file(b.image), "MAGIC/02.TGA") == 0);
+    assert(b.image == DISP_IMAGE_NONE);
 
     /* A sentinel-3 blob written before Dynamic existed: its colour preset index
        is in the OLD space and must shift up by one, or every saved appearance

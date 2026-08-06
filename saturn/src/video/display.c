@@ -707,18 +707,15 @@ static int image_slot_of(const char *name) {
 /*----------------------
  | display_encode
  | Description: Serializes a DisplayState into a save blob (sentinel 4): palette,
- |   background, and text bytes (Dynamic is marked DISP_BLOB_DYNAMIC and an image
- |   palette DISP_BLOB_IMAGE), plus the on-screen picture's name so it can be
- |   matched back by name on a different disc. If image and palette disagree, what
- |   is displayed wins.
+ |   background, and text bytes (Dynamic is marked DISP_BLOB_DYNAMIC). The name
+ |   field is always written empty now -- see the comment below.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: (via display_image_file)
+ | Globals: N/A
  | Params: d -- the state; out -- the blob buffer
  | Returns: DISP_BLOB_BYTES (the bytes written)
  ----------------------*/
 int display_encode(const DisplayState *d, unsigned char *out) {
-    const char *name = "";
     int i;
 
     out[0] = 4;                                /* block sentinel: + the Dynamic palette */
@@ -727,19 +724,16 @@ int display_encode(const DisplayState *d, unsigned char *out) {
     out[2] = (unsigned char) d->bg;            /* always a color now */
     out[3] = (unsigned char) d->text;
 
-    /* Dynamic stores no name: the picture it is showing is a consequence of where
-       the player happens to be standing, not a setting worth restoring. Nothing
-       else can be carrying a picture now that the row lists none, so in practice
-       this writes an empty name every time -- the field is kept, and kept
-       populated from d->image, so a state built by hand (a test, a future row that
-       pins a picture again) still round-trips instead of silently losing it. */
-    if (d->palette == DISP_PAL_DYNAMIC) name = "";
-    else if (d->image >= 0)             name = display_image_file(d->image);
-
-    for (i = 0; i < DISP_IMAGE_NAME_MAX - 1 && name[i]; i++)
-        out[4 + i] = (unsigned char) name[i];
-    for (; i < DISP_IMAGE_NAME_MAX; i++)
-        out[4 + i] = 0;
+    /* The name field is frozen at its size for save-format compatibility and is
+       no longer populated: no UI path can produce palette != Dynamic with
+       image >= 0 (the Palette row offers Dynamic plus colour presets and
+       nothing else, and a colour preset carries DISP_IMAGE_NONE), and even a
+       hand-built state's synthesised "MOOD/NN.TGA" path does not fit the field
+       -- it would truncate to something image_slot_of then rejects on the way
+       back in, which corrupts silently rather than failing clean. If
+       per-picture pinning ever returns, it needs a wider field and a new
+       sentinel regardless, not this one repurposed. */
+    for (i = 0; i < DISP_IMAGE_NAME_MAX; i++) out[4 + i] = 0;
     return DISP_BLOB_BYTES;
 }
 

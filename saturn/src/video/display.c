@@ -197,7 +197,8 @@ int display_slot_valid(int slot) {
  |   display_image_count. Nothing writes it any more now that display_set_images is
  |   gone, so it stays at its zero initializer and the two gates that still read it
  |   (display_defaults, display_cycle_palette) always take their no-art branch --
- |   see the task report.
+ |   Dynamic is unreachable until a later pass routes those two through
+ |   display_image_count() instead of this stale cache.
  | Author: suinevere
  ----------------------*/
 static int g_image_count = 0;
@@ -323,8 +324,8 @@ int display_bg_count(void)    { return DISP_BG_COLOR_N; }
 /*----------------------
  | g_file_buf
  | Description: Two rotating buffers for display_image_file, so one screen draw
- |   can hold two filenames at once -- the same reason display_image_label keeps
- |   two. "UNDRGRND/99.TGA" is 15 characters plus a terminator.
+ |   can hold two filenames at once -- the Palette row prints one while resolving
+ |   another. "UNDRGRND/99.TGA" is 15 characters plus a terminator.
  | Author: suinevere
  ----------------------*/
 static char g_file_buf[2][16];
@@ -357,36 +358,6 @@ const char *display_image_file(int slot) {
     out[k++] = (char) ('0' + index % 10);
     out[k++] = '.'; out[k++] = 'T'; out[k++] = 'G'; out[k++] = 'A';
     out[k]   = '\0';
-    return out;
-}
-
-/*----------------------
- | display_image_label
- | Description: A display label for an image slot: the filename without extension,
- |   first letter upper, rest lower. Uses two rotating buffers so a single screen
- |   draw can hold two labels at once (the Palette row prints one while
- |   display_palette_name resolves another).
- | Author: suinevere
- | Dependencies: N/A
- | Globals: (via display_image_file)
- | Params: slot -- the image slot
- | Returns: the formatted label (in a rotating static buffer)
- ----------------------*/
-const char *display_image_label(int slot) {
-    static char ring[2][DISP_IMAGE_NAME_MAX];
-    static int turn = 0;
-    const char *src = display_image_file(slot);
-    char *out = ring[turn];
-    int i = 0;
-
-    turn = (turn + 1) & 1;
-    for (; src[i] && src[i] != '.' && i < DISP_IMAGE_NAME_MAX - 1; i++) {
-        char c = src[i];
-        if (i == 0) { if (c >= 'a' && c <= 'z') c = (char) (c - 'a' + 'A'); }
-        else        { if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a'); }
-        out[i] = c;
-    }
-    out[i] = '\0';
     return out;
 }
 

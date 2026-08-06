@@ -75,9 +75,9 @@ static void test_preset_contents(void) {
 static void test_defaults_and_palette_name(void) {
     DisplayState d;
     /* g_image_count has nothing left to set it now that display_set_images is
-       gone (see the task report), so display_defaults always takes its no-art
-       branch and falls to the first colour preset -- there is no registered-art
-       case left to cover separately here. */
+       gone, so display_defaults always takes its no-art branch and falls to the
+       first colour preset -- there is no registered-art case left to cover
+       separately here. */
     display_defaults(&d);
     assert(d.palette == PAL(0));                   /* IBM PC (MDA Monitor) */
     assert(d.bg == DISP_BG_BLACK);
@@ -106,11 +106,14 @@ static void test_bg_name_and_is_image(void) {
     assert(strcmp(display_bg_name(&d), "Black") == 0);
 
     /* The Background row keeps naming a colour even when the image field holds a
-       real slot -- is_image itself is still gated on g_image_count, which
-       nothing sets any more (see the task report), so it cannot read true here
-       yet; Task 3 restores that path. */
+       real slot -- is_image itself still reads d->image against g_image_count,
+       which nothing sets any more, so a real slot cannot make it read true here
+       yet; a later pass that routes is_image through display_slot_valid instead
+       restores that path (and the true-case assertion this test is missing
+       until then). */
     d.image = display_slot_make(TC_HOUSE, 1);
     assert(strcmp(display_bg_name(&d), "Black") == 0);
+    assert(!display_is_image(&d));
 }
 
 static void test_cycle_bg_stays_in_colors(void) {
@@ -183,7 +186,7 @@ static void test_guard_follows_bg_color_under_image(void) {
 
 static void test_cycle_palette(void) {
     DisplayState d;
-    /* g_image_count is permanently zero now (see the task report), so Dynamic
+    /* g_image_count is permanently zero now that nothing sets it, so Dynamic
        (index 0) is unreachable and cycling steps straight over it -- including
        across both wraps. */
     display_defaults(&d);                  /* first colour preset */
@@ -342,6 +345,61 @@ static void test_decode_rejects_bad_input(void) {
     assert(d.text == def.text);
 }
 
+static void test_decode_multi_field_corruption(void) {
+    DisplayState d, def;
+    unsigned char buf[DISP_BLOB_BYTES];
+
+    display_defaults(&def);
+
+    /* Valid sentinel and length, valid non-default background, but both
+       palette and text are out of range. Both corrupt fields fall back
+       independently while the valid background is accepted. */
+    buf[0] = 1;                 /* valid sentinel */
+    buf[1] = 99;                /* out-of-range palette */
+    buf[2] = DISP_BG_AMBER;     /* valid, non-default background */
+    buf[3] = 99;                /* out-of-range text */
+    assert(display_decode(buf, 4, &d) == 0);
+    assert(d.bg == DISP_BG_AMBER);              /* valid field accepted */
+    assert(d.palette == def.palette);           /* corrupt field fell back */
+    assert(d.text == def.text);                 /* corrupt field fell back */
+}
+
+static void test_palette_count_is_fixed(void) {
+    /* The row used to grow by one per picture. It does not any more: thirty-
+       seven of them made a fifty-four-entry cycler where most steps read the
+       disc. Every picture is still reachable, through the mood that owns it. */
+    assert(display_palette_count() == 1 + DISP_PRESET_N);
+}
+
+static void test_decode_missing_image_falls_back(void) {
+    /* A name that cannot resolve, paired with a background/text pair that
+       clashes once the picture behind it is gone: decode must still land on a
+       legible pair, restored from the saved palette's own preset, with the
+       palette byte itself surviving untouched. ZX Spectrum (Light Gray/Black)
+       is the concrete case pinned here. Built by hand rather than round-tripped
+       through a shrinking disc, since the disc's art no longer varies at
+       runtime -- an unresolvable name is what "the picture is gone" now looks
+       like. */
+    unsigned char blob[DISP_BLOB_BYTES];
+    DisplayState b;
+    static const char *const name = "GONE.TGA";
+    int i;
+
+    for (i = 0; i < DISP_BLOB_BYTES; i++) blob[i] = 0;
+    blob[0] = 4;
+    blob[1] = (unsigned char) PAL(11);      /* ZX Spectrum */
+    blob[2] = DISP_BG_BLACK;
+    blob[3] = DISP_TEXT_BLACK;              /* clashes, image or not */
+    for (i = 0; name[i]; i++) blob[4 + i] = (unsigned char) name[i];
+
+    assert(display_decode(blob, DISP_BLOB_BYTES, &b) == 0);   /* reports the fallback */
+    assert(!display_is_image(&b));
+    assert(display_bg_rgb(b.bg) != display_text_rgb(b.text));
+    assert(b.palette == PAL(11));              /* palette byte survived */
+    assert(b.bg == DISP_BG_LIGHT_GRAY);         /* restored from ZX Spectrum's own pair */
+    assert(b.text == DISP_TEXT_BLACK);          /* restored from ZX Spectrum's own pair */
+}
+
 static void test_decode_missing_image_never_clashes(void) {
     /* Any accepted palette plus a background/text pair that happens to clash
        must still decode to a legible pair -- restored from that palette's own
@@ -444,30 +502,6 @@ static void test_decode_truncated_name_block(void) {
 
 /* --- images as their own field --------------------------------------------- */
 
-static void test_image_label_drops_extension_and_capitalizes(void) {
-    /* Real slots now -- a label is read off the synthesised path, so the folder
-       component rides along with it, unlike the old flat "HOUSE1.TGA" names. */
-    int house = display_slot_make(TC_HOUSE, 1);
-    int town  = display_slot_make(TC_TOWN, 2);
-    assert(strcmp(display_image_file(house), "HOUSE/01.TGA") == 0);
-    assert(strcmp(display_image_label(house), "House/01") == 0);
-    assert(strcmp(display_image_file(town), "TOWN/02.TGA") == 0);
-    assert(strcmp(display_image_label(town), "Town/02") == 0);
-    /* An invalid slot is empty, not garbage. */
-    assert(display_image_label(DISP_IMAGE_NONE)[0] == '\0');
-    assert(display_image_label(-99)[0] == '\0');
-}
-
-static void test_two_labels_live_at_once(void) {
-    /* The Display page prints one label while resolving another, so a single
-       static buffer would make both read the same. */
-    const char *a, *b;
-    a = display_image_label(display_slot_make(TC_HOUSE, 1));
-    b = display_image_label(display_slot_make(TC_TOWN, 1));
-    assert(strcmp(a, "House/01") == 0);
-    assert(strcmp(b, "Town/01")  == 0);
-}
-
 static void test_bg_color_under_image_survives_a_save(void) {
     /* The color beneath a picture is what shows through the menu frames, so it
        has to round-trip independently of the picture. */
@@ -479,7 +513,8 @@ static void test_bg_color_under_image_survives_a_save(void) {
     saved.text    = DISP_TEXT_WHITE;
     /* HOUSE, not a longer mood name: "HOUSE/01.TGA" is exactly 12 characters,
        the most DISP_IMAGE_NAME_MAX's 13-byte field can hold with its NUL --
-       longer names truncate and miss on decode. See the task report. */
+       longer names truncate and miss on decode (see DISP_IMAGE_NAME_MAX in
+       display.h). */
     saved.image   = display_slot_make(TC_HOUSE, 1);
     display_encode(&saved, blob);
 
@@ -503,8 +538,9 @@ static void test_category_art(void) {
         named++;
         assert(f[0] != '\0');
         /* Not DISP_IMAGE_NAME_MAX-1: an 8-letter mood's path ("UNDRGRND/07.TGA")
-           is 15 characters, longer than the save-blob field now reserves -- see
-           the task report. 15 is what the synthesis buffer itself allows. */
+           is 15 characters, longer than the save-blob field now reserves (see
+           DISP_IMAGE_NAME_MAX in display.h). 15 is what the synthesis buffer
+           itself allows. */
         assert(strlen(f) <= 15);
     }
     /* Twelve categories carry art. Three deliberately do not, and each NULL means
@@ -633,9 +669,9 @@ static void test_blob_roundtrip(void) {
     }
 
     /* A blob carrying the Dynamic marker is refused on this build: g_image_count
-       has nothing left to set it (see the task report), so Dynamic is
-       unreachable through display_defaults too -- this constructs the marker by
-       hand rather than by going through it. */
+       has nothing left to set it, so Dynamic is unreachable through
+       display_defaults too -- this constructs the marker by hand rather than by
+       going through it. */
     a.palette = DISP_PAL_DYNAMIC;
     a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE; a.image = DISP_IMAGE_NONE;
     display_encode(&a, buf);
@@ -658,13 +694,14 @@ int main(void) {
     test_collisions_roundtrip();
     test_custom_state_roundtrips();
     test_decode_rejects_bad_input();
+    test_decode_multi_field_corruption();
+    test_palette_count_is_fixed();
+    test_decode_missing_image_falls_back();
     test_decode_missing_image_never_clashes();
     test_color_state_needs_no_image();
     test_legacy_blob_still_decodes();
     test_legacy_blob_image_index_rejected();
     test_decode_truncated_name_block();
-    test_image_label_drops_extension_and_capitalizes();
-    test_two_labels_live_at_once();
     test_bg_color_under_image_survives_a_save();
     test_category_art();
     test_virtual_slots();

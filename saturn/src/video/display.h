@@ -148,15 +148,13 @@ int display_image_count(void);
 int display_bg_count(void);
 
 /*----------------------
- | display_image_file / display_image_label
- | Description: file synthesises the on-disc path from a slot ("HORROR/07.TGA"),
- |   or "" for a slot this disc does not carry; label is the player-facing form
- |   (extension dropped, capitalized), held in a small rotating buffer -- copy it
- |   if you need to keep it past a couple of uses.
+ | display_image_file
+ | Description: Synthesises the on-disc path from a slot ("HORROR/07.TGA"), or ""
+ |   for a slot this disc does not carry. Held in a small rotating buffer -- copy
+ |   it if you need to keep it past a couple of uses.
  | Author: suinevere
  ----------------------*/
 const char *display_image_file(int slot);
-const char *display_image_label(int slot);
 
 /*----------------------
  | display_category_image
@@ -260,9 +258,12 @@ void display_cycle_palette(DisplayState *d, int dir);
 /*----------------------
  | DISP_IMAGE_NAME_MAX
  | Description: The longest image filename stored in a save blob, plus its NUL.
- |   Sized for the old flat ISO9660 8.3 names; an 8-letter mood folder's path
- |   ("UNDRGRND/07.TGA", "NAUTICAL/07.TGA") is 15 characters and does not fit --
- |   see the task report.
+ |   Frozen at the old flat ISO9660 8.3 width (12 usable characters); a
+ |   synthesised "MOOD/NN.TGA" path needs strlen(MOOD) + 7, which only fits for
+ |   moods of 5 letters or fewer (WATER, TOWN, DUNGN, MAGIC, SCIFI, HOUSE). The
+ |   other six (WILDER, DESERT, HORROR, MYSTERY, UNDRGRND, NAUTICAL) truncate on
+ |   encode and then fail to resolve on decode; only the legacy "image alongside
+ |   a colour preset" blob path can hit this, since Dynamic never stores a name.
  | Author: suinevere
  ----------------------*/
 #define DISP_IMAGE_NAME_MAX 13

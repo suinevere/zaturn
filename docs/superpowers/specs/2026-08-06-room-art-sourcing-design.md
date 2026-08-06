@@ -96,12 +96,51 @@ rows are `TC_NEUTRAL`, `TC_DANGER` and `TC_TRIUMPH`, which hold whatever is
 showing and must keep doing so.
 
 `display_category_image(cat)` formats `"%s/%02d.TGA"` from a small
-`CATEGORY_DIR[]` table and the existing `g_cat_rot` counter. Twelve bytes replace
-24KB, `DISP_IMAGE_MAX` and `display_set_images` are deleted, and the counts come
-from the files that actually converted rather than from names a human typed.
+`CATEGORY_DIR[]` table and the existing `g_cat_rot` counter, into a rotating
+buffer — the pattern `display_image_label` already uses. Twelve bytes replace
+24KB, `DISP_IMAGE_MAX`, `display_set_images` and `g_image_names` are deleted, and
+the counts come from the files that actually converted rather than from names a
+human typed.
 
 Pool disjointness stops being a property maintained by care. A file lives in one
 folder; two moods cannot name it.
+
+#### Slots stay, and become virtual
+
+The image **slot** does not go away with the name array. `DisplayState.image` is a
+slot, and it is load-bearing: `main.cxx:133`, `main.cxx:157`, `main.cxx:381`,
+`menu_pages.cxx:719` and `options.cxx:94` all read or write it, and
+`display_dynamic_slot`, `display_pin_dynamic_slot` — which is what keeps CD-DA
+playing on the Display Options page — `display_is_image`, `display_defaults` and
+`display_cycle_palette` all reason in slots.
+
+So a slot stops indexing a scanned array and starts *encoding* a location:
+
+```
+slot = cat * 100 + index      /* index is 1..99, matching the filename */
+cat  = slot / 100
+index= slot % 100
+```
+
+Three consequences, each of which is a task rather than an afterthought:
+
+- `display_image_file(slot)` synthesises the path instead of looking it up.
+  `image_slot_of(name)` parses one back, which is what `display_decode` and
+  `display_set_dynamic_category` need.
+- **The validity test changes shape.** Every `slot >= 0 && slot < g_image_count`
+  becomes `display_slot_valid(slot)`, because the slot space is now sparse — 100
+  and 199 are valid while 150 may not be. Missing one of these is a silent bug
+  that only shows as a wallpaper failing to appear, so the sites are enumerated
+  in the plan rather than found by grep at implementation time.
+- `g_image_count` survives, but only to answer "does this disc have art at all".
+  It becomes the sum of `CATEGORY_ART_N` and is compared against zero, never used
+  as an upper bound.
+
+Old save blobs stored a *name*. `image_slot_of` parses the new form, so a
+`HOUSE1.TGA` from a sentinel-2/3/4 blob simply misses and resolves to
+`DISP_IMAGE_NONE` — which is already the outcome for those blobs, since the
+Palette row stopped honouring pinned pictures (`display.h:277`). No new
+behaviour, and no migration.
 
 ### Query scaffold
 

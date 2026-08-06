@@ -548,7 +548,7 @@ static void test_sparse_slot_space(void) {
     assert(d.palette == DISP_PAL_DYNAMIC);
 
     d.image = good;
-    assert(display_is_image(&d));
+    assert(display_is_image(&d));           /* impossible until the dead global goes */
     d.image = gap;
     assert(!display_is_image(&d));          /* a naive < count test passes this */
     d.image = DISP_IMAGE_NONE;
@@ -568,7 +568,21 @@ Run: `gcc -O2 -I saturn/src -o /tmp/td saturn/tests/test_display.c saturn/src/vi
 Expected: FAIL at `assert(!display_is_image(&d))` — `TC_HOUSE * 100` is below the
 total count and the old test accepts it.
 
-- [ ] **Step 3: Apply the four substitutions**
+- [ ] **Step 2a: Restore the true case Task 2 could not assert**
+
+`saturn/tests/test_display.c`, `test_bg_name_and_is_image`, currently pins the
+false case with a comment saying a true case is impossible. It was: while
+`g_image_count` sat dead at zero, `display_is_image` could never return true, so
+Task 2 was blocked from asserting it. Deleting the global unblocks it.
+
+Replace that comment with the real assertion:
+
+```c
+    d.image = display_slot_make(TC_HOUSE, 1);
+    assert(display_is_image(&d));
+```
+
+- [ ] **Step 3: Apply the substitutions**
 
 Change exactly the four rows marked → in the table above. Leave the two marked
 **keep** alone; update the `Globals:` line of each touched header block to name

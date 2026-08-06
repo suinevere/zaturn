@@ -156,15 +156,28 @@ def main():
             if not rows:
                 print("FAIL: GAME_GENRE rows carry no fallback column")
                 fails += 1
+            # TC_DANGER and TC_TRIUMPH are event categories, scanned per-turn and
+            # never a room's base mood -- a fallback naming one would stick a
+            # story in a permanent "moment" that never resolves, which is a
+            # design error even though both names do own a picture pool.
+            PLACE_CATEGORIES = {
+                "TC_WILDERNESS", "TC_UNDERGROUND", "TC_WATER", "TC_NAUTICAL",
+                "TC_TOWN", "TC_DUNGEON", "TC_DESERT", "TC_MAGIC", "TC_SCIFI",
+                "TC_HORROR", "TC_MYSTERY", "TC_HOUSE",
+            }
             bad = []
             for cat in sorted(set(rows)):
                 if cat == "TC_NEUTRAL":
+                    continue
+                if cat not in PLACE_CATEGORIES:
+                    bad.append(f"{cat}: not TC_NEUTRAL or a place category "
+                               f"(TC_WILDERNESS..TC_HOUSE)")
                     continue
                 img = "IMG_" + cat[len("TC_"):]
                 if img not in pool or not pool[img]:
                     bad.append(f"{cat}: no pictures in {img}")
             if bad:
-                print("FAIL: fallback categories with no picture pool:")
+                print("FAIL: fallback categories that cannot be a base mood:")
                 for b in bad:
                     print(f"       {b}")
                 fails += 1

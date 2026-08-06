@@ -529,7 +529,7 @@ void music_transition_flush(void) {
  |   stale engine cannot leak a track into the menu.
  | Author: suinevere
  | Dependencies: room_class.h (room_class_reset, room_class_set_game,
- |   room_class_genre_locked), music.h (text_game_fallback); stops via g_play
+ |   room_class_genre_locked, text_game_fallback); stops via g_play
  | Globals: nearly all engine/mix state, including g_fallback_cat and
  |   g_genre_was_locked which it re-derives from g_release/g_serial
  | Params: N/A
@@ -540,7 +540,6 @@ void music_reset(void) {
     room_class_reset();
     g_active_track = 0; g_turn_len = 0; g_turn_text[0] = 0;
     for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
-    g_genre_was_locked = 0;
     g_neutral_rooms = 0;
     /* Reset clears play state, not which game is loaded. main.cxx calls
        music_set_game before music_reset, so anything derived from the story

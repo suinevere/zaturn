@@ -106,7 +106,19 @@ static unsigned char g_fallback_cat = TC_NEUTRAL;   /* this game's default */
 
 `music_set_game` already forwards to `room_class_set_game`; it gains one more
 line beside it, `g_fallback_cat = text_game_fallback(g_release, g_serial);`.
-`music_reset` clears both statics.
+
+`music_reset` does **not** clear `g_fallback_cat` back to `TC_NEUTRAL` --
+that was the design's original mistake, and shipping it would have silently
+undone the whole feature every time a game reached `music_reset` after
+`music_set_game` had already run. `main.cxx` calls `music_set_game` at :578
+and `music_reset` at :580, so anything the former derives, the latter must
+rebuild or it is lost for the rest of the session. `g_release`/`g_serial`
+deliberately survive `music_reset` for exactly this reason: `music_reset`
+clears play state, then calls `room_class_reset()` followed by
+`room_class_set_game(g_release, g_serial)`, `g_fallback_cat =
+text_game_fallback(g_release, g_serial)`, and `g_genre_was_locked =
+room_class_genre_locked()` -- re-deriving from game identity everything that
+`music_set_game` had already set, rather than wiping it.
 
 `GAME_GENRE` stays in `room_class_data.c` rather than moving to `music_data.c`.
 It is already keyed by release + serial and already read through an accessor, so
@@ -259,6 +271,14 @@ same class of silent failure that test already exists to catch.
 - **More wallpaper changes than today.** Every fallback firing is a change that
   previously did not happen. Three rooms of hysteresis is the mitigation; if it
   still feels busy in play, the constant is the dial.
+- **One wallpaper change, two track changes.** `TC_NEUTRAL` has no picture pool
+  (`CATEGORY_IMAGE[TC_NEUTRAL] = { 0, 0 }`), so the picture holds while
+  `g_neutral_rooms` climbs -- but `TC_NEUTRAL` does have a real track pool,
+  `P_NEUTRAL`, so the music moves to it as soon as the room's base category goes
+  neutral. The fallback firing a few rooms later then moves the track a second
+  time, while the wallpaper only ever makes its one move (holding, then jumping
+  straight to the fallback's picture). A run of unclassified rooms is therefore
+  audibly busier than it is visibly busier.
 - **A wrong default is worse than none.** A game tagged with a mood that does not
   suit it will show that mood across its whole featureless middle. The table is
   the risky part of this change, not the code, and it is the part a build on real

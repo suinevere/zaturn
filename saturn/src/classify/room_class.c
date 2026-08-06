@@ -183,7 +183,14 @@ static int g_genre_rooms = 0;
 /*----------------------
  | room_class_reset
  | Description: Clears the module's per-game state, so neither a room name nor a
- |   resolved genre recorded for one story can leak into the next.
+ |   resolved genre recorded for one story can leak into the next -- on its own.
+ |   music_reset calls this and then immediately room_class_set_game(g_release,
+ |   g_serial), which re-resolves the genre from the (still-loaded) game
+ |   identity, so on the title-screen reset path the previous game's genre
+ |   comes right back. Harmless today only because the one path that loads a
+ |   new game overwrites identity before any room is classified; the leak this
+ |   function guards against now depends on that call order, not on this
+ |   function alone.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_room_title, g_genre, g_genre_lock, g_genre_hits, g_genre_rooms

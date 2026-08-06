@@ -401,6 +401,13 @@ In `music_reset`, beside the existing `g_genre_was_locked = 0;`:
     g_fallback_cat = TC_NEUTRAL;
 ```
 
+> **Corrected during implementation.** Wiping `g_fallback_cat` to `TC_NEUTRAL`
+> here is wrong -- it undoes what `music_set_game` just derived, every time
+> `music_reset` runs after it. The shipped `music_reset` re-derives
+> `g_fallback_cat` (and `g_genre_was_locked`) from `g_release`/`g_serial`
+> instead of wiping them. See the design doc's Architecture section for the
+> corrected control flow.
+
 - [ ] **Step 5: Add the substitution in `music_on_turn`**
 
 Inside the `if (room_changed) {` branch, after the whole `if (base < 0) { ... }` block closes and **before** `g_cur_room = room; g_have_room = 1; ...`:

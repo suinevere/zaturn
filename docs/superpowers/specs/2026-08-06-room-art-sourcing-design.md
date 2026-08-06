@@ -243,12 +243,26 @@ bound.
 
 ## Sequencing
 
+This ships as **two independent plans**. They share exactly one thing — the
+per-mood folder convention fixed in *Disc layout* above — and nothing else. Plan
+A touches only Saturn C and can go to hardware on the 37 pictures that already
+exist; Plan B touches only Python and never compiles for the SH-2.
+
+### Plan A — Saturn: foldered art and an adjustable dim
+
 1. **Disc layout and synthesis.** Move the existing 37 pictures into per-mood
    folders, emit `category_art.inc`, replace the boot scan and `CATEGORY_IMAGE`
-   with synthesis, delete `DISP_IMAGE_MAX`. Verifiable on hardware with the art
-   that already exists, before any new picture is fetched.
-2. **Adjustable dim.** Offset composition, the Display Options row, blob
-   sentinel 5. Independent of sourcing and independently shippable.
+   with synthesis, delete `DISP_IMAGE_MAX` and `display_set_images`.
+2. **Adjustable dim.** Offset composition in `title.cxx`, the Display Options
+   row, blob sentinel 5.
+
+Done when the disc renders its existing art from mood folders and the dim row
+works — with no new picture sourced. Both the CD-navigation test and the
+fade-interaction test belong here, which is the point of landing it first: the
+two risky changes are proven before 1188 images depend on them.
+
+### Plan B — Pipeline: sourcing, gating, curation
+
 3. **Query scaffold.** `art_nouns.py`, `art_queries.json`, the query builder and
    its test. No network.
 4. **Fetcher and gate.** `fetch_art.py`, the three metrics, the manifest.
@@ -256,8 +270,9 @@ bound.
 6. **Curation.** Fill the twelve folders. The long tail, done in sittings.
 7. **Git LFS migration.** Last, once the volume is real.
 
-Steps 1 and 2 are the only ones touching Saturn code, and both land before a
-single new image is sourced.
+Plan B's only dependency on Plan A is the folder layout `make_tga.py` writes
+into. Steps 3–5 can be built and tested against the current 37-picture tree
+while Plan A is still in review; step 6 is where the two meet.
 
 ## Testing
 

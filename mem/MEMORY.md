@@ -1,1 +1,2 @@
 - [Room categorization handoff (2026-08-05)](2026-08-05-room-categorization-handoff.md) — paused mid-Task-3; `blessed.inc` is valid only until a scoring change lands.
+- [Merge order: fallback-mood before tiers](2026-08-05-merge-order-constraint.md) — merging room-categorization-tiers alone ships a genre-wipe bug.

@@ -20,23 +20,14 @@
     ((unsigned short)(0x8000 | (((b) >> 3) << 10) | (((g) >> 3) << 5) | ((r) >> 3)))
 
 /*----------------------
- | DISP_BG_COLOR_N / DISP_TEXT_N / DISP_PRESET_N / DISP_IMAGE_MAX
- | Description: Counts: selectable background colors, text colors, microcomputer
- |   presets, and the cap on bitmaps read from the disc's TGA folder.
- |
- |   DISP_IMAGE_MAX is a registration cap, not a menu length -- the Palette row
- |   offers Dynamic plus the colour presets and nothing else, so the pictures are
- |   reached through the text categories rather than picked one by one. It only has
- |   to cover every file in /TGA (37 backgrounds at the time of writing), and the
- |   cost of raising it is one name buffer and one pointer per slot in title.cxx,
- |   not RAM for the art: how many pictures are actually held in memory at once is
- |   TGA_CACHE_SLOTS over there, and that is a much smaller number.
+ | DISP_BG_COLOR_N / DISP_TEXT_N / DISP_PRESET_N
+ | Description: Counts: selectable background colors, text colors, and
+ |   microcomputer presets.
  | Author: suinevere
  ----------------------*/
 #define DISP_BG_COLOR_N 7
 #define DISP_TEXT_N     9
 #define DISP_PRESET_N   16
-#define DISP_IMAGE_MAX  40
 
 /*----------------------
  | DISP_BG_* / DISP_TEXT_* (color indices)
@@ -135,23 +126,33 @@ const char *display_palette_name(const DisplayState *d);
 void display_defaults(DisplayState *d);
 
 /*----------------------
- | display_set_images / display_image_count / display_bg_count
- | Description: set_images registers the disc's TGA bitmaps (names borrowed, not
- |   copied -- keep the array alive for the program's life; count clamped to
- |   DISP_IMAGE_MAX); image_count is how many were registered; bg_count is
- |   DISP_BG_COLOR_N (the Background row is colors only).
+ | display_slot_make / display_slot_valid
+ | Description: A slot is a category and a 1-based index encoded together
+ |   (cat * 100 + index) rather than a position in a scanned list, so it names a
+ |   picture without ever reading the disc. make builds one from the pair, refusing
+ |   an index the category does not carry; valid answers whether a slot (however it
+ |   was built, including DISP_IMAGE_NONE) names a picture this disc actually has.
  | Author: suinevere
  ----------------------*/
-void display_set_images(const char *const *names, int count);
+int display_slot_make(int cat, int index);
+int display_slot_valid(int slot);
+
+/*----------------------
+ | display_image_count / display_bg_count
+ | Description: image_count is how many pictures the disc carries in total, summed
+ |   from every category's pool; bg_count is DISP_BG_COLOR_N (the Background row is
+ |   colors only).
+ | Author: suinevere
+ ----------------------*/
 int display_image_count(void);
 int display_bg_count(void);
 
 /*----------------------
  | display_image_file / display_image_label
- | Description: file is the on-disc name to open ("HOUSE1.TGA"), or "" for an
- |   unregistered slot; label is the player-facing form (extension dropped,
- |   capitalized -> "House"), held in a small rotating buffer -- copy it if you need
- |   to keep it past a couple of uses.
+ | Description: file synthesises the on-disc path from a slot ("HORROR/07.TGA"),
+ |   or "" for a slot this disc does not carry; label is the player-facing form
+ |   (extension dropped, capitalized), held in a small rotating buffer -- copy it
+ |   if you need to keep it past a couple of uses.
  | Author: suinevere
  ----------------------*/
 const char *display_image_file(int slot);
@@ -160,12 +161,12 @@ const char *display_image_label(int slot);
 /*----------------------
  | display_category_image
  | Description: The picture a text category shows, as an on-disc filename, or NULL
- |   for "keep whatever is showing". Keyed by name rather than slot because slots
- |   index the disc's TGA scan order, so adding, removing or reordering art would
- |   repoint a slot-keyed table with nothing to show for it. NULL comes back for
- |   the two turn-text event categories (TC_DANGER, TC_TRIUMPH): those are
- |   moments, not places, so the music shifts for them while the wallpaper holds
- |   on the room's own picture instead of flicking away and back.
+ |   for "keep whatever is showing". Returns a filename rather than a slot so
+ |   display_set_dynamic_category can resolve it with display_image_slot the same
+ |   way it would resolve any other disc path. NULL comes back for the two
+ |   turn-text event categories (TC_DANGER, TC_TRIUMPH): those are moments, not
+ |   places, so the music shifts for them while the wallpaper holds on the room's
+ |   own picture instead of flicking away and back.
  | Author: suinevere
  ----------------------*/
 const char *display_category_image(int cat);
@@ -258,8 +259,10 @@ void display_cycle_palette(DisplayState *d, int dir);
 
 /*----------------------
  | DISP_IMAGE_NAME_MAX
- | Description: The longest image filename stored, plus its NUL. Disc names are
- |   ISO9660 8.3, which GFS_FNAME_LEN caps at 12.
+ | Description: The longest image filename stored in a save blob, plus its NUL.
+ |   Sized for the old flat ISO9660 8.3 names; an 8-letter mood folder's path
+ |   ("UNDRGRND/07.TGA", "NAUTICAL/07.TGA") is 15 characters and does not fit --
+ |   see the task report.
  | Author: suinevere
  ----------------------*/
 #define DISP_IMAGE_NAME_MAX 13
@@ -297,8 +300,7 @@ void display_cycle_palette(DisplayState *d, int dir);
  | Description: encode writes the display block (out must have DISP_BLOB_BYTES
  |   room), returning the bytes written. decode reads it, defaulting any field that
  |   is absent, truncated, mis-sentinelled, out of range, or names an image this
- |   disc lacks; returns 1 if fully accepted, 0 if anything was defaulted. Call
- |   display_set_images first so image references resolve against present names.
+ |   disc lacks; returns 1 if fully accepted, 0 if anything was defaulted.
  | Author: suinevere
  ----------------------*/
 int display_encode(const DisplayState *d, unsigned char *out);

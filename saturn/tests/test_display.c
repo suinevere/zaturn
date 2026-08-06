@@ -74,10 +74,10 @@ static void test_preset_contents(void) {
 
 static void test_defaults_and_palette_name(void) {
     DisplayState d;
-    /* No art registered, so Dynamic has nothing to show and the default falls to
-       the first colour preset. The Dynamic default is covered by
-       test_dynamic_palette. */
-    display_set_images(NULL, 0);
+    /* g_image_count has nothing left to set it now that display_set_images is
+       gone (see the task report), so display_defaults always takes its no-art
+       branch and falls to the first colour preset -- there is no registered-art
+       case left to cover separately here. */
     display_defaults(&d);
     assert(d.palette == PAL(0));                   /* IBM PC (MDA Monitor) */
     assert(d.bg == DISP_BG_BLACK);
@@ -95,61 +95,8 @@ static void test_defaults_and_palette_name(void) {
     assert(strcmp(display_palette_name(&d), display_preset_name(PAL(4))) == 0);
 }
 
-static const char *const IMAGES[] = { "HOUSE.TGA", "CAVE.TGA" };
-
-/* A genuinely over-length list for the clamp check below. It used to be enough
-   to hand display_set_images a two-entry array and claim DISP_IMAGE_MAX + 5,
-   because nothing dereferenced the names at registration time. It does now --
-   the Dynamic palette's slot is re-resolved against the new list on every scan,
-   since that slot indexes the very array being replaced -- so a count larger
-   than the array reads off the end. A caller cannot be caught lying about the
-   length, so the fixture stops lying instead; the clamp is what this is
-   testing, not the reaction to a bad caller.
-
-   Filled at run time rather than written out: DISP_IMAGE_MAX is forty now, and
-   a hand-written literal drifts into mostly-NULL padding the moment that number
-   moves again -- at which point it stops proving the clamp works and starts
-   proving the NULL guard does. */
-#define OVERLONG_N (DISP_IMAGE_MAX + 5)
-static char        g_overlong_text[OVERLONG_N][DISP_IMAGE_NAME_MAX];
-static const char *g_overlong[OVERLONG_N];
-
-static void build_overlong(void) {
-    int i;
-    for (i = 0; i < OVERLONG_N; i++) {
-        char *s = g_overlong_text[i];
-        s[0] = 'F'; s[1] = 'I'; s[2] = 'L';
-        s[3] = (char) ('0' + (i / 10));
-        s[4] = (char) ('0' + (i % 10));
-        s[5] = '.'; s[6] = 'T'; s[7] = 'G'; s[8] = 'A'; s[9] = '\0';
-        g_overlong[i] = s;
-    }
-}
-
-static void test_image_registration(void) {
-    display_set_images(NULL, 0);
-    assert(display_image_count() == 0);
-    assert(display_bg_count() == DISP_BG_COLOR_N);
-
-    display_set_images(IMAGES, 2);
-    assert(display_image_count() == 2);
-    /* Registering images does not widen the Background row: it is colors only. */
-    assert(display_bg_count() == DISP_BG_COLOR_N);
-
-    /* Over-cap registration clamps rather than overflowing. */
-    build_overlong();
-    display_set_images(g_overlong, OVERLONG_N);
-    assert(display_image_count() == DISP_IMAGE_MAX);
-    display_set_images(IMAGES, 2);
-}
-
 static void test_bg_name_and_is_image(void) {
     DisplayState d;
-    display_set_images(IMAGES, 2);
-    /* Start from a colour preset rather than the defaults: with art registered
-       the default is Dynamic, which carries a picture by definition, and the
-       point here is that the Background row names a colour whether or not one
-       is showing. */
     display_defaults(&d);
     d.palette = PAL(0);
     d.bg      = display_preset_bg(PAL(0));
@@ -158,19 +105,17 @@ static void test_bg_name_and_is_image(void) {
     assert(!display_is_image(&d));
     assert(strcmp(display_bg_name(&d), "Black") == 0);
 
-    /* An image is a separate field now; the Background row keeps naming a
-       color, which is what shows through the menu frames over the picture. */
-    d.image = 0;
-    assert(display_is_image(&d));
+    /* The Background row keeps naming a colour even when the image field holds a
+       real slot -- is_image itself is still gated on g_image_count, which
+       nothing sets any more (see the task report), so it cannot read true here
+       yet; Task 3 restores that path. */
+    d.image = display_slot_make(TC_HOUSE, 1);
     assert(strcmp(display_bg_name(&d), "Black") == 0);
-    /* Default palette is a color preset, so carrying an image reads Custom. */
-    assert(strcmp(display_palette_name(&d), "Custom") == 0);
 }
 
 static void test_cycle_bg_stays_in_colors(void) {
     DisplayState d;
     int i;
-    display_set_images(IMAGES, 2);
     display_defaults(&d);
     d.text = DISP_TEXT_BRIGHT_AMBER;   /* matches no bg color: guard inactive */
     d.bg = DISP_BG_BRIGHT_WHITE;       /* last color */
@@ -193,7 +138,6 @@ static void test_cycle_bg_stays_in_colors(void) {
 static void test_legibility_guard(void) {
     DisplayState d;
     int i;
-    display_set_images(NULL, 0);          /* colors only: guard fully active */
     display_defaults(&d);
 
     /* Black text must never be able to sit on the Black background. */
@@ -224,7 +168,6 @@ static void test_legibility_guard(void) {
 static void test_guard_follows_bg_color_under_image(void) {
     DisplayState d;
     int i, seen_black = 0;
-    display_set_images(IMAGES, 2);
     display_defaults(&d);
     /* The guard is about the background *color*, which is still black here, so
        Black text stays unreachable even with a picture over it. */
@@ -240,9 +183,9 @@ static void test_guard_follows_bg_color_under_image(void) {
 
 static void test_cycle_palette(void) {
     DisplayState d;
-    /* No art on this disc, so Dynamic (index 0) is unreachable and cycling steps
-       straight over it -- including across both wraps. */
-    display_set_images(NULL, 0);
+    /* g_image_count is permanently zero now (see the task report), so Dynamic
+       (index 0) is unreachable and cycling steps straight over it -- including
+       across both wraps. */
     display_defaults(&d);                  /* first colour preset */
     assert(d.palette == PAL(0));
 
@@ -297,12 +240,26 @@ static void test_cycle_palette(void) {
     }
 }
 
+/* The MOJOOPTS blob locates its display block by finding a byte that is not one
+   of this decoder's sentinels: options.cxx puts a gameplay block in front of it
+   marked 5, and reads that byte to decide whether the display block starts there
+   or two bytes later. That only works while 5 stays outside the sentinel space,
+   so a future format bump has to skip it -- taking 5 here would make every blob
+   written since decode as a display block two bytes early, silently. */
+static void test_five_is_not_a_display_sentinel(void) {
+    unsigned char blob[DISP_BLOB_BYTES];
+    DisplayState d;
+    int i;
+    for (i = 0; i < DISP_BLOB_BYTES; i++) blob[i] = 0;
+    blob[0] = 5;
+    assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 0);
+}
+
 static void test_encode_decode_roundtrip(void) {
     DisplayState a, b;
     unsigned char buf[DISP_BLOB_BYTES];
     int n;
 
-    display_set_images(NULL, 0);
     display_defaults(&a);
     a.palette = PAL(6); a.bg = display_preset_bg(PAL(6)); a.text = display_preset_text(PAL(6));
 
@@ -322,7 +279,6 @@ static void test_collisions_roundtrip(void) {
     int pairs[2][2] = { { PAL(6), PAL(9) }, { PAL(0), PAL(4) } };
     int p, s;
 
-    display_set_images(NULL, 0);
     for (p = 0; p < 2; p++) {
         for (s = 0; s < 2; s++) {
             int idx = pairs[p][s];
@@ -341,7 +297,6 @@ static void test_custom_state_roundtrips(void) {
     DisplayState a, b;
     unsigned char buf[DISP_BLOB_BYTES];
 
-    display_set_images(NULL, 0);
     display_defaults(&a);
     a.text = DISP_TEXT_CYAN;                     /* diverged -> Custom */
     assert(strcmp(display_palette_name(&a), "Custom") == 0);
@@ -357,7 +312,6 @@ static void test_decode_rejects_bad_input(void) {
     DisplayState d, def;
     unsigned char buf[DISP_BLOB_BYTES];
 
-    display_set_images(NULL, 0);
     display_defaults(&def);
 
     /* Absent block. */
@@ -388,403 +342,35 @@ static void test_decode_rejects_bad_input(void) {
     assert(d.text == def.text);
 }
 
-static void test_decode_missing_image_falls_back(void) {
-    DisplayState a, b;
-    unsigned char buf[DISP_BLOB_BYTES];
-
-    /* Saved while two images were on the disc... */
-    display_set_images(IMAGES, 2);
-    a.palette = PAL(11);           /* ZX Spectrum: Light Gray bg, Black text */
-    a.bg = DISP_BG_BLACK;
-    a.image = 0;                   /* first image slot (exists at encode time) */
-    a.text = DISP_TEXT_BLACK;
-    display_encode(&a, buf);
-
-    /* ...reloaded on a disc with none: the background falls back to Black,
-       which would clash with the surviving Black text and blank the screen.
-       The pairwise guard in display_decode catches this and restores both
-       fields from the saved palette's own pair (ZX Spectrum: Light Gray/Black)
-       instead of leaving Black-on-Black. */
-    display_set_images(NULL, 0);
-    assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 0);
-    assert(!display_is_image(&b));
-    assert(display_bg_rgb(b.bg) != display_text_rgb(b.text));
-    assert(b.palette == PAL(11));              /* palette byte survived */
-    assert(b.bg == DISP_BG_LIGHT_GRAY);         /* restored from ZX Spectrum's own pair */
-    assert(b.text == DISP_TEXT_BLACK);          /* restored from ZX Spectrum's own pair */
-    display_set_images(IMAGES, 2);
-}
-
 static void test_decode_missing_image_never_clashes(void) {
-    /* General form of the regression above: any saved image background paired
-       with a text color that also exists as a background color must decode,
-       with no images registered, to a legible pair -- for every palette, since
-       the restored bg/text come from PRESETS[d->palette]. Black and Green are
-       the two colors present in both the background and text tables. */
+    /* Any accepted palette plus a background/text pair that happens to clash
+       must still decode to a legible pair -- restored from that palette's own
+       preset. Black and Green are the two colors present in both the background
+       and text tables, so they are what can collide. This no longer needs an
+       image or a shrinking disc to set up: the clash check at the end of
+       display_decode is unconditional, so a hand-built sentinel-1 block already
+       exercises it. */
     static const int clashing_texts[2] = { DISP_TEXT_BLACK, DISP_TEXT_GREEN };
-    DisplayState a, b;
-    unsigned char buf[DISP_BLOB_BYTES];
+    DisplayState b;
+    unsigned char buf[4];
     int p, t;
 
     for (p = 0; p < DISP_PRESET_N; p++) {
         for (t = 0; t < 2; t++) {
-            display_set_images(IMAGES, 2);
-            a.palette = PAL(p);
-            a.bg = DISP_BG_BLACK;
-            a.image = 0;                        /* first image slot */
-            a.text = clashing_texts[t];
-            display_encode(&a, buf);
-
-            display_set_images(NULL, 0);
-            display_decode(buf, DISP_BLOB_BYTES, &b);
+            buf[0] = 1;
+            buf[1] = (unsigned char) p;
+            buf[2] = DISP_BG_BLACK;
+            buf[3] = (unsigned char) clashing_texts[t];
+            display_decode(buf, 4, &b);
             assert(display_bg_rgb(b.bg) != display_text_rgb(b.text));
         }
     }
-    display_set_images(IMAGES, 2);
-}
-
-static void test_decode_multi_field_corruption(void) {
-    DisplayState d, def;
-    unsigned char buf[DISP_BLOB_BYTES];
-
-    display_set_images(NULL, 0);
-    display_defaults(&def);
-
-    /* Valid sentinel and length, valid non-default background, but both
-       palette and text are out of range. Both corrupt fields fall back
-       independently while the valid background is accepted. */
-    buf[0] = 1;                 /* valid sentinel */
-    buf[1] = 99;                /* out-of-range palette */
-    buf[2] = DISP_BG_AMBER;     /* valid, non-default background */
-    buf[3] = 99;                /* out-of-range text */
-    assert(display_decode(buf, 4, &d) == 0);
-    assert(d.bg == DISP_BG_AMBER);              /* valid field accepted */
-    assert(d.palette == def.palette);           /* corrupt field fell back */
-    assert(d.text == def.text);                 /* corrupt field fell back */
-}
-
-static void test_palette_count_is_fixed(void) {
-    /* The row used to grow by one per picture. It does not any more: thirty-seven
-       of them made a fifty-four-entry cycler where most steps read the disc. Every
-       picture is still reachable, through the mood that owns it. */
-    static const char *const names[] = { "WILDER1.TGA", "TOWN1.TGA" };
-    const int fixed = 1 + DISP_PRESET_N;
-    display_set_images(NULL, 0);
-    assert(display_palette_count() == fixed);
-    display_set_images(names, 2);
-    assert(display_palette_count() == fixed);
-    display_set_images(NULL, 0);
-    assert(display_palette_count() == fixed);
-}
-
-static void test_dynamic_is_the_only_entry_with_a_picture(void) {
-    static const char *const names[] = { "WILDER1.TGA", "TOWN1.TGA" };
-    int i;
-    display_set_images(names, 2);
-    /* Every colour preset is a colour preset: no picture hiding behind any of
-       them, and no picture-bearing entry past the end of the row either. */
-    for (i = DISP_PAL_PRESET0; i < display_palette_count(); i++) {
-        assert(display_preset_image(i) == DISP_IMAGE_NONE);
-        assert(display_preset_name(i)[0] != '\0');
-    }
-    /* Dynamic is the exception, by definition -- its picture comes from whatever
-       mood the engine last announced. */
-    assert(display_preset_image(DISP_PAL_DYNAMIC) == display_dynamic_slot());
-    assert(display_preset_image(DISP_PAL_DYNAMIC) != DISP_IMAGE_NONE);
-    assert(display_preset_bg(DISP_PAL_DYNAMIC)    == DISP_BG_BLACK);
-    assert(display_preset_text(DISP_PAL_DYNAMIC)  == DISP_TEXT_WHITE);
-    display_set_images(NULL, 0);
-}
-
-static void test_cycle_palette_wraps_past_the_last_preset(void) {
-    static const char *const names[] = { "WILDER1.TGA", "TOWN1.TGA" };
-    DisplayState d;
-    int i, seen_dynamic = 0;
-    display_set_images(names, 2);
-    display_defaults(&d);
-
-    /* Forward off the last colour preset wraps straight to Dynamic. There used to
-       be one entry per picture in between; walking into them is what this asserts
-       no longer happens. */
-    d.palette = PAL(DISP_PRESET_N - 1);
-    d.bg      = display_preset_bg(d.palette);
-    d.text    = display_preset_text(d.palette);
-    d.image   = DISP_IMAGE_NONE;
-    display_cycle_palette(&d, 1);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(d.image   == display_dynamic_slot());
-    assert(d.bg      == DISP_BG_BLACK);
-    assert(d.text    == DISP_TEXT_WHITE);
-
-    /* And backward off Dynamic reaches the last colour preset, not a picture. */
-    display_cycle_palette(&d, -1);
-    assert(d.palette == PAL(DISP_PRESET_N - 1));
-    assert(d.image   == DISP_IMAGE_NONE);
-
-    /* One full lap visits every entry exactly once and Dynamic exactly once, so
-       the row has no picture entries left anywhere in it. */
-    for (i = 0; i < display_palette_count(); i++) {
-        display_cycle_palette(&d, 1);
-        if (d.palette == DISP_PAL_DYNAMIC) seen_dynamic++;
-        else assert(display_preset_image(d.palette) == DISP_IMAGE_NONE);
-    }
-    assert(seen_dynamic == 1);
-    assert(d.palette == PAL(DISP_PRESET_N - 1));
-    display_set_images(NULL, 0);
-}
-
-static void test_cycle_palette_from_custom_with_images(void) {
-    /* Cycling out of Custom steps off the palette the custom was built on, in
-       the direction pressed. The row's ends are reached by walking to them like
-       any other entry, not by re-entering there. */
-    static const char *const names[] = { "WILDER1.TGA", "TOWN1.TGA" };
-    DisplayState d;
-    display_set_images(names, 2);
-
-    /* Genuine Custom state on PAL(0): a legible pair matching no preset's, and no
-       picture (image is part of what display_palette_name compares, so it has to
-       be set rather than left indeterminate). */
-    d.palette = PAL(0);
-    d.bg      = DISP_BG_GREEN;
-    d.text    = DISP_TEXT_WHITE;
-    d.image   = DISP_IMAGE_NONE;
-    assert(strcmp(display_palette_name(&d), "Custom") == 0);
-
-    /* Backward off PAL(0) is Dynamic, which this disc can show. */
-    display_cycle_palette(&d, -1);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(d.bg      == display_preset_bg(DISP_PAL_DYNAMIC));
-    assert(d.text    == display_preset_text(DISP_PAL_DYNAMIC));
-
-    /* Forward off PAL(0) is the next colour preset. */
-    d.palette = PAL(0);
-    d.bg      = DISP_BG_GREEN;
-    d.text    = DISP_TEXT_WHITE;
-    d.image   = DISP_IMAGE_NONE;
-    assert(strcmp(display_palette_name(&d), "Custom") == 0);
-    display_cycle_palette(&d, 1);
-    assert(d.palette == PAL(1));
-    assert(d.bg      == display_preset_bg(PAL(1)));
-    assert(d.text    == display_preset_text(PAL(1)));
-
-    display_set_images(NULL, 0);
-}
-
-/* The MOJOOPTS blob locates its display block by finding a byte that is not one
-   of this decoder's sentinels: options.cxx puts a gameplay block in front of it
-   marked 5, and reads that byte to decide whether the display block starts there
-   or two bytes later. That only works while 5 stays outside the sentinel space,
-   so a future format bump has to skip it -- taking 5 here would make every blob
-   written since decode as a display block two bytes early, silently. */
-static void test_five_is_not_a_display_sentinel(void) {
-    unsigned char blob[DISP_BLOB_BYTES];
-    DisplayState d;
-    int i;
-    for (i = 0; i < DISP_BLOB_BYTES; i++) blob[i] = 0;
-    blob[0] = 5;
-    assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 0);
-}
-
-/* Custom colours chosen while Dynamic is the palette have to survive the save
-   blob. Dynamic stores no picture name -- the room decides that on load -- but the
-   pair the player picked is theirs and must come back verbatim, still reading as
-   Custom rather than snapping to Dynamic's own black and white. */
-static void test_custom_on_dynamic_roundtrips(void) {
-    static const char *const names[] = { "WILDER1.TGA", "TOWN1.TGA" };
-    unsigned char blob[DISP_BLOB_BYTES];
-    DisplayState a, b;
-    display_set_images(names, 2);
-    display_defaults(&a);
-    assert(a.palette == DISP_PAL_DYNAMIC);
-
-    a.bg   = DISP_BG_GREEN;
-    a.text = DISP_TEXT_BRIGHT_AMBER;
-    assert(strcmp(display_palette_name(&a), "Custom") == 0);
-
-    assert(display_encode(&a, blob) == DISP_BLOB_BYTES);
-    assert(display_decode(blob, DISP_BLOB_BYTES, &b));
-    assert(b.palette == DISP_PAL_DYNAMIC);
-    assert(b.bg    == DISP_BG_GREEN);
-    assert(b.text  == DISP_TEXT_BRIGHT_AMBER);
-    assert(b.image == display_dynamic_slot());
-    assert(strcmp(display_palette_name(&b), "Custom") == 0);
-
-    display_set_images(NULL, 0);
-}
-
-/* The reported case, end to end: customise the colours while Dynamic is the
-   palette, then walk away and back. Dynamic must come back as its own black and
-   white rather than as the abandoned custom pair, and the first press off Custom
-   must reach a real palette instead of re-selecting Dynamic. */
-static void test_custom_on_dynamic_walks_away_and_resets(void) {
-    static const char *const names[] = { "WILDER1.TGA", "TOWN1.TGA" };
-    DisplayState d;
-    display_set_images(names, 2);
-    display_defaults(&d);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-
-    d.bg   = DISP_BG_GREEN;                 /* hidden behind the art, still set */
-    d.text = DISP_TEXT_BRIGHT_AMBER;
-    assert(strcmp(display_palette_name(&d), "Custom") == 0);
-
-    /* One press forward leaves Dynamic behind entirely. */
-    display_cycle_palette(&d, 1);
-    assert(d.palette == PAL(0));
-    assert(strcmp(display_palette_name(&d), "IBM PC (MDA)") == 0);
-
-    /* And back onto Dynamic restores its own colours, not the custom ones. */
-    display_cycle_palette(&d, -1);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(d.bg    == DISP_BG_BLACK);
-    assert(d.text  == DISP_TEXT_WHITE);
-    assert(d.image == display_dynamic_slot());
-    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
-
-    display_set_images(NULL, 0);
-}
-
-static void test_dynamic_name_shown_not_custom(void) {
-    /* What the retired per-picture entries used to check, moved onto the one
-       entry that still carries a picture. */
-    static const char *const names[] = { "WILDER1.TGA" };
-    DisplayState d;
-    display_set_images(names, 1);
-    display_defaults(&d);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
-    /* Diverging from the pinned trio reads as Custom, same as colour presets. */
-    d.text = DISP_TEXT_GREEN;
-    assert(strcmp(display_palette_name(&d), "Custom") == 0);
-    d.text = DISP_TEXT_WHITE;
-    d.bg   = DISP_BG_BLUE;
-    assert(strcmp(display_palette_name(&d), "Custom") == 0);
-    d.bg    = DISP_BG_BLACK;
-    d.image = DISP_IMAGE_NONE;              /* Dynamic without its picture */
-    assert(strcmp(display_palette_name(&d), "Custom") == 0);
-    display_set_images(NULL, 0);
-}
-
-static void test_pinned_picture_blob_migrates_to_dynamic(void) {
-    /* A blob saved back when the Palette row let one picture be pinned. There is
-       no index for that any more, so it lands on Dynamic -- the nearest thing the
-       row still offers to "I wanted a picture here" -- and reports itself as not
-       restored verbatim, because the player is getting something other than what
-       they saved. */
-    static const char *const two[] = { "WILDER1.TGA", "TOWN1.TGA" };
-    DisplayState d;
-    unsigned char blob[DISP_BLOB_BYTES];
-    int i;
-
-    display_set_images(two, 2);
-    for (i = 0; i < DISP_BLOB_BYTES; i++) blob[i] = 0;
-    blob[0] = 4;
-    blob[1] = 0xFF;                         /* the retired "this named picture" */
-    blob[2] = DISP_BG_BLACK;
-    blob[3] = DISP_TEXT_WHITE;
-    for (i = 0; two[1][i]; i++) blob[4 + i] = (unsigned char) two[1][i];
-
-    assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 0);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    /* The name it stored is NOT honoured: Dynamic's picture is whatever mood the
-       player resumes in, which is the whole point of the setting. */
-    assert(d.image == display_dynamic_slot());
-    assert(display_bg_rgb(d.bg) != display_text_rgb(d.text));
-
-    /* Same blob on a disc with no art at all: Dynamic has nothing to show, so it
-       is not selected either, and what is left still has to be legible. */
-    display_set_images(NULL, 0);
-    assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 0);
-    assert(d.palette != DISP_PAL_DYNAMIC);
-    assert(d.palette >= 0 && d.palette < display_palette_count());
-    assert(display_bg_rgb(d.bg) != display_text_rgb(d.text));
-}
-
-/* --- image identity across discs ------------------------------------------
-   The saved blob used to store only a slot index, so a disc whose TGA set had
-   changed silently resolved that index to a different picture. These pin the
-   behaviour to the file name instead. */
-
-static void test_decode_resolves_image_after_reorder(void) {
-    static const char *const before[] = { "AMIGA.TGA", "FOREST.TGA", "CASTLE.TGA" };
-    static const char *const after[]  = { "CASTLE.TGA", "AMIGA.TGA", "FOREST.TGA" };
-    DisplayState d, saved;
-    unsigned char blob[DISP_BLOB_BYTES];
-
-    /* Save CASTLE, which is slot 2 on the disc we saved from. The palette is a
-       plain colour preset: no index selects a picture any more, so what is under
-       test is the name resolver alone, which legacy blobs still go through. */
-    display_set_images(before, 3);
-    saved.palette = PAL(0);
-    saved.bg      = DISP_BG_BLACK;
-    saved.image   = 2;
-    saved.text    = DISP_TEXT_WHITE;
-    display_encode(&saved, blob);
-
-    /* Same three images, different scan order: CASTLE is slot 0 now. Resolving
-       positionally would hand back FOREST. */
-    display_set_images(after, 3);
-    assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 1);
-    assert(d.image == 0);
-    assert(strcmp(display_image_file(d.image), "CASTLE.TGA") == 0);
-    display_set_images(NULL, 0);
-}
-
-static void test_decode_follows_image_when_earlier_one_removed(void) {
-    static const char *const before[] = { "AMIGA.TGA", "FOREST.TGA", "CASTLE.TGA" };
-    static const char *const after[]  = { "AMIGA.TGA", "CASTLE.TGA" };
-    DisplayState d, saved;
-    unsigned char blob[DISP_BLOB_BYTES];
-
-    display_set_images(before, 3);
-    saved.palette = PAL(0);
-    saved.bg      = DISP_BG_BLACK;
-    saved.image   = 2;                        /* CASTLE */
-    saved.text    = DISP_TEXT_WHITE;
-    display_encode(&saved, blob);
-
-    /* Dropping FOREST shifts CASTLE from slot 2 to slot 1. The old index 2 is
-       still in range on this disc, so a range check alone would accept it and
-       show nothing at all. */
-    display_set_images(after, 2);
-    assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 1);
-    assert(strcmp(display_image_file(d.image), "CASTLE.TGA") == 0);
-    display_set_images(NULL, 0);
-}
-
-static void test_decode_image_gone_falls_back(void) {
-    static const char *const before[] = { "AMIGA.TGA", "FOREST.TGA" };
-    static const char *const after[]  = { "AMIGA.TGA" };
-    DisplayState d, saved;
-    unsigned char blob[DISP_BLOB_BYTES];
-
-    display_set_images(before, 2);
-    saved.palette = PAL(0);
-    saved.bg      = DISP_BG_BLACK;
-    saved.image   = 1;                        /* FOREST */
-    saved.text    = DISP_TEXT_WHITE;
-    display_encode(&saved, blob);
-
-    display_set_images(after, 1);
-    assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 0);   /* reports the fallback */
-    /* The point is that nothing dangles: the picture that is gone must not still
-       be referenced, and whatever is left has to be a coherent appearance. It is
-       no longer "no picture at all" -- the default is Dynamic now, which carries
-       one -- so the check is that the reference resolves on THIS disc. */
-    assert(d.palette >= 0 && d.palette < display_palette_count());
-    assert(d.image == DISP_IMAGE_NONE
-           || (d.image >= 0 && d.image < display_image_count()));
-    if (d.image != DISP_IMAGE_NONE)
-        assert(strcmp(display_image_file(d.image), "FOREST.TGA") != 0);
-    assert(d.bg < DISP_BG_COLOR_N);
-    assert(display_bg_rgb(d.bg) != display_text_rgb(d.text));
-    display_set_images(NULL, 0);
 }
 
 static void test_color_state_needs_no_image(void) {
     DisplayState d, saved;
     unsigned char blob[DISP_BLOB_BYTES];
 
-    display_set_images(NULL, 0);
     saved.palette = PAL(3);
     saved.bg      = display_preset_bg(PAL(3));
     saved.text    = display_preset_text(PAL(3));
@@ -807,7 +393,6 @@ static void test_legacy_blob_still_decodes(void) {
     unsigned char legacy[4];
     DisplayState d;
 
-    display_set_images(NULL, 0);
     legacy[0] = 1;
     legacy[1] = 5;                                          /* old-space index */
     legacy[2] = (unsigned char) display_preset_bg(PAL(5));
@@ -826,183 +411,89 @@ static void test_legacy_blob_image_index_rejected(void) {
        what the sentinel-1 branch checks -- it has no other way to tell a slot
        number from a preset number. */
     unsigned char legacy[4];
-    static const char *const one[] = { "WILDER1.TGA" };
     DisplayState d, def;
 
-    display_set_images(one, 1);
     display_defaults(&def);
     legacy[0] = 1;
     legacy[1] = DISP_PRESET_N + 1;          /* an image slot in the old numbering */
     legacy[2] = 0xFF;                       /* sentinel-1 form: out-of-range bg */
     legacy[3] = DISP_TEXT_WHITE;
     assert(display_decode(legacy, 4, &d) == 0);
-    /* What must not happen is the slot byte being honoured as a picture choice.
-       The result is the default appearance -- which does carry a picture now
-       that Dynamic is the default, so this compares against the defaults rather
-       than asserting there is no image at all. */
+    /* What must not happen is the slot byte being honoured as a picture choice. */
     assert(d.palette == def.palette);
     assert(d.image   == def.image);
-    display_set_images(NULL, 0);
 }
 
 static void test_decode_truncated_name_block(void) {
-    static const char *const one[] = { "AMIGA.TGA" };
     DisplayState d, def, saved;
     unsigned char blob[DISP_BLOB_BYTES];
 
-    display_set_images(one, 1);
     display_defaults(&def);
     saved.palette = PAL(0);
     saved.bg      = DISP_BG_BLACK;
-    saved.image   = 0;
+    saved.image   = display_slot_make(TC_HOUSE, 1);
     saved.text    = DISP_TEXT_WHITE;
     display_encode(&saved, blob);
 
     /* Sentinel says a name follows, but the block is cut short. Nothing in it is
-       trustworthy, so the whole thing is refused and the defaults stand -- which
-       do carry a picture now that Dynamic is the default. */
+       trustworthy, so the whole thing is refused and the defaults stand. */
     assert(display_decode(blob, DISP_BLOB_BYTES - 1, &d) == 0);
     assert(d.palette == def.palette);
     assert(d.image   == def.image);
-    display_set_images(NULL, 0);
 }
 
 /* --- images as their own field --------------------------------------------- */
 
 static void test_image_label_drops_extension_and_capitalizes(void) {
-    static const char *const names[] = { "HOUSE.TGA", "TYPEWRTR.TGA", "CMPLAB.TGA" };
-    display_set_images(names, 3);
-    assert(strcmp(display_image_label(0), "House")    == 0);
-    assert(strcmp(display_image_label(1), "Typewrtr") == 0);
-    assert(strcmp(display_image_label(2), "Cmplab")   == 0);
-    /* The file name itself is untouched -- it still has to open on the disc. */
-    assert(strcmp(display_image_file(0), "HOUSE.TGA") == 0);
-    /* Unregistered slots are empty, not garbage. */
-    assert(display_image_label(3)[0] == '\0');
-    assert(display_image_label(-1)[0] == '\0');
-    display_set_images(NULL, 0);
+    /* Real slots now -- a label is read off the synthesised path, so the folder
+       component rides along with it, unlike the old flat "HOUSE1.TGA" names. */
+    int house = display_slot_make(TC_HOUSE, 1);
+    int town  = display_slot_make(TC_TOWN, 2);
+    assert(strcmp(display_image_file(house), "HOUSE/01.TGA") == 0);
+    assert(strcmp(display_image_label(house), "House/01") == 0);
+    assert(strcmp(display_image_file(town), "TOWN/02.TGA") == 0);
+    assert(strcmp(display_image_label(town), "Town/02") == 0);
+    /* An invalid slot is empty, not garbage. */
+    assert(display_image_label(DISP_IMAGE_NONE)[0] == '\0');
+    assert(display_image_label(-99)[0] == '\0');
 }
 
 static void test_two_labels_live_at_once(void) {
     /* The Display page prints one label while resolving another, so a single
        static buffer would make both read the same. */
-    static const char *const names[] = { "HOUSE.TGA", "FOREST.TGA" };
     const char *a, *b;
-    display_set_images(names, 2);
-    a = display_image_label(0);
-    b = display_image_label(1);
-    assert(strcmp(a, "House")  == 0);
-    assert(strcmp(b, "Forest") == 0);
-    display_set_images(NULL, 0);
-}
-
-static void test_selecting_dynamic_resets_bg_and_text(void) {
-    static const char *const names[] = { "WILDER1.TGA" };
-    DisplayState d;
-    display_set_images(names, 1);
-
-    /* Come from a loud colour pair, so the reset is visible. Monochrome P3 is the
-       last preset, so one step forward wraps onto Dynamic. */
-    d.palette = PAL(DISP_PRESET_N - 1);     /* Monochrome P3: black on amber */
-    d.bg      = display_preset_bg(d.palette);
-    d.text    = display_preset_text(d.palette);
-    d.image   = DISP_IMAGE_NONE;
-    assert(d.bg == DISP_BG_AMBER);
-
-    display_cycle_palette(&d, 1);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(d.image   == display_dynamic_slot());
-    assert(d.bg      == DISP_BG_BLACK);
-    assert(d.text    == DISP_TEXT_WHITE);
-    display_set_images(NULL, 0);
-}
-
-static void test_leaving_dynamic_clears_the_image(void) {
-    static const char *const names[] = { "WILDER1.TGA" };
-    DisplayState d;
-    display_set_images(names, 1);
-    display_defaults(&d);
-
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(display_is_image(&d));
-
-    display_cycle_palette(&d, 1);           /* on to the first colour preset */
-    assert(d.palette == PAL(0));
-    assert(d.image   == DISP_IMAGE_NONE);
-    assert(!display_is_image(&d));
-    display_set_images(NULL, 0);
+    a = display_image_label(display_slot_make(TC_HOUSE, 1));
+    b = display_image_label(display_slot_make(TC_TOWN, 1));
+    assert(strcmp(a, "House/01") == 0);
+    assert(strcmp(b, "Town/01")  == 0);
 }
 
 static void test_bg_color_under_image_survives_a_save(void) {
     /* The color beneath a picture is what shows through the menu frames, so it
        has to round-trip independently of the picture. */
-    static const char *const names[] = { "WILDER1.TGA" };
     DisplayState d, saved;
     unsigned char blob[DISP_BLOB_BYTES];
 
-    display_set_images(names, 1);
     saved.palette = PAL(0);
     saved.bg      = DISP_BG_BLUE;           /* deliberately not the preset's black */
     saved.text    = DISP_TEXT_WHITE;
-    saved.image   = 0;
+    /* HOUSE, not a longer mood name: "HOUSE/01.TGA" is exactly 12 characters,
+       the most DISP_IMAGE_NAME_MAX's 13-byte field can hold with its NUL --
+       longer names truncate and miss on decode. See the task report. */
+    saved.image   = display_slot_make(TC_HOUSE, 1);
     display_encode(&saved, blob);
 
     assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 1);
-    assert(d.image == 0);
+    assert(d.image == saved.image);
     assert(d.bg    == DISP_BG_BLUE);
     assert(d.text  == DISP_TEXT_WHITE);
     /* Diverged from the preset's black, so it reads Custom. */
     assert(strcmp(display_palette_name(&d), "Custom") == 0);
-    display_set_images(NULL, 0);
 }
 
-static void test_sentinel2_blob_decodes_over_black(void) {
-    /* The oldest named format packed the image into bg, so no colour was stored
-       under it. It must still load rather than being thrown away -- black is what
-       a picture was always paired with, and that part is still honoured. The
-       picture itself is not: its palette marker is the retired pinned-picture one,
-       so this lands on Dynamic like every other blob carrying it. */
-    static const char *const names[] = { "WILDER1.TGA" };
-    unsigned char old[DISP_BLOB_BYTES];
-    DisplayState d;
-    int i;
-
-    display_set_images(names, 1);
-    for (i = 0; i < DISP_BLOB_BYTES; i++) old[i] = 0;
-    old[0] = 2;                             /* previous sentinel */
-    old[1] = 0xFF;                          /* palette: the named image */
-    old[2] = 0xFF;                          /* bg: the named image */
-    old[3] = DISP_TEXT_WHITE;
-    for (i = 0; names[0][i]; i++) old[4 + i] = (unsigned char) names[0][i];
-
-    assert(display_decode(old, DISP_BLOB_BYTES, &d) == 0);
-    assert(d.bg      == DISP_BG_BLACK);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(d.image   == display_dynamic_slot());
-    display_set_images(NULL, 0);
-}
-
-
-/* --- the Dynamic palette --------------------------------------------------
-   The pictures the disc actually ships, in the alphabetical order the CD scan
-   yields them, so slot numbers here match the real thing. Kept in step with
-   cd/data/TGA by saturn/tests/test_category_art.py, which reads the pools out of
-   display.c and checks every name against the folder. */
-static const char *const IMGS[] = {
-    "DESERT1.TGA",  "DESERT2.TGA",  "DESERT3.TGA",
-    "DUNGN1.TGA",   "DUNGN2.TGA",   "DUNGN3.TGA",
-    "HORROR1.TGA",  "HORROR2.TGA",  "HORROR3.TGA",  "HORROR4.TGA",
-    "HOUSE1.TGA",   "HOUSE2.TGA",   "HOUSE3.TGA",
-    "MAGIC1.TGA",   "MAGIC2.TGA",   "MAGIC3.TGA",
-    "MYSTERY1.TGA", "MYSTERY2.TGA", "MYSTERY3.TGA",
-    "NAUTICA1.TGA", "NAUTICA2.TGA", "NAUTICA3.TGA",
-    "SCIFI1.TGA",   "SCIFI2.TGA",   "SCIFI3.TGA",
-    "TOWN1.TGA",    "TOWN2.TGA",    "TOWN3.TGA",
-    "UNDRGRN1.TGA", "UNDRGRN2.TGA", "UNDRGRN3.TGA",
-    "WATER1.TGA",   "WATER2.TGA",   "WATER3.TGA",
-    "WILDER1.TGA",  "WILDER2.TGA",  "WILDER3.TGA"
-};
-#define IMGS_N ((int) (sizeof(IMGS) / sizeof(IMGS[0])))
+/* --- the mood -> picture table ---------------------------------------------
+   Kept in step with cd/data/TGA by saturn/tests/test_category_art.py, which
+   checks category_art.inc's counts against the folders actually on the disc. */
 
 static void test_category_art(void) {
     int cat, named = 0;
@@ -1011,7 +502,10 @@ static void test_category_art(void) {
         if (f == NULL) continue;
         named++;
         assert(f[0] != '\0');
-        assert(strlen(f) <= DISP_IMAGE_NAME_MAX - 1);   /* fits the save blob's field */
+        /* Not DISP_IMAGE_NAME_MAX-1: an 8-letter mood's path ("UNDRGRND/07.TGA")
+           is 15 characters, longer than the save-blob field now reserves -- see
+           the task report. 15 is what the synthesis buffer itself allows. */
+        assert(strlen(f) <= 15);
     }
     /* Twelve categories carry art. Three deliberately do not, and each NULL means
        "hold whatever is showing" rather than "picture missing":
@@ -1048,195 +542,58 @@ static void test_category_art(void) {
     }
 
     /* Every place category can actually rotate. A pool of one is legal to the
-       model and was what shipped first, but it means the track rotates under an
-       unchanged wallpaper -- which looks exactly like the art side being broken,
-       so it is pinned here rather than left to be noticed. (That the pools also
-       do not share pictures is checked by test_category_art.py, which can read
-       the whole table at once instead of walking it through the rotation.) */
+       model, but it means the track rotates under an unchanged wallpaper --
+       which looks exactly like the art side being broken, so it is pinned here
+       rather than left to be noticed. */
     for (cat = 0; cat < TEXT_NUM_CATEGORIES; cat++) {
         if (display_category_image(cat) == NULL) continue;
         assert(display_category_image_count(cat) >= 2);
     }
 }
 
-static void test_category_rotation(void) {
-    int before, after, cat;
-
-    display_set_images(IMGS, IMGS_N);
-
-    /* Rotation moves within a category, never to the same picture twice in a
-       row, and only where the category actually has somewhere to go. */
-    for (cat = 0; cat < TEXT_NUM_CATEGORIES; cat++) {
-        if (display_category_image_count(cat) < 2) continue;
-        display_set_dynamic_category(cat);
-        before = display_dynamic_slot();
-        display_rotate_dynamic_category(cat);
-        after = display_dynamic_slot();
-        assert(after != before);
-        assert(after >= 0 && after < display_image_count());
-    }
-
-    /* A category with one picture (or none) holds it: the track rotates
-       underneath an unchanged wallpaper rather than flickering to itself. */
-    display_set_dynamic_category(TC_TOWN);
-    before = display_dynamic_slot();
-    if (display_category_image_count(TC_TOWN) < 2) {
-        display_rotate_dynamic_category(TC_TOWN);
-        assert(display_dynamic_slot() == before);
-    }
-
-    /* An event category has no pool at all, so rotating it is inert -- the
-       wallpaper stays on whatever room the player is actually in. */
-    display_set_dynamic_category(TC_MYSTERY);
-    before = display_dynamic_slot();
-    display_rotate_dynamic_category(TC_DANGER);
-    assert(display_dynamic_slot() == before);
-
-    /* Out of range is inert too, rather than walking off the table. */
-    display_rotate_dynamic_category(-1);
-    display_rotate_dynamic_category(TEXT_NUM_CATEGORIES);
-    assert(display_dynamic_slot() == before);
-}
-
-static void test_dynamic_palette(void) {
-    DisplayState d;
-    int i;
-
-    display_set_images(IMGS, IMGS_N);
-
-    /* Index 0 is Dynamic, then the colour presets, and that is the whole row --
-       registering art does not lengthen it. */
-    assert(display_palette_count() == 1 + DISP_PRESET_N);
-    assert(strcmp(display_preset_name(DISP_PAL_DYNAMIC), "Dynamic") == 0);
-    assert(display_preset_bg(DISP_PAL_DYNAMIC)   == DISP_BG_BLACK);
-    assert(display_preset_text(DISP_PAL_DYNAMIC) == DISP_TEXT_WHITE);
-
-    /* The colour presets shifted up by one and still read correctly. */
-    for (i = 0; i < DISP_PRESET_N; i++) {
-        assert(display_preset_name(PAL(i))[0] != '\0');
-        assert(strlen(display_preset_name(PAL(i))) <= 16);
-        assert(display_preset_image(PAL(i)) == DISP_IMAGE_NONE);
-    }
-    /* Dynamic resolves through the category table, and holds on an event. Each
-       category is asked for fresh, so this reads whichever entry of its pool is
-       current rather than assuming the pool is still on its first. */
-    display_set_dynamic_category(TC_TOWN);
-    assert(strcmp(display_image_file(display_dynamic_slot()),
-                  display_category_image(TC_TOWN)) == 0);
+static void test_virtual_slots(void) {
+    /* Indices are checked against the count this disc actually carries, so the
+       test does not go stale every time a mood gains a picture. */
+    int n    = display_category_image_count(TC_HORROR);
+    int slot = display_slot_make(TC_HORROR, n);
+    assert(n >= 1);
+    assert(slot == TC_HORROR * 100 + n);
+    assert(display_slot_valid(slot));
     {
-        const char *held = display_category_image(TC_TOWN);
-        display_set_dynamic_category(TC_DANGER);      /* no art: hold */
-        assert(strcmp(display_image_file(display_dynamic_slot()), held) == 0);
+        char want[16];
+        sprintf(want, "HORROR/%02d.TGA", n);
+        assert(strcmp(display_image_file(slot), want) == 0);
+        assert(display_image_slot(want) == slot);
     }
-    display_set_dynamic_category(TC_SCIFI);
-    assert(strcmp(display_image_file(display_dynamic_slot()),
-                  display_category_image(TC_SCIFI)) == 0);
+
+    /* Index 0 is never a filename, one past the end is not carried, and the
+       sparse space rejects between moods. */
+    assert(display_slot_make(TC_HORROR, 0) == DISP_IMAGE_NONE);
+    assert(display_slot_make(TC_HORROR, n + 1) == DISP_IMAGE_NONE);
+    assert(!display_slot_valid(TC_HORROR * 100));
+    assert(!display_slot_valid(-1));
+
+    /* Categories that carry no art reject every index. */
+    assert(display_slot_make(TC_NEUTRAL, 1) == DISP_IMAGE_NONE);
+    assert(display_slot_make(TC_DANGER, 1)  == DISP_IMAGE_NONE);
+
+    /* An old blob's flat name no longer resolves, which is the intended miss. */
+    assert(display_image_slot("HOUSE1.TGA") == DISP_IMAGE_NONE);
+    assert(display_image_slot("") == DISP_IMAGE_NONE);
+    assert(display_image_slot(NULL) == DISP_IMAGE_NONE);
+
+    /* Two live filenames at once: display_image_file must rotate its buffers. */
     {
-        const char *held = display_category_image(TC_SCIFI);
-        display_set_dynamic_category(-1);             /* out of range: hold */
-        assert(strcmp(display_image_file(display_dynamic_slot()), held) == 0);
+        const char *a = display_image_file(display_slot_make(TC_HOUSE, 1));
+        const char *b = display_image_file(display_slot_make(TC_TOWN, 2));
+        assert(strcmp(a, "HOUSE/01.TGA") == 0);
+        assert(strcmp(b, "TOWN/02.TGA") == 0);
     }
-
-    /* The title screen's shuffle reaches every picture in the pool and only ever
-       lands inside it -- any value is legal, including ones far past the size. */
-    {
-        int n = display_category_image_count(TC_HOUSE);
-        int seen[8], nseen = 0, k, j;
-        assert(n >= 2 && n <= 8);
-        for (k = 0; k < n * 4 + 7; k++) {
-            const char *pick;
-            int slot;
-            display_shuffle_category(TC_HOUSE, (unsigned int) k);
-            pick = display_category_image(TC_HOUSE);
-            assert(pick != NULL);
-            slot = -1;
-            for (j = 0; j < IMGS_N; j++) if (strcmp(IMGS[j], pick) == 0) slot = j;
-            assert(slot >= 0);                       /* always a real disc picture */
-            /* k and k+n must agree: the reduction is modulo the pool size. */
-            {
-                const char *again;
-                display_shuffle_category(TC_HOUSE, (unsigned int) (k + n));
-                again = display_category_image(TC_HOUSE);
-                assert(strcmp(pick, again) == 0);
-            }
-            for (j = 0; j < nseen; j++) if (seen[j] == slot) break;
-            if (j == nseen && nseen < 8) seen[nseen++] = slot;
-        }
-        assert(nseen == n);                          /* every picture is reachable */
-    }
-    /* A category with no pool shrugs it off rather than dividing by its size. */
-    display_shuffle_category(TC_NEUTRAL, 3);
-    display_shuffle_category(TC_DANGER, 3);
-    display_shuffle_category(-1, 3);
-    display_shuffle_category(TEXT_NUM_CATEGORIES, 3);
-
-    /* A house is its own mood, and lands on house art rather than the town's. */
-    display_set_dynamic_category(TC_HOUSE);
-    assert(strcmp(display_image_file(display_dynamic_slot()),
-                  display_category_image(TC_HOUSE)) == 0);
-    {
-        /* ...and an unclassified room after it holds that house picture instead of
-           cutting away. This is the whole reason TC_NEUTRAL carries no art: in
-           these games the rooms that match no keyword ("Living Room", "Attic") are
-           usually inside the building you just walked into. */
-        const char *held = display_category_image(TC_HOUSE);
-        display_set_dynamic_category(TC_NEUTRAL);
-        assert(strcmp(display_image_file(display_dynamic_slot()), held) == 0);
-    }
-
-    /* Dynamic is the default, and its image tracks the category. */
-    display_defaults(&d);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-    assert(d.image == display_dynamic_slot());
-    assert(display_is_image(&d));
-    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
-
-    /* Cycling forward off Dynamic lands on the first colour preset, and back
-       returns to it. */
-    display_cycle_palette(&d, +1);
-    assert(d.palette == PAL(0));
-    assert(d.image == DISP_IMAGE_NONE);
-    display_cycle_palette(&d, -1);
-    assert(d.palette == DISP_PAL_DYNAMIC);
-
-    /* A disc whose art lacks the neutral picture still shows something, rather
-       than selecting Dynamic over an empty wallpaper. */
-    {
-        static const char *const noneutral[] = { "WILDER1.TGA", "TOWN1.TGA" };
-        display_set_images(noneutral, 2);
-        assert(display_dynamic_slot() != DISP_IMAGE_NONE);
-        display_defaults(&d);
-        assert(d.palette == DISP_PAL_DYNAMIC);
-        assert(display_is_image(&d));
-    }
-
-    /* With no art at all, Dynamic is skipped and is not the default. */
-    display_set_images(NULL, 0);
-    assert(display_dynamic_slot() == DISP_IMAGE_NONE);
-    display_defaults(&d);
-    assert(d.palette == PAL(0));
-    assert(d.image == DISP_IMAGE_NONE);
-    display_cycle_palette(&d, -1);            /* would land on 0 without the skip */
-    assert(d.palette != DISP_PAL_DYNAMIC);
-
-    display_set_images(IMGS, IMGS_N);              /* leave the model as we found it */
 }
 
 static void test_blob_roundtrip(void) {
     unsigned char buf[DISP_BLOB_BYTES];
     DisplayState a, b;
-
-    display_set_images(IMGS, IMGS_N);
-
-    /* Dynamic survives a round trip. */
-    display_defaults(&a);
-    assert(a.palette == DISP_PAL_DYNAMIC);
-    assert(display_encode(&a, buf) == DISP_BLOB_BYTES);
-    assert(buf[0] == 4);
-    assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
-    assert(b.palette == DISP_PAL_DYNAMIC);
-    assert(b.bg == a.bg && b.text == a.text);
-    assert(b.image == display_dynamic_slot());
 
     /* A colour preset survives a round trip in the new space. */
     a.palette = PAL(5);
@@ -1251,12 +608,13 @@ static void test_blob_roundtrip(void) {
        entry to reach it from -- but the name field and its resolver are still in
        the format, and a legacy blob arrives through exactly this path. */
     a.palette = PAL(0);
-    a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE; a.image = 3;
+    a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE;
+    a.image = display_slot_make(TC_MAGIC, 2);
     display_encode(&a, buf);
     assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
     assert(b.palette == PAL(0));
-    assert(b.image == 3);
-    assert(strcmp(display_image_file(b.image), IMGS[3]) == 0);
+    assert(b.image == a.image);
+    assert(strcmp(display_image_file(b.image), "MAGIC/02.TGA") == 0);
 
     /* A sentinel-3 blob written before Dynamic existed: its colour preset index
        is in the OLD space and must shift up by one, or every saved appearance
@@ -1274,14 +632,15 @@ static void test_blob_roundtrip(void) {
         assert(b.image == DISP_IMAGE_NONE);
     }
 
-    /* Dynamic reloaded onto a disc with no art has nothing to show, so it is
-       refused rather than selected over an empty wallpaper. */
-    display_defaults(&a);
+    /* A blob carrying the Dynamic marker is refused on this build: g_image_count
+       has nothing left to set it (see the task report), so Dynamic is
+       unreachable through display_defaults too -- this constructs the marker by
+       hand rather than by going through it. */
+    a.palette = DISP_PAL_DYNAMIC;
+    a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE; a.image = DISP_IMAGE_NONE;
     display_encode(&a, buf);
-    display_set_images(NULL, 0);
     assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 0);
     assert(b.palette != DISP_PAL_DYNAMIC);
-    display_set_images(IMGS, IMGS_N);
 }
 
 int main(void) {
@@ -1289,44 +648,26 @@ int main(void) {
     test_known_colors();
     test_preset_contents();
     test_defaults_and_palette_name();
-    test_image_registration();
     test_bg_name_and_is_image();
     test_cycle_bg_stays_in_colors();
     test_legibility_guard();
     test_guard_follows_bg_color_under_image();
     test_cycle_palette();
-    test_palette_count_is_fixed();
-    test_dynamic_is_the_only_entry_with_a_picture();
-    test_cycle_palette_wraps_past_the_last_preset();
-    test_cycle_palette_from_custom_with_images();
     test_five_is_not_a_display_sentinel();
-    test_custom_on_dynamic_roundtrips();
-    test_custom_on_dynamic_walks_away_and_resets();
-    test_dynamic_name_shown_not_custom();
-    test_pinned_picture_blob_migrates_to_dynamic();
-    test_decode_resolves_image_after_reorder();
-    test_decode_follows_image_when_earlier_one_removed();
-    test_decode_image_gone_falls_back();
+    test_encode_decode_roundtrip();
+    test_collisions_roundtrip();
+    test_custom_state_roundtrips();
+    test_decode_rejects_bad_input();
+    test_decode_missing_image_never_clashes();
     test_color_state_needs_no_image();
     test_legacy_blob_still_decodes();
     test_legacy_blob_image_index_rejected();
     test_decode_truncated_name_block();
     test_image_label_drops_extension_and_capitalizes();
     test_two_labels_live_at_once();
-    test_selecting_dynamic_resets_bg_and_text();
-    test_leaving_dynamic_clears_the_image();
     test_bg_color_under_image_survives_a_save();
-    test_sentinel2_blob_decodes_over_black();
-    test_encode_decode_roundtrip();
-    test_collisions_roundtrip();
-    test_custom_state_roundtrips();
-    test_decode_rejects_bad_input();
-    test_decode_missing_image_falls_back();
-    test_decode_missing_image_never_clashes();
-    test_decode_multi_field_corruption();
     test_category_art();
-    test_category_rotation();
-    test_dynamic_palette();
+    test_virtual_slots();
     test_blob_roundtrip();
     printf("test_display: OK\n");
     return 0;

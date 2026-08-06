@@ -36,7 +36,18 @@ static const TextKeyword KW[] = {
     {"passageway",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
     {"grotto",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
     {"crawlway",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
-    {"maze",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"shaft",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    /* A shaft is a mine shaft in Zork/Sorcerer and a ventilation duct on
+       Stationfall's space station; Stationfall proved a single GN_ANY
+       reading cannot serve both, so it splits the way ship/chamber/hall
+       already do. */
+    {"shaft",TC_UNDERGROUND,KT_STRUCTURE,GN_FANTASY|GN_MODERN},
+    {"shaft",TC_SCIFI,KT_STRUCTURE,GN_SCIFI},
+    /* A maze is Adventure/Zork's cave labyrinth in a fantasy game and a
+       garden hedge maze in a modern one; no sci-fi row is deliberate --
+       "maze of neon" (Leather Goddesses) is a metaphor, and abstaining is
+       the right answer for a word used figuratively. */
+    {"maze",TC_UNDERGROUND,KT_STRUCTURE,GN_FANTASY},
+    {"maze",TC_WILDERNESS,KT_BIOME,GN_MODERN},
     {"pit",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"alcove",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
 
     {"river",TC_WATER,KT_BIOME,GN_ANY},{"stream",TC_WATER,KT_BIOME,GN_ANY},

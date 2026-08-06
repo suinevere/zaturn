@@ -200,13 +200,13 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 851108: Inner Lair */
     0,   /* 851108: Inside the Sperm Whale */
     12,   /* 851108: Marvin's Pantry */
-    2,   /* 851108: Maze */
+    0,   /* 851108: Maze */
     0,   /* 851108: Ramp */
     4,   /* 861215: Beach */
     1,   /* 861215: Bottom Landing */
     1,   /* 861215: Dining Room */
     0,   /* 861215: East End of Roof */
-    2,   /* 861215: Entrance to Hedge Maze */
+    1,   /* 861215: Entrance to Hedge Maze */
     12,   /* 861215: Front Porch */
     0,   /* 861215: Game Room */
     1,   /* 861215: Garden, East */
@@ -215,7 +215,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     1,   /* 861215: Garden, West */
     2,   /* 861215: Grotto, Underwater */
     12,   /* 861215: Guest Room */
-    2,   /* 861215: Hedge Maze */
+    1,   /* 861215: Hedge Maze */
     0,   /* 861215: In the Chimney */
     2,   /* 861215: Inlet */
     12,   /* 861215: Kitchen */
@@ -223,8 +223,8 @@ static const unsigned char BLESSED[CORPUS_N] = {
     12,   /* 861215: Living Room */
     12,   /* 861215: Master Bedroom */
     5,   /* 861215: Middle of Beach Stairs */
-    2,   /* 861215: Northeast Junction */
-    2,   /* 861215: Northwest Junction */
+    1,   /* 861215: Northeast Junction */
+    1,   /* 861215: Northwest Junction */
     0,   /* 861215: Projection Booth */
     10,   /* 861215: Screening Room */
     5,   /* 861215: Short Hall */
@@ -376,7 +376,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     4,   /* 860730: Hickory & Dickory Dock */
     4,   /* 860730: Icy Dock */
     7,   /* 860730: Inside the Tent */
-    2,   /* 860730: Joe's Bar */
+    0,   /* 860730: Joe's Bar */
     6,   /* 860730: Ladder Room */
     9,   /* 860730: Main Hall of Palace */
     7,   /* 860730: Martian Desert */
@@ -417,7 +417,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     2,   /* 870912: Tunnel Entrance */
     5,   /* 861022: east hall */
     0,   /* 861022: game room */
-    2,   /* 861022: hedge maze */
+    1,   /* 861022: hedge maze */
     11,   /* 861022: study */
     5,   /* 861022: west hall */
     6,   /* 840207: Altar */
@@ -727,7 +727,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     9,   /* 821021: Yellow Hall */
     9,   /* 821021: Zoo */
     5,   /* 870430: "Doc" Schuster's */
-    2,   /* 870430: Air Shaft */
+    9,   /* 870430: Air Shaft */
     2,   /* 870430: Alley */
     9,   /* 870430: Armory */
     9,   /* 870430: Astro Lab */
@@ -738,14 +738,14 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 870430: Barracks SanFac */
     9,   /* 870430: Bio Lab */
     5,   /* 870430: Bio Office */
-    2,   /* 870430: Bottom of Air Shaft */
+    9,   /* 870430: Bottom of Air Shaft */
     0,   /* 870430: Briefing Room */
     0,   /* 870430: Brig */
     5,   /* 870430: Broadway */
     9,   /* 870430: Cargo Bay */
     9,   /* 870430: Cargo Bay Entrance */
     0,   /* 870430: Commander's Quarters */
-    2,   /* 870430: Computer Control */
+    9,   /* 870430: Computer Control */
     9,   /* 870430: Deck Twelve */
     9,   /* 870430: Docking Bay #1 */
     0,   /* 870430: Docking Bay #3 */
@@ -787,7 +787,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     5,   /* 870430: Robot Shop */
     5,   /* 870430: Saloon */
     9,   /* 870430: Scientists' Quarters */
-    2,   /* 870430: Shaft at Level Nine */
+    9,   /* 870430: Shaft at Level Nine */
     0,   /* 870430: Shipping Room */
     0,   /* 870430: Sick Bay */
     9,   /* 870430: South Junction */
@@ -795,7 +795,7 @@ static const unsigned char BLESSED[CORPUS_N] = {
     0,   /* 870430: Studio */
     5,   /* 870430: The PX */
     0,   /* 870430: Theatre */
-    2,   /* 870430: Top of Air Shaft */
+    9,   /* 870430: Top of Air Shaft */
     2,   /* 870430: Trading Post */
     0,   /* 870430: Travel Agency */
     9,   /* 870430: Tube */

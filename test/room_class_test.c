@@ -127,14 +127,15 @@ static int assertions(void) {
 
     /* A landmark named as distant does not get to describe the room. The whole
        sentence is discarded, because "far off" attaches to the landmark and not
-       to any particular word next to it. */
-    CHECK(classify("Ledge",
-        "You are on a narrow ledge. Far off, a forest covers the valley floor.")
+       to any particular word next to it. "outcrop" stands in for the room word
+       here (not "ledge") because Task 2 makes "ledge" itself a keyword. */
+    CHECK(classify("Overlook",
+        "You are on a narrow outcrop. Far off, a forest covers the valley floor.")
         == TC_NEUTRAL);
 
     /* ...and the same sentence without the modifier still votes. */
-    CHECK(classify("Ledge",
-        "You are on a narrow ledge. A forest covers the valley floor.")
+    CHECK(classify("Overlook",
+        "You are on a narrow outcrop. A forest covers the valley floor.")
         == TC_WILDERNESS);
 
     /* A positive phrase doubles its sentence's hits, which breaks a tie WITHIN a
@@ -221,6 +222,13 @@ static int assertions(void) {
 
     /* Events keep literal matching: the relaxation must not reach EV[]. */
     CHECK(text_scan_event("A pile of jewels lies here.") == -1);
+
+    /* ---- place-words ----
+       "tent" gives TC_DESERT its first Structure-tier word. Infidel's camp rooms
+       previously lost to whatever biome word sat nearby, because DESERT could
+       only ever field Biome and Feature entries. */
+    room_class_reset();
+    CHECK(classify("Camp", "Your tent stands in a clearing.") == TC_DESERT);
 
     if (!fails) printf("ASSERTIONS: OK\n");
     return fails;

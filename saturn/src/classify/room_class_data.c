@@ -26,6 +26,8 @@ static const TextKeyword KW[] = {
     {"path",TC_WILDERNESS,KT_FEATURE,GN_ANY},{"pathway",TC_WILDERNESS,KT_FEATURE,GN_ANY},
     {"hill",TC_WILDERNESS,KT_BIOME,GN_ANY},
     {"mountain",TC_WILDERNESS,KT_BIOME,GN_ANY},{"garden",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"canyon",TC_WILDERNESS,KT_BIOME,GN_ANY},{"volcano",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"cliff",TC_WILDERNESS,KT_BIOME,GN_ANY},{"ledge",TC_WILDERNESS,KT_FEATURE,GN_ANY},
 
     {"cave",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"cavern",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
     {"tunnel",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"underground",TC_UNDERGROUND,KT_BIOME,GN_ANY},
@@ -34,6 +36,8 @@ static const TextKeyword KW[] = {
     {"passageway",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
     {"grotto",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
     {"crawlway",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"maze",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"shaft",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"pit",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"alcove",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
 
     {"river",TC_WATER,KT_BIOME,GN_ANY},{"stream",TC_WATER,KT_BIOME,GN_ANY},
     {"lake",TC_WATER,KT_BIOME,GN_ANY},{"pool",TC_WATER,KT_FEATURE,GN_ANY},
@@ -57,6 +61,7 @@ static const TextKeyword KW[] = {
     {"ocean",TC_NAUTICAL,KT_BIOME,GN_ANY},{"dock",TC_NAUTICAL,KT_STRUCTURE,GN_ANY},
     {"harbor",TC_NAUTICAL,KT_BIOME,GN_ANY},{"sail",TC_NAUTICAL,KT_FEATURE,GN_ANY},
     {"mast",TC_NAUTICAL,KT_FEATURE,GN_ANY},{"submarine",TC_NAUTICAL,KT_STRUCTURE,GN_ANY},
+    {"wharf",TC_NAUTICAL,KT_STRUCTURE,GN_ANY},
 
     /* A house is not a town. These used to share TC_TOWN, and the art is where
        that showed: TC_HOUSE's pool is single houses (a boarded-up exterior, an
@@ -72,6 +77,8 @@ static const TextKeyword KW[] = {
        Cutthroats' inn landing, Deadline's and Moonmist's mansions, Infidel's
        pyramid. "way" is not a general suffix precisely so this can differ. */
     {"hallway",TC_HOUSE,KT_STRUCTURE,GN_ANY},
+    {"ballroom",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"closet",TC_HOUSE,KT_STRUCTURE,GN_ANY},
+    {"fireplace",TC_HOUSE,KT_FEATURE,GN_ANY},
 
     /* Left in TC_TOWN: words that are as much a public building or a settlement as
        a home. "town" and "village" are new -- with the domestic words moved out,
@@ -84,6 +91,7 @@ static const TextKeyword KW[] = {
     {"stairs",TC_TOWN,KT_FEATURE,GN_ANY},{"square",TC_TOWN,KT_BIOME,GN_ANY},
     {"market",TC_TOWN,KT_BIOME,GN_ANY},{"shop",TC_TOWN,KT_STRUCTURE,GN_ANY},
     {"inn",TC_TOWN,KT_STRUCTURE,GN_ANY},{"tavern",TC_TOWN,KT_STRUCTURE,GN_ANY},
+    {"tower",TC_TOWN,KT_STRUCTURE,GN_ANY},
 
     {"temple",TC_DUNGEON,KT_STRUCTURE,GN_ANY},{"tomb",TC_DUNGEON,KT_STRUCTURE,GN_ANY},
     {"crypt",TC_DUNGEON,KT_STRUCTURE,GN_ANY},{"ruin",TC_DUNGEON,KT_STRUCTURE,GN_ANY},
@@ -101,6 +109,10 @@ static const TextKeyword KW[] = {
     {"desert",TC_DESERT,KT_BIOME,GN_ANY},{"sand",TC_DESERT,KT_FEATURE,GN_ANY},
     {"dune",TC_DESERT,KT_BIOME,GN_ANY},{"oasis",TC_DESERT,KT_BIOME,GN_ANY},
     {"wasteland",TC_DESERT,KT_BIOME,GN_ANY},
+    /* TC_DESERT's first Structure-tier word. Without it the category could only
+       field Biome and Feature entries, so any indoor word in an Infidel camp
+       room outranked the camp itself. */
+    {"tent",TC_DESERT,KT_STRUCTURE,GN_ANY},
 
     {"spell",TC_MAGIC,KT_FEATURE,GN_ANY},{"magic",TC_MAGIC,KT_FEATURE,GN_ANY},
     {"enchant",TC_MAGIC,KT_FEATURE,GN_ANY},{"wizard",TC_MAGIC,KT_FEATURE,GN_ANY},

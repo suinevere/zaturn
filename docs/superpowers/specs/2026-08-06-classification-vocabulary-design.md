@@ -1,7 +1,7 @@
 # Room Classification Vocabulary — Inflection and Place-Words — Design
 
 **Date:** 2026-08-06
-**Status:** Designed
+**Status:** Implemented 2026-08-06
 **Follows:** `2026-08-05-per-game-fallback-mood-design.md`
 
 ## Goal

@@ -20,16 +20,19 @@
  ----------------------*/
 static const TextKeyword KW[] = {
     {"forest",TC_WILDERNESS,KT_BIOME,GN_ANY},{"tree",TC_WILDERNESS,KT_FEATURE,GN_ANY},
-    {"trees",TC_WILDERNESS,KT_FEATURE,GN_ANY},{"woods",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"woods",TC_WILDERNESS,KT_BIOME,GN_ANY},
     {"grove",TC_WILDERNESS,KT_BIOME,GN_ANY},{"meadow",TC_WILDERNESS,KT_BIOME,GN_ANY},
     {"field",TC_WILDERNESS,KT_BIOME,GN_ANY},{"clearing",TC_WILDERNESS,KT_BIOME,GN_ANY},
-    {"path",TC_WILDERNESS,KT_FEATURE,GN_ANY},{"hill",TC_WILDERNESS,KT_BIOME,GN_ANY},
+    {"path",TC_WILDERNESS,KT_FEATURE,GN_ANY},{"pathway",TC_WILDERNESS,KT_FEATURE,GN_ANY},
+    {"hill",TC_WILDERNESS,KT_BIOME,GN_ANY},
     {"mountain",TC_WILDERNESS,KT_BIOME,GN_ANY},{"garden",TC_WILDERNESS,KT_BIOME,GN_ANY},
 
     {"cave",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"cavern",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
     {"tunnel",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"underground",TC_UNDERGROUND,KT_BIOME,GN_ANY},
     {"cellar",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"mine",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
-    {"passage",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},{"grotto",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"passage",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"passageway",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
+    {"grotto",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
     {"crawlway",TC_UNDERGROUND,KT_STRUCTURE,GN_ANY},
 
     {"river",TC_WATER,KT_BIOME,GN_ANY},{"stream",TC_WATER,KT_BIOME,GN_ANY},
@@ -64,6 +67,11 @@ static const TextKeyword KW[] = {
     {"parlor",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"bedroom",TC_HOUSE,KT_STRUCTURE,GN_ANY},
     {"attic",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"cottage",TC_HOUSE,KT_STRUCTURE,GN_ANY},
     {"farmhouse",TC_HOUSE,KT_STRUCTURE,GN_ANY},{"porch",TC_HOUSE,KT_STRUCTURE,GN_ANY},
+    /* Not an inflection of "hall": that votes TC_TOWN for public buildings and
+       settlements, while every hallway in the library is a domestic interior --
+       Cutthroats' inn landing, Deadline's and Moonmist's mansions, Infidel's
+       pyramid. "way" is not a general suffix precisely so this can differ. */
+    {"hallway",TC_HOUSE,KT_STRUCTURE,GN_ANY},
 
     /* Left in TC_TOWN: words that are as much a public building or a settlement as
        a home. "town" and "village" are new -- with the domestic words moved out,

@@ -59,6 +59,66 @@ static int has_word(const char* text, const char* word) {
 }
 
 /*----------------------
+ | at_bound
+ | Description: True when offset q ends a word -- past the end of the searched
+ |   span, or sitting on a non-letter.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: text -- haystack; len -- searched length; q -- offset to test
+ | Returns: 1 when q is a word boundary, 0 otherwise
+ ----------------------*/
+static int at_bound(const char* text, int len, int q) {
+    char c;
+    if (q >= len) return 1;
+    c = text[q];
+    return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+}
+
+/*----------------------
+ | has_word_infl
+ | Description: Whole-word search that also accepts a plural: the word, the word
+ |   plus "s", or the word plus "es".
+ |
+ |   The leading boundary stays strict and only the trailing one relaxes, which
+ |   is the whole safety property. "caverns" matches "cavern" and never "cave";
+ |   "mineral" matches neither "mine" nor anything else. A rule that relaxed both
+ |   ends would silently collapse pairs the keyword table separates on purpose.
+ |
+ |   One pass, not one pass per suffix -- the alternative of re-scanning the text
+ |   for word+"s" and again for word+"es" would triple a loop that already runs
+ |   ~130 keywords over every sentence of the room text.
+ |
+ |   Deliberately NOT used by text_scan_event or the genre markers, which keep
+ |   has_word: events fire on every turn with first-match-wins semantics, and
+ |   inflecting them is a different decision from inflecting room keywords.
+ | Author: suinevere
+ | Dependencies: string.h, at_bound, lc
+ | Globals: N/A
+ | Params: text -- haystack; len -- how much of it to search; word -- lowercase needle
+ | Returns: 1 on a whole-word or plural match, 0 otherwise
+ ----------------------*/
+static int has_word_infl(const char* text, int len, const char* word) {
+    int wl = (int) strlen(word), p, i, e;
+    for (p = 0; p + wl <= len; p++) {
+        i = 0;
+        while (i < wl && lc(text[p + i]) == word[i]) i++;
+        if (i != wl) continue;
+        {
+            char before = (p == 0) ? ' ' : text[p - 1];
+            if ((before >= 'a' && before <= 'z') ||
+                (before >= 'A' && before <= 'Z')) continue;
+        }
+        e = p + wl;
+        if (at_bound(text, len, e)) return 1;
+        if (lc(text[e]) == 's' && at_bound(text, len, e + 1)) return 1;
+        if (lc(text[e]) == 'e' && e + 1 < len && lc(text[e + 1]) == 's' &&
+            at_bound(text, len, e + 2)) return 1;
+    }
+    return 0;
+}
+
+/*----------------------
  | has_phrase_n
  | Description: Case-insensitive substring search within the first `len` bytes of
  |   `text`. Not word-bounded, because the modifier phrases contain spaces and
@@ -386,7 +446,7 @@ int text_classify_room(const char* text) {
                 int w = sentence_weight(text + start, len);
                 if (w > 0)
                     for (i = 0; i < nk; i++)
-                        if (KW_VOTES(kw[i]) && has_word_n(text + start, len, kw[i].word))
+                        if (KW_VOTES(kw[i]) && has_word_infl(text + start, len, kw[i].word))
                             hits[kw[i].cat][kw[i].tier] += (unsigned short) w;
             }
             if (ch == 0) break;
@@ -395,7 +455,7 @@ int text_classify_room(const char* text) {
         pos++;
     }
     for (i = 0; i < nk; i++)
-        if (KW_VOTES(kw[i]) && has_word(title, kw[i].word))
+        if (KW_VOTES(kw[i]) && has_word_infl(title, (int) strlen(title), kw[i].word))
             hits[kw[i].cat][kw[i].tier] += TEXT_TITLE_WEIGHT;
 
     /* Starts past TC_NEUTRAL on purpose: it is the nothing-matched answer, not

@@ -192,6 +192,36 @@ static int assertions(void) {
     room_class_reset();
     CHECK(room_class_genre_locked() == 0);
 
+    /* ---- keyword inflection ----
+       The table already held "passage"; the matcher just could not see the
+       plural. 34 corpus rooms say "passages" and classified as nothing. */
+    room_class_reset();
+    CHECK(classify("Junction", "Two passages lead away from here.") == TC_UNDERGROUND);
+
+    /* The relaxation is TRAILING ONLY, and this is the assertion that keeps it
+       that way. "mineral" begins with the keyword "mine"; if the rule ever
+       degenerated into prefix or substring matching, this room would read as
+       underground and so would every pair the table distinguishes on purpose.
+
+       The spec proposed "caverns must not match cave" for this. That test cannot
+       fail: "cavern" is itself a keyword and votes TC_UNDERGROUND, the same as
+       "cave", so it passes whether the rule is correct or broken. "mine" and
+       "mineral" is the version with teeth -- "mineral" is not a keyword at all,
+       so a match can only come from the boundary rule going wrong. */
+    room_class_reset();
+    CHECK(classify("Nowhere", "A mineral seam runs through it.") == TC_NEUTRAL);
+
+    /* A hallway is not a hall. "hall" votes TOWN for public buildings; every
+       hallway in the library is a domestic interior. Its explicit row must win,
+       and it also proves the relaxation did not match "hall" inside "hallway" --
+       if both scored, the Structure-tier tie would fall to TOWN on enum order. */
+    room_class_reset();
+    CHECK(classify("Upstairs Hallway", "A hallway runs the length of the floor.")
+          == TC_HOUSE);
+
+    /* Events keep literal matching: the relaxation must not reach EV[]. */
+    CHECK(text_scan_event("A pile of jewels lies here.") == -1);
+
     if (!fails) printf("ASSERTIONS: OK\n");
     return fails;
 }

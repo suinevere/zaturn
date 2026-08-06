@@ -720,113 +720,253 @@ git commit -m "title: open backgrounds from their mood folder and drop the boot-
 ### Task 5: A held wallpaper offset that composes with the transition ramp
 
 **Files:**
+- Create: `saturn/src/video/bg_dim.c`, `saturn/src/video/bg_dim.h`
 - Modify: `saturn/src/video/title.cxx:1183` (`title_bg_dyn_fade`), `:1140-1152` (fade disengage)
 - Modify: `saturn/src/video/title.h:151-170`
-- Test: `saturn/tests/test_bg_hold.c`
+- Test: `saturn/tests/test_bg_dim.c`
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks. Independent of Tasks 1–4.
-- Produces:
-  - `void title_bg_dim_set(int offset)` — holds `offset` in `-255..+255`; 0 releases.
-  - `int title_bg_dim_get(void)` — the held offset.
-  - `int title_bg_effective(int level, int hold)` — pure, testable on the host:
-    returns `clamp(hold + (level - 255), -255, +255)`.
+- Produces, in `bg_dim.h` (plain C, `extern "C"` guarded like `display.h`, and
+  **including no SRL header** so it links on the host):
+  - `int bg_dim_compose(int level, int hold)` — pure: `clamp(hold + (level - 255), -255, +255)`.
+  - `void bg_dim_set(int offset)` — clamps to `-255..+255` and holds it.
+  - `int bg_dim_get(void)` — the held offset.
+  - `int bg_dim_effective(int level)` — `bg_dim_compose(level, bg_dim_get())`.
+- Produces, in `title.h`:
+  - `void title_bg_dim_set(int offset)` — sets the hold and re-applies it to VDP2.
+  - `int title_bg_dim_get(void)` — delegates to `bg_dim_get`.
+
+The arithmetic and the hold live in `bg_dim.c`; `title.cxx` keeps the VDP2
+register writes and nothing else. That seam is what makes the composition
+testable on the host — `title.cxx` pulls in SRL and cannot build there.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `saturn/tests/test_bg_hold.c`:
+Create `saturn/tests/test_bg_dim.c`:
 
 ```c
 /* Build:
-     gcc -O2 -I saturn/src -o /tmp/tbh saturn/tests/test_bg_hold.c && /tmp/tbh
-   title_bg_effective is duplicated here rather than linked: title.cxx pulls in
-   SRL and cannot build on the host, and this arithmetic is the whole of what
-   needs proving. Keep the two copies identical. */
+     gcc -O2 -I saturn/src -o /tmp/tbd saturn/tests/test_bg_dim.c \
+         saturn/src/video/bg_dim.c && /tmp/tbd
+   bg_dim.c is deliberately free of SRL includes so this links on the host. */
+#include "../src/video/bg_dim.h"
 #include <assert.h>
 #include <stdio.h>
 
-static int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
-
-int title_bg_effective(int level, int hold) {
-    return clampi(hold + (level - 255), -255, 255);
-}
-
 int main(void) {
     /* No hold: byte-identical to the behaviour before this change. */
-    assert(title_bg_effective(255, 0) == 0);
-    assert(title_bg_effective(0, 0)   == -255);
-    assert(title_bg_effective(128, 0) == -127);
+    assert(bg_dim_compose(255, 0) == 0);
+    assert(bg_dim_compose(0, 0)   == -255);
+    assert(bg_dim_compose(128, 0) == -127);
 
     /* A darkening hold rests dark and still dips to black. */
-    assert(title_bg_effective(255, -96) == -96);
-    assert(title_bg_effective(0, -96)   == -255);
+    assert(bg_dim_compose(255, -96) == -96);
+    assert(bg_dim_compose(0, -96)   == -255);
 
     /* A lightening hold rests light and still dips. */
-    assert(title_bg_effective(255, 64) == 64);
-    assert(title_bg_effective(0, 64)   == -191);
+    assert(bg_dim_compose(255, 64) == 64);
+    assert(bg_dim_compose(0, 64)   == -191);
+
+    /* The clamp holds at both rails. */
+    assert(bg_dim_compose(255, 400)  == 255);
+    assert(bg_dim_compose(0, -400)   == -255);
 
     /* Only a resting, unheld wallpaper releases the channel. */
-    assert(title_bg_effective(255, 0) == 0);
-    assert(title_bg_effective(255, -32) != 0);
+    assert(bg_dim_compose(255, 0) == 0);
+    assert(bg_dim_compose(255, -32) != 0);
 
-    printf("test_bg_hold: ok\n");
+    /* The held value round-trips and clamps on the way in. */
+    bg_dim_set(-96);
+    assert(bg_dim_get() == -96);
+    assert(bg_dim_effective(255) == -96);
+    assert(bg_dim_effective(0)   == -255);
+
+    bg_dim_set(9999);
+    assert(bg_dim_get() == 255);
+    bg_dim_set(-9999);
+    assert(bg_dim_get() == -255);
+
+    bg_dim_set(0);
+    assert(bg_dim_get() == 0);
+    assert(bg_dim_effective(255) == 0);
+
+    printf("test_bg_dim: ok\n");
     return 0;
 }
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
 
-Run: `gcc -O2 -I saturn/src -o /tmp/tbh saturn/tests/test_bg_hold.c && /tmp/tbh`
-Expected: PASS immediately — the reference implementation is inside the test.
-This test's job is to pin the arithmetic *before* `title.cxx` is edited, so the
-port can be compared against it. Record the output; Step 5 re-runs it.
+Run: `gcc -O2 -I saturn/src -o /tmp/tbd saturn/tests/test_bg_dim.c saturn/src/video/bg_dim.c && /tmp/tbd`
+Expected: FAIL — `saturn/src/video/bg_dim.c: No such file or directory`.
 
-- [ ] **Step 3: Add the hold to title.cxx**
+- [ ] **Step 3: Write the unit**
 
-```cxx
+Create `saturn/src/video/bg_dim.h`:
+
+```c
 /*----------------------
- | g_bg_hold / title_bg_dim_set / title_bg_dim_get
- | Description: A wallpaper offset the player chose, held across rooms. Composes
- |   additively with title_bg_dyn_fade's transition ramp, so a held dim rests at
- |   its own level and a transition still dips to black through it.
+ | bg_dim.h
+ | Description: The wallpaper dim's arithmetic and held value: how a player's
+ |   chosen offset composes with a transition ramp, and where that choice lives
+ |   between rooms.
  |
- |   Negative darkens, positive lightens -- VDP2's colour offset is signed, and a
- //   black text preset wants a lighter wallpaper as much as a white one wants a
- |   darker. Zero releases channel B entirely, which is exactly the behaviour
- |   before this existed.
+ |   Split out of title.cxx because it is arithmetic, not hardware. title.cxx
+ |   includes SRL and cannot build on the host, and this composition is the
+ |   subtlest logic in the feature -- keeping it here is what lets
+ |   saturn/tests/test_bg_dim.c pin it. Nothing in this file may include an SRL
+ |   header.
  | Author: suinevere
+ | Dependencies: none
  ----------------------*/
-static int g_bg_hold = 0;
+#ifndef BG_DIM_H
+#define BG_DIM_H
 
-void title_bg_dim_set(int offset) {
-    if (offset < -255) offset = -255;
-    if (offset >  255) offset =  255;
-    g_bg_hold = offset;
-    title_bg_dyn_fade(255);
-}
-
-int title_bg_dim_get(void) { return g_bg_hold; }
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*----------------------
- | title_bg_effective
- | Description: The colour-offset value for a ramp level and a held offset.
- |   Separated out and kept pure so saturn/tests/test_bg_hold.c can pin it on the
- |   host, where SRL cannot build.
+ | bg_dim_compose
+ | Description: The signed VDP2 colour offset for a ramp level and a held offset.
+ |   Additive rather than multiplicative: a held lighten still dips toward black
+ |   during a transition instead of scaling around its own resting point, which is
+ |   what makes a room change read the same at every dim setting.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: level -- 0 (black) to 255 (unmodified); hold -- -255..+255
- | Returns: the signed per-channel offset, -255..+255
+ | Returns: the per-channel offset, -255..+255
  ----------------------*/
-int title_bg_effective(int level, int hold) {
+int bg_dim_compose(int level, int hold);
+
+/*----------------------
+ | bg_dim_set / bg_dim_get / bg_dim_effective
+ | Description: set clamps and holds the player's chosen offset; get reads it;
+ |   effective composes it with a ramp level. Zero is "no dim", and is the value
+ |   at which title.cxx releases the colour-offset channel entirely.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_bg_hold (in bg_dim.c)
+ | Params: offset -- -255..+255, clamped; level -- 0..255
+ | Returns: get and effective return the offset; set returns N/A
+ ----------------------*/
+void bg_dim_set(int offset);
+int  bg_dim_get(void);
+int  bg_dim_effective(int level);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* BG_DIM_H */
+```
+
+Create `saturn/src/video/bg_dim.c`:
+
+```c
+/*----------------------
+ | bg_dim.c
+ | Description: See bg_dim.h.
+ | Author: suinevere
+ | Dependencies: bg_dim.h
+ ----------------------*/
+#include "bg_dim.h"
+
+/*----------------------
+ | g_bg_hold
+ | Description: The wallpaper offset the player chose, held across rooms.
+ |   Negative darkens, positive lightens -- VDP2's colour offset is signed, and a
+ |   black text preset wants a lighter wallpaper as much as a white one wants a
+ |   darker.
+ | Author: suinevere
+ ----------------------*/
+static int g_bg_hold = 0;
+
+/*----------------------
+ | bg_dim_compose
+ | Description: See bg_dim.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: level -- 0 (black) to 255 (unmodified); hold -- -255..+255
+ | Returns: the per-channel offset, -255..+255
+ ----------------------*/
+int bg_dim_compose(int level, int hold) {
     int v = hold + (level - 255);
     if (v < -255) v = -255;
     if (v >  255) v =  255;
     return v;
 }
+
+/*----------------------
+ | bg_dim_set
+ | Description: See bg_dim.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_bg_hold
+ | Params: offset -- -255..+255, clamped
+ | Returns: N/A
+ ----------------------*/
+void bg_dim_set(int offset) {
+    if (offset < -255) offset = -255;
+    if (offset >  255) offset =  255;
+    g_bg_hold = offset;
+}
+
+/*----------------------
+ | bg_dim_get
+ | Description: See bg_dim.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_bg_hold
+ | Params: N/A
+ | Returns: the held offset
+ ----------------------*/
+int bg_dim_get(void) { return g_bg_hold; }
+
+/*----------------------
+ | bg_dim_effective
+ | Description: See bg_dim.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_bg_hold
+ | Params: level -- 0 (black) to 255 (unmodified)
+ | Returns: the per-channel offset, -255..+255
+ ----------------------*/
+int bg_dim_effective(int level) { return bg_dim_compose(level, g_bg_hold); }
 ```
 
-- [ ] **Step 4: Rewrite title_bg_dyn_fade around it**
+- [ ] **Step 4: Run the test and watch it pass**
+
+Run: `gcc -O2 -I saturn/src -o /tmp/tbd saturn/tests/test_bg_dim.c saturn/src/video/bg_dim.c && /tmp/tbd`
+Expected: PASS, printing `test_bg_dim: ok`.
+
+- [ ] **Step 5: Wire title.cxx to it**
+
+Add `#include "bg_dim.h"` to `title.cxx`, and:
+
+```cxx
+/*----------------------
+ | title_bg_dim_set / title_bg_dim_get
+ | Description: See title.h. The value lives in bg_dim.c; this pair is the half
+ |   that touches VDP2, re-applying the new offset immediately so a menu row can
+ |   preview it.
+ | Author: suinevere
+ | Dependencies: bg_dim.h
+ | Globals: N/A
+ | Params: offset -- -255..+255, clamped by bg_dim_set
+ | Returns: get returns the held offset; set returns N/A
+ ----------------------*/
+void title_bg_dim_set(int offset) {
+    bg_dim_set(offset);
+    title_bg_dyn_fade(255);
+}
+
+int title_bg_dim_get(void) { return bg_dim_get(); }
+```
+
+- [ ] **Step 6: Rewrite title_bg_dyn_fade around it**
 
 ```cxx
 void title_bg_dyn_fade(int level) {
@@ -834,7 +974,7 @@ void title_bg_dyn_fade(int level) {
     if (level < 0)   level = 0;
     if (level > 255) level = 255;
 
-    v = title_bg_effective(level, g_bg_hold);
+    v = bg_dim_effective(level);
 
     if (v == 0) {
         if (g_dyn_faded) {
@@ -860,7 +1000,7 @@ Update the function's header block: `level` still runs 0..255, but the resting
 state is now the held offset rather than unmodified, and channel B is released
 only when both are neutral.
 
-- [ ] **Step 5: Re-apply the hold when a screen-wide fade releases NBG0**
+- [ ] **Step 7: Re-apply the hold when a screen-wide fade releases NBG0**
 
 `title_fade_engage` moves NBG0 to channel A and clears `g_dyn_faded`. A scroll
 uses A or B, not both, so the hold is silently dropped. At the end of
@@ -873,23 +1013,23 @@ uses A or B, not both, so the hold is silently dropped. At the end of
 
 That re-engages channel B when, and only when, a hold is set.
 
-- [ ] **Step 6: Run the test and check the port matches**
+- [ ] **Step 8: Re-run the unit test**
 
-Run: `gcc -O2 -I saturn/src -o /tmp/tbh saturn/tests/test_bg_hold.c && /tmp/tbh`
-Expected: PASS. Then diff the two bodies by eye — the copy in `title.cxx` and the
-copy in the test must be character-identical inside the braces.
+Run: `gcc -O2 -I saturn/src -o /tmp/tbd saturn/tests/test_bg_dim.c saturn/src/video/bg_dim.c && /tmp/tbd`
+Expected: PASS. `title.cxx` now calls this code rather than carrying its own copy,
+so there is nothing to keep in step by hand.
 
-- [ ] **Step 7: Cross-compile to check syntax**
+- [ ] **Step 9: Cross-compile to check syntax**
 
-Run the project's SH-2 cross-compile of `title.cxx` into a scratch directory.
+Run the project's SH-2 cross-compile of `title.cxx` and `bg_dim.c` into a scratch directory.
 **Do not run `compile.bat`** — the user runs all builds.
 
-- [ ] **Step 8: Ask the user to verify the fade interaction on hardware**
+- [ ] **Step 10: Ask the user to verify the fade interaction on hardware**
 
 This is the hazard Step 5 exists for, and the only way to observe it is to run it.
 The row that sets a dim does not exist until Task 7, so drive it from a temporary
-call: set `g_bg_hold = -96;` at the top of `title_bg_dim_set` for this check only,
-and remove it before committing.
+call: call `title_bg_dim_set(-96)` once at startup for this check only, and remove it
+before committing.
 
 > With the wallpaper visibly dimmed: enter and leave the Options menu (which runs
 > a screen-wide title fade), then return to the game. Confirm the wallpaper is
@@ -900,11 +1040,11 @@ and remove it before committing.
 A wallpaper that brightens after a menu means the re-apply in Step 5 is missing or
 is placed before the `NoOffset` writes rather than after them.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add saturn/src/video/title.cxx saturn/src/video/title.h saturn/tests/test_bg_hold.c
-git commit -m "title: hold a player-chosen wallpaper offset that composes with the transition ramp"
+git add saturn/src/video/bg_dim.c saturn/src/video/bg_dim.h \n        saturn/src/video/title.cxx saturn/src/video/title.h saturn/tests/test_bg_dim.c
+git commit -m "video: hold a player-chosen wallpaper offset that composes with the transition ramp"
 ```
 
 ---
@@ -1231,7 +1371,7 @@ git commit -m "menu: add a Dimming row to Display options that previews live"
   both zero comparisons.
 - All host tests pass:
   `gcc -O2 -I saturn/src -o /tmp/td saturn/tests/test_display.c saturn/src/video/display.c && /tmp/td`
-  and `gcc -O2 -I saturn/src -o /tmp/tbh saturn/tests/test_bg_hold.c && /tmp/tbh`
+  and `gcc -O2 -I saturn/src -o /tmp/tbd saturn/tests/test_bg_dim.c saturn/src/video/bg_dim.c && /tmp/tbd`
 - `python -m pytest saturn/tests/ -v` passes.
 - The user has confirmed both hardware checks (Task 4 Step 7, Task 7 Step 7).
 

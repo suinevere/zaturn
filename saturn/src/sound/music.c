@@ -109,6 +109,31 @@ static char          g_turn_text[MUSIC_TEXT_MAX];
 static int           g_turn_len = 0;
 
 /*----------------------
+ | MUSIC_FALLBACK_ROOMS
+ | Description: How many rooms in a row must classify as nothing before the
+ |   engine gives up on the text and shows the game's authored default mood.
+ |
+ |   Three, matching MUSIC_ROTATE_ROOMS -- both answer the same shape of question
+ |   and letting them disagree would be noise. It is also what keeps the older
+ |   behaviour worth keeping: holding the previous picture across a corridor or a
+ |   closet reads as continuity, and a threshold of one would turn every isolated
+ |   featureless room into two wallpaper changes where there are currently none.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_FALLBACK_ROOMS 3
+
+/*----------------------
+ | g_neutral_rooms / g_fallback_cat
+ | Description: g_neutral_rooms counts consecutive rooms whose text classified as
+ |   nothing; g_fallback_cat is the loaded game's authored default mood, or
+ |   TC_NEUTRAL when it has none and the older hold-the-previous-picture
+ |   behaviour should stand.
+ | Author: suinevere
+ ----------------------*/
+static int           g_neutral_rooms = 0;
+static unsigned char g_fallback_cat = TC_NEUTRAL;
+
+/*----------------------
  | mix state (g_mix_mode .. g_isshort)
  | Description: Mix-mode selection and its bookkeeping. g_mix_mode is the active
  |   MIX_*; g_override_track/g_seq_track carry the Override and Sequential
@@ -386,6 +411,8 @@ void music_set_game(unsigned int release, const char* serial) {
     g_serial[6] = 0;
     room_class_set_game(g_release, g_serial);
     g_genre_was_locked = room_class_genre_locked();
+    g_fallback_cat = text_game_fallback(g_release, g_serial);
+    g_neutral_rooms = 0;
 }
 
 /*----------------------
@@ -508,6 +535,8 @@ void music_reset(void) {
     g_active_track = 0; g_turn_len = 0; g_turn_text[0] = 0;
     for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
     g_genre_was_locked = 0;
+    g_neutral_rooms = 0;
+    g_fallback_cat = TC_NEUTRAL;
     g_active_cat = -1; g_pending_cat = -1; g_pending_track = 0; g_pending_frames = 0;
     g_pending_rotate = 0; g_same_cat_rooms = 0;
     g_seq_track = MUSIC_TRACK_MIN;
@@ -749,11 +778,14 @@ void music_note_output(const char* str, unsigned int len) {
  |   map, else a memoized keyword classification. If the target already sounds it
  |   keeps the stream; on the very first switch it plays immediately; otherwise it
  |   arms a debounced pending switch (restarting the countdown when the target
- |   changes), so brief passes through a room do not thrash the music.
+ |   changes), so brief passes through a room do not thrash the music. After
+ |   MUSIC_FALLBACK_ROOMS rooms that classify as nothing, the game's authored
+ |   default mood stands in for the text.
  | Author: suinevere
  | Dependencies: music.h (text_game_room_category)
  | Globals: g_mix_mode, g_turn_text, g_cur_room, g_have_room, g_base_cat,
- |   g_event_cat, g_room_cache, g_active_cat, g_active_track, g_pending_*
+ |   g_event_cat, g_room_cache, g_active_cat, g_active_track, g_pending_*,
+ |   g_neutral_rooms, g_fallback_cat
  | Params: room -- the current room number
  | Returns: N/A
  ----------------------*/
@@ -778,6 +810,15 @@ void music_on_turn(unsigned int room) {
                 base = text_classify_room(g_turn_text);
                 if (room < 256) g_room_cache[room] = (unsigned char)(base + 1);
             }
+        }
+        /* The cache above stored the real verdict, not this substitution, so a
+           revisit mid-run behaves exactly like the first visit and the room
+           corpus keeps meaning "what the text says". */
+        if (base != TC_NEUTRAL) {
+            g_neutral_rooms = 0;
+        } else if (++g_neutral_rooms >= MUSIC_FALLBACK_ROOMS &&
+                   g_fallback_cat != TC_NEUTRAL) {
+            base = g_fallback_cat;
         }
         g_cur_room = room; g_have_room = 1; g_base_cat = base; g_event_cat = -1;
     }

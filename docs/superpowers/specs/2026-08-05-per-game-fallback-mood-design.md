@@ -1,7 +1,7 @@
 # Per-Game Fallback Mood — Design
 
 **Date:** 2026-08-05
-**Status:** Designed
+**Status:** Implemented 2026-08-05
 **Follows:** `2026-08-04-room-categorization-tiers-design.md`
 
 ## Goal

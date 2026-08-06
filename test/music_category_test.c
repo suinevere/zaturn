@@ -10,6 +10,7 @@
        saturn/src/sound/music_data.c saturn/src/classify/room_class.c \
        saturn/src/classify/room_class_data.c && /tmp/mct */
 #include <stdio.h>
+#include <string.h>
 #include "sound/music.h"
 #include "classify/room_class.h"
 
@@ -30,6 +31,12 @@ static void rec_rot(int c) { if (g_nrot < 32) g_rots[g_nrot++] = c; }
 static int g_last_track;
 static void play(int t, int loop) { (void) loop; if (t) g_last_track = t; }
 static int  isplaying(void) { return 1; }
+
+static void enter(unsigned int room, const char *text) {
+    music_note_output(text, (unsigned int) strlen(text));
+    music_on_turn(room);
+    for (int t = 0; t < 4; t++) music_tick();
+}
 
 int main(void) {
     int fails = 0;
@@ -373,6 +380,110 @@ int main(void) {
 
     music_set_fade_frames(0);
     music_set_debounce_frames(3);
+
+    /* ---- per-game fallback mood ----
+       A run of rooms whose text says nothing used to hold the previous picture
+       forever. After MUSIC_FALLBACK_ROOMS of them the engine now shows the
+       game's authored default instead. These cases cannot come from the room
+       corpus: it is a static list with no traversal order, so run length is only
+       expressible as a scripted sequence. */
+    {
+        const char *NOWHERE = "Nowhere\nThere is nothing in particular here.";
+        const char *CELLAR  = "Cellar\nA dark cellar with a crawlway south.";
+
+        music_reset();
+        music_set_backend(play);
+        music_set_isplaying(isplaying);
+        music_set_category_fn(rec_cat);
+        music_set_debounce_frames(0);
+        music_set_game(219, "870912");         /* The Lurking Horror -> HORROR */
+
+        /* Two unclassified rooms must NOT trigger it: holding the previous
+           picture across a short gap is deliberate, not a bug. Room 1 is this
+           session's opening commit -- the very first room after any reset
+           announces once no matter what it classifies as, even TC_NEUTRAL (see
+           the "NEUTRAL, plays at once" case above) -- so that one announcement
+           is absorbed here rather than counted against the fallback. */
+        g_ncat = 0;
+        enter(1, NOWHERE);
+        g_ncat = 0;
+        enter(2, NOWHERE);
+        CHECK(g_ncat == 0);
+
+        /* The third does -- and it is a real mood change, so the track moves
+           with the picture. A fallback that changed the wallpaper while the
+           music stayed put would put the two subscribers in disagreement, which
+           is the thing music_set_category_fn exists to prevent. */
+        g_last_track = 0;
+        enter(3, NOWHERE);
+        CHECK(g_ncat == 1);
+        CHECK(g_cats[0] == TC_HORROR);
+        CHECK(g_last_track != 0);
+
+        /* And it holds for the rest of the run -- one change, not seven. */
+        g_ncat = 0;
+        for (i = 4; i <= 10; i++) enter((unsigned) i, NOWHERE);
+        CHECK(g_ncat == 0);
+
+        /* A classified room takes back control immediately and resets the run,
+           so three more unclassified rooms are needed before it fires again. */
+        g_ncat = 0;
+        enter(11, CELLAR);
+        CHECK(g_ncat == 1);
+        CHECK(g_cats[0] == TC_UNDERGROUND);
+        /* Room 12 is a real mood change too, from UNDERGROUND to the generic
+           TC_NEUTRAL pool -- that switch is not the fallback and has held
+           since before this feature existed, so it is absorbed the same way
+           room 1's opening commit was. */
+        g_ncat = 0;
+        enter(12, NOWHERE);
+        g_ncat = 0;
+        enter(13, NOWHERE);
+        CHECK(g_ncat == 0);
+        enter(14, NOWHERE);
+        CHECK(g_ncat == 1);
+        CHECK(g_cats[0] == TC_HORROR);
+
+        /* A game whose column is TC_NEUTRAL never falls back, however long the
+           run -- that is how "this game has no default" is expressed. */
+        music_reset();
+        music_set_game(11, "870225");          /* Hypochondriac -> none */
+        g_ncat = 0;
+        enter(1, NOWHERE);
+        g_ncat = 0;                            /* absorb this session's opening commit */
+        for (i = 2; i <= 8; i++) enter((unsigned) i, NOWHERE);
+        CHECK(g_ncat == 0);
+
+        /* An unlisted game takes the same path for a different reason. */
+        music_reset();
+        music_set_game(0, "000000");
+        g_ncat = 0;
+        enter(1, NOWHERE);
+        g_ncat = 0;
+        for (i = 2; i <= 8; i++) enter((unsigned) i, NOWHERE);
+        CHECK(g_ncat == 0);
+
+        /* music_reset clears the run, so one game's dead zone cannot carry into
+           the next game's opening rooms. Without the reset, room 1 here would
+           be the fourth unclassified room in a row and the fallback would have
+           already fired. */
+        music_set_game(219, "870912");
+        enter(1, NOWHERE);
+        enter(2, NOWHERE);
+        music_reset();
+        music_set_backend(play);
+        music_set_isplaying(isplaying);
+        music_set_category_fn(rec_cat);
+        music_set_debounce_frames(0);
+        music_set_game(219, "870912");
+        g_ncat = 0;
+        enter(1, NOWHERE);
+        /* The reset's own session-opening commit fires (as every fresh session's
+           does), but to TC_NEUTRAL, not to HORROR -- confirming the run truly
+           started over rather than the dead zone carrying across the reset. */
+        CHECK(g_ncat == 1);
+        CHECK(g_cats[0] == TC_NEUTRAL);
+    }
 
     printf(fails ? "\n%d FAILURES\n" : "\nALL PASS\n", fails);
     return fails ? 1 : 0;

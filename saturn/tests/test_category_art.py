@@ -139,6 +139,36 @@ def main():
         print("      raise DISP_IMAGE_MAX in saturn/src/video/display.h")
         fails += 1
 
+    # A fallback naming a category with no pictures would be invisible at
+    # runtime -- display_set_dynamic_category resolves it to "no slot" and holds
+    # the previous picture, which is exactly the behaviour the fallback exists to
+    # replace. Same class of silent failure as the checks above.
+    DATA = ROOT / "src" / "classify" / "room_class_data.c"
+    if DATA.is_file():
+        data = DATA.read_text(encoding="utf-8", errors="replace")
+        table = re.search(r"GAME_GENRE\[\]\s*=\s*\{(.*?)\n\};", data, re.S)
+        if not table:
+            print("FAIL: no GAME_GENRE table in room_class_data.c")
+            fails += 1
+        else:
+            rows = re.findall(r"\{\s*\d+,\s*\"\d+\",\s*[^,]+,\s*(TC_\w+)\s*\}",
+                              table.group(1))
+            if not rows:
+                print("FAIL: GAME_GENRE rows carry no fallback column")
+                fails += 1
+            bad = []
+            for cat in sorted(set(rows)):
+                if cat == "TC_NEUTRAL":
+                    continue
+                img = "IMG_" + cat[len("TC_"):]
+                if img not in pool or not pool[img]:
+                    bad.append(f"{cat}: no pictures in {img}")
+            if bad:
+                print("FAIL: fallback categories with no picture pool:")
+                for b in bad:
+                    print(f"       {b}")
+                fails += 1
+
     if fails:
         return 1
 

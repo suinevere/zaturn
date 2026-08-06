@@ -104,10 +104,13 @@ const char* const* text_pos_phrases(int* n);
  | Description: genre_keywords returns the marker table used to infer an unlisted
  |   game's genre and its length; game_genre returns a story's authored genre
  |   mask, or 0 when it is not listed and inference should run instead.
+ |   game_fallback returns a story's default mood, or TC_NEUTRAL when it is not
+ |   listed or has none.
  | Author: suinevere
  ----------------------*/
 const GenreKeyword* text_genre_keywords(int* n);
 unsigned char       text_game_genre(unsigned int release, const char* serial);
+unsigned char       text_game_fallback(unsigned int release, const char* serial);
 
 /*----------------------
  | classifiers

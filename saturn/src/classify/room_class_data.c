@@ -202,9 +202,14 @@ static const GenreKeyword GENRE_KW[] = {
 
 /*----------------------
  | GameGenre / GAME_GENRE
- | Description: The authored genre of each shipped story, keyed by Z-header
- |   release number and 6-char serial -- the same key SOLUTIONS[] in
+ | Description: The authored genre and default mood of each shipped story, keyed
+ |   by Z-header release number and 6-char serial -- the same key SOLUTIONS[] in
  |   typeahead_solution.c and text_game_room_category use.
+ |
+ |   `fallback` is what the engine shows after a run of rooms whose text says
+ |   nothing. TC_NEUTRAL means this game has no default and keeps the older
+ |   behaviour of holding the previous picture. Hypochondriac carries TC_NEUTRAL
+ |   deliberately: guessing at an obscure game's mood is worse than leaving it.
  |
  |   The two Infocom Samplers are deliberately absent. A sampler carries excerpts
  |   of several games and genuinely changes genre partway through, so inference
@@ -215,37 +220,38 @@ typedef struct {
     unsigned short release;
     const char*    serial;
     unsigned char  genre;
+    unsigned char  fallback;
 } GameGenre;
 static const GameGenre GAME_GENRE[] = {
-    {   1, "151001", GN_FANTASY },  /* Adventure           */
-    {  97, "851218", GN_MODERN  },  /* Ballyhoo            */
-    {  23, "840809", GN_MODERN  },  /* Cutthroats          */
-    {  27, "831005", GN_MODERN  },  /* Deadline            */
-    {  29, "860820", GN_FANTASY },  /* Enchanter           */
-    {  59, "851108", GN_SCIFI   },  /* Hitchhiker's Guide  */
-    {  37, "861215", GN_MODERN  },  /* Hollywood Hijinx    */
-    {  11, "870225", GN_MODERN  },  /* Hypochondriac       */
-    {  22, "830916", GN_MODERN  },  /* Infidel             */
-    {  59, "860730", GN_SCIFI   },  /* Leather Goddesses   */
-    { 219, "870912", GN_MODERN  },  /* The Lurking Horror  */
-    {   9, "861022", GN_MODERN  },  /* Moonmist            */
-    {   2, "840207", GN_FANTASY },  /* Mini-Zork I         */
-    {  34, "871124", GN_FANTASY },  /* Mini-Zork I         */
-    {   2, "871123", GN_FANTASY },  /* Mini-Zork II        */
-    {  26, "870730", GN_MODERN  },  /* Plundered Hearts    */
-    {  37, "851003", GN_SCIFI   },  /* Planetfall          */
-    {  16, "850603", GN_MODERN  },  /* Seastalker          */
-    {  15, "851108", GN_FANTASY },  /* Sorcerer            */
-    {  87, "860904", GN_FANTASY },  /* Spellbreaker        */
-    {  17, "821021", GN_SCIFI   },  /* Starcross           */
-    { 107, "870430", GN_SCIFI   },  /* Stationfall         */
-    {  14, "841005", GN_MODERN  },  /* Suspect             */
-    {   8, "840521", GN_SCIFI   },  /* Suspended           */
-    {  69, "850920", GN_FANTASY },  /* Wishbringer         */
-    {  22, "840924", GN_MODERN  },  /* The Witness         */
-    {  88, "840726", GN_FANTASY },  /* Zork I              */
-    {  48, "840904", GN_FANTASY },  /* Zork II             */
-    {  17, "840727", GN_FANTASY },  /* Zork III            */
+    {   1, "151001", GN_FANTASY, TC_UNDERGROUND },  /* Adventure           */
+    {  97, "851218", GN_MODERN , TC_MYSTERY     },  /* Ballyhoo            */
+    {  23, "840809", GN_MODERN , TC_NAUTICAL    },  /* Cutthroats          */
+    {  27, "831005", GN_MODERN , TC_MYSTERY     },  /* Deadline            */
+    {  29, "860820", GN_FANTASY, TC_MAGIC       },  /* Enchanter           */
+    {  59, "851108", GN_SCIFI  , TC_SCIFI       },  /* Hitchhiker's Guide  */
+    {  37, "861215", GN_MODERN , TC_HOUSE       },  /* Hollywood Hijinx    */
+    {  11, "870225", GN_MODERN , TC_NEUTRAL     },  /* Hypochondriac       */
+    {  22, "830916", GN_MODERN , TC_DESERT      },  /* Infidel             */
+    {  59, "860730", GN_SCIFI  , TC_SCIFI       },  /* Leather Goddesses   */
+    { 219, "870912", GN_MODERN , TC_HORROR      },  /* The Lurking Horror  */
+    {   9, "861022", GN_MODERN , TC_MYSTERY     },  /* Moonmist            */
+    {   2, "840207", GN_FANTASY, TC_UNDERGROUND },  /* Mini-Zork I         */
+    {  34, "871124", GN_FANTASY, TC_UNDERGROUND },  /* Mini-Zork I         */
+    {   2, "871123", GN_FANTASY, TC_UNDERGROUND },  /* Mini-Zork II        */
+    {  26, "870730", GN_MODERN , TC_NAUTICAL    },  /* Plundered Hearts    */
+    {  37, "851003", GN_SCIFI  , TC_SCIFI       },  /* Planetfall          */
+    {  16, "850603", GN_MODERN , TC_NAUTICAL    },  /* Seastalker          */
+    {  15, "851108", GN_FANTASY, TC_MAGIC       },  /* Sorcerer            */
+    {  87, "860904", GN_FANTASY, TC_MAGIC       },  /* Spellbreaker        */
+    {  17, "821021", GN_SCIFI  , TC_SCIFI       },  /* Starcross           */
+    { 107, "870430", GN_SCIFI  , TC_SCIFI       },  /* Stationfall         */
+    {  14, "841005", GN_MODERN , TC_MYSTERY     },  /* Suspect             */
+    {   8, "840521", GN_SCIFI  , TC_SCIFI       },  /* Suspended           */
+    {  69, "850920", GN_FANTASY, TC_TOWN        },  /* Wishbringer         */
+    {  22, "840924", GN_MODERN , TC_MYSTERY     },  /* The Witness         */
+    {  88, "840726", GN_FANTASY, TC_UNDERGROUND },  /* Zork I              */
+    {  48, "840904", GN_FANTASY, TC_UNDERGROUND },  /* Zork II             */
+    {  17, "840727", GN_FANTASY, TC_UNDERGROUND },  /* Zork III            */
 };
 
 /*----------------------
@@ -279,4 +285,23 @@ unsigned char text_game_genre(unsigned int release, const char* serial) {
             memcmp(GAME_GENRE[i].serial, serial, 6) == 0)
             return GAME_GENRE[i].genre;
     return 0;
+}
+
+/*----------------------
+ | text_game_fallback
+ | Description: Looks up a story's default mood by release and 6-char serial.
+ | Author: suinevere
+ | Dependencies: string.h (memcmp)
+ | Globals: GAME_GENRE
+ | Params: release -- Z-machine release number; serial -- the 6-char game serial
+ | Returns: the TC_* default, or TC_NEUTRAL when the story is not listed
+ ----------------------*/
+unsigned char text_game_fallback(unsigned int release, const char* serial) {
+    int i;
+    if (!serial) return TC_NEUTRAL;
+    for (i = 0; i < (int)(sizeof GAME_GENRE / sizeof GAME_GENRE[0]); i++)
+        if (GAME_GENRE[i].release == release &&
+            memcmp(GAME_GENRE[i].serial, serial, 6) == 0)
+            return GAME_GENRE[i].fallback;
+    return TC_NEUTRAL;
 }

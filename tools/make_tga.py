@@ -22,17 +22,17 @@ export:
 The TGA is written by hand because PIL re-optimizes the palette on save, which
 silently undoes constraint 2.
 
-Sources that are not exactly 320x224, or whose name would not survive ISO9660
-8.3 truncation, are reported and skipped rather than aborting the run -- the
-build calls this on every compile and one bad file must not stop the rest.
+Sources that are not exactly 320x224 are reported and skipped rather than
+aborting the run -- the build calls this on every compile and one bad file
+must not stop the rest.
 
-The source tree is one folder per text category (tools/assets/png/WILDER/,
-/TOWN/, ...) but the disc is flat: /TGA holds every picture side by side, and
-display.c's pools name them individually. So this walks subfolders and writes
-everything into one destination folder. The folder a picture came from carries
-no meaning here -- it is a filing convention for humans, and the naming rule
-(stem = folder name, truncated to 7 characters, plus a 1..N index) is what
-actually ties a file to its category.
+The source tree is one folder per mood (tools/assets/png/WILDER/, /TOWN/,
+...) and the disc keeps that shape: each mood gets its own folder under
+saturn/cd/data/TGA, holding a gapless 01.TGA..NN.TGA run. The first path
+component under the source root names the mood; anything below that is
+provenance and is flattened away. Naming disc files by position rather than
+by source filename is what lets category_art.inc synthesise a filename from
+a mood and an index instead of scanning the disc at boot -- see write_inc.
 """
 import struct
 import sys
@@ -40,10 +40,14 @@ from pathlib import Path
 
 from PIL import Image
 
+REPO = Path(__file__).resolve().parent.parent
 WIDTH, HEIGHT = 320, 224
-MAX_STEM = 8  # ISO9660 8.3; the build passes --norock to xorrisofs
 SOURCE_EXT = (".png", ".jpg", ".jpeg")
-IMAGE_MAX = 40  # DISP_IMAGE_MAX in saturn/src/video/display.h -- extras never register
+
+# TC_* enum order, saturn/src/sound/music.h:45. None carries no art.
+ENUM_ORDER = [None, "WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
+              "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE",
+              None, None]
 
 
 def encode_tga(im):
@@ -96,80 +100,100 @@ def convert_one(src, dst):
     return ("wrote", f"{dst.name}: {w}x{h} 8bpp, index 0 reserved, {len(blob)} bytes")
 
 
-def batch(srcdir, dstdir):
-    """Convert every PNG in srcdir into dstdir. Returns the number written."""
-    srcdir, dstdir = Path(srcdir), Path(dstdir)
-    if not srcdir.is_dir():
-        print(f"  skip  {srcdir} does not exist -- nothing to convert")
-        return 0
+def mood_of(src_root, path):
+    """
+    ----------------------
+    | mood_of
+    | Description: The mood folder a source picture belongs to: the first path
+    |   component under the source root.
+    | Author: suinevere
+    | Dependencies: N/A
+    | Globals: N/A
+    | Params: src_root -- the source PNG tree root; path -- a source picture's path
+    | Returns: the mood name (str)
+    ----------------------
+    """
+    return path.relative_to(src_root).parts[0]
 
-    # rglob, not iterdir: the sources are filed one folder per category and the
-    # disc is flat. Sorted by the name that lands on the disc rather than by
-    # path, so two folders colliding on a stem are reported next to each other.
-    sources = sorted((p for p in srcdir.rglob("*")
-                      if p.is_file() and p.suffix.lower() in SOURCE_EXT),
-                     key=lambda p: (p.stem.upper(), str(p)))
-    if not sources:
-        print(f"  skip  no source images in {srcdir}")
-        return 0
 
-    written = 0
-    claimed = {}
-    for src in sources:
-        stem = src.stem.upper()
-        if len(stem) > MAX_STEM:
-            print(f"  skip  {src.name}: name over {MAX_STEM} characters "
-                  f"(ISO9660 8.3); rename it")
-            continue
+def convert_tree(src_root, dst_root):
+    """
+    ----------------------
+    | convert_tree
+    | Description: Convert every source picture under src_root into
+    |   dst_root/<MOOD>/NN.TGA, replacing each mood's existing TGAs first.
+    | Author: suinevere
+    | Dependencies: PIL.Image, encode_tga
+    | Globals: WIDTH, HEIGHT, SOURCE_EXT
+    | Params: src_root -- source PNG tree (tools/assets/png); dst_root -- disc
+    |   TGA tree (saturn/cd/data/TGA)
+    | Returns: dict mapping mood name to the number of pictures written
+    ----------------------
+    """
+    src_root, dst_root = Path(src_root), Path(dst_root)
+    if not src_root.is_dir():
+        print(f"  skip  {src_root} does not exist -- nothing to convert")
+        return {}
 
-        # Flattening means two folders can name the same picture, and the second
-        # would silently overwrite the first on the disc -- one category's art
-        # quietly becoming another's.
-        if stem in claimed:
-            print(f"  skip  {src.relative_to(srcdir)}: {stem}.TGA already claimed "
-                  f"by {claimed[stem]}; the disc is flat, so stems must be unique")
-            continue
-        claimed[stem] = str(src.relative_to(srcdir))
+    counts = {}
+    for mood in sorted({p.name for p in src_root.iterdir() if p.is_dir()}):
+        out_dir = dst_root / mood
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for old in out_dir.glob("*.TGA"):
+            old.unlink()
 
-        dst = dstdir / (stem + ".TGA")
-        if dst.exists() and dst.stat().st_mtime >= src.stat().st_mtime:
-            print(f"  ok    {dst.name} up to date")
-            continue
+        sources = sorted(
+            p for p in (src_root / mood).rglob("*")
+            if p.suffix.lower() in SOURCE_EXT
+        )
+        n = 0
+        for src in sources:
+            if n >= 99:
+                print(f"  {mood}: more than 99 pictures, ignoring {src.name}")
+                continue
+            try:
+                im = Image.open(src).convert("RGB")
+            except Exception as exc:
+                print(f"  skipped {src}: {exc}")
+                continue
+            if im.size != (WIDTH, HEIGHT):
+                print(f"  skipped {src}: {im.size} is not {WIDTH}x{HEIGHT}")
+                continue
+            n += 1
+            (out_dir / f"{n:02d}.TGA").write_bytes(encode_tga(im))
+        counts[mood] = n
+        print(f"  {mood}: {n}")
+    return counts
 
-        try:
-            status, message = convert_one(src, dst)
-        except AssertionError:
-            # A real encoder bug (e.g. palette-index-0 leaked through, or a
-            # palette overflow) must still abort the run loudly -- swallowing
-            # it here would silently ship a TGA that punches transparent
-            # holes through the VDP2 scroll screen.
-            raise
-        except Exception as exc:
-            print(f"  skip  {src.name}: unreadable ({exc})")
-            continue
-        print(f"  {'wrote' if status == 'wrote' else 'skip '} {message}")
-        if status == "wrote":
-            written += 1
 
-    total = sum(1 for _ in dstdir.glob("*.TGA")) if dstdir.is_dir() else 0
-    if total > IMAGE_MAX:
-        print(f"  WARN  {total} TGAs present but only {IMAGE_MAX} can register; "
-              f"the disc scans them in ISO9660 (alphabetical) order and stops "
-              f"after {IMAGE_MAX}, so whichever files sort LAST alphabetically "
-              f"are unreachable -- not necessarily the newest ones. Raise "
-              f"DISP_IMAGE_MAX in saturn/src/video/display.h or remove a background.")
-
-    # A TGA nothing produces any more is dead weight on the disc and still eats a
-    # registration slot, so name it rather than leave it to be noticed later.
-    live = {p.stem.upper() for p in sources}
-    if dstdir.is_dir():
-        orphans = sorted(p.name for p in dstdir.glob("*.TGA")
-                         if p.stem.upper() not in live and p.stem.upper() != "SUINE")
-        if orphans:
-            print(f"  WARN  no source image builds these any more: "
-                  f"{', '.join(orphans)} -- delete them from {dstdir}")
-
-    return written
+def write_inc(counts, path):
+    """
+    ----------------------
+    | write_inc
+    | Description: Write the generated per-category art-count table consumed by
+    |   display.c.
+    | Author: suinevere
+    | Dependencies: N/A
+    | Globals: ENUM_ORDER
+    | Params: counts -- per-mood picture counts from convert_tree; path --
+    |   output .inc file path
+    | Returns: N/A
+    ----------------------
+    """
+    row = ", ".join(str(0 if m is None else counts.get(m, 0)) for m in ENUM_ORDER)
+    path.write_text(
+        "/*----------------------\n"
+        " | category_art.inc\n"
+        " | Description: How many pictures each text category carries on this disc.\n"
+        " |   GENERATED by tools/make_tga.py -- do not edit. Row order is the TC_*\n"
+        " |   enum order in sound/music.h; the three zero rows are TC_NEUTRAL,\n"
+        " |   TC_DANGER and TC_TRIUMPH, which hold whatever is showing.\n"
+        " | Author: suinevere\n"
+        " ----------------------*/\n"
+        "static const unsigned char CATEGORY_ART_N[TEXT_NUM_CATEGORIES] = {\n"
+        f"    {row}\n"
+        "};\n"
+    )
 
 
 def main(argv):
@@ -179,7 +203,8 @@ def main(argv):
 
     src, dst = Path(argv[1]), Path(argv[2])
     if src.is_dir() or dst.suffix.lower() != ".tga":
-        batch(src, dst)
+        counts = convert_tree(src, dst)
+        write_inc(counts, REPO / "saturn" / "src" / "video" / "category_art.inc")
         return 0
 
     status, message = convert_one(src, dst)

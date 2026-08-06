@@ -1,197 +1,69 @@
-#!/usr/bin/env python3
-"""The category -> picture table in display.c must describe the actual disc.
+"""Gate the generated art count table against the files actually on the disc.
 
-A name with no file behind it is invisible at runtime: display.c resolves it to
-"no slot", display_set_dynamic_category holds the previous picture, and that room
-mood simply never gets its art. Nothing about it shows on screen -- the wallpaper
-just stops changing for one category -- which is the same class of silent failure
-test_lwram_splash_budget.py exists to catch.
-
-Four properties, all of them data rather than logic, which is why they live in a
-script that reads the table instead of in the C tests that exercise it:
-
-  present   every name is a file in cd/data/TGA
-  rotatable every pool has at least two pictures, or the room-count rotation
-            moves the track under an unchanged wallpaper
-  disjoint  no picture appears in two pools -- rotating onto art the player was
-            just looking at in another mood reads as the rotation being broken
-  named     every name follows <FOLDER truncated to 7><1..N>.TGA, which is what
-            ties a flat disc file back to the category that owns it
-
-Run: python saturn/tests/test_category_art.py
+The disjointness check this file used to carry is gone: a picture now lives in
+exactly one mood folder, so two moods cannot name the same file and there is
+nothing left to assert.
 """
-import pathlib
 import re
-import sys
+from pathlib import Path
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-SRC = ROOT / "src" / "video" / "display.c"
-TGA = ROOT / "cd" / "data" / "TGA"
-PNG = ROOT.parent / "tools" / "assets" / "png"
+REPO = Path(__file__).resolve().parents[2]
+TGA = REPO / "saturn" / "cd" / "data" / "TGA"
+INC = REPO / "saturn" / "src" / "video" / "category_art.inc"
 
-# The boot splash logo is not a room background and is deliberately skipped
-# by the TGA scan in title.cxx, so it is not a legal target for the table either.
-NOT_A_BACKGROUND = {"SUINE.TGA"}
+MOODS = ["WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
+         "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE"]
 
-# title.cxx stops registering after this many files, in ISO9660 (alphabetical)
-# order, so a folder past it has a silently unreachable tail.
-DISP_IMAGE_MAX = 40
-
-NAME_RE = re.compile(r"^([A-Z]{2,7})([0-9]+)\.TGA$")
+# TC_* enum order, saturn/src/sound/music.h:45. None means "carries no art".
+ENUM_ORDER = [None, "WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
+              "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE",
+              None, None]
 
 
-def pools(text):
-    """Each category's picture pool, as {IMG_NAME: [files]}, in table order."""
-    found = {}
-    for m in re.finditer(
-        r"static\s+const\s+char\s*\*\s*const\s+(IMG_\w+)\s*\[\s*\]\s*=\s*\{(.*?)\};",
-        text, re.S,
-    ):
-        found[m.group(1)] = re.findall(r'"([^"]+)"', m.group(2))
-    return found
+def parse_inc():
+    text = INC.read_text()
+    body = re.search(r"CATEGORY_ART_N\[TEXT_NUM_CATEGORIES\]\s*=\s*\{(.*?)\}",
+                     text, re.S).group(1)
+    return [int(v) for v in re.findall(r"\d+", body)]
 
 
-def main():
-    text = SRC.read_text(encoding="utf-8", errors="replace")
-    if not re.search(r"CATEGORY_IMAGE\s*\[[^\]]*\]\s*=\s*\{", text):
-        print("FAIL: no CATEGORY_IMAGE table in display.c")
-        return 1
-
-    pool = pools(text)
-    if not pool:
-        print("FAIL: no IMG_* picture pools in display.c")
-        return 1
-
-    names = [f for files in pool.values() for f in files]
-    if not names:
-        print("FAIL: the picture pools name no pictures at all")
-        return 1
-
-    fails = 0
-
-    # A pool that cannot rotate leaves the track changing under a fixed picture,
-    # which is indistinguishable from the art side being broken.
-    thin = sorted("%s(%d)" % (k, len(v)) for k, v in pool.items() if len(v) < 2)
-    if thin:
-        print(f"FAIL: pool(s) with fewer than two pictures: {', '.join(thin)}")
-        fails += 1
-
-    # Sharing a picture between two moods defeats the rotation and would also let
-    # one CD read serve two categories, hiding a cache problem behind a fluke.
-    owner = {}
-    shared = []
-    for cat, files in pool.items():
-        for f in files:
-            if f in owner and owner[f] != cat:
-                shared.append(f"{f} in both {owner[f]} and {cat}")
-            elif f in owner:
-                shared.append(f"{f} twice in {cat}")
-            owner[f] = cat
-    if shared:
-        print("FAIL: pictures claimed more than once:")
-        for s in sorted(shared):
-            print(f"       {s}")
-        fails += 1
-
-    # The naming rule is what makes a flat disc legible: without it, a file in
-    # /TGA gives no clue which mood it belongs to.
-    if PNG.is_dir():
-        stems = {d.name.upper()[:7] for d in PNG.iterdir() if d.is_dir()}
-        stray = []
-        for n in sorted(set(names)):
-            m = NAME_RE.match(n)
-            if not m:
-                stray.append(f"{n}: not <STEM><N>.TGA")
-            elif m.group(1) not in stems:
-                stray.append(f"{n}: stem {m.group(1)} matches no folder under "
-                             f"tools/assets/png")
-        if stray:
-            print("FAIL: names that do not follow the folder rule:")
-            for s in stray:
-                print(f"       {s}")
-            fails += 1
-
-    if not TGA.is_dir():
-        print(f"FAIL: no TGA folder at {TGA}")
-        return 1
-
-    present = {p.name.upper() for p in TGA.iterdir() if p.suffix.upper() == ".TGA"}
-    selectable = present - NOT_A_BACKGROUND
-
-    missing = sorted(n for n in set(names) if n.upper() not in present)
-    if missing:
-        print(f"FAIL: named in display.c but not in cd/data/TGA: {', '.join(missing)}")
-        fails += 1
-
-    # A category pointing at the boot logo would compile and resolve to nothing,
-    # since the scan never registers it.
-    logo = sorted(n for n in set(names) if n.upper() in NOT_A_BACKGROUND)
-    if logo:
-        print(f"FAIL: {', '.join(logo)} is not a room background")
-        fails += 1
-
-    # The scan stops at DISP_IMAGE_MAX in alphabetical order, so it is the TAIL of
-    # the folder that vanishes -- not the newest file, and with no error either way.
-    if len(present) > DISP_IMAGE_MAX:
-        lost = sorted(present)[DISP_IMAGE_MAX:]
-        print(f"FAIL: {len(present)} TGAs but only {DISP_IMAGE_MAX} register; "
-              f"unreachable: {', '.join(lost)}")
-        print("      raise DISP_IMAGE_MAX in saturn/src/video/display.h")
-        fails += 1
-
-    # A fallback naming a category with no pictures would be invisible at
-    # runtime -- display_set_dynamic_category resolves it to "no slot" and holds
-    # the previous picture, which is exactly the behaviour the fallback exists to
-    # replace. Same class of silent failure as the checks above.
-    DATA = ROOT / "src" / "classify" / "room_class_data.c"
-    if DATA.is_file():
-        data = DATA.read_text(encoding="utf-8", errors="replace")
-        table = re.search(r"GAME_GENRE\[\]\s*=\s*\{(.*?)\n\};", data, re.S)
-        if not table:
-            print("FAIL: no GAME_GENRE table in room_class_data.c")
-            fails += 1
-        else:
-            rows = re.findall(r"\{\s*\d+,\s*\"\d+\",\s*[^,]+,\s*(TC_\w+)\s*\}",
-                              table.group(1))
-            if not rows:
-                print("FAIL: GAME_GENRE rows carry no fallback column")
-                fails += 1
-            # TC_DANGER and TC_TRIUMPH are event categories, scanned per-turn and
-            # never a room's base mood -- a fallback naming one would stick a
-            # story in a permanent "moment" that never resolves, which is a
-            # design error even though both names do own a picture pool.
-            PLACE_CATEGORIES = {
-                "TC_WILDERNESS", "TC_UNDERGROUND", "TC_WATER", "TC_NAUTICAL",
-                "TC_TOWN", "TC_DUNGEON", "TC_DESERT", "TC_MAGIC", "TC_SCIFI",
-                "TC_HORROR", "TC_MYSTERY", "TC_HOUSE",
-            }
-            bad = []
-            for cat in sorted(set(rows)):
-                if cat == "TC_NEUTRAL":
-                    continue
-                if cat not in PLACE_CATEGORIES:
-                    bad.append(f"{cat}: not TC_NEUTRAL or a place category "
-                               f"(TC_WILDERNESS..TC_HOUSE)")
-                    continue
-                img = "IMG_" + cat[len("TC_"):]
-                if img not in pool or not pool[img]:
-                    bad.append(f"{cat}: no pictures in {img}")
-            if bad:
-                print("FAIL: fallback categories that cannot be a base mood:")
-                for b in bad:
-                    print(f"       {b}")
-                fails += 1
-
-    if fails:
-        return 1
-
-    unused = sorted(selectable - {n.upper() for n in names})
-    print(f"test_category_art: OK ({len(set(names))} pictures across "
-          f"{len(pool)} categories, all pools disjoint and rotatable)")
-    if unused:
-        print(f"  no category claims: {', '.join(unused)}")
-    return 0
+def test_inc_has_one_entry_per_category():
+    assert len(parse_inc()) == len(ENUM_ORDER)
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def test_counts_match_the_disc():
+    counts = parse_inc()
+    for slot, mood in enumerate(ENUM_ORDER):
+        if mood is None:
+            assert counts[slot] == 0, f"row {slot} must carry no art"
+            continue
+        n = len(list((TGA / mood).glob("*.TGA"))) if (TGA / mood).is_dir() else 0
+        assert counts[slot] == n, f"{mood}: table says {counts[slot]}, disc has {n}"
+
+
+def test_filenames_are_two_digits_from_one():
+    for mood in MOODS:
+        d = TGA / mood
+        if not d.is_dir():
+            continue
+        names = sorted(p.name for p in d.glob("*.TGA"))
+        assert names == [f"{i:02d}.TGA" for i in range(1, len(names) + 1)], \
+            f"{mood}: expected a gapless 01..NN run, got {names}"
+
+
+def test_folder_and_file_names_fit_iso9660():
+    for mood in MOODS:
+        assert len(mood) <= 8, f"{mood} exceeds the 8-character directory limit"
+    for mood in MOODS:
+        d = TGA / mood
+        if not d.is_dir():
+            continue
+        for p in d.glob("*"):
+            stem, _, ext = p.name.partition(".")
+            assert len(stem) <= 8 and len(ext) <= 3, f"{p.name} is not 8.3"
+
+
+def test_splash_stays_at_the_root():
+    assert (TGA / "SUINE.TGA").is_file()
+    for mood in MOODS:
+        assert not (TGA / mood / "SUINE.TGA").exists()

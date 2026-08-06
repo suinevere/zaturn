@@ -502,19 +502,35 @@ git commit -m "display: encode image slots as category and index so filenames ar
 - Consumes: `display_slot_valid` (Task 2).
 - Produces: no new API. This task is a correctness sweep.
 
-The slot space is now sparse: slot 1007 is valid while 1050 may not be. Every
-surviving `slot < g_image_count` is a latent bug that shows only as a wallpaper
-silently failing to appear. These are the five sites, enumerated so none is
-missed:
+Two separate defects live in the same variable, and both must go in this task.
+
+**First, `g_image_count` is dead.** Task 2 deleted `display_set_images`, which was
+its only writer, so the global is now permanently `0` while
+`display_image_count()` computes the real total from `CATEGORY_ART_N`. Every site
+still reading the global therefore behaves as though the disc carries no art at
+all — `display_defaults` takes its no-art branch, Dynamic is never selected, and
+**no room picture ever appears**. This is a live break, not stale logic.
+
+Delete the `static int g_image_count` declaration outright. Every "is there any
+art" question routes through `display_image_count()` instead.
+
+**Second, the slot space is now sparse**: slot 1003 is valid while 1050 is not,
+so any surviving `slot < count` comparison is a latent bug that shows only as a
+wallpaper silently failing to appear.
+
+These are all eight sites, enumerated so none is missed. Line numbers are as of
+commit `7b6a8b7`:
 
 | Site | Function | Change |
 |---|---|---|
-| `display.c:230` | `display_dynamic_slot` | `g_dyn_pin >= 0 && g_dyn_pin < g_image_count` → `display_slot_valid(g_dyn_pin)` |
-| `display.c:231` | `display_dynamic_slot` | same for `g_dyn_slot` |
-| `display.c:257` | `display_pin_dynamic_slot` | `(slot >= 0 && slot < g_image_count)` → `display_slot_valid(slot)` |
-| `display.c:576` | `display_defaults` | `g_image_count > 0` — **keep**, this is the "any art at all" question |
-| `display.c:597` | `display_is_image` | `d->image >= 0 && d->image < g_image_count` → `display_slot_valid(d->image)` |
-| `display.c:685` | `display_cycle_palette` | `g_image_count == 0` — **keep**, same question |
+| `display.c:249` | `display_dynamic_slot` | `g_dyn_pin >= 0 && g_dyn_pin < g_image_count` → `display_slot_valid(g_dyn_pin)` |
+| `display.c:250` | `display_dynamic_slot` | same for `g_dyn_slot` |
+| `display.c:276` | `display_pin_dynamic_slot` | `(slot >= 0 && slot < g_image_count)` → `display_slot_valid(slot)` |
+| `display.c:570` | `display_defaults` | `g_image_count > 0` → `display_image_count() > 0` |
+| `display.c:591` | `display_is_image` | `d->image >= 0 && d->image < g_image_count` → `display_slot_valid(d->image)` |
+| `display.c:679` | `display_cycle_palette` | `g_image_count == 0` → `display_image_count() == 0` |
+| `display.c:833` | `display_decode` | `g_image_count > 0` → `display_image_count() > 0` |
+| `display.c:840` | `display_decode` | same |
 
 - [ ] **Step 1: Write the failing test**
 
@@ -524,7 +540,12 @@ static void test_sparse_slot_space(void) {
     int good = display_slot_make(TC_HOUSE, 1);
     int gap  = TC_HOUSE * 100;              /* index 0: never a file */
 
+    /* The disc carries art, so the default appearance must be Dynamic. This is
+       what a dead g_image_count silently broke: every "any art at all" question
+       answered no, and no room picture ever appeared. */
+    assert(display_image_count() > 0);
     display_defaults(&d);
+    assert(d.palette == DISP_PAL_DYNAMIC);
 
     d.image = good;
     assert(display_is_image(&d));
@@ -558,12 +579,17 @@ Change exactly the four rows marked → in the table above. Leave the two marked
 Run: `gcc -O2 -I saturn/src -o /tmp/td saturn/tests/test_display.c saturn/src/video/display.c && /tmp/td`
 Expected: PASS.
 
-- [ ] **Step 5: Verify no upper-bound test survives**
+- [ ] **Step 5: Verify the dead global is gone**
 
 Run: `grep -n "g_image_count" saturn/src/video/display.c`
-Expected: exactly two hits, both `> 0` or `== 0` comparisons, at `display_defaults`
-and `display_cycle_palette`. Any `<` comparison is a missed site — fix it and
-re-run Step 4.
+Expected: **no hits at all.** The global is deleted and every question it used to
+answer now goes through `display_image_count()` or `display_slot_valid()`. A
+surviving hit is a missed site — fix it and re-run Step 4.
+
+Then run: `grep -n "< *display_image_count()" saturn/src/video/display.c`
+Expected: no hits. `display_image_count()` answers "is there any art", never "is
+this slot in range" — the slot space is sparse and only `display_slot_valid` can
+answer that.
 
 - [ ] **Step 6: Commit**
 

@@ -33,6 +33,11 @@ component under the source root names the mood; anything below that is
 provenance and is flattened away. Naming disc files by position rather than
 by source filename is what lets category_art.inc synthesise a filename from
 a mood and an index instead of scanning the disc at boot -- see write_inc.
+
+A source image that sits at the root of the source tree, not inside a mood
+folder, is not part of any mood's rotation -- SUINE.PNG (the boot splash) is
+the one that exists today. Root-level sources keep their own stem instead of
+a position: <STEM>.TGA, upper-cased, same 8.3 length rule as everything else.
 """
 import struct
 import sys
@@ -42,6 +47,7 @@ from PIL import Image
 
 REPO = Path(__file__).resolve().parent.parent
 WIDTH, HEIGHT = 320, 224
+MAX_STEM = 8  # ISO9660 8.3; the build passes --norock to xorrisofs
 SOURCE_EXT = (".png", ".jpg", ".jpeg")
 
 # TC_* enum order, saturn/src/sound/music.h:45. None carries no art.
@@ -116,15 +122,44 @@ def mood_of(src_root, path):
     return path.relative_to(src_root).parts[0]
 
 
+def _convert_source(src, dst):
+    """
+    ----------------------
+    | _convert_source
+    | Description: Convert one source picture straight to dst, open, encode and
+    |   write as a single guarded unit so one bad file costs one picture, not
+    |   the run. AssertionError (a genuine encoder bug) is left to propagate.
+    | Author: suinevere
+    | Dependencies: PIL.Image, encode_tga
+    | Globals: WIDTH, HEIGHT
+    | Params: src -- source picture path; dst -- destination .TGA path
+    | Returns: True if dst was written, False if src was skipped
+    ----------------------
+    """
+    try:
+        im = Image.open(src).convert("RGB")
+        if im.size != (WIDTH, HEIGHT):
+            print(f"  skipped {src}: {im.size} is not {WIDTH}x{HEIGHT}")
+            return False
+        dst.write_bytes(encode_tga(im))
+        return True
+    except AssertionError:
+        raise
+    except Exception as exc:
+        print(f"  skipped {src}: {exc}")
+        return False
+
+
 def convert_tree(src_root, dst_root):
     """
     ----------------------
     | convert_tree
     | Description: Convert every source picture under src_root into
-    |   dst_root/<MOOD>/NN.TGA, replacing each mood's existing TGAs first.
+    |   dst_root/<MOOD>/NN.TGA, replacing each mood's existing TGAs first, and
+    |   every root-level source (the boot splash) into dst_root/<STEM>.TGA.
     | Author: suinevere
-    | Dependencies: PIL.Image, encode_tga
-    | Globals: WIDTH, HEIGHT, SOURCE_EXT
+    | Dependencies: _convert_source
+    | Globals: SOURCE_EXT, MAX_STEM
     | Params: src_root -- source PNG tree (tools/assets/png); dst_root -- disc
     |   TGA tree (saturn/cd/data/TGA)
     | Returns: dict mapping mood name to the number of pictures written
@@ -151,18 +186,24 @@ def convert_tree(src_root, dst_root):
             if n >= 99:
                 print(f"  {mood}: more than 99 pictures, ignoring {src.name}")
                 continue
-            try:
-                im = Image.open(src).convert("RGB")
-            except Exception as exc:
-                print(f"  skipped {src}: {exc}")
-                continue
-            if im.size != (WIDTH, HEIGHT):
-                print(f"  skipped {src}: {im.size} is not {WIDTH}x{HEIGHT}")
-                continue
-            n += 1
-            (out_dir / f"{n:02d}.TGA").write_bytes(encode_tga(im))
+            if _convert_source(src, out_dir / f"{n + 1:02d}.TGA"):
+                n += 1
         counts[mood] = n
         print(f"  {mood}: {n}")
+
+    root_sources = sorted(
+        p for p in src_root.iterdir()
+        if p.is_file() and p.suffix.lower() in SOURCE_EXT
+    )
+    for src in root_sources:
+        stem = src.stem.upper()
+        if len(stem) > MAX_STEM:
+            print(f"  skip  {src.name}: name over {MAX_STEM} characters "
+                  f"(ISO9660 8.3); rename it")
+            continue
+        if _convert_source(src, dst_root / f"{stem}.TGA"):
+            print(f"  {stem}: wrote")
+
     return counts
 
 

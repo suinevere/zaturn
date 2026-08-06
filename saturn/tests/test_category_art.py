@@ -5,11 +5,19 @@ exactly one mood folder, so two moods cannot name the same file and there is
 nothing left to assert.
 """
 import re
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 TGA = REPO / "saturn" / "cd" / "data" / "TGA"
 INC = REPO / "saturn" / "src" / "video" / "category_art.inc"
+PNG = REPO / "tools" / "assets" / "png"
+
+# make_tga.py lives in tools/, which is not on sys.path by default.
+TOOLS = REPO / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+import make_tga  # noqa: E402
 
 MOODS = ["WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
          "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE"]
@@ -67,3 +75,11 @@ def test_splash_stays_at_the_root():
     assert (TGA / "SUINE.TGA").is_file()
     for mood in MOODS:
         assert not (TGA / mood / "SUINE.TGA").exists()
+
+
+def test_generator_reproduces_the_splash():
+    splash = TGA / "SUINE.TGA"
+    if splash.is_file():
+        splash.unlink()
+    make_tga.convert_tree(PNG, TGA)
+    assert splash.is_file(), "convert_tree must regenerate the root-level splash"

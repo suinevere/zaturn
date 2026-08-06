@@ -244,14 +244,24 @@ Append to `saturn/tests/test_display.c`, and add the call to `main`:
 
 ```c
 static void test_virtual_slots(void) {
-    int slot = display_slot_make(TC_HORROR, 7);
-    assert(slot == TC_HORROR * 100 + 7);
+    /* Indices are checked against the count this disc actually carries, so the
+       test does not go stale every time a mood gains a picture. */
+    int n    = display_category_image_count(TC_HORROR);
+    int slot = display_slot_make(TC_HORROR, n);
+    assert(n >= 1);
+    assert(slot == TC_HORROR * 100 + n);
     assert(display_slot_valid(slot));
-    assert(strcmp(display_image_file(slot), "HORROR/07.TGA") == 0);
-    assert(display_image_slot("HORROR/07.TGA") == slot);
+    {
+        char want[16];
+        sprintf(want, "HORROR/%02d.TGA", n);
+        assert(strcmp(display_image_file(slot), want) == 0);
+        assert(display_image_slot(want) == slot);
+    }
 
-    /* Index 0 is never a filename, and the sparse space rejects between moods. */
+    /* Index 0 is never a filename, one past the end is not carried, and the
+       sparse space rejects between moods. */
     assert(display_slot_make(TC_HORROR, 0) == DISP_IMAGE_NONE);
+    assert(display_slot_make(TC_HORROR, n + 1) == DISP_IMAGE_NONE);
     assert(!display_slot_valid(TC_HORROR * 100));
     assert(!display_slot_valid(-1));
 

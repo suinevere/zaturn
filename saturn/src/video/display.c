@@ -191,18 +191,6 @@ int display_slot_valid(int slot) {
     return display_slot_make(slot / SLOT_STRIDE, slot % SLOT_STRIDE) == slot;
 }
 
-/*----------------------
- | g_image_count
- | Description: How many pictures this disc carries in total, per
- |   display_image_count. Nothing writes it any more now that display_set_images is
- |   gone, so it stays at its zero initializer and the two gates that still read it
- |   (display_defaults, display_cycle_palette) always take their no-art branch --
- |   Dynamic is unreachable until a later pass routes those two through
- |   display_image_count() instead of this stale cache.
- | Author: suinevere
- ----------------------*/
-static int g_image_count = 0;
-
 static int image_slot_of(const char *name);   /* defined with the save-blob helpers */
 
 /*----------------------
@@ -242,13 +230,13 @@ void display_set_dynamic_category(int cat) {
  | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_dyn_slot, g_image_count
+ | Globals: g_dyn_slot, g_dyn_pin
  | Params: N/A
  | Returns: the Dynamic palette's image slot, or DISP_IMAGE_NONE
  ----------------------*/
 int display_dynamic_slot(void) {
-    if (g_dyn_pin >= 0 && g_dyn_pin < g_image_count) return g_dyn_pin;
-    if (g_dyn_slot >= 0 && g_dyn_slot < g_image_count) return g_dyn_slot;
+    if (display_slot_valid(g_dyn_pin)) return g_dyn_pin;
+    if (display_slot_valid(g_dyn_slot)) return g_dyn_slot;
     return DISP_IMAGE_NONE;
 }
 
@@ -269,12 +257,12 @@ int display_dynamic_slot(void) {
  |   DISP_IMAGE_NONE, or any slot this disc does not carry, clears the pin.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_dyn_pin, g_image_count
+ | Globals: g_dyn_pin
  | Params: slot -- the slot to hold Dynamic at, or DISP_IMAGE_NONE to release
  | Returns: N/A
  ----------------------*/
 void display_pin_dynamic_slot(int slot) {
-    g_dyn_pin = (slot >= 0 && slot < g_image_count) ? slot : DISP_IMAGE_NONE;
+    g_dyn_pin = display_slot_valid(slot) ? slot : DISP_IMAGE_NONE;
 }
 
 /*----------------------
@@ -538,7 +526,7 @@ const char *display_palette_name(const DisplayState *d) {
  | Returns: N/A
  ----------------------*/
 void display_defaults(DisplayState *d) {
-    if (g_image_count > 0) {
+    if (display_image_count() > 0) {
         /* Dynamic: the picture follows the room's mood. The shipped default. */
         d->palette = DISP_PAL_DYNAMIC;
         d->bg      = DISP_BG_BLACK;
@@ -557,9 +545,13 @@ void display_defaults(DisplayState *d) {
  | display_is_image
  | Description: True when the state's image index refers to a present image slot.
  | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: d -- the display state
+ | Returns: 1 when d->image names a picture this disc carries, else 0
  ----------------------*/
 int display_is_image(const DisplayState *d) {
-    return d->image >= 0 && d->image < g_image_count;
+    return display_slot_valid(d->image);
 }
 
 /*----------------------
@@ -636,7 +628,7 @@ void display_cycle_text(DisplayState *d, int dir) {
  |   either direction, which is the whole of what it should do.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_image_count
+ | Globals: N/A
  | Params: d -- the state to update; dir -- +1/-1
  | Returns: N/A
  ----------------------*/
@@ -646,8 +638,8 @@ void display_cycle_palette(DisplayState *d, int dir) {
     /* Dynamic holds index 0 on every disc, art or not, so the display_preset_*
        accessors above can stay single unconditional expressions. The cost is one
        unreachable entry to step past here, which is cheaper than the row changing
-       shape -- that would put the arithmetic behind g_image_count everywhere. */
-    if (next == DISP_PAL_DYNAMIC && g_image_count == 0)
+       shape -- that would put the arithmetic behind display_image_count() everywhere. */
+    if (next == DISP_PAL_DYNAMIC && display_image_count() == 0)
         next = step(next, dir, count);
     d->palette = next;
     d->bg      = display_preset_bg(next);
@@ -795,14 +787,14 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         if (buf[1] == DISP_BLOB_DYNAMIC) {
             /* Only sentinel 4 writes this, and only from a disc that had art.
                Reloaded onto one that has none, Dynamic has nothing to show. */
-            if (g_image_count > 0) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
+            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
         } else if (buf[1] == DISP_BLOB_IMAGE) {
             /* A blob from when the row let one picture be pinned. It cannot be
                honoured -- there is no palette index for a single picture any more
                -- so it lands on Dynamic, the one entry that still shows art at
                all. Reported as not-verbatim either way: the player is getting
                something other than what they saved. */
-            if (g_image_count > 0) d->palette = DISP_PAL_DYNAMIC;
+            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;
             ok = 0;
         } else if (buf[1] < DISP_PRESET_N) {
             /* Sentinels 2 and 3 predate Dynamic, so their colour-preset indices

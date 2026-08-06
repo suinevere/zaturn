@@ -74,23 +74,27 @@ static void test_preset_contents(void) {
 
 static void test_defaults_and_palette_name(void) {
     DisplayState d;
-    /* g_image_count has nothing left to set it now that display_set_images is
-       gone, so display_defaults always takes its no-art branch and falls to the
-       first colour preset -- there is no registered-art case left to cover
-       separately here. */
+    /* This disc carries art, so display_defaults lands on Dynamic -- the branch
+       that a dead g_image_count made unreachable. */
     display_defaults(&d);
-    assert(d.palette == PAL(0));                   /* IBM PC (MDA Monitor) */
+    assert(d.palette == DISP_PAL_DYNAMIC);
     assert(d.bg == DISP_BG_BLACK);
-    assert(d.text == DISP_TEXT_BRIGHT_GREEN);
-    assert(strcmp(display_palette_name(&d), display_preset_name(PAL(0))) == 0);
+    assert(d.text == DISP_TEXT_WHITE);
+    assert(d.image == DISP_IMAGE_NONE);   /* no category set yet in this test */
+    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
 
     /* Diverge from the preset -> Custom; restore -> the name comes back. */
     d.text = DISP_TEXT_CYAN;
     assert(strcmp(display_palette_name(&d), "Custom") == 0);
-    d.text = DISP_TEXT_BRIGHT_GREEN;
-    assert(strcmp(display_palette_name(&d), display_preset_name(PAL(0))) == 0);
+    d.text = DISP_TEXT_WHITE;
+    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
 
     /* The stored index disambiguates the collision: same colors, different name. */
+    d.palette = PAL(0);
+    d.bg      = display_preset_bg(PAL(0));
+    d.text    = display_preset_text(PAL(0));
+    d.image   = DISP_IMAGE_NONE;
+    assert(strcmp(display_palette_name(&d), display_preset_name(PAL(0))) == 0);
     d.palette = PAL(4);
     assert(strcmp(display_palette_name(&d), display_preset_name(PAL(4))) == 0);
 }
@@ -106,14 +110,10 @@ static void test_bg_name_and_is_image(void) {
     assert(strcmp(display_bg_name(&d), "Black") == 0);
 
     /* The Background row keeps naming a colour even when the image field holds a
-       real slot -- is_image itself still reads d->image against g_image_count,
-       which nothing sets any more, so a real slot cannot make it read true here
-       yet; a later pass that routes is_image through display_slot_valid instead
-       restores that path (and the true-case assertion this test is missing
-       until then). */
+       real slot. */
     d.image = display_slot_make(TC_HOUSE, 1);
     assert(strcmp(display_bg_name(&d), "Black") == 0);
-    assert(!display_is_image(&d));
+    assert(display_is_image(&d));
 }
 
 static void test_cycle_bg_stays_in_colors(void) {
@@ -187,49 +187,56 @@ static void test_guard_follows_bg_color_under_image(void) {
 static void test_cycle_palette(void) {
     DisplayState d;
     /* g_image_count is permanently zero now that nothing sets it, so Dynamic
-       (index 0) is unreachable and cycling steps straight over it -- including
-       across both wraps. */
-    display_defaults(&d);                  /* first colour preset */
-    assert(d.palette == PAL(0));
+       (index 0) is a normal stop on the row now that this disc's art makes it
+       reachable -- nothing skips it any more. */
+    display_defaults(&d);                  /* Dynamic */
+    assert(d.palette == DISP_PAL_DYNAMIC);
 
     display_cycle_palette(&d, 1);
-    assert(d.palette == PAL(1));
-    assert(d.bg == display_preset_bg(PAL(1)) && d.text == display_preset_text(PAL(1)));
-    assert(strcmp(display_palette_name(&d), "Apple II Plus") == 0);
-
-    display_cycle_palette(&d, -1);
     assert(d.palette == PAL(0));
+    assert(d.bg == display_preset_bg(PAL(0)) && d.text == display_preset_text(PAL(0)));
     assert(strcmp(display_palette_name(&d), "IBM PC (MDA)") == 0);
 
-    /* Wraps at both ends, skipping Dynamic on the way past. */
+    display_cycle_palette(&d, -1);
+    assert(d.palette == DISP_PAL_DYNAMIC);
+    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
+
+    /* Wraps at both ends; Dynamic is one of the stops, not skipped. */
     d.palette = PAL(DISP_PRESET_N - 1);    /* last colour preset */
     d.bg = display_preset_bg(d.palette); d.text = display_preset_text(d.palette);
     display_cycle_palette(&d, 1);
-    assert(d.palette == PAL(0));
+    assert(d.palette == DISP_PAL_DYNAMIC);
     display_cycle_palette(&d, -1);
     assert(d.palette == PAL(DISP_PRESET_N - 1));
 
     /* From a Custom state, cycling steps off the palette the custom was built on
        rather than re-entering at an end of the row. Forward from a custom of
        PAL(0) is therefore PAL(1), NOT PAL(0) again -- landing back on the base
-       would spend the press undoing the player's colours and go nowhere. */
-    display_defaults(&d);
-    d.text = DISP_TEXT_CYAN;               /* now Custom, base PAL(0) */
+       would spend the press undoing the player's colours and go nowhere. Built by
+       hand rather than through display_defaults, which now lands on Dynamic. */
+    d.palette = PAL(0);
+    d.bg      = display_preset_bg(PAL(0));
+    d.text    = DISP_TEXT_CYAN;            /* now Custom, base PAL(0) */
+    d.image   = DISP_IMAGE_NONE;
     assert(strcmp(display_palette_name(&d), "Custom") == 0);
     display_cycle_palette(&d, 1);
     assert(d.palette == PAL(1));
     assert(d.bg == display_preset_bg(PAL(1)) && d.text == display_preset_text(PAL(1)));
 
-    /* Backward off that same base is the wrap, since PAL(0) - 1 is Dynamic and
-       this disc has no art to show for it. */
-    display_defaults(&d);
-    d.text = DISP_TEXT_CYAN;
+    /* Backward off that same base steps onto Dynamic, PAL(0)'s neighbour on the
+       row now that this disc has art to show for it. */
+    d.palette = PAL(0);
+    d.bg      = display_preset_bg(PAL(0));
+    d.text    = DISP_TEXT_CYAN;
+    d.image   = DISP_IMAGE_NONE;
     display_cycle_palette(&d, -1);
-    assert(d.palette == PAL(DISP_PRESET_N - 1));
+    assert(d.palette == DISP_PAL_DYNAMIC);
 
     /* One press always leaves Custom behind, from either direction. */
-    display_defaults(&d);
-    d.text = DISP_TEXT_CYAN;
+    d.palette = PAL(0);
+    d.bg      = display_preset_bg(PAL(0));
+    d.text    = DISP_TEXT_CYAN;
+    d.image   = DISP_IMAGE_NONE;
     display_cycle_palette(&d, 1);
     assert(strcmp(display_palette_name(&d), "Custom") != 0);
 
@@ -300,8 +307,13 @@ static void test_custom_state_roundtrips(void) {
     DisplayState a, b;
     unsigned char buf[DISP_BLOB_BYTES];
 
-    display_defaults(&a);
-    a.text = DISP_TEXT_CYAN;                     /* diverged -> Custom */
+    /* Built on a colour preset by hand rather than through display_defaults,
+       which now lands on Dynamic -- the case that already has its own coverage
+       in test_blob_roundtrip. */
+    a.palette = PAL(0);
+    a.bg      = display_preset_bg(PAL(0));
+    a.text    = DISP_TEXT_CYAN;                   /* diverged -> Custom */
+    a.image   = DISP_IMAGE_NONE;
     assert(strcmp(display_palette_name(&a), "Custom") == 0);
 
     display_encode(&a, buf);
@@ -673,15 +685,39 @@ static void test_blob_roundtrip(void) {
         assert(b.image == DISP_IMAGE_NONE);
     }
 
-    /* A blob carrying the Dynamic marker is refused on this build: g_image_count
-       has nothing left to set it, so Dynamic is unreachable through
-       display_defaults too -- this constructs the marker by hand rather than by
-       going through it. */
+    /* A blob carrying the Dynamic marker decodes cleanly now that this disc's
+       art makes Dynamic reachable through display_defaults again. */
     a.palette = DISP_PAL_DYNAMIC;
     a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE; a.image = DISP_IMAGE_NONE;
     display_encode(&a, buf);
-    assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 0);
-    assert(b.palette != DISP_PAL_DYNAMIC);
+    assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
+    assert(b.palette == DISP_PAL_DYNAMIC);
+}
+
+static void test_sparse_slot_space(void) {
+    DisplayState d;
+    int good = display_slot_make(TC_HOUSE, 1);
+    int gap  = TC_HOUSE * 100;              /* index 0: never a file */
+
+    /* The disc carries art, so the default appearance must be Dynamic. This is
+       what a dead g_image_count silently broke: every "any art at all" question
+       answered no, and no room picture ever appeared. */
+    assert(display_image_count() > 0);
+    display_defaults(&d);
+    assert(d.palette == DISP_PAL_DYNAMIC);
+
+    d.image = good;
+    assert(display_is_image(&d));           /* impossible until the dead global goes */
+    d.image = gap;
+    assert(!display_is_image(&d));          /* a naive < count test passes this */
+    d.image = DISP_IMAGE_NONE;
+    assert(!display_is_image(&d));
+
+    display_pin_dynamic_slot(gap);
+    assert(display_dynamic_slot() != gap);
+    display_pin_dynamic_slot(good);
+    assert(display_dynamic_slot() == good);
+    display_pin_dynamic_slot(DISP_IMAGE_NONE);
 }
 
 int main(void) {
@@ -711,6 +747,7 @@ int main(void) {
     test_category_art();
     test_virtual_slots();
     test_blob_roundtrip();
+    test_sparse_slot_space();
     printf("test_display: OK\n");
     return 0;
 }

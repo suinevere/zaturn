@@ -485,6 +485,44 @@ int main(void) {
         CHECK(g_cats[0] == TC_NEUTRAL);
     }
 
+    /* ---- fix round 1: fallback must survive music_reset in PRODUCTION order ----
+       saturn/src/main.cxx calls music_set_game before music_reset on every game
+       load -- the reverse of every scripted sequence above. Before this fix,
+       music_reset unconditionally reset g_fallback_cat to TC_NEUTRAL, wiping out
+       what music_set_game had just set, with no later room ever re-deriving it:
+       the fallback was dead on the shipped disc. */
+    {
+        const char *NOWHERE = "Nowhere\nThere is nothing in particular here.";
+
+        music_reset();
+        music_set_backend(play);
+        music_set_isplaying(isplaying);
+        music_set_category_fn(rec_cat);
+        music_set_debounce_frames(0);
+        music_set_game(219, "870912");          /* The Lurking Horror -> HORROR */
+        music_reset();                          /* production order: set_game, then reset */
+
+        g_ncat = 0;
+        enter(1, NOWHERE);
+        g_ncat = 0;                             /* absorb this session's opening commit */
+        enter(2, NOWHERE);
+        enter(3, NOWHERE);
+        CHECK(g_ncat == 1);
+        CHECK(g_cats[0] == TC_HORROR);
+    }
+
+    /* ---- fix round 1: the authored genre must survive music_reset too ----
+       music_reset also calls room_class_reset, which wipes g_genre/g_genre_lock.
+       Same set_game-then-reset order, same root cause: Starcross's authored
+       SCIFI genre was silently discarded and every room fell back to runtime
+       keyword inference instead of the authored row. */
+    {
+        music_reset();
+        music_set_game(17, "821021");           /* Starcross -> authored SCIFI genre */
+        music_reset();                          /* production order: set_game, then reset */
+        CHECK(room_class_genre_locked() == 1);
+    }
+
     printf(fails ? "\n%d FAILURES\n" : "\nALL PASS\n", fails);
     return fails ? 1 : 0;
 }

@@ -520,12 +520,18 @@ void music_transition_flush(void) {
 
 /*----------------------
  | music_reset
- | Description: Clears all room / mix / latch state back to first-boot values and
- |   tells the backend to stop. Called for a new game and on soft-reset re-entry
- |   so a stale engine cannot leak a track into the menu.
+ | Description: Clears play state back to first-boot values and tells the backend
+ |   to stop. Does NOT clear which game is loaded -- g_release/g_serial survive it
+ |   on purpose, because main.cxx calls music_set_game before music_reset on every
+ |   load, so anything keyed off the story identity (the authored genre, the
+ |   fallback mood) is re-derived here rather than wiped, or it would be lost for
+ |   the whole session. Called for a new game and on soft-reset re-entry so a
+ |   stale engine cannot leak a track into the menu.
  | Author: suinevere
- | Dependencies: N/A (stops via g_play)
- | Globals: nearly all engine/mix state
+ | Dependencies: room_class.h (room_class_reset, room_class_set_game,
+ |   room_class_genre_locked), music.h (text_game_fallback); stops via g_play
+ | Globals: nearly all engine/mix state, including g_fallback_cat and
+ |   g_genre_was_locked which it re-derives from g_release/g_serial
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -536,7 +542,13 @@ void music_reset(void) {
     for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
     g_genre_was_locked = 0;
     g_neutral_rooms = 0;
-    g_fallback_cat = TC_NEUTRAL;
+    /* Reset clears play state, not which game is loaded. main.cxx calls
+       music_set_game before music_reset, so anything derived from the story
+       identity has to be re-derived here or it is lost for the whole session --
+       g_release and g_serial deliberately survive reset for exactly this. */
+    room_class_set_game(g_release, g_serial);
+    g_fallback_cat = text_game_fallback(g_release, g_serial);
+    g_genre_was_locked = room_class_genre_locked();
     g_active_cat = -1; g_pending_cat = -1; g_pending_track = 0; g_pending_frames = 0;
     g_pending_rotate = 0; g_same_cat_rooms = 0;
     g_seq_track = MUSIC_TRACK_MIN;

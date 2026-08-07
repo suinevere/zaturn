@@ -9,12 +9,14 @@ Description: The metric gate removes what is provably unusable; everything left
     Verdicts live in their own file rather than in the manifest, so a review
     session can be interrupted and resumed without a half-written manifest.
 Author: suinevere
-Dependencies: base64, json, pathlib, PIL
+Dependencies: base64, json, pathlib, PIL, art_status
 Globals: HAMMING_MAX
 """
 import base64
 import json
 from pathlib import Path
+
+import art_status
 
 HAMMING_MAX = 6
 
@@ -45,7 +47,7 @@ def sheet(mood, records, candidates_dir):
     Returns: the HTML as a string
     """
     mine = [r for r in records.values()
-            if r["mood"] == mood and r["status"] == "candidate"]
+            if r["mood"] == mood and r["status"] == art_status.CANDIDATE]
     mine.sort(key=lambda r: (r["donor"], r["noun"], r["id"]))
 
     cells = []
@@ -125,8 +127,11 @@ def dedup(records):
 def promote(verdicts, manifest, candidates_dir, png_dir):
     """Move accepted candidates into the source tree and record the outcome.
 
+    Description: A human reject is recorded as REJECTED, distinct from the
+        METRIC_REJECTED a failed metric gate writes -- the two must not blur
+        into one status, see art_status for why.
     Author: suinevere
-    Dependencies: pathlib
+    Dependencies: pathlib, art_status
     Globals: N/A
     Params: verdicts -- id -> "accept"/"reject"; manifest -- mutated in place;
         candidates_dir -- where the PNGs are; png_dir -- tools/assets/png
@@ -135,10 +140,10 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
     counts = {}
     for key, call in verdicts.items():
         rec = manifest.get(key)
-        if rec is None or rec["status"] != "candidate":
+        if rec is None or rec["status"] != art_status.CANDIDATE:
             continue
         if call != "accept":
-            rec["status"] = "rejected"
+            rec["status"] = art_status.REJECTED
             continue
 
         rel = Path(rec["mood"]) / rec["donor"] / rec["noun"] / f"{rec['id']}.png"
@@ -149,7 +154,7 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_bytes(src.read_bytes())
         src.unlink()
-        rec["status"] = "accepted"
+        rec["status"] = art_status.ACCEPTED
         counts[rec["mood"]] = counts.get(rec["mood"], 0) + 1
     return counts
 
@@ -174,7 +179,7 @@ def main(argv):
     if argv and argv[0] == "--sheets":
         kept = {str(r["id"]): r
                 for r in dedup([r for r in manifest.values()
-                                if r["status"] == "candidate"])}
+                                if r["status"] == art_status.CANDIDATE])}
         out = assets / "sheets"
         out.mkdir(parents=True, exist_ok=True)
         for mood in MOODS:

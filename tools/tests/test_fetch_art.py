@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import art_status
 import fetch_art
 from art_queries import Query
 
@@ -78,7 +79,7 @@ def test_rejected_candidates_are_recorded_but_not_written(tmp_path):
     assert got == []
     assert len(manifest) == 4
     assert all(r["verdict"] == "bright" for r in manifest.values())
-    assert all(r["status"] == "rejected" for r in manifest.values())
+    assert all(r["status"] == art_status.METRIC_REJECTED for r in manifest.values())
     assert all(r["luminance"] == 252.0 for r in manifest.values())
     assert all(r["busyness"] == 0.0 for r in manifest.values())
     assert all(r["banding"] == 0.0 for r in manifest.values())

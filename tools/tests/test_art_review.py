@@ -8,10 +8,11 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import art_review
+import art_status
 
 
 def record(pid, mood="HORROR", donor="HOUSE", noun="hallway", phash="0" * 16,
-           status="candidate"):
+           status=art_status.CANDIDATE):
     return {"id": pid, "page_url": f"https://pixabay.com/photos/{pid}/",
             "image_url": "", "phrase": "dark hallway", "mood": mood,
             "donor": donor, "noun": noun, "licence": "Pixabay Content License",
@@ -68,8 +69,8 @@ def test_promote_moves_accepted_and_leaves_rejected(tmp_path):
     assert counts == {"HORROR": 1}
     assert (png / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
     assert not (png / "HORROR" / "HOUSE" / "hallway" / "2.png").exists()
-    assert recs["1"]["status"] == "accepted"
-    assert recs["2"]["status"] == "rejected"
+    assert recs["1"]["status"] == art_status.ACCEPTED
+    assert recs["2"]["status"] == art_status.REJECTED
 
 
 def test_promotion_is_idempotent_even_if_the_source_file_reappears(tmp_path):

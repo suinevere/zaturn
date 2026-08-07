@@ -12,7 +12,7 @@ Description: Walks the query plan, asks Pixabay for each phrase, crops every hit
     Nothing here decides what ships. Surviving the metric gate only earns a place
     on a contact sheet; a human accepts or rejects from there.
 Author: suinevere
-Dependencies: requests, PIL, art_metrics, art_queries, art_nouns
+Dependencies: requests, PIL, art_metrics, art_queries, art_nouns, art_status
 Globals: ENDPOINT, LICENCE
 """
 import json
@@ -29,6 +29,7 @@ from PIL import Image
 import art_metrics
 import art_nouns
 import art_queries
+import art_status
 
 ENDPOINT = "https://pixabay.com/api/"
 LICENCE = "Pixabay Content License"
@@ -79,7 +80,7 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
         A Pixabay id already in the manifest is skipped without a download,
         which is what makes a re-run cheap and a partial run resumable.
     Author: suinevere
-    Dependencies: PIL, art_metrics
+    Dependencies: PIL, art_metrics, art_status
     Globals: LICENCE
     Params: plan -- mood -> [Query]; fetcher -- an object with .search/.download;
         out_dir -- where surviving PNGs go; manifest -- mutated in place;
@@ -130,7 +131,8 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
                     "busyness": round(scores.busyness, 2),
                     "banding": round(scores.banding, 2),
                     "verdict": call, "phash": "",
-                    "status": "rejected" if call != "pass" else "candidate",
+                    "status": (art_status.METRIC_REJECTED if call != "pass"
+                               else art_status.CANDIDATE),
                 }
                 manifest[key] = record
                 if call != "pass":

@@ -51,5 +51,11 @@ tools/.venv/
 # --- Art pipeline working files -----------------------------------------------
 # Candidates are working files until a later review promotes them; never committed.
 tools/assets/candidates/
+# Contact sheets are regenerated per review pass and embed candidate PNGs; never committed.
+tools/assets/sheets/
 
 .worktrees/
+
+# Local secrets -- never commit
+tools/.env
+.env

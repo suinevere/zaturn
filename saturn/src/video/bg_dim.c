@@ -68,3 +68,34 @@ int bg_dim_get(void) { return g_bg_hold; }
  | Returns: the per-channel offset, -255..+255
  ----------------------*/
 int bg_dim_effective(int level) { return bg_dim_compose(level, g_bg_hold); }
+
+/*----------------------
+ | g_bg_last_level
+ | Description: The raw ramp level most recently passed to bg_dim_note_level.
+ |   255 (resting, unmodified) at startup, matching the level a fresh boot's
+ |   colour-offset channel is implicitly at before any fade has run.
+ | Author: suinevere
+ ----------------------*/
+static int g_bg_last_level = 255;
+
+/*----------------------
+ | bg_dim_note_level
+ | Description: See bg_dim.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_bg_last_level
+ | Params: level -- 0..255, the raw ramp level
+ | Returns: N/A
+ ----------------------*/
+void bg_dim_note_level(int level) { g_bg_last_level = level; }
+
+/*----------------------
+ | bg_dim_last_level
+ | Description: See bg_dim.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_bg_last_level
+ | Params: N/A
+ | Returns: the recorded level
+ ----------------------*/
+int bg_dim_last_level(void) { return g_bg_last_level; }

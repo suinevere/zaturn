@@ -1098,8 +1098,13 @@ void title_bg_fade_reset(void) {
 /*----------------------
  | title_bg_dim_set / title_bg_dim_get
  | Description: See title.h. The value lives in bg_dim.c; this pair is the half
- |   that touches VDP2, re-applying the new offset immediately so a menu row can
- |   preview it.
+ |   that touches VDP2, re-applying the new offset immediately at the ramp level
+ |   bg_dim_last_level() recorded rather than a hardcoded 255 -- display_apply()
+ |   calls this unconditionally, including from the bottom of a room-transition
+ |   fade where the screen is held at level 0, and forcing 255 there would
+ |   re-light the outgoing picture to full brightness for the CD read that
+ |   follows. At rest (255, the Options page's resting level) this re-applies at
+ |   255 exactly as before, so live preview is unchanged.
  | Author: suinevere
  | Dependencies: bg_dim.h
  | Globals: N/A
@@ -1108,7 +1113,7 @@ void title_bg_fade_reset(void) {
  ----------------------*/
 void title_bg_dim_set(int offset) {
     bg_dim_set(offset);
-    title_bg_dyn_fade(255);
+    title_bg_dyn_fade(bg_dim_last_level());
 }
 
 int title_bg_dim_get(void) { return bg_dim_get(); }
@@ -1138,6 +1143,10 @@ int title_bg_dim_get(void) { return bg_dim_get(); }
  |   composed value is neutral -- level 255 with no hold set -- so a held dim keeps
  |   the channel claimed at rest, byte-identical to today when no hold is set.
  |
+ |   Every call records `level` via bg_dim_note_level before anything else, so
+ |   title_bg_dim_set can re-apply a changed hold at the level actually showing
+ |   instead of assuming 255 -- see title_bg_dim_set.
+ |
  |   A screen-wide fade taking NBG0 releases this claim: title_fade_engage clears
  |   g_dyn_faded, so a ramp interrupted by one (a soft reset mid-transition) does
  |   not later disengage a layer it no longer holds. Nothing restores NBG3 to
@@ -1153,6 +1162,7 @@ void title_bg_dyn_fade(int level) {
     int v;
     if (level < 0)   level = 0;
     if (level > 255) level = 255;
+    bg_dim_note_level(level);   /* so a later title_bg_dim_set replays at this level */
 
     v = bg_dim_effective(level);
 

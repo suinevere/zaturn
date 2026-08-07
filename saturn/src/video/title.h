@@ -177,7 +177,9 @@ void title_bg_dyn_fade(int level);
  |   bg_dim.h), held across rooms and composed into every title_bg_dyn_fade
  |   ramp -- including the one a screen-wide title fade's disengage re-applies,
  |   so the dim survives a trip through the Options menu. set re-applies the
- |   new offset to VDP2 immediately, for a menu row to preview it live.
+ |   new offset to VDP2 immediately, at whatever ramp level is currently
+ |   showing (see bg_dim_last_level) rather than forcing full brightness -- at
+ |   rest that level is 255, so a menu row still previews it live.
  | Author: suinevere
  | Dependencies: bg_dim.h
  | Globals: N/A

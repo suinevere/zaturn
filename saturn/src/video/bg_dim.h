@@ -48,6 +48,22 @@ void bg_dim_set(int offset);
 int  bg_dim_get(void);
 int  bg_dim_effective(int level);
 
+/*----------------------
+ | bg_dim_note_level / bg_dim_last_level
+ | Description: note records the raw ramp level (not the composed offset) most
+ |   recently applied to the wallpaper; last_level reads it back. title.cxx's
+ |   title_bg_dim_set uses this to re-apply a changed hold at the level actually
+ |   showing, rather than forcing the wallpaper to full brightness mid-ramp --
+ |   see title_bg_dyn_fade. 255 at startup, the resting level.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_bg_last_level (in bg_dim.c)
+ | Params: level -- 0..255, the raw ramp level
+ | Returns: note returns N/A; last_level returns the recorded level
+ ----------------------*/
+void bg_dim_note_level(int level);
+int  bg_dim_last_level(void);
+
 #ifdef __cplusplus
 }
 #endif

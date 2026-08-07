@@ -273,16 +273,12 @@ static unsigned int boot_entropy(void) {
  | main
  | Description: Boots the client and never returns to its caller (it ends by
  |   soft-resetting to the title). Order matters at several points: cd_capture_root
- |   precedes any GFS_SetDir; display_scan_images precedes options_load so saved
- |   image indices validate against the real list. setjmp arms g_title_jmp so the
- |   soft reset (chord or typed reboot/quit) longjmps back here; because that jump
- |   skips destructors, the re-entry path hand-clears g_menu_backing_depth (else
- |   NBG3 stays opaque and hides the title image) and disables the NBG0 image
- |   window, and does NOT re-scan /TGA -- the first-boot scan's list and g_tga_tbl
- |   are plain static RAM that survives the longjmp, and a destructive post-reset
- |   re-scan once wiped the list and made every options background vanish. The
- |   story image is owned by the Z-machine (initStory frees the prior one), so it
- |   is never freed here. music_reset before the menu track clears stale engine
+ |   precedes any GFS_SetDir. setjmp arms g_title_jmp so the soft reset (chord or
+ |   typed reboot/quit) longjmps back here; because that jump skips destructors,
+ |   the re-entry path hand-clears g_menu_backing_depth (else NBG3 stays opaque and
+ |   hides the title image) and disables the NBG0 image window. The story image is
+ |   owned by the Z-machine (initStory frees the prior one), so it is never freed
+ |   here. music_reset before the menu track clears stale engine
  |   state so a menu-frame music_tick cannot leak a game track. The menu track is
  |   started through the engine (music_start_menu) rather than handed straight to
  |   the CD-DA backend, so it obeys the same play-count-and-cycle rule the in-game
@@ -292,8 +288,8 @@ static unsigned int boot_entropy(void) {
  |   finishes before CD-DA starts, because the single drive head cannot play
  |   CD-DA while reading data. The screen is held black from Core::Initialize
  |   onward and is only ever lifted by an explicit fade-in, so every CD read on
- |   the way to the first picture -- the image scan here, the splash's own reads,
- |   HOUSE1.TGA -- happens behind black rather than over a bare console. On first
+ |   the way to the first picture -- the splash's own reads, HOUSE1.TGA -- happens
+ |   behind black rather than over a bare console. On first
  |   cold boot, splash_show() covers the game-catalogue scan and the first few
  |   background pictures with a fading logo instead of a silent title picture, and
  |   title_and_seed() finishes whatever is left with its prompt already on screen.
@@ -335,7 +331,6 @@ int main(void) {
                            // splash re-arms and owns the screen from there
     saturn_bup_init();
     cd_capture_root();
-    display_scan_images();
     display_defaults(&g_display);
     options_load();
 

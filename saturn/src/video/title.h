@@ -185,19 +185,6 @@ void title_bg_dyn_fade(int level);
 int title_and_seed(void);
 
 /*----------------------
- | display_scan_images
- | Description: Scans the disc's TGA folder once at boot and registers any usable
- |   .TGA files found with the display system so the background selector can cycle
- |   into them.
- | Author: suinevere
- | Dependencies: display.c, SRL
- | Globals: N/A
- | Params: N/A
- | Returns: N/A
- ----------------------*/
-void display_scan_images(void);
-
-/*----------------------
  | display_preload_categories
  | Description: Warms the background-art cache with one picture per text category,
  |   in an order that puts the title screen's own picture first, and stops as soon

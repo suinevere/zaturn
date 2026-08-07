@@ -20,7 +20,6 @@
 #include "online.h"
 #include <srl.hpp>
 #include "text_map.h"
-#include <string.h>
 
 #include "boot_music.h"
 
@@ -33,15 +32,6 @@
 #define SOFT_RESET_HOLD 60
 
 /*----------------------
- | g_image_name / g_image_ptr
- | Description: The registered background filenames (owned storage) and a pointer
- |   array over them, handed to the display system as the selectable image list.
- | Author: suinevere
- ----------------------*/
-static char        g_image_name[DISP_IMAGE_MAX][16];
-static const char *g_image_ptr[DISP_IMAGE_MAX];
-
-/*----------------------
  | g_root_dirnames / g_root_tbl / g_root_dir_valid
  | Description: The CD root directory record captured right after GFS_Reset, so
  |   cd_enter_root can return to it; the flag guards against an unread record.
@@ -50,16 +40,6 @@ static const char *g_image_ptr[DISP_IMAGE_MAX];
 static GfsDirName g_root_dirnames[SRL_MAX_CD_FILES];
 static GfsDirTbl  g_root_tbl;
 static bool       g_root_dir_valid = false;
-
-/*----------------------
- | g_tga_dirnames / g_tga_tbl / g_tga_dir_valid
- | Description: The /TGA directory record captured by display_scan_images, so
- |   cd_enter_tga can switch to the background-art folder; the flag guards it.
- | Author: suinevere
- ----------------------*/
-static GfsDirName g_tga_dirnames[SRL_MAX_CD_FILES];
-static GfsDirTbl  g_tga_tbl;
-static bool       g_tga_dir_valid = false;
 
 /*----------------------
  | g_z3_tbl (extern)
@@ -83,24 +63,6 @@ extern GfsDirTbl g_z3_tbl;
 void title_draw_art(void) {
     text_print(13, 12, "Z - A T U R N");
     text_print(4, 15, "Saturn port (c) 2026 by Suinevere");
-}
-
-/*----------------------
- | tga_name_is_usable
- | Description: Checks if a filename ends with exactly ".TGA".
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: name -- the filename to check
- | Returns: true if the name ends in .TGA, false otherwise
- ----------------------*/
-static bool tga_name_is_usable(const char *name) {
-    if (!name || !name[0] || name[0] == '.') return false;
-    for (int i = 0; name[i]; i++) {
-        if (name[i] == '.' && name[i+1] == 'T' && name[i+2] == 'G' && name[i+3] == 'A'
-            && name[i+4] == '\0') return true;
-    }
-    return false;
 }
 
 /*----------------------
@@ -150,17 +112,42 @@ void cd_enter_root(void) {
 }
 
 /*----------------------
- | cd_enter_tga
- | Description: Sets the CD current directory to /TGA where the background bitmaps
- |   are stored.
+ | cd_enter_mood
+ | Description: Enters the on-disc folder a background lives in and hands back the
+ |   bare filename to open there. Every image on the disc -- "SUINE.TGA" and
+ |   "HORROR/07.TGA" alike -- lives under /TGA (tools/make_tga.py lays it out that
+ |   way), so this always climbs to root and steps into TGA first; a `path` that
+ |   names a mood before the slash then takes one further step into that mood's
+ |   subfolder, and a bare `path` (no slash) stays in /TGA, which is where
+ |   SUINE.TGA is.
+ |
+ |   The working directory is process-wide, so the caller owes a cd_enter_root()
+ |   once the open (or the failed attempt to make one) is done -- left standing in
+ |   /TGA or /TGA/HORROR, a game catalog scan that runs GFS_LoadDir on /Z3 finds
+ |   nothing (see game_catalog.cxx).
  | Author: suinevere
  | Dependencies: SRL
- | Globals: g_tga_tbl, g_tga_dir_valid
- | Params: N/A
- | Returns: N/A
+ | Globals: N/A
+ | Params: path -- "HORROR/07.TGA" or "SUINE.TGA"; leaf -- receives "07.TGA" or
+ |   "SUINE.TGA"
+ | Returns: true when the leaf can now be opened in the current directory
  ----------------------*/
-static void cd_enter_tga(void) {
-    if (g_tga_dir_valid) GFS_SetDir(&g_tga_tbl);
+static bool cd_enter_mood(const char *path, const char **leaf) {
+    char dir[16];
+    int i = 0;
+
+    while (path[i] && path[i] != '/' && i < (int) sizeof(dir) - 1) {
+        dir[i] = path[i];
+        i++;
+    }
+
+    cd_enter_root();
+    if (SRL::Cd::ChangeDir("TGA") < 0) { *leaf = path; return false; }
+
+    if (path[i] != '/') { *leaf = path; return true; }
+    dir[i] = '\0';
+    *leaf = path + i + 1;
+    return SRL::Cd::ChangeDir(dir) >= 0;
 }
 
 /*----------------------
@@ -216,65 +203,6 @@ static void nbg0_note_loaded(const char *file) {
  ----------------------*/
 static void bitmap_read_end(void) {
     cd_restore_z3();
-}
-
-/*----------------------
- | display_scan_images
- | Description: Scans the disc's TGA folder once at boot and registers every usable
- |   .TGA file found with the display system, which is what lets display.c resolve a
- |   category pool's filename to a slot. SUINE.TGA is deliberately skipped even
- |   though it lives in the same folder -- it is the boot splash logo (see
- |   splash.cxx), not a room background, and registering it would put the logo in
- |   the rotation on a disc whose art was otherwise complete.
- |
- |   The registered list is names only and costs no picture memory; how many
- |   pictures are actually decoded and held is TGA_CACHE_SLOTS, which is a different
- |   and much smaller number. So DISP_IMAGE_MAX only has to be at least the number
- |   of files in /TGA -- past that the scan stops and the tail of the folder, in
- |   alphabetical order, becomes unreachable to every category that names it.
- | Author: suinevere
- | Dependencies: display.c, SRL
- | Globals: N/A
- | Params: N/A
- | Returns: N/A
- ----------------------*/
-void display_scan_images(void) {
-    GfsDirName *dirnames = g_tga_dirnames;
-    GfsDirTbl  *tblp     = &g_tga_tbl;
-    int found = 0;
-
-    g_tga_dir_valid = false;
-
-    cd_enter_root();
-
-    int32_t fid = GFS_NameToId((int8_t *) "TGA");
-    if (fid >= 0) {
-        GFS_DIRTBL_TYPE(tblp)    = GFS_DIR_NAME;
-        GFS_DIRTBL_DIRNAME(tblp) = dirnames;
-        GFS_DIRTBL_NDIR(tblp)    = SRL_MAX_CD_FILES;
-        int32_t count = GFS_LoadDir(fid, tblp);
-        g_tga_dir_valid = count >= 0;
-        for (int32_t i = 0; count > 0 && i < count && found < DISP_IMAGE_MAX; i++) {
-            char nm[16];
-            int j = 0;
-            for (; j < GFS_FNAME_LEN && j < (int) sizeof(nm) - 1; j++) {
-                char c = (char) dirnames[i].fname[j];
-                if (c == '\0' || c == ';') break;
-                nm[j] = c;
-            }
-            nm[j] = '\0';
-            if (!tga_name_is_usable(nm)) continue;
-            if (strcmp(nm, "SUINE.TGA") == 0) continue;  // boot splash logo, not a selectable background
-            int k = 0;
-            for (; nm[k] && k < (int) sizeof(g_image_name[0]) - 1; k++) g_image_name[found][k] = nm[k];
-            g_image_name[found][k] = '\0';
-            g_image_ptr[found] = g_image_name[found];
-            found++;
-        }
-    }
-
-    cd_enter_root();
-    display_set_images(found > 0 ? g_image_ptr : NULL, found);
 }
 
 /*----------------------
@@ -476,6 +404,12 @@ static void tga_image_free(TgaImage *img) {
  |   only function here that touches the disc, so it is also the only one that
  |   interrupts CD audio.
  |
+ |   Enters the picture's mood folder through cd_enter_mood before opening it, and
+ |   calls cd_enter_root() on every exit that follows -- success, every validation
+ |   failure, every allocation or read failure. The working directory is
+ |   process-wide, and a return that skipped it would leave the CD standing in
+ |   /TGA or /TGA/HORROR for whatever runs next (see cd_enter_mood).
+ |
  |   Two modes, told apart by out->Cap on entry. Zero means "allocate": the plane
  |   is taken at exactly the size this picture needs and the caller owns it. Non-
  |   zero means out->Pixels and out->Colors are already-owned buffers of that
@@ -484,11 +418,13 @@ static void tga_image_free(TgaImage *img) {
  |   A picture too big for the capacity is refused rather than truncated, and the
  |   slot keeps whatever it held.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: SRL, cd_enter_mood, cd_enter_root
  | Globals: N/A
- | Params: file -- filename on the disc; low -- true to allocate in Low Work RAM
- |   (ignored when reusing); limit -- most bytes the pixel plane may take; out --
- |   filled on success, Cap read on entry and preserved
+ | Params: file -- the mood-relative path from display_image_file/
+ |   display_category_image, e.g. "HORROR/07.TGA", or a bare /TGA filename like
+ |   "SUINE.TGA"; low -- true to allocate in Low Work RAM (ignored when reusing);
+ |   limit -- most bytes the pixel plane may take; out -- filled on success, Cap
+ |   read on entry and preserved
  | Returns: true on success; on failure out is left blank (allocating mode, nothing
  |   allocated) or untouched apart from Name (reusing mode)
  ----------------------*/
@@ -514,14 +450,17 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
     out->H       = 0;
     out->Name[0] = '\0';
 
-    SRL::Cd::File f(file);
-    if (!f.Exists()) return false;
+    const char *leaf = file;
+    if (!cd_enter_mood(file, &leaf)) { cd_enter_root(); return false; }
+
+    SRL::Cd::File f(leaf);
+    if (!f.Exists()) { cd_enter_root(); return false; }
 
     static uint32_t hdrbuf[512];
     uint8_t *const hdr = (uint8_t *) hdrbuf;
     const int32_t ss = (f.Size.SectorSize > 0) ? f.Size.SectorSize : 2048;
-    if (ss > (int32_t) sizeof(hdrbuf)) return false;
-    if (f.LoadBytes(0, ss, hdr) <= 0) return false;
+    if (ss > (int32_t) sizeof(hdrbuf)) { cd_enter_root(); return false; }
+    if (f.LoadBytes(0, ss, hdr) <= 0) { cd_enter_root(); return false; }
 
     const int idlen    = hdr[0];
     const int cmaptype = hdr[1];
@@ -533,16 +472,16 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
     const int bpp      = hdr[16];
     const int topdown  = (hdr[17] >> 5) & 1;
 
-    if (cmaptype != 1 || imgtype != 1 || bpp != 8)      return false;
-    if (cmaplen <= 0 || cmaplen > 256)                  return false;
-    if (cmapbits != 24 && cmapbits != 32)               return false;
-    if (w <= 0 || h <= 0 || w > 1024 || h > 512)        return false;
+    if (cmaptype != 1 || imgtype != 1 || bpp != 8)      { cd_enter_root(); return false; }
+    if (cmaplen <= 0 || cmaplen > 256)                  { cd_enter_root(); return false; }
+    if (cmapbits != 24 && cmapbits != 32)               { cd_enter_root(); return false; }
+    if (w <= 0 || h <= 0 || w > 1024 || h > 512)        { cd_enter_root(); return false; }
 
     const int      cmapbytes = cmaplen * (cmapbits / 8);
     const int      pixoff    = 18 + idlen + cmapbytes;
     const uint32_t npix      = (uint32_t) w * (uint32_t) h;
-    if (pixoff > ss)                                    return false;
-    if ((uint32_t) pixoff + npix > (uint32_t) f.Size.Bytes) return false;
+    if (pixoff > ss)                                    { cd_enter_root(); return false; }
+    if ((uint32_t) pixoff + npix > (uint32_t) f.Size.Bytes) { cd_enter_root(); return false; }
 
     const uint32_t skip    = (uint32_t) (pixoff % ss);
     const uint32_t span    = skip + npix;
@@ -550,15 +489,15 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
     if (reuse_pix != nullptr) {
         /* Refusing rather than truncating: a short plane would render as a band of
            the previous picture across the bottom of this one. */
-        if (span > reuse_cap) return false;
+        if (span > reuse_cap) { cd_enter_root(); return false; }
     } else {
-        if (span + palsize > limit)                     return false;
-        if (tga_free_space(low) < span + palsize + 4096) return false;
+        if (span + palsize > limit)                     { cd_enter_root(); return false; }
+        if (tga_free_space(low) < span + palsize + 4096) { cd_enter_root(); return false; }
     }
 
     SRL::Types::HighColor *colors = reuse_col;
     if (colors == nullptr) colors = (SRL::Types::HighColor *) tga_alloc(palsize, low);
-    if (colors == nullptr) return false;
+    if (colors == nullptr) { cd_enter_root(); return false; }
     for (int i = 0; i < 256; i++) {
         SRL::Types::HighColor c;
         c.Opaque = (i == 0) ? 0 : 1;
@@ -576,10 +515,12 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
     // LoadBytes wants a long-aligned destination; refuse rather than corrupt.
     if (pix == nullptr || ((unsigned int) pix & 3) != 0) {
         if (reuse_pix == nullptr) { tga_free(pix, low); tga_free(colors, low); }
+        cd_enter_root();
         return false;
     }
     if (f.LoadBytes((size_t) (pixoff / ss), (int32_t) span, pix) <= 0) {
         if (reuse_pix == nullptr) { tga_free(pix, low); tga_free(colors, low); }
+        cd_enter_root();
         return false;
     }
     if (skip > 0) for (uint32_t i = 0; i < npix; i++) pix[i] = pix[skip + i];
@@ -605,6 +546,7 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
     int k = 0;
     for (; file[k] && k < (int) sizeof(out->Name) - 1; k++) out->Name[k] = file[k];
     out->Name[k] = '\0';
+    cd_enter_root();
     return true;
 }
 
@@ -791,7 +733,6 @@ static const int CATEGORY_ORDER[] = {
  ----------------------*/
 void display_preload_categories(int max_slots) {
     int taken = 0;
-    cd_enter_tga();
     for (int i = 0; i < CATEGORY_ORDER_N; i++) {
         if (g_cache_count >= TGA_CACHE_SLOTS) break;
         if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
@@ -877,7 +818,6 @@ void display_warm_cache_random(unsigned int seed) {
         int t = order[i]; order[i] = order[j]; order[j] = t;
     }
 
-    cd_enter_tga();
     for (int i = 0; i < CATEGORY_ORDER_N; i++) {
         if (g_cache_count >= TGA_CACHE_SLOTS) break;
         if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
@@ -932,7 +872,6 @@ bool title_bg_show(const char *file) {
         bool            borrowed = false;
         const TgaImage *img      = tga_cache_find(file);
         if (img == nullptr) {
-            cd_enter_tga();
             img = tga_cache_admit(file);
             if (img == nullptr && tga_decode(file, false, 0xFFFFFFFFu, &oneoff)) {
                 img = &oneoff; borrowed = true;
@@ -970,7 +909,6 @@ bool title_bg_show(const char *file) {
  ----------------------*/
 bool title_bg_show_oneoff(const char *file) {
     TgaImage oneoff = { nullptr, nullptr, 0, 0, 0, 0, false, 0, { '\0' } };
-    cd_enter_tga();
     bool decoded = tga_decode(file, false, 0xFFFFFFFFu, &oneoff);
     bitmap_read_end();
     if (!decoded) return false;

@@ -8,7 +8,7 @@ title's own house picture. display_warm_cache_random() at game start is the fill
 that matters: both PCM cues are freed by then and main.cxx has already built the
 game's trie, so it reads an honest free-space figure and spends the rest on art.
 
-Three things here can fail silently:
+Five things here can fail silently:
 
   1. A picture whose read span exceeds TGA_PLANE_MAX can never take a cache slot.
      tga_decode refuses it -- correctly, since a short plane would render as a
@@ -22,7 +22,13 @@ Three things here can fail silently:
      constant would be describing a cache that cannot exist, and eviction would
      start thrashing earlier than anyone reading title.cxx would expect.
 
-  3. A full cache leaving the game's typeahead trie short. main.cxx builds the trie
+  3. display_warm_cache_random taking zero slots at game start. Every wallpaper
+     change would then read the disc over a playing track.
+
+  4. The boot jingle alone not fitting LWRAM even with the art cache emptied,
+     which would come back to a silent title screen after a soft reset.
+
+  5. A full cache leaving the game's typeahead trie short. main.cxx builds the trie
      before warming the cache so the cache cannot take its space -- but the two
      still have to fit together, and a trie that cannot be built is a prompt with
      no completions rather than a crash. TRIE_RESERVE below is the figure to clear.
@@ -30,11 +36,18 @@ Three things here can fail silently:
 The online trie is deliberately absent from this budget: ensure_online_typeahead
 only runs once the player has dialled, so an ordinary session never holds it.
 
-Run: python saturn/tests/test_lwram_splash_budget.py
+Art is walked recursively under cd/data/TGA: Task 1 moved every background into
+a per-mood subfolder (cd/data/TGA/<MOOD>/NN.TGA), and only the splash logo
+(SUINE.TGA) still sits at the TGA root.
+
+Run as a human-readable report: python saturn/tests/test_lwram_splash_budget.py
+Run as tests: pytest saturn/tests/test_lwram_splash_budget.py
 """
 import re
 import sys
 import pathlib
+
+import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 SRC = ROOT / "saturn" / "src"
@@ -91,7 +104,11 @@ def cdefines(path):
     return out
 
 
-def main():
+def compute_budget():
+    """Read title.cxx's cache constants and the shipped art, and derive every
+    figure the checks below need. Raises RuntimeError on a setup problem
+    (missing constants, missing/empty art directory) rather than exiting, so a
+    problem here fails whichever test needed it instead of the whole run."""
     title = SRC / "video" / "title.cxx"
     d = cdefines(title)
     d.update(cdefines(SRC / "sound" / "boot_music.cxx"))
@@ -102,8 +119,7 @@ def main():
             "BOOT_MUSIC_MAX_BYTES", "LOADING_MUSIC_MAX_BYTES"]
     missing = [n for n in need if n not in d]
     if missing:
-        print(f"could not read {', '.join(missing)} from title.cxx", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"could not read {', '.join(missing)} from title.cxx")
 
     lwram = d["LWRAM_TOTAL"]
     slots = d["TGA_CACHE_SLOTS"]
@@ -115,7 +131,6 @@ def main():
     # residency. Missing files fall back to the cap, which is the safe direction.
     jingle = pcm_bytes("SPLASH.PCM", d["BOOT_MUSIC_MAX_BYTES"])
     cue = pcm_bytes("LOADCD.PCM", d["LOADING_MUSIC_MAX_BYTES"])
-    resident_pcm = jingle + cue
 
     # Mirror display_preload_categories(): the splash fills around the still-resident
     # jingle, capped by its caller rather than by the zone.
@@ -132,88 +147,143 @@ def main():
         warm_slots += 1
 
     if not TGA_DIR.is_dir():
-        print("no cd/data/TGA to measure", file=sys.stderr)
-        sys.exit(1)
-    art = sorted(p for p in TGA_DIR.iterdir()
-                 if p.suffix.upper() == ".TGA" and p.name.upper() != SPLASH_LOGO)
+        raise RuntimeError("no cd/data/TGA to measure")
+    # Recursive: every background lives in a per-mood subfolder
+    # (cd/data/TGA/<MOOD>/NN.TGA) since Task 1; only the splash logo sits at
+    # the TGA root. A flat iterdir() here would silently see zero art.
+    art = sorted(p for p in TGA_DIR.rglob("*")
+                 if p.is_file() and p.suffix.upper() == ".TGA"
+                 and p.name.upper() != SPLASH_LOGO)
     if not art:
-        print("no background art found in cd/data/TGA", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError("no background art found under cd/data/TGA")
 
     # span == the file's byte length: pixoff lands inside the first sector, so
     # tga_decode's leading-partial-sector skip puts the read span back on the
     # file size exactly.
     biggest = max(art, key=lambda p: p.stat().st_size)
     biggest_span = biggest.stat().st_size
-
     resident = slots * slot_bytes
+
+    return {
+        "lwram": lwram, "slots": slots, "plane": plane, "slot_bytes": slot_bytes,
+        "floor": floor, "pal_bytes": d["TGA_PAL_BYTES"], "jingle": jingle, "cue": cue,
+        "splash_slots": splash_slots, "warm_slots": warm_slots, "art": art,
+        "biggest": biggest, "biggest_span": biggest_span, "resident": resident,
+    }
+
+
+@pytest.fixture(scope="module")
+def budget():
+    return compute_budget()
+
+
+def test_biggest_picture_fits_a_cache_slot(budget):
+    biggest, biggest_span, plane = budget["biggest"], budget["biggest_span"], budget["plane"]
+    assert biggest_span <= plane, (
+        f"{biggest.name} needs {biggest_span} bytes but a cache slot's plane is "
+        f"{plane}. It can never be cached: tga_decode refuses it and title_bg_show "
+        "falls back to the one-off path, so that picture reads the CD every time it "
+        "is shown and stops the music every time. Raise TGA_PLANE_MAX in title.cxx "
+        "or ship the picture at 320x224.")
+
+
+def test_cache_slots_fit_within_lwram(budget):
+    resident, floor, lwram, slots = (budget["resident"], budget["floor"],
+                                      budget["lwram"], budget["slots"])
+    over = resident + floor - lwram
+    assert resident + floor <= lwram, (
+        f"{slots} slots plus the floor are {over} bytes ({over / 1024.0:.1f} KB) "
+        "over LWRAM. The cache would stop growing before reaching TGA_CACHE_SLOTS, "
+        "so that constant would be describing a cache that cannot exist. Lower "
+        "TGA_CACHE_SLOTS or TGA_CACHE_FLOOR in title.cxx.")
+
+
+def test_warm_cache_can_take_at_least_one_slot(budget):
+    assert budget["warm_slots"] >= 1, (
+        "display_warm_cache_random can take no slots at all at game start, with "
+        "both cues freed and only the trie and the floor in its way. Every "
+        "wallpaper change would then read the disc over a playing track. Lower "
+        "TGA_CACHE_FLOOR.")
+
+
+def test_jingle_fits_lwram_alone(budget):
+    jingle, lwram = budget["jingle"], budget["lwram"]
+    assert jingle <= lwram, (
+        f"the jingle ({jingle} bytes) does not fit in LWRAM even with the cache "
+        "emptied, so a soft-reset return comes back to a silent title screen "
+        "however much art title_bg_cache_release hands over. Lower "
+        "BOOT_MUSIC_MAX_SECONDS.")
+
+
+def test_full_cache_and_largest_trie_fit_lwram(budget):
+    resident, lwram = budget["resident"], budget["lwram"]
+    over = resident + TRIE_RESERVE - lwram
+    assert resident + TRIE_RESERVE <= lwram, (
+        f"a full cache ({resident}) and the largest trie ({TRIE_RESERVE}) are "
+        f"{over} bytes over LWRAM. The cache is filled at game start and the trie "
+        "is built on the first turn, so the cache wins and the trie is what goes "
+        "short -- a prompt with no completions, and no error anywhere. Lower "
+        "TGA_CACHE_SLOTS.")
+
+
+def _print_report(b):
+    lwram, slots, plane, slot_bytes, floor = (
+        b["lwram"], b["slots"], b["plane"], b["slot_bytes"], b["floor"])
+    resident = b["resident"]
     print("  LWRAM               %8d" % lwram)
     print("  %d cache slots       %8d  (%d each: %d plane + %d palette)"
-          % (slots, resident, slot_bytes, plane, d["TGA_PAL_BYTES"]))
+          % (slots, resident, slot_bytes, plane, b["pal_bytes"]))
     print("  in-game floor       %8d" % floor)
     print("  game trie (measured)%8d" % TRIE_RESERVE)
     print("  ---------------------------")
     print("  total               %8d  of %d" % (resident + floor, lwram))
     print("  largest of %d TGAs   %8d  (%s), against a %d plane"
-          % (len(art), biggest_span, biggest.name, plane))
-    print("  boot jingle         %8d  (splash + title only)" % jingle)
-    print("  loading cue         %8d  (during a load only)" % cue)
+          % (len(b["art"]), b["biggest_span"], b["biggest"].name, plane))
+    print("  boot jingle         %8d  (splash + title only)" % b["jingle"])
+    print("  loading cue         %8d  (during a load only)" % b["cue"])
     print("  -> slots at the splash, beside the jingle: %d of %d"
-          % (splash_slots, slots))
+          % (b["splash_slots"], slots))
     print("  -> slots at game start, beside the trie:   %d of %d"
-          % (warm_slots, slots))
+          % (b["warm_slots"], slots))
     print("  -> full cache + largest trie: %8d  of %d"
           % (resident + TRIE_RESERVE, lwram))
-    print("  -> jingle reload after cache release: %8d  of %d" % (jingle, lwram))
+    print("  -> jingle reload after cache release: %8d  of %d" % (b["jingle"], lwram))
 
+
+def main():
+    """Human-readable report plus a hard pass/fail, for the direct-script entry
+    point named in the module docstring. The pytest functions above carry the
+    same checks for CI; this exists so `python test_lwram_splash_budget.py`
+    still prints the numbers a person reading it wants to see."""
+    try:
+        b = compute_budget()
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+
+    _print_report(b)
+
+    checks = [
+        (test_biggest_picture_fits_a_cache_slot, "biggest picture fits a cache slot"),
+        (test_cache_slots_fit_within_lwram, "cache slots fit within LWRAM"),
+        (test_warm_cache_can_take_at_least_one_slot, "warm cache can take a slot"),
+        (test_jingle_fits_lwram_alone, "jingle fits LWRAM alone"),
+        (test_full_cache_and_largest_trie_fit_lwram, "full cache + trie fit LWRAM"),
+    ]
     fails = 0
-
-    if biggest_span > plane:
-        print("\ntest_lwram_splash_budget: FAILED -- %s needs %d bytes but a cache "
-              "slot's plane is %d.\nIt can never be cached: tga_decode refuses it "
-              "and title_bg_show falls back to the one-off\npath, so that picture "
-              "reads the CD every time it is shown and stops the music every time.\n"
-              "Raise TGA_PLANE_MAX in title.cxx or ship the picture at 320x224."
-              % (biggest.name, biggest_span, plane), file=sys.stderr)
-        fails += 1
-
-    if resident + floor > lwram:
-        over = resident + floor - lwram
-        print("\ntest_lwram_splash_budget: FAILED -- %d slots plus the floor are %d "
-              "bytes (%.1f KB) over LWRAM.\nThe cache would stop growing before "
-              "reaching TGA_CACHE_SLOTS, so that constant would be describing a\n"
-              "cache that cannot exist. Lower TGA_CACHE_SLOTS or TGA_CACHE_FLOOR "
-              "in title.cxx." % (slots, over, over / 1024.0), file=sys.stderr)
-        fails += 1
-
-    if warm_slots < 1:
-        print("\ntest_lwram_splash_budget: FAILED -- display_warm_cache_random can take "
-              "no slots at all at game start,\nwith both cues freed and only the trie and "
-              "the floor in its way. Every wallpaper change would then read the\ndisc "
-              "over a playing track. Lower TGA_CACHE_FLOOR.", file=sys.stderr)
-        fails += 1
-
-    if jingle > lwram:
-        print("\ntest_lwram_splash_budget: FAILED -- the jingle (%d bytes) does not fit "
-              "in LWRAM even with the cache\nemptied, so a soft-reset return comes back "
-              "to a silent title screen however much art\ntitle_bg_cache_release hands "
-              "over. Lower BOOT_MUSIC_MAX_SECONDS." % jingle, file=sys.stderr)
-        fails += 1
-
-    if resident + TRIE_RESERVE > lwram:
-        over = resident + TRIE_RESERVE - lwram
-        print("\ntest_lwram_splash_budget: FAILED -- a full cache (%d) and the largest "
-              "trie (%d) are %d bytes over LWRAM.\nThe cache is filled at game start and "
-              "the trie is built on the first turn, so the cache wins and the trie\nis "
-              "what goes short -- a prompt with no completions, and no error anywhere.\n"
-              "Lower TGA_CACHE_SLOTS." % (resident, TRIE_RESERVE, over), file=sys.stderr)
-        fails += 1
+    for fn, label in checks:
+        try:
+            fn(b)
+        except AssertionError as e:
+            print(f"\ntest_lwram_splash_budget: FAILED -- {label}\n{e}", file=sys.stderr)
+            fails += 1
 
     if fails:
         sys.exit(1)
 
     print("\ntest_lwram_splash_budget: OK (%d bytes spare, %d bytes of plane headroom)"
-          % (lwram - resident - floor, plane - biggest_span))
+          % (b["lwram"] - b["resident"] - b["floor"], b["plane"] - b["biggest_span"]))
 
 
-main()
+if __name__ == "__main__":
+    main()

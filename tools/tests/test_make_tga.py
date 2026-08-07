@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Host tests for tools/make_tga.py. Run: python tools/tests/test_make_tga.py"""
+"""Host tests for tools/make_tga.py. Run: python tools/tests/test_make_tga.py
+
+check() raises as well as recording, so a failed assertion fails the test under
+pytest -- which is the gate this project actually runs. Recording alone made
+pytest blind to everything except exceptions. main() swallows the raise per test
+so a direct run still reaches every test rather than stopping at the first.
+"""
 import sys
 import tempfile
 from pathlib import Path
@@ -17,6 +23,7 @@ def check(cond, label):
     print(("  ok   " if cond else "  FAIL ") + label)
     if not cond:
         FAILURES.append(label)
+        raise AssertionError(label)
 
 
 def gradient(w=make_tga.WIDTH, h=make_tga.HEIGHT):
@@ -288,7 +295,10 @@ def main():
               test_convert_tree_missing_src_root_is_a_noop,
               test_convert_tree_clears_stale_mood_tgas,
               test_convert_tree_clears_stale_root_level_tgas):
-        t()
+        try:
+            t()
+        except AssertionError:
+            pass
     print()
     if FAILURES:
         print(f"FAILED {len(FAILURES)} check(s):")

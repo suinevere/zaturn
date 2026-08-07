@@ -1,8 +1,8 @@
 """Gate the disc-side contract the mood folders rest on.
 
-This is a source and layout test, not a hardware test -- the runtime half is
-verified on hardware per the plan's Task 4 Step 7, which is the only way to
-observe CD-DA surviving a directory change.
+This is a source and layout test, not a hardware test -- whether CD-DA actually
+survives a directory change can only be observed on real hardware (or in an
+accurate emulator), which is outside what a host-side pytest run can check.
 """
 import re
 from pathlib import Path

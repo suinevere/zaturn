@@ -8,16 +8,22 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 TGA = REPO / "saturn" / "cd" / "data" / "TGA"
 INC = REPO / "saturn" / "src" / "video" / "category_art.inc"
 PNG = REPO / "tools" / "assets" / "png"
 
-# make_tga.py lives in tools/, which is not on sys.path by default.
+# make_tga.py lives in tools/, which is not on sys.path by default. Not imported
+# here at module scope: it does `from PIL import Image`, and pulling that in for
+# every test in this file (most of which never touch PIL) breaks collection of
+# the whole directory for a bare `pytest` run with no tools/.venv -- the same
+# failure test_lwram_splash_budget.py had for a different import. Only
+# test_generator_reproduces_the_splash needs it, so it imports make_tga lazily.
 TOOLS = REPO / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
-import make_tga  # noqa: E402
 
 MOODS = ["WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
          "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE"]
@@ -77,9 +83,17 @@ def test_splash_stays_at_the_root():
         assert not (TGA / mood / "SUINE.TGA").exists()
 
 
-def test_generator_reproduces_the_splash():
-    splash = TGA / "SUINE.TGA"
-    if splash.is_file():
-        splash.unlink()
-    make_tga.convert_tree(PNG, TGA)
-    assert splash.is_file(), "convert_tree must regenerate the root-level splash"
+def test_generator_reproduces_the_splash(tmp_path):
+    # A test suite must not rewrite the repo it is testing: this used to delete
+    # the real SUINE.TGA and run convert_tree over the whole disc TGA tree as
+    # the destination, clobbering all 38 disc pictures on every pytest run.
+    # Reading the real source tree (PNG) is fine -- it is not touched -- but the
+    # generated output goes to tmp_path, never to TGA. The property under test
+    # is unchanged: convert_tree, run against the real sources, must regenerate
+    # the root-level splash.
+    pytest.importorskip("PIL")
+    import make_tga
+
+    make_tga.convert_tree(PNG, tmp_path)
+    assert (tmp_path / "SUINE.TGA").is_file(), \
+        "convert_tree must regenerate the root-level splash"

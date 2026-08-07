@@ -53,6 +53,17 @@ def test_unknown_donor_is_rejected():
         art_queries.validate({"HORROR": {"adjectives": ["x"], "donors": ["NOPE"]}})
 
 
+def test_a_mood_with_no_adjectives_is_rejected():
+    with pytest.raises(ValueError, match="HORROR"):
+        art_queries.validate({"HORROR": {"adjectives": [], "donors": [],
+                                         "target": 99}})
+
+
+def test_a_mood_with_no_target_is_rejected():
+    with pytest.raises(ValueError, match="HORROR"):
+        art_queries.validate({"HORROR": {"adjectives": ["dark"], "donors": []}})
+
+
 def test_a_mood_with_no_reachable_noun_is_rejected():
     """HORROR donating only to itself would produce zero queries -- catch it here."""
     with pytest.raises(ValueError, match="HORROR"):

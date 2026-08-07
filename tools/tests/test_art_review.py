@@ -58,6 +58,18 @@ def test_sheet_covers_only_its_own_mood(tmp_path):
     assert "photos/2/" not in html
 
 
+def test_sheet_escapes_a_quote_in_the_phrase_and_page_url(tmp_path):
+    """A quote in either field must not break out of its HTML attribute --
+    a Pixabay URL with a query string is exactly where one could appear."""
+    rec = record(1)
+    rec["phrase"] = 'dark "haunted" hallway'
+    rec["page_url"] = 'https://pixabay.com/photos/1/?ref="x"'
+    make_candidate(tmp_path, rec)
+    html = art_review.sheet("HORROR", {"1": rec}, tmp_path)
+    assert '"x"' not in html
+    assert "&quot;" in html
+
+
 def test_promote_moves_accepted_and_leaves_rejected(tmp_path):
     cand, png = tmp_path / "c", tmp_path / "png"
     recs = {"1": record(1), "2": record(2)}

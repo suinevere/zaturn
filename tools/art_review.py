@@ -8,11 +8,16 @@ Description: The metric gate removes what is provably unusable; everything left
 
     Verdicts live in their own file rather than in the manifest, so a review
     session can be interrupted and resumed without a half-written manifest.
+
+    HAMMING_MAX = 6 is out of the 64 bits a phash carries: under 10% of bits
+    differing is the conventional near-duplicate threshold for perceptual
+    hashes, tight enough that unrelated photos essentially never collide.
 Author: suinevere
-Dependencies: base64, json, pathlib, PIL, art_status
+Dependencies: base64, html, json, pathlib
 Globals: HAMMING_MAX
 """
 import base64
+import html
 import json
 from pathlib import Path
 
@@ -24,6 +29,8 @@ HAMMING_MAX = 6
 def _thumb_uri(path):
     """Embed a candidate PNG as a data: URI.
 
+    Description: Keeps the sheet a single self-contained file, with no
+        reference back to the candidates directory it was built from.
     Author: suinevere
     Dependencies: base64
     Globals: N/A
@@ -39,8 +46,10 @@ def _thumb_uri(path):
 def sheet(mood, records, candidates_dir):
     """Render one mood's candidates as a self-contained HTML review page.
 
+    Description: Renders with zero candidates rather than refusing to -- the
+        likely state of most moods on a first, small calibration run.
     Author: suinevere
-    Dependencies: N/A
+    Dependencies: html
     Globals: N/A
     Params: mood -- the mood folder name; records -- the manifest dict;
         candidates_dir -- where fetch_art wrote the PNGs
@@ -57,10 +66,11 @@ def sheet(mood, records, candidates_dir):
         cells.append(
             f'<figure data-id="{r["id"]}">'
             f'<img src="{src}" width="320" height="224" alt="">'
-            f'<figcaption>{r["phrase"]}<br>'
+            f'<figcaption>{html.escape(r["phrase"])}<br>'
             f'lum {r["luminance"]} &middot; busy {r["busyness"]} '
             f'&middot; band {r["banding"]}<br>'
-            f'<a href="{r["page_url"]}" target="_blank">{r["id"]}</a><br>'
+            f'<a href="{html.escape(r["page_url"], quote=True)}" '
+            f'target="_blank">{r["id"]}</a><br>'
             f'<label><input type="checkbox" checked> keep</label>'
             f'</figcaption></figure>'
         )
@@ -87,6 +97,8 @@ def sheet(mood, records, candidates_dir):
 def _hamming(a, b):
     """Hamming distance between two hex perceptual hashes.
 
+    Description: Unequal lengths mean the hashes came from different phash
+        settings and are not comparable, so they are treated as maximally far.
     Author: suinevere
     Dependencies: N/A
     Globals: N/A
@@ -169,6 +181,8 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
 def main(argv):
     """Write the contact sheets, or promote a downloaded verdicts file.
 
+    Description: The two subcommands are separate runs on purpose -- a review
+        session (opening sheets, checking boxes) happens between them.
     Author: suinevere
     Dependencies: fetch_art
     Globals: N/A

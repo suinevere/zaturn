@@ -40,6 +40,7 @@ Candidate = namedtuple("Candidate", "query hit scores verdict phash path")
 def load_manifest(path):
     """Read the provenance manifest, or an empty one if it does not exist yet.
 
+    Description: A missing manifest means "first run", not an error.
     Author: suinevere
     Dependencies: json
     Globals: N/A
@@ -56,6 +57,8 @@ def load_manifest(path):
 def save_manifest(path, data):
     """Write the provenance manifest, sorted so its diffs stay readable.
 
+    Description: Creates the parent directory, so a first run on a clean
+        checkout does not need one made for it.
     Author: suinevere
     Dependencies: json
     Globals: N/A
@@ -185,6 +188,15 @@ class PixabayFetcher:
         self.pause = pause
 
     def search(self, phrase, per_page=12):
+        """Query Pixabay for one phrase and map hits to the shape harvest() expects.
+
+        Author: suinevere
+        Dependencies: requests
+        Globals: ENDPOINT
+        Params: phrase -- a search phrase; per_page -- Pixabay's page size
+        Returns: a list of {id, page_url, image_url} dicts, empty on any
+            non-200 response
+        """
         time.sleep(self.pause)
         r = self.session.get(ENDPOINT, timeout=30, params={
             "key": self.key, "q": phrase, "image_type": "photo",
@@ -199,6 +211,14 @@ class PixabayFetcher:
                 for h in r.json().get("hits", [])]
 
     def download(self, url):
+        """Fetch one image's raw bytes.
+
+        Author: suinevere
+        Dependencies: requests
+        Globals: N/A
+        Params: url -- an image_url returned by search()
+        Returns: the response body as bytes
+        """
         r = self.session.get(url, timeout=60)
         r.raise_for_status()
         return r.content

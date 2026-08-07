@@ -40,12 +40,17 @@ def validate(vocab):
         for donor in entry.get("donors", []):
             if donor not in MOODS:
                 raise ValueError(f"{mood}: donor {donor} is not a mood folder")
+        target = entry.get("target")
+        if not isinstance(target, int) or isinstance(target, bool) or target <= 0:
+            raise ValueError(f"{mood} has no positive integer target")
     return vocab
 
 
 def load(path):
     """Read and validate art_queries.json.
 
+    Description: The only entry point production code uses to reach the
+        vocabulary, so nothing downstream ever sees an unvalidated one.
     Author: suinevere
     Dependencies: json
     Globals: N/A

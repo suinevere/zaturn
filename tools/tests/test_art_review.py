@@ -9,6 +9,8 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import art_review
 import art_status
+import fetch_art
+from art_nouns import MOODS
 
 
 def record(pid, mood="HORROR", donor="HOUSE", noun="hallway", phash="0" * 16,
@@ -47,6 +49,12 @@ def test_sheet_is_self_contained_and_names_its_sources(tmp_path):
 
     assert "dark hallway" in html
     assert "pixabay.com/photos/1/" in html
+
+
+def test_sheet_with_no_candidates_still_renders(tmp_path):
+    html = art_review.sheet("HORROR", {}, tmp_path)
+    assert "<html" in html and "</html>" in html
+    assert "0 candidates" in html
 
 
 def test_sheet_covers_only_its_own_mood(tmp_path):
@@ -124,3 +132,40 @@ def test_dedup_keeps_a_candidate_far_from_every_accepted_hash():
     new = record(2, mood="HOUSE", phash="00000000000000ff")
     kept = art_review.dedup([new], already_accepted=["ff00ff00ff00ff00"])
     assert [r["id"] for r in kept] == [2]
+
+
+def test_main_sheets_writes_one_page_per_mood_and_seeds_dedup_from_accepted(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    cand = assets / "candidates"
+    new = record(1, mood="HORROR", phash="ff00ff00ff00ff01")
+    already = record(2, mood="HORROR", phash="ff00ff00ff00ff00",
+                     status=art_status.ACCEPTED)
+    make_candidate(cand, new)
+    fetch_art.save_manifest(assets / "art_manifest.json",
+                            {"1": new, "2": already})
+
+    assert art_review.main(["--sheets"], repo=tmp_path) == 0
+
+    pages = list((assets / "sheets").glob("*.html"))
+    assert len(pages) == len(MOODS)
+    horror_html = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
+    assert "dark hallway" not in horror_html, \
+        "candidate 1 is a near-duplicate of the already-accepted candidate 2"
+
+
+def test_main_promote_moves_accepted_and_updates_the_manifest_on_disk(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    cand = assets / "candidates"
+    rec = record(1)
+    make_candidate(cand, rec)
+    manifest_path = assets / "art_manifest.json"
+    fetch_art.save_manifest(manifest_path, {"1": rec})
+
+    verdicts_path = tmp_path / "verdicts.json"
+    verdicts_path.write_text(json.dumps({"1": "accept"}), encoding="utf-8")
+
+    assert art_review.main(["--promote", str(verdicts_path)], repo=tmp_path) == 0
+
+    assert (assets / "png" / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
+    saved = fetch_art.load_manifest(manifest_path)
+    assert saved["1"]["status"] == art_status.ACCEPTED

@@ -45,6 +45,30 @@ def test_crop_always_produces_the_disc_size():
         assert art_metrics.crop(Image.new("RGB", size)).size == (320, 224)
 
 
+def test_crop_preserves_aspect_ratio_instead_of_stretching():
+    """A resize((320, 224)) that ignores the source aspect ratio would squash
+    a circle into an ellipse; crop() must scale both axes by the same factor
+    and only crop, never stretch. Output size alone cannot catch that."""
+    size = 640
+    im = Image.new("RGB", (size, size), (0, 0, 0))
+    d = ImageDraw.Draw(im)
+    r = size // 3
+    cx = cy = size // 2
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 255, 255))
+
+    out = art_metrics.crop(im)
+    px = out.load()
+    y = out.size[1] // 2
+    xs = [x for x in range(out.size[0]) if px[x, y][0] > 200]
+    x = out.size[0] // 2
+    ys = [yy for yy in range(out.size[1]) if px[x, yy][0] > 200]
+
+    width_px = max(xs) - min(xs)
+    height_px = max(ys) - min(ys)
+    assert abs(width_px - height_px) <= 2, \
+        "a circle stretched into an ellipse means the aspect ratio was not kept"
+
+
 def test_luminance_tracks_brightness():
     assert art_metrics.score(flat(20)).luminance < 40
     assert art_metrics.score(flat(240)).luminance > 200

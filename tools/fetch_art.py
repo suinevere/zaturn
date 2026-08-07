@@ -182,9 +182,11 @@ class PixabayFetcher:
     """
 
     def __init__(self, key, session=None, pause=0.7):
-        import requests
+        if session is None:
+            import requests
+            session = requests.Session()
         self.key = key
-        self.session = session or requests.Session()
+        self.session = session
         self.pause = pause
 
     def search(self, phrase, per_page=12):

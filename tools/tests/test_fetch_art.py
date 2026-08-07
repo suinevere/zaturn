@@ -2,6 +2,7 @@
 import io
 import json
 import sys
+import types
 from pathlib import Path
 
 from PIL import Image
@@ -44,6 +45,34 @@ class StubFetcher:
     def download(self, url):
         self.downloads += 1
         return png_bytes(self.value)
+
+
+class FakeResponse:
+    """Stands in for a requests.Response."""
+
+    def __init__(self, status_code=200, payload=None, content=b""):
+        self.status_code = status_code
+        self._payload = payload or {}
+        self.content = content
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+class FakeSession:
+    """Stands in for a requests.Session. Never touches the network."""
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def get(self, url, timeout=None, params=None):
+        self.calls.append((url, params))
+        return self.responses.pop(0)
 
 
 PLAN = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "dark hallway"),
@@ -141,3 +170,81 @@ def test_no_api_key_is_reported_not_raised(monkeypatch, capsys):
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
     assert fetch_art.main([]) == 0
     assert "PIXABAY_API_KEY" in capsys.readouterr().out
+
+
+def test_main_runs_the_real_chain_with_a_stubbed_fetcher(monkeypatch, capsys):
+    """Exercises load -> nouns_by_mood -> build -> harvest against the real
+    shipped vocabulary and classifier table, with only the network layer
+    (PixabayFetcher itself) stubbed out."""
+    monkeypatch.setenv("PIXABAY_API_KEY", "test-key")
+    saved = {}
+
+    def fake_save_manifest(path, data):
+        saved["data"] = data
+
+    monkeypatch.setattr(fetch_art, "load_manifest", lambda path: {})
+    monkeypatch.setattr(fetch_art, "save_manifest", fake_save_manifest)
+    monkeypatch.setattr(fetch_art, "PixabayFetcher",
+                        lambda key: StubFetcher(per_phrase=1, value=70))
+
+    assert fetch_art.main(["1"]) == 0
+    assert saved["data"], "the chain must reach harvest and write manifest entries"
+    assert all("mood" in r and "phrase" in r for r in saved["data"].values())
+    assert any(r["status"] == art_status.CANDIDATE for r in saved["data"].values())
+    out = capsys.readouterr().out
+    assert "candidates written" in out
+
+
+def test_pixabay_fetcher_search_maps_hits_and_prefers_large_image():
+    payload = {"hits": [
+        {"id": 42, "pageURL": "https://pixabay.com/photos/42/",
+         "largeImageURL": "https://cdn.example/large42.jpg",
+         "webformatURL": "https://cdn.example/web42.jpg"},
+        {"id": 43, "pageURL": "https://pixabay.com/photos/43/",
+         "webformatURL": "https://cdn.example/web43.jpg"},
+    ]}
+    session = FakeSession([FakeResponse(200, payload)])
+    f = fetch_art.PixabayFetcher("key", session=session, pause=0)
+    hits = f.search("dark hallway", per_page=12)
+    assert hits[0] == {"id": 42, "page_url": "https://pixabay.com/photos/42/",
+                       "image_url": "https://cdn.example/large42.jpg"}
+    assert hits[1]["image_url"] == "https://cdn.example/web43.jpg", \
+        "must fall back to webformatURL when largeImageURL is absent"
+
+
+def test_pixabay_fetcher_search_returns_empty_on_non_200():
+    session = FakeSession([FakeResponse(503, {})])
+    f = fetch_art.PixabayFetcher("key", session=session, pause=0)
+    assert f.search("dark hallway", per_page=12) == []
+
+
+def test_pixabay_fetcher_download_returns_response_content():
+    session = FakeSession([FakeResponse(200, content=b"pngbytes")])
+    f = fetch_art.PixabayFetcher("key", session=session, pause=0)
+    assert f.download("https://cdn.example/x.jpg") == b"pngbytes"
+
+
+def test_phash_reflects_image_content_not_a_constant(tmp_path, monkeypatch):
+    """A stubbed imagehash module, so this pins _phash's own wiring
+    regardless of whether the real optional dependency is installed."""
+    class FakeHash:
+        def __init__(self, digest):
+            self._digest = digest
+
+        def __str__(self):
+            return self._digest
+
+    def fake_phash(im):
+        px = im.convert("L").tobytes()
+        return FakeHash(format(sum(px) % (16 ** 16), "016x"))
+
+    monkeypatch.setitem(sys.modules, "imagehash",
+                        types.SimpleNamespace(phash=fake_phash))
+
+    p1, p2 = tmp_path / "a.png", tmp_path / "b.png"
+    Image.new("RGB", (320, 224), (10, 10, 10)).save(p1, "PNG")
+    Image.new("RGB", (320, 224), (245, 245, 245)).save(p2, "PNG")
+
+    h1, h2 = fetch_art._phash(p1), fetch_art._phash(p2)
+    assert h1 and h2
+    assert h1 != h2, "a constant _phash would collapse every candidate to one hash"

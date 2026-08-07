@@ -178,21 +178,24 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
     return counts
 
 
-def main(argv):
+def main(argv, repo=None):
     """Write the contact sheets, or promote a downloaded verdicts file.
 
     Description: The two subcommands are separate runs on purpose -- a review
-        session (opening sheets, checking boxes) happens between them.
+        session (opening sheets, checking boxes) happens between them. `repo`
+        defaults to the real repository root; tests pass a tmp_path so a run
+        never writes sheets or promotions into the working tree.
     Author: suinevere
     Dependencies: fetch_art
     Globals: N/A
-    Params: argv -- ["--sheets"] or ["--promote", "<verdicts.json>"]
+    Params: argv -- ["--sheets"] or ["--promote", "<verdicts.json>"];
+        repo -- optional repository root override, for tests
     Returns: 0 always
     """
     import fetch_art
     from art_nouns import MOODS
 
-    repo = Path(__file__).resolve().parents[1]
+    repo = repo or Path(__file__).resolve().parents[1]
     assets = repo / "tools" / "assets"
     manifest_path = assets / "art_manifest.json"
     manifest = fetch_art.load_manifest(manifest_path)

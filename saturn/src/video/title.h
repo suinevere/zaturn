@@ -3,7 +3,7 @@
  | Description: Title screen, background art, TGA loading, CD directory juggling,
  |   and the boot sequence random seed.
  | Author: suinevere
- | Dependencies: app_state.h, display.h, menu.h, SRL
+ | Dependencies: app_state.h, display.h, menu.h, bg_dim.h, SRL
  ----------------------*/
 #ifndef TITLE_H
 #define TITLE_H
@@ -151,8 +151,10 @@ void title_bg_fade_in_ex(int frames, TitleFadeStep step);
  | title_bg_dyn_fade
  | Description: Dims the background wallpaper (NBG0) alone, for the in-game
  |   transition between one room mood's picture and the next. `level` runs 0
- |   (black) to 255 (unmodified); 255 fully disengages, leaving no residue for
- |   the title and page fades that share the hardware.
+ |   (black) to 255 (unmodified); at 255 the resting brightness is whatever
+ |   offset title_bg_dim_set last held (see bg_dim.h), and the colour-offset
+ |   channel is released only when that composed value is neutral -- with no
+ |   dim held, behaviour is unchanged from before the dim existed.
  |     Unlike the four fades above it deliberately does NOT touch NBG3: in game
  |   that layer carries the player's text, and dimming it would blink a sentence
  |   out mid-read. It therefore runs on color offset channel B rather than A --
@@ -162,12 +164,28 @@ void title_bg_fade_in_ex(int frames, TitleFadeStep step);
  |   per-frame tick, and stalling the interpreter for a whole fade every time a
  |   room's mood changed is exactly what this avoids.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: SRL, bg_dim.h
  | Globals: N/A
  | Params: level -- 0 (black) to 255 (unmodified)
  | Returns: N/A
  ----------------------*/
 void title_bg_dyn_fade(int level);
+
+/*----------------------
+ | title_bg_dim_set / title_bg_dim_get
+ | Description: Sets or reads the player's chosen wallpaper offset (see
+ |   bg_dim.h), held across rooms and composed into every title_bg_dyn_fade
+ |   ramp -- including the one a screen-wide title fade's disengage re-applies,
+ |   so the dim survives a trip through the Options menu. set re-applies the
+ |   new offset to VDP2 immediately, for a menu row to preview it live.
+ | Author: suinevere
+ | Dependencies: bg_dim.h
+ | Globals: N/A
+ | Params: offset -- -255 (darken) to +255 (lighten), clamped
+ | Returns: get returns the held offset; set returns N/A
+ ----------------------*/
+void title_bg_dim_set(int offset);
+int  title_bg_dim_get(void);
 
 /*----------------------
  | title_and_seed

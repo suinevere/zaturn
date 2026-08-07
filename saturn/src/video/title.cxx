@@ -5,9 +5,10 @@
  | Author: suinevere
  | Dependencies: app_state.h, display.h, menu.h, soft_reset.h, game_catalog.h
  |   (the Z3 directory record cd_restore_z3 re-applies), online.h, boot_music.h,
- |   sound/music.h, text_map.h, SRL
+ |   sound/music.h, text_map.h, bg_dim.h, SRL
  ----------------------*/
 #include "title.h"
+#include "bg_dim.h"
 #include "app_state.h"
 #include "display.h"
 #include "sound/music.h"   /* TC_*: the categories the preload walks */
@@ -1075,9 +1076,14 @@ void title_bg_fade_out(int frames) {
 
 /*----------------------
  | title_bg_fade_reset
- | Description: See title.h.
+ | Description: See title.h. Releases both layers from channel A, then
+ |   re-applies title_bg_dyn_fade(255) so a held wallpaper dim -- dropped by
+ |   title_fade_engage clearing g_dyn_faded, since a scroll uses channel A or B,
+ |   not both -- reclaims channel B rather than staying dark or popping back to
+ |   full brightness. A no-op when no dim is set: bg_dim_effective(255) is then 0
+ |   and title_bg_dyn_fade takes its early return.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: SRL, bg_dim.h
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
@@ -1086,12 +1092,35 @@ void title_bg_fade_reset(void) {
     title_fade_set(0);
     SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+    title_bg_dyn_fade(255);
 }
+
+/*----------------------
+ | title_bg_dim_set / title_bg_dim_get
+ | Description: See title.h. The value lives in bg_dim.c; this pair is the half
+ |   that touches VDP2, re-applying the new offset immediately so a menu row can
+ |   preview it.
+ | Author: suinevere
+ | Dependencies: bg_dim.h
+ | Globals: N/A
+ | Params: offset -- -255..+255, clamped by bg_dim_set
+ | Returns: get returns the held offset; set returns N/A
+ ----------------------*/
+void title_bg_dim_set(int offset) {
+    bg_dim_set(offset);
+    title_bg_dyn_fade(255);
+}
+
+int title_bg_dim_get(void) { return bg_dim_get(); }
 
 /*----------------------
  | title_bg_dyn_fade
  | Description: Dims the wallpaper alone, for the in-game transition between one
- |   room mood's picture and the next. `level` runs 0 (black) to 255 (normal).
+ |   room mood's picture and the next. `level` runs 0 (black) to 255 (normal), but
+ |   the resting state at 255 is now the held dim from bg_dim.c rather than
+ |   unmodified brightness -- bg_dim_effective composes the two, additively and
+ |   clamped once, so a lightening hold still dips toward black through the ramp
+ |   instead of scaling around its own resting point.
  |
  |   This cannot go through title_fade_engage: that points NBG0 AND NBG3 at
  |   channel A so the title screen dims as a unit, which in game would blink the
@@ -1105,7 +1134,9 @@ void title_bg_fade_reset(void) {
  |
  |   Engage/disengage happen only at the ends of a ramp, because UseColorOffset
  |   calls slColOffsetOn(0) and re-registers; the per-frame steps in between are
- |   just SetColorOffsetB value writes.
+ |   just SetColorOffsetB value writes. Channel B is released only when the
+ |   composed value is neutral -- level 255 with no hold set -- so a held dim keeps
+ |   the channel claimed at rest, byte-identical to today when no hold is set.
  |
  |   A screen-wide fade taking NBG0 releases this claim: title_fade_engage clears
  |   g_dyn_faded, so a ramp interrupted by one (a soft reset mid-transition) does
@@ -1113,16 +1144,19 @@ void title_bg_fade_reset(void) {
  |   channel B afterwards, which is deliberate -- SRL seeds it there and no fade
  |   in this file wants it, so the seed is cleared for the session and inert.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: SRL, bg_dim.h
  | Globals: g_dyn_faded
  | Params: level -- 0 (black) to 255 (unmodified)
  | Returns: N/A
  ----------------------*/
 void title_bg_dyn_fade(int level) {
+    int v;
     if (level < 0)   level = 0;
     if (level > 255) level = 255;
 
-    if (level >= 255) {
+    v = bg_dim_effective(level);
+
+    if (v == 0) {
         if (g_dyn_faded) {
             SRL::VDP2::ColorOffset clear(0, 0, 0);
             SRL::VDP2::SetColorOffsetB(clear);
@@ -1138,8 +1172,7 @@ void title_bg_dyn_fade(int level) {
         SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetB);
         g_dyn_faded = true;
     }
-    SRL::VDP2::ColorOffset off((int16_t)(level - 255), (int16_t)(level - 255),
-                               (int16_t)(level - 255));
+    SRL::VDP2::ColorOffset off((int16_t) v, (int16_t) v, (int16_t) v);
     SRL::VDP2::SetColorOffsetB(off);
 }
 

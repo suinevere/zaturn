@@ -12,17 +12,25 @@ Description: The game draws its text over the picture on VDP2 NBG0, at
                  wide smooth gradient becomes visible steps. Cheaper to reject
                  here than to notice on hardware.
 
-    THRESHOLDS is unvalidated: all three values are guesses, not measurements
-    against real photographs. Reference points from tools/tests/test_art_metrics.py's
-    synthetic fixtures, so a future tuning pass starts from measured numbers:
+    THRESHOLDS is calibrated against the first real fetch: 524 Pixabay
+    photographs scored by this module (tools/assets/art_manifest.json).
+    Measured distribution, with each threshold's reject rate against it:
+      luminance p50=105.3 max=227.1 -> threshold 165.0 rejects  7.6%
+      busyness  p50= 26.6 max= 76.1 -> threshold  35.0 rejects ~25%
+      banding   p50=  3.2 max=  7.95 -> threshold  12.0 rejects  0.0%
+    busyness_max was raised from an original 18.0, which rejected 68.3% of
+    that same batch -- far too aggressive once the player's Dimming row is
+    accounted for (see verdict()). banding_max is left at 12.0 on purpose:
+    it has never fired against a real photograph, and there is no evidence
+    a real photograph scoring 6-8 looks bad on Saturn, so lowering it on no
+    evidence would be worse than a quiet gate.
+
+    Reference points from tools/tests/test_art_metrics.py's synthetic
+    fixtures, useful for reasoning about a single metric in isolation:
       flat(120) mid-grey      -> luminance=120.0, busyness=0.0,   banding=0.0
       flat(240) bright        -> luminance=240.0, busyness=0.0,   banding=0.0
       checkerboard(4px cells) -> luminance=177.5, busyness=157.4, banding=0.0
       wide_gamut_gradient     -> luminance=126.9, busyness=1.3,   banding=4.12
-    The wide-gamut gradient is the archetypal banding case (a smooth ramp with
-    >255 unique colours after crop) and it clears banding_max=12.0 with room to
-    spare -- it is not obvious anything realistic would ever score 12. Treat the
-    first real-photo batch from the fetcher as calibration data, not curation.
 Author: suinevere
 Dependencies: PIL
 Globals: THRESHOLDS
@@ -37,7 +45,7 @@ Scores = namedtuple("Scores", "luminance busyness banding")
 
 THRESHOLDS = {
     "luminance_max": 165.0,
-    "busyness_max":  18.0,
+    "busyness_max":  35.0,
     "banding_max":   12.0,
 }
 

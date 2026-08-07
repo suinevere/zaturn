@@ -143,7 +143,7 @@ void display_cycle_row(DisplayCycleRow which, int dir) {
             title_bg_dim_set(display_dim_offset(g_display.dim));
 #endif
         }
-        display_apply();     // colours only; nothing here can fail to load
+        display_apply();     // these rows cannot fail to load, unlike DCR_PALETTE
         return;
     }
     int tries = display_palette_count();

@@ -758,7 +758,7 @@ static int image_slot_of(const char *name) {
  | DISP_BLOB_BYTES_V4
  | Description: The block size of save forms 2, 3 and 4 -- four header bytes plus
  |   the name. Frozen, and named rather than spelled 17, because DISP_BLOB_BYTES
- |   now describes form 5 and the two must not be confused: measuring an old blob
+ |   now describes form 6 and the two must not be confused: measuring an old blob
  |   against the new size rejects every save file already on a card.
  | Author: suinevere
  ----------------------*/

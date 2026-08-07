@@ -166,17 +166,19 @@ def test_manifest_round_trips(tmp_path):
     assert fetch_art.load_manifest(tmp_path / "absent.json") == {}
 
 
-def test_no_api_key_is_reported_not_raised(monkeypatch, capsys):
+def test_no_api_key_is_reported_not_raised(monkeypatch, capsys, tmp_path):
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
     assert fetch_art.main([]) == 0
     assert "PIXABAY_API_KEY" in capsys.readouterr().out
 
 
-def test_main_runs_the_real_chain_with_a_stubbed_fetcher(monkeypatch, capsys):
+def test_main_runs_the_real_chain_with_a_stubbed_fetcher(monkeypatch, capsys, tmp_path):
     """Exercises load -> nouns_by_mood -> build -> harvest against the real
     shipped vocabulary and classifier table, with only the network layer
     (PixabayFetcher itself) stubbed out."""
     monkeypatch.setenv("PIXABAY_API_KEY", "test-key")
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
     saved = {}
 
     def fake_save_manifest(path, data):
@@ -222,6 +224,67 @@ def test_pixabay_fetcher_download_returns_response_content():
     session = FakeSession([FakeResponse(200, content=b"pngbytes")])
     f = fetch_art.PixabayFetcher("key", session=session, pause=0)
     assert f.download("https://cdn.example/x.jpg") == b"pngbytes"
+
+
+def test_dotenv_key_found_in_file_when_environment_is_empty(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text("PIXABAY_API_KEY=abc123\n", encoding="utf-8")
+    env = {}
+    fetch_art.load_dotenv_into_environ(env_path, env)
+    assert env["PIXABAY_API_KEY"] == "abc123"
+
+
+def test_explicit_env_var_wins_over_dotenv_file(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text("PIXABAY_API_KEY=fromfile\n", encoding="utf-8")
+    env = {"PIXABAY_API_KEY": "fromenv"}
+    fetch_art.load_dotenv_into_environ(env_path, env)
+    assert env["PIXABAY_API_KEY"] == "fromenv"
+
+
+def test_missing_dotenv_file_is_harmless(tmp_path):
+    env = {}
+    fetch_art.load_dotenv_into_environ(tmp_path / "absent.env", env)
+    assert env == {}
+
+
+def test_dotenv_handles_quotes_whitespace_comments_and_embedded_equals(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "\n"
+        "# a comment line\n"
+        '  PIXABAY_API_KEY = "abc=123"  \n'
+        "SINGLE='quoted value'\n",
+        encoding="utf-8",
+    )
+    env = {}
+    fetch_art.load_dotenv_into_environ(env_path, env)
+    assert env["PIXABAY_API_KEY"] == "abc=123"
+    assert env["SINGLE"] == "quoted value"
+
+
+def test_malformed_dotenv_lines_are_ignored_not_raised(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "this line has no equals sign\n"
+        "=novalue\n"
+        "PIXABAY_API_KEY=abc123\n",
+        encoding="utf-8",
+    )
+    env = {}
+    fetch_art.load_dotenv_into_environ(env_path, env)
+    assert env == {"PIXABAY_API_KEY": "abc123"}
+
+
+def test_dotenv_default_path_is_beside_the_module_not_the_cwd():
+    assert fetch_art.DOTENV_PATH == Path(fetch_art.__file__).resolve().parent / ".env"
+
+
+def test_dotenv_loader_never_prints_the_value(tmp_path, capsys):
+    env_path = tmp_path / ".env"
+    env_path.write_text("PIXABAY_API_KEY=super-secret-value\n", encoding="utf-8")
+    fetch_art.load_dotenv_into_environ(env_path, {})
+    assert "super-secret-value" not in capsys.readouterr().out
 
 
 def test_phash_reflects_image_content_not_a_constant(tmp_path, monkeypatch):

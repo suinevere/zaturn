@@ -33,6 +33,7 @@ import art_status
 
 ENDPOINT = "https://pixabay.com/api/"
 LICENCE = "Pixabay Content License"
+DOTENV_PATH = Path(__file__).resolve().parent / ".env"
 
 Candidate = namedtuple("Candidate", "query hit scores verdict phash path")
 
@@ -226,20 +227,81 @@ class PixabayFetcher:
         return r.content
 
 
+def _parse_dotenv(path):
+    """Parse a .env file's KEY=value lines into a dict.
+
+    Description: Deliberately minimal -- python-dotenv is not a listed
+        dependency and a handful of lines does not justify one. A line with no
+        "=", an empty key, or an unreadable file degrades to "found nothing"
+        rather than raising, matching this module's everything-degrades rule.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: N/A
+    Params: path -- the .env file; absent or unreadable yields {}
+    Returns: dict of parsed KEY -> value pairs
+    """
+    path = Path(path)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+
+    out = {}
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        out[key] = value
+    return out
+
+
+def load_dotenv_into_environ(path=None, env=None):
+    """Fill unset variables in `env` from a .env file.
+
+    Description: An already-set variable always wins, so a one-off
+        `PIXABAY_API_KEY=... python fetch_art.py` still overrides the file.
+        Never prints or otherwise surfaces a value -- a secret in a report is
+        still a leak.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: DOTENV_PATH
+    Params: path -- the .env file; defaults to DOTENV_PATH (tools/.env,
+        beside this module rather than the current working directory);
+        env -- the mapping to fill; defaults to os.environ
+    Returns: N/A
+    """
+    if path is None:
+        path = DOTENV_PATH
+    if env is None:
+        env = os.environ
+    for key, value in _parse_dotenv(path).items():
+        env.setdefault(key, value)
+
+
 def main(argv):
     """Run a harvest against the shipped vocabulary.
 
     Description: Defaults to 99 survivors per mood -- matching both the
         vocabulary's own "target" and make_tga.convert_tree's per-mood cap --
         and no overall ceiling, so a default run can fetch up to 99 * len(MOODS)
-        candidates across the twelve moods.
+        candidates across the twelve moods. Reads PIXABAY_API_KEY from
+        tools/.env when it is not already exported, so an explicit export
+        still wins over the file.
     Author: suinevere
     Dependencies: art_queries, art_nouns
-    Globals: N/A
+    Globals: DOTENV_PATH
     Params: argv -- [] | [per_mood_budget] | [per_mood_budget, total_budget]
     Returns: 0 always; failures are reported, not raised
     """
     repo = Path(__file__).resolve().parents[1]
+    load_dotenv_into_environ()
     key = os.environ.get("PIXABAY_API_KEY", "")
     if not key:
         print("  PIXABAY_API_KEY is not set. Get a free key at "

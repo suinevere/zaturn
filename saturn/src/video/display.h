@@ -99,7 +99,36 @@ typedef struct {
     int bg;        /* 0..DISP_BG_COLOR_N-1: always a color */
     int text;      /* 0..DISP_TEXT_N-1 */
     int image;     /* image slot, or DISP_IMAGE_NONE */
+    int dim;       /* 0..DISP_DIM_N-1; DISP_DIM_NORMAL is unmodified */
 } DisplayState;
+
+/*----------------------
+ | DISP_DIM_N / DISP_DIM_NORMAL
+ | Description: The wallpaper-dim row's length and its neutral stop. Discrete
+ |   steps rather than a continuous slider: the picture is 8bpp, so a large
+ |   offset clips distinct palette entries onto one value and posterises, and
+ |   a stop the player can name is easier to return to than a position on a
+ |   bar.
+ | Author: suinevere
+ ----------------------*/
+#define DISP_DIM_N      7
+#define DISP_DIM_NORMAL 2
+
+/*----------------------
+ | display_dim_offset / display_dim_name / display_cycle_dim
+ | Description: dim_offset is the signed VDP2 colour offset a dim-row index
+ |   holds (0 outside 0..DISP_DIM_N-1); dim_name is that index's label
+ |   ("Normal" for the fallback too, out of range or not); cycle_dim steps
+ |   d->dim one stop in `dir`, wrapping.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: index -- 0..DISP_DIM_N-1; d -- the state to update; dir -- -1 or +1
+ | Returns: dim_offset the offset; dim_name the label; cycle_dim N/A
+ ----------------------*/
+int display_dim_offset(int index);
+const char *display_dim_name(int index);
+void display_cycle_dim(DisplayState *d, int dir);
 
 /*----------------------
  | color / preset lookups (display_bg_rgb .. display_preset_text)
@@ -269,24 +298,37 @@ void display_cycle_palette(DisplayState *d, int dir);
 
 /*----------------------
  | DISP_BLOB_BYTES
- | Description: The save-block size and layout: [sentinel=4][palette][bg][text]
- |   [image name, NUL-padded]. bg is always a color, stored independently of any
- |   image because it is what shows through the menu frames and survives
+ | Description: The save-block size and layout: [sentinel=6][palette][bg][text]
+ |   [dim][image name, NUL-padded]. bg is always a color, stored independently of
+ |   any image because it is what shows through the menu frames and survives
  |   switching the picture off. palette holds 0xFE for Dynamic, which stores no
  |   name at all because its picture is a consequence of where the player is
- |   standing rather than a setting.
+ |   standing rather than a setting. dim is the wallpaper-offset row index (see
+ |   DISP_DIM_N); sentinels 1-4 predate it and always decode to DISP_DIM_NORMAL.
+ |
+ |   The sentinel is 6, not 5: options.cxx's MOJOOPTS reader (options_load)
+ |   locates the gameplay block ahead of this one by testing whether that
+ |   position's byte equals 5, and 5 was picked there specifically because no
+ |   display sentinel had ever used it -- see options.cxx's "gameplay-block
+ |   sentinel" comment and test_display.c's test_five_is_not_a_display_sentinel.
+ |   Taking 5 here would make that peek ambiguous for a saved blob that has this
+ |   block but no gameplay block ahead of it. 6 carries no such meaning anywhere
+ |   else in the save format.
  |
  |   display_encode always writes the name field empty now (see its comment):
  |   no UI path can pin a picture to a colour preset any more, and a synthesised
  |   path is wider than the field regardless. The field stays in the layout
  |   rather than being reclaimed -- the block size is what older forms are told
- |   apart by, a shorter sentinel-4 would make an old blob and a new one
+ |   apart by, a shorter sentinel-6 would make an old blob and a new one
  |   indistinguishable, and display_decode still reads a name out of it for
  |   blobs written before this change.
  |
- |   Three older forms are still read, and all three predate Dynamic taking palette
- |   index 0 -- so a colour-preset index in any of them is one lower than it should
- |   be now and is shifted up on read. Sentinel 3 is the same layout as 4 without
+ |   Four older forms are still read. Sentinel 4 is this same layout minus the
+ |   dim byte -- its block is DISP_BLOB_BYTES_V4 (17) bytes where a sentinel-6
+ |   block is DISP_BLOB_BYTES (18), so length and sentinel agree -- and,
+ |   along with sentinels 2 and 3, predates Dynamic taking palette index 0, so a
+ |   colour-preset index in any of them is one lower than it should be now and is
+ |   shifted up on read. Sentinel 3 is the same layout as 4 without
  |   the Dynamic marker; sentinel 2 packed the image into bg (decoding to that image
  |   over black, losing the color beneath); sentinel 1 is the original four-byte,
  |   no-name form (colors honored, any image reference refused). Nothing writes
@@ -295,7 +337,7 @@ void display_cycle_palette(DisplayState *d, int dir);
  |   offers to "I wanted a picture here."
  | Author: suinevere
  ----------------------*/
-#define DISP_BLOB_BYTES (4 + DISP_IMAGE_NAME_MAX)
+#define DISP_BLOB_BYTES (5 + DISP_IMAGE_NAME_MAX)
 
 /*----------------------
  | display_encode / display_decode

@@ -70,6 +70,49 @@ static const char *const TEXT_NAME[DISP_TEXT_N] = {
 };
 
 /*----------------------
+ | DIM_STOPS / DIM_NAMES
+ | Description: The wallpaper offsets the Display row steps through, brightest
+ |   first, and their labels. Steps of 32 rather than a continuous slider: the
+ |   picture is 8bpp, so a large offset clips distinct palette entries onto one
+ |   value and posterises, and a stop the player can name is easier to return to
+ |   than a position on a bar.
+ | Author: suinevere
+ ----------------------*/
+static const short DIM_STOPS[DISP_DIM_N] = { 64, 32, 0, -32, -64, -96, -128 };
+static const char *const DIM_NAMES[DISP_DIM_N] = {
+    "Lighter +2", "Lighter +1", "Normal", "Darker -1",
+    "Darker -2", "Darker -3", "Darker -4"
+};
+
+/*----------------------
+ | display_dim_offset
+ | Description: See display.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: DIM_STOPS
+ | Params: index -- 0..DISP_DIM_N-1
+ | Returns: the signed offset, or 0 if index is out of range
+ ----------------------*/
+int display_dim_offset(int index) {
+    if (index < 0 || index >= DISP_DIM_N) return 0;
+    return (int) DIM_STOPS[index];
+}
+
+/*----------------------
+ | display_dim_name
+ | Description: See display.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: DIM_NAMES
+ | Params: index -- 0..DISP_DIM_N-1
+ | Returns: the label, or Normal's label if index is out of range
+ ----------------------*/
+const char *display_dim_name(int index) {
+    if (index < 0 || index >= DISP_DIM_N) return DIM_NAMES[DISP_DIM_NORMAL];
+    return DIM_NAMES[index];
+}
+
+/*----------------------
  | DisplayPreset / PRESETS
  | Description: The microcomputer presets (name + background + text index). Names
  |   are shortened where the full hardware name would overflow the selector field.
@@ -532,12 +575,14 @@ void display_defaults(DisplayState *d) {
         d->bg      = DISP_BG_BLACK;
         d->text    = DISP_TEXT_WHITE;
         d->image   = display_dynamic_slot();
+        d->dim     = DISP_DIM_NORMAL;
     } else {
         /* No art on this disc, so Dynamic has nothing to show. */
         d->palette = DISP_PAL_PRESET0;         /* IBM PC (MDA): closest to the */
         d->bg      = PRESETS[0].bg;            /* previous hardcoded appearance */
         d->text    = PRESETS[0].text;
         d->image   = DISP_IMAGE_NONE;
+        d->dim     = DISP_DIM_NORMAL;
     }
 }
 
@@ -583,6 +628,19 @@ static int step(int value, int dir, int count) {
     if (value >= count) value = 0;
     if (value < 0)      value = count - 1;
     return value;
+}
+
+/*----------------------
+ | display_cycle_dim
+ | Description: See display.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: d -- the state to update; dir -- +1/-1
+ | Returns: N/A
+ ----------------------*/
+void display_cycle_dim(DisplayState *d, int dir) {
+    d->dim = step(d->dim, dir, DISP_DIM_N);
 }
 
 /*----------------------
@@ -697,10 +755,21 @@ static int image_slot_of(const char *name) {
 #define DISP_BLOB_DYNAMIC 0xFE
 
 /*----------------------
+ | DISP_BLOB_BYTES_V4
+ | Description: The block size of save forms 2, 3 and 4 -- four header bytes plus
+ |   the name. Frozen, and named rather than spelled 17, because DISP_BLOB_BYTES
+ |   now describes form 5 and the two must not be confused: measuring an old blob
+ |   against the new size rejects every save file already on a card.
+ | Author: suinevere
+ ----------------------*/
+#define DISP_BLOB_BYTES_V4 (4 + DISP_IMAGE_NAME_MAX)
+
+/*----------------------
  | display_encode
- | Description: Serializes a DisplayState into a save blob (sentinel 4): palette,
- |   background, and text bytes (Dynamic is marked DISP_BLOB_DYNAMIC). The name
- |   field is always written empty now -- see the comment below.
+ | Description: Serializes a DisplayState into a save blob (sentinel 6 -- not 5,
+ |   see DISP_BLOB_BYTES in display.h): palette, background, text, and dim bytes
+ |   (Dynamic is marked DISP_BLOB_DYNAMIC). The name field is always written
+ |   empty now -- see the comment below.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -710,11 +779,12 @@ static int image_slot_of(const char *name) {
 int display_encode(const DisplayState *d, unsigned char *out) {
     int i;
 
-    out[0] = 4;                                /* block sentinel: + the Dynamic palette */
+    out[0] = 6;                                /* block sentinel: + dim */
     out[1] = (d->palette == DISP_PAL_DYNAMIC) ? DISP_BLOB_DYNAMIC
            : (unsigned char) d->palette;
     out[2] = (unsigned char) d->bg;            /* always a color now */
     out[3] = (unsigned char) d->text;
+    out[4] = (unsigned char) d->dim;
 
     /* The name field is frozen at its size for save-format compatibility and is
        no longer populated: no UI path can produce palette != Dynamic with
@@ -725,7 +795,7 @@ int display_encode(const DisplayState *d, unsigned char *out) {
        back in, which corrupts silently rather than failing clean. If
        per-picture pinning ever returns, it needs a wider field and a new
        sentinel regardless, not this one repurposed. */
-    for (i = 0; i < DISP_IMAGE_NAME_MAX; i++) out[4 + i] = 0;
+    for (i = 0; i < DISP_IMAGE_NAME_MAX; i++) out[5 + i] = 0;
     return DISP_BLOB_BYTES;
 }
 
@@ -734,8 +804,9 @@ int display_encode(const DisplayState *d, unsigned char *out) {
  | Description: Restores a DisplayState from a save blob, defaulting first so a bad
  |   blob leaves a sane state. Handles the original slot-only form (sentinel 1,
  |   image slots refused since the picture cannot be trusted), and the named forms
- |   (sentinels 2/3/4): resolves the image by name, refusing one this disc lacks,
- |   and validates each field independently.
+ |   (sentinels 2/3/4/6): resolves the image by name, refusing one this disc lacks,
+ |   and validates each field independently. Only sentinel 6 carries a dim byte;
+ |   the older forms leave d->dim at the DISP_DIM_NORMAL display_defaults set.
  |
  |   Sentinels 1, 2 and 3 were written before Dynamic took palette index 0, so a
  |   colour-preset index stored in them is one lower than it should be now and is
@@ -775,11 +846,49 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         } else ok = 0;
         if (buf[2] < DISP_BG_COLOR_N) d->bg      = (int) buf[2];  else ok = 0;
         if (buf[3] < DISP_TEXT_N)     d->text    = (int) buf[3];  else ok = 0;
+    } else if (buf[0] == 6) {
+        /* Current form: sentinel 2/3/4's layout plus a dim byte ahead of the
+           name, and its own length -- DISP_BLOB_BYTES, not DISP_BLOB_BYTES_V4.
+           Post-Dynamic numbering throughout, like sentinel 4, so the palette
+           byte needs no shift. Sentinel is 6, not 5 -- see DISP_BLOB_BYTES in
+           display.h for why 5 is reserved for options.cxx's gameplay block. */
+        const char *name = (const char *) (buf + 5);
+        int slot, n = 0;
+
+        if (len < DISP_BLOB_BYTES) return 0;
+        while (n < DISP_IMAGE_NAME_MAX && name[n]) n++;
+        if (n >= DISP_IMAGE_NAME_MAX) return 0;   /* name never terminates */
+        slot = image_slot_of(name);
+
+        if (buf[1] == DISP_BLOB_DYNAMIC) {
+            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
+        } else if (buf[1] == DISP_BLOB_IMAGE) {
+            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;
+            ok = 0;
+        } else if (buf[1] < DISP_PRESET_N) {
+            d->palette = (int) buf[1];
+        } else ok = 0;
+
+        if (buf[2] == DISP_BLOB_IMAGE) {
+            d->bg = DISP_BG_BLACK;
+            if (slot < 0) ok = 0;
+        } else if (buf[2] < DISP_BG_COLOR_N) {
+            d->bg = (int) buf[2];
+        } else ok = 0;
+
+        if (buf[3] < DISP_TEXT_N) d->text = (int) buf[3];  else ok = 0;
+        if (buf[4] < DISP_DIM_N)  d->dim  = (int) buf[4];  else ok = 0;
+
+        if (name[0]) {
+            if (slot >= 0) d->image = slot;  else ok = 0;
+        }
+        if (d->palette == DISP_PAL_DYNAMIC) d->image = display_dynamic_slot();
+        else if (!name[0])                  d->image = DISP_IMAGE_NONE;
     } else if (buf[0] == 2 || buf[0] == 3 || buf[0] == 4) {
         const char *name = (const char *) (buf + 4);
         int slot, n = 0;
 
-        if (len < DISP_BLOB_BYTES) return 0;
+        if (len < DISP_BLOB_BYTES_V4) return 0;
         while (n < DISP_IMAGE_NAME_MAX && name[n]) n++;
         if (n >= DISP_IMAGE_NAME_MAX) return 0;   /* name never terminates */
         slot = image_slot_of(name);

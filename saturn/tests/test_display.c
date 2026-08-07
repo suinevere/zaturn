@@ -275,7 +275,7 @@ static void test_encode_decode_roundtrip(void) {
 
     n = display_encode(&a, buf);
     assert(n == DISP_BLOB_BYTES);
-    assert(buf[0] == 4);            /* sentinel: + the Dynamic palette */
+    assert(buf[0] == 6);            /* current sentinel: + dim (was 4 before Task 6) */
 
     assert(display_decode(buf, n, &b) == 1);
     assert(b.palette == a.palette && b.bg == a.bg && b.text == a.text);
@@ -663,7 +663,7 @@ static void test_blob_roundtrip(void) {
     display_encode(&a, buf);
     {
         int i;
-        for (i = 0; i < DISP_IMAGE_NAME_MAX; i++) assert(buf[4 + i] == 0);
+        for (i = 0; i < DISP_IMAGE_NAME_MAX; i++) assert(buf[5 + i] == 0);   /* name field: after dim */
     }
     assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
     assert(b.palette == PAL(0));
@@ -720,6 +720,66 @@ static void test_sparse_slot_space(void) {
     display_pin_dynamic_slot(DISP_IMAGE_NONE);
 }
 
+static void test_dim_table_and_blob(void) {
+    DisplayState d, r;
+    unsigned char buf[DISP_BLOB_BYTES];
+    int i;
+
+    assert(DISP_DIM_N == 7);
+    assert(display_dim_offset(DISP_DIM_NORMAL) == 0);
+    assert(display_dim_offset(0) ==  64);
+    assert(display_dim_offset(1) ==  32);
+    assert(display_dim_offset(3) == -32);
+    assert(display_dim_offset(6) == -128);
+    for (i = 0; i < DISP_DIM_N; i++) assert(display_dim_name(i)[0] != '\0');
+    assert(display_dim_offset(-1) == 0);
+    assert(display_dim_offset(DISP_DIM_N) == 0);
+
+    display_defaults(&d);
+    assert(d.dim == DISP_DIM_NORMAL);
+
+    d.dim = 6;
+    assert(display_encode(&d, buf) == DISP_BLOB_BYTES);
+    /* Sentinel is 6, not the brief's literal 5: byte 5 at this position in the
+       save is reserved for options.cxx's gameplay-block marker (see
+       test_five_is_not_a_display_sentinel, just below), and the brief's value
+       would have collided with it. See DISP_BLOB_BYTES's comment in display.h. */
+    assert(buf[0] == 6);
+    assert(buf[4] == 6);
+    assert(display_decode(buf, DISP_BLOB_BYTES, &r) == 1);
+    assert(r.dim == 6);
+
+    /* An out-of-range dim is defaulted, not trusted. */
+    buf[4] = 99;
+    assert(display_decode(buf, DISP_BLOB_BYTES, &r) == 0);
+    assert(r.dim == DISP_DIM_NORMAL);
+}
+
+static void test_old_blobs_get_no_dim(void) {
+    DisplayState d;
+    unsigned char old[17];
+    int i;
+
+    for (i = 0; i < 17; i++) old[i] = 0;
+    old[0] = 4;
+    old[1] = DISP_PAL_PRESET0;
+    old[2] = DISP_BG_BLACK;
+    old[3] = DISP_TEXT_WHITE;
+
+    /* A sentinel-4 blob is 17 bytes where a sentinel-5 blob is 18. The old branch
+       must keep measuring against the OLD size, or growing DISP_BLOB_BYTES
+       silently rejects every save file already on a memory card. */
+    assert(display_decode(old, 17, &d) == 1);
+    assert(d.palette == DISP_PAL_PRESET0);
+    assert(d.bg   == DISP_BG_BLACK);
+    assert(d.text == DISP_TEXT_WHITE);
+    assert(d.dim  == DISP_DIM_NORMAL);
+
+    old[0] = 1;
+    display_decode(old, 4, &d);
+    assert(d.dim == DISP_DIM_NORMAL);
+}
+
 int main(void) {
     test_tables_well_formed();
     test_known_colors();
@@ -748,6 +808,8 @@ int main(void) {
     test_virtual_slots();
     test_blob_roundtrip();
     test_sparse_slot_space();
+    test_dim_table_and_blob();
+    test_old_blobs_get_no_dim();
     printf("test_display: OK\n");
     return 0;
 }

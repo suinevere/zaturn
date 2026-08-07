@@ -114,28 +114,35 @@ bool display_apply(void) {
 
 /*----------------------
  | display_cycle_row
- | Description: For DCR_BG/DCR_TEXT, steps that field and applies -- a plain
- |   color change that cannot fail to load. For DCR_PALETTE, repeatedly steps
- |   the palette in `dir` and applies, restoring the pre-step state and
- |   retrying whenever the candidate fails to load, for up to
- |   display_palette_count() tries; only the Palette row can hit that failure
- |   path, since it is the one carrying picture presets. The restore-and-retry
- |   matters because display_apply() installs a color-preset fallback on
- |   failure, which rewrites the very index being cycled -- without restoring
- |   it first, the next press would resume from the fallback and land on the
- |   same bad image, making every image past it unreachable. If every
- |   candidate fails (a disc whose images are all unreadable), the loop gives
- |   up and lets the fallback from the last display_apply() call stand.
+ | Description: For DCR_BG/DCR_TEXT/DCR_DIM, steps that field and applies -- a
+ |   plain change that cannot fail to load, unlike a palette entry. For
+ |   DCR_PALETTE, repeatedly steps the palette in `dir` and applies, restoring
+ |   the pre-step state and retrying whenever the candidate fails to load, for
+ |   up to display_palette_count() tries; only the Palette row can hit that
+ |   failure path, since it is the one carrying picture presets. The
+ |   restore-and-retry matters because display_apply() installs a color-preset
+ |   fallback on failure, which rewrites the very index being cycled --
+ |   without restoring it first, the next press would resume from the
+ |   fallback and land on the same bad image, making every image past it
+ |   unreachable. If every candidate fails (a disc whose images are all
+ |   unreadable), the loop gives up and lets the fallback from the last
+ |   display_apply() call stand.
  | Author: suinevere
  | Dependencies: display.h
  | Globals: g_display
- | Params: which -- DCR_PALETTE, DCR_BG, or DCR_TEXT; dir -- -1 or +1
+ | Params: which -- DCR_PALETTE, DCR_BG, DCR_TEXT, or DCR_DIM; dir -- -1 or +1
  | Returns: N/A
  ----------------------*/
 void display_cycle_row(DisplayCycleRow which, int dir) {
     if (which != DCR_PALETTE) {
         if (which == DCR_BG) display_cycle_bg(&g_display, dir);
-        else                 display_cycle_text(&g_display, dir);
+        else if (which == DCR_TEXT) display_cycle_text(&g_display, dir);
+        if (which == DCR_DIM) {
+            display_cycle_dim(&g_display, dir);
+#ifndef NETBIN
+            title_bg_dim_set(display_dim_offset(g_display.dim));
+#endif
+        }
         display_apply();     // colours only; nothing here can fail to load
         return;
     }

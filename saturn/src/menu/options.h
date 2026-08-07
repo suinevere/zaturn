@@ -19,7 +19,7 @@
  |   from the page's own row enum because display_cycle_row lives here.
  | Author: suinevere
  ----------------------*/
-enum DisplayCycleRow { DCR_PALETTE, DCR_BG, DCR_TEXT };
+enum DisplayCycleRow { DCR_PALETTE, DCR_BG, DCR_TEXT, DCR_DIM };
 
 /*----------------------
  | options_load
@@ -76,14 +76,14 @@ bool display_apply(void);
 /*----------------------
  | display_cycle_row
  | Description: Cycles one row of the Display Options page (palette,
- |   background, or text) in direction `dir` and pushes the result to VDP2,
- |   stepping past any palette entry that fails to apply (an image that will
- |   not load) so repeated cycling cannot get stuck re-selecting the same
+ |   background, text, or dim) in direction `dir` and pushes the result to
+ |   VDP2, stepping past any palette entry that fails to apply (an image that
+ |   will not load) so repeated cycling cannot get stuck re-selecting the same
  |   broken picture.
  | Author: suinevere
  | Dependencies: display.h
  | Globals: g_display
- | Params: which -- DCR_PALETTE, DCR_BG, or DCR_TEXT; dir -- -1 or +1
+ | Params: which -- DCR_PALETTE, DCR_BG, DCR_TEXT, or DCR_DIM; dir -- -1 or +1
  | Returns: N/A
  ----------------------*/
 void display_cycle_row(DisplayCycleRow which, int dir);

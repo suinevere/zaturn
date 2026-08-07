@@ -2,3 +2,4 @@
 # Installed into tools/.venv on demand by tools/convert-backgrounds.sh.
 Pillow>=10,<13
 imagehash
+requests

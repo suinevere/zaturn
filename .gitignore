@@ -48,4 +48,8 @@ tools/.venv/
 **/__pycache__/
 *.pyc
 
+# --- Art pipeline working files -----------------------------------------------
+# Candidates are working files until a later review promotes them; never committed.
+tools/assets/candidates/
+
 .worktrees/

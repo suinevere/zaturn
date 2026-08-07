@@ -15,8 +15,8 @@ Description: The game draws its text over the picture on VDP2 NBG0, at
     THRESHOLDS is calibrated against the first real fetch: 524 Pixabay
     photographs scored by this module (tools/assets/art_manifest.json).
     Measured distribution, with each threshold's reject rate against it:
-      luminance p50=105.3 max=227.1 -> threshold 165.0 rejects  7.6%
-      busyness  p50= 26.6 max= 76.1 -> threshold  35.0 rejects ~25%
+      luminance p50=105.2 max=227.1 -> threshold 165.0 rejects  7.6%
+      busyness  p50= 26.5 max= 76.1 -> threshold  35.0 rejects 31.1%
       banding   p50=  3.2 max=  7.95 -> threshold  12.0 rejects  0.0%
     busyness_max was raised from an original 18.0, which rejected 68.3% of
     that same batch -- far too aggressive once the player's Dimming row is

@@ -98,22 +98,29 @@ def _hamming(a, b):
     return bin(int(a, 16) ^ int(b, 16)).count("1")
 
 
-def dedup(records):
+def dedup(records, already_accepted=None):
     """Drop records whose perceptual hash is too close to an earlier one.
 
     Description: Runs across every mood, not within one. A cave that appears in
         both UNDRGRND and HORROR reads as the rotation being broken, which is the
         same reason the pools are kept disjoint on the disc.
 
+        `already_accepted` seeds `seen` before any candidate is judged, so a
+        picture promoted in an earlier review pass still blocks its duplicate
+        today -- without it, dedup only sees the current run's candidates and
+        a later fetch can re-promote a picture already on the disc.
+
         A record with no hash is kept: imagehash is optional, and dropping
         everything when it is absent would be worse than keeping a duplicate.
     Author: suinevere
     Dependencies: N/A
     Globals: HAMMING_MAX
-    Params: records -- a list of manifest records
+    Params: records -- a list of manifest records under review;
+        already_accepted -- optional iterable of phashes already promoted
     Returns: the kept records, in input order
     """
-    kept, seen = [], []
+    kept = []
+    seen = [h for h in (already_accepted or []) if h]
     for r in records:
         h = r.get("phash", "")
         if h and any(_hamming(h, s) <= HAMMING_MAX for s in seen):
@@ -177,9 +184,11 @@ def main(argv):
     manifest = fetch_art.load_manifest(manifest_path)
 
     if argv and argv[0] == "--sheets":
-        kept = {str(r["id"]): r
-                for r in dedup([r for r in manifest.values()
-                                if r["status"] == art_status.CANDIDATE])}
+        candidates = [r for r in manifest.values()
+                      if r["status"] == art_status.CANDIDATE]
+        already_accepted = [r.get("phash", "") for r in manifest.values()
+                            if r["status"] == art_status.ACCEPTED]
+        kept = {str(r["id"]): r for r in dedup(candidates, already_accepted)}
         out = assets / "sheets"
         out.mkdir(parents=True, exist_ok=True)
         for mood in MOODS:

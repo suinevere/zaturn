@@ -97,3 +97,18 @@ def test_dedup_drops_a_near_duplicate_across_moods():
 def test_dedup_keeps_everything_when_hashes_are_missing():
     recs = [record(1, phash=""), record(2, phash="")]
     assert len(art_review.dedup(recs)) == 2
+
+
+def test_dedup_drops_a_candidate_matching_an_already_accepted_hash():
+    """Cross-run blind spot: an id accepted and promoted in an earlier pass
+    is gone from the candidates list by the next run, so dedup must be told
+    about it separately or its duplicate sails through untouched."""
+    new = record(2, mood="HOUSE", phash="ff00ff00ff00ff01")
+    kept = art_review.dedup([new], already_accepted=["ff00ff00ff00ff00"])
+    assert kept == []
+
+
+def test_dedup_keeps_a_candidate_far_from_every_accepted_hash():
+    new = record(2, mood="HOUSE", phash="00000000000000ff")
+    kept = art_review.dedup([new], already_accepted=["ff00ff00ff00ff00"])
+    assert [r["id"] for r in kept] == [2]

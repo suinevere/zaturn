@@ -18,12 +18,16 @@ Description: The game draws its text over the picture on VDP2 NBG0, at
       luminance p50=105.2 max=227.1 -> threshold 165.0 rejects  7.6%
       busyness  p50= 26.5 max= 76.1 -> threshold  35.0 rejects 31.1%
       banding   p50=  3.2 max=  7.95 -> threshold  12.0 rejects  0.0%
-    busyness_max was raised from an original 18.0, which rejected 68.3% of
-    that same batch -- far too aggressive once the player's Dimming row is
-    accounted for (see verdict()). banding_max is left at 12.0 on purpose:
-    it has never fired against a real photograph, and there is no evidence
-    a real photograph scoring 6-8 looks bad on Saturn, so lowering it on no
-    evidence would be worse than a quiet gate.
+    busyness_max was raised from an original 18.0, which was never validated
+    against real input: measurement showed it rejected 68.3% of the 524
+    photographs -- the median photograph in 8 of the 12 moods -- so 18.0 was
+    mis-scaled, not correctly strict. 35.0 keeps the busiest ~31% out.
+    Whether 35.0 is the right legibility limit is still unproven; the
+    Task 6 Step 7 hardware check is what will settle that, not this number.
+    banding_max is left at 12.0 on purpose: it has never fired against a
+    real photograph, and there is no evidence a real photograph scoring 6-8
+    looks bad on Saturn, so lowering it on no evidence would be worse than a
+    quiet gate.
 
     Reference points from tools/tests/test_art_metrics.py's synthetic
     fixtures, useful for reasoning about a single metric in isolation:

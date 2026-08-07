@@ -287,6 +287,29 @@ def test_dotenv_loader_never_prints_the_value(tmp_path, capsys):
     assert "super-secret-value" not in capsys.readouterr().out
 
 
+def test_undecodable_dotenv_parses_to_empty(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_bytes(b"\xff\xfe garbage\n")
+    assert fetch_art._parse_dotenv(env_path) == {}
+
+
+def test_undecodable_dotenv_load_is_harmless(tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_bytes(b"\xff\xfe garbage\n")
+    env = {}
+    fetch_art.load_dotenv_into_environ(env_path, env)
+    assert env == {}
+
+
+def test_undecodable_dotenv_does_not_crash_main(monkeypatch, capsys, tmp_path):
+    env_path = tmp_path / ".env"
+    env_path.write_bytes(b"\xff\xfe garbage\n")
+    monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", env_path)
+    assert fetch_art.main([]) == 0
+    assert "PIXABAY_API_KEY" in capsys.readouterr().out
+
+
 def test_phash_reflects_image_content_not_a_constant(tmp_path, monkeypatch):
     """A stubbed imagehash module, so this pins _phash's own wiring
     regardless of whether the real optional dependency is installed."""

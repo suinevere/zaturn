@@ -232,18 +232,19 @@ def _parse_dotenv(path):
 
     Description: Deliberately minimal -- python-dotenv is not a listed
         dependency and a handful of lines does not justify one. A line with no
-        "=", an empty key, or an unreadable file degrades to "found nothing"
-        rather than raising, matching this module's everything-degrades rule.
+        "=", an empty key, or a file that cannot be read or decoded degrades
+        to "found nothing" rather than raising, matching this module's
+        everything-degrades rule.
     Author: suinevere
     Dependencies: N/A
     Globals: N/A
-    Params: path -- the .env file; absent or unreadable yields {}
+    Params: path -- the .env file; absent, unreadable, or undecodable yields {}
     Returns: dict of parsed KEY -> value pairs
     """
     path = Path(path)
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return {}
 
     out = {}

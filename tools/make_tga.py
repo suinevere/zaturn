@@ -55,9 +55,27 @@ ENUM_ORDER = [None, "WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
               "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE",
               None, None]
 
+# The twelve mood folders write_inc's table has a row for. Any other directory
+# under the source root is a typo, not a mood -- converting it anyway would ship
+# art onto the ISO that category_art.inc's lookup can never reach (count 0),
+# silently.
+KNOWN_MOODS = frozenset(m for m in ENUM_ORDER if m)
+
 
 def encode_tga(im):
-    """Pack a 320x224 RGB image into a complete 8bpp paletted TGA file image."""
+    """
+    ----------------------
+    | encode_tga
+    | Description: Pack a 320x224 RGB image into a complete 8bpp paletted TGA
+    |   file image, index 0 reserved (VDP2 reads it as transparent on a scroll
+    |   screen) and colormap entries stored BGR, per the TGA spec.
+    | Author: suinevere
+    | Dependencies: PIL.Image, struct
+    | Globals: N/A
+    | Params: im -- a 320x224 PIL Image, any mode
+    | Returns: the complete TGA file, as bytes
+    ----------------------
+    """
     w, h = im.size
     q = im.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
     idx = q.tobytes()
@@ -94,7 +112,19 @@ def encode_tga(im):
 
 
 def convert_one(src, dst):
-    """Convert one PNG. Returns (status, message) with status 'wrote' or 'skip'."""
+    """
+    ----------------------
+    | convert_one
+    | Description: Convert a single PNG at src to a TGA at dst, for the
+    |   single-file CLI form. Reports a size mismatch as a skip rather than
+    |   raising, matching the batch form's one-bad-file tolerance.
+    | Author: suinevere
+    | Dependencies: PIL.Image, encode_tga
+    | Globals: WIDTH, HEIGHT
+    | Params: src -- source picture path; dst -- destination .TGA path
+    | Returns: (status, message), status 'wrote' or 'skip'
+    ----------------------
+    """
     im = Image.open(src).convert("RGB")
     w, h = im.size
     if (w, h) != (WIDTH, HEIGHT):
@@ -104,22 +134,6 @@ def convert_one(src, dst):
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_bytes(blob)
     return ("wrote", f"{dst.name}: {w}x{h} 8bpp, index 0 reserved, {len(blob)} bytes")
-
-
-def mood_of(src_root, path):
-    """
-    ----------------------
-    | mood_of
-    | Description: The mood folder a source picture belongs to: the first path
-    |   component under the source root.
-    | Author: suinevere
-    | Dependencies: N/A
-    | Globals: N/A
-    | Params: src_root -- the source PNG tree root; path -- a source picture's path
-    | Returns: the mood name (str)
-    ----------------------
-    """
-    return path.relative_to(src_root).parts[0]
 
 
 def _convert_source(src, dst):
@@ -156,10 +170,12 @@ def convert_tree(src_root, dst_root):
     | convert_tree
     | Description: Convert every source picture under src_root into
     |   dst_root/<MOOD>/NN.TGA, replacing each mood's existing TGAs first, and
-    |   every root-level source (the boot splash) into dst_root/<STEM>.TGA.
+    |   every root-level source (the boot splash) into dst_root/<STEM>.TGA. A
+    |   source subdirectory not named for one of the twelve known moods is
+    |   reported and skipped rather than converted -- see KNOWN_MOODS.
     | Author: suinevere
     | Dependencies: _convert_source
-    | Globals: SOURCE_EXT, MAX_STEM
+    | Globals: SOURCE_EXT, MAX_STEM, KNOWN_MOODS
     | Params: src_root -- source PNG tree (tools/assets/png); dst_root -- disc
     |   TGA tree (saturn/cd/data/TGA)
     | Returns: dict mapping mood name to the number of pictures written
@@ -172,6 +188,10 @@ def convert_tree(src_root, dst_root):
 
     counts = {}
     for mood in sorted({p.name for p in src_root.iterdir() if p.is_dir()}):
+        if mood not in KNOWN_MOODS:
+            print(f"  skip  {mood}: not one of the twelve known moods "
+                  f"(typo? see KNOWN_MOODS in make_tga.py)")
+            continue
         out_dir = dst_root / mood
         out_dir.mkdir(parents=True, exist_ok=True)
         for old in out_dir.glob("*.TGA"):
@@ -238,6 +258,19 @@ def write_inc(counts, path):
 
 
 def main(argv):
+    """
+    ----------------------
+    | main
+    | Description: CLI entry point. Dispatches to the batch form (convert_tree
+    |   plus write_inc) when the source is a directory or the destination is
+    |   not a .tga file, otherwise the single-file form (convert_one).
+    | Author: suinevere
+    | Dependencies: convert_tree, convert_one, write_inc
+    | Globals: REPO
+    | Params: argv -- sys.argv: [prog, src, dst]
+    | Returns: process exit code (0 ok, 2 on bad usage)
+    ----------------------
+    """
     if len(argv) != 3:
         print(__doc__)
         return 2

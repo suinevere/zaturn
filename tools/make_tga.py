@@ -170,9 +170,13 @@ def convert_tree(src_root, dst_root):
     | convert_tree
     | Description: Convert every source picture under src_root into
     |   dst_root/<MOOD>/NN.TGA, replacing each mood's existing TGAs first, and
-    |   every root-level source (the boot splash) into dst_root/<STEM>.TGA. A
-    |   source subdirectory not named for one of the twelve known moods is
-    |   reported and skipped rather than converted -- see KNOWN_MOODS.
+    |   every root-level source (the boot splash) into dst_root/<STEM>.TGA,
+    |   likewise clearing dst_root's existing root-level TGAs first -- a source
+    |   PNG renamed or deleted must not leave its old <STEM>.TGA behind as an
+    |   orphan on the ISO. The clear is a plain top-level glob, so it never
+    |   touches a mood subfolder's own TGAs. A source subdirectory not named
+    |   for one of the twelve known moods is reported and skipped rather than
+    |   converted -- see KNOWN_MOODS.
     | Author: suinevere
     | Dependencies: _convert_source
     | Globals: SOURCE_EXT, MAX_STEM, KNOWN_MOODS
@@ -210,6 +214,10 @@ def convert_tree(src_root, dst_root):
                 n += 1
         counts[mood] = n
         print(f"  {mood}: {n}")
+
+    dst_root.mkdir(parents=True, exist_ok=True)
+    for old in dst_root.glob("*.TGA"):
+        old.unlink()
 
     root_sources = sorted(
         p for p in src_root.iterdir()

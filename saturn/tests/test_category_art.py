@@ -97,3 +97,34 @@ def test_generator_reproduces_the_splash(tmp_path):
     make_tga.convert_tree(PNG, tmp_path)
     assert (tmp_path / "SUINE.TGA").is_file(), \
         "convert_tree must regenerate the root-level splash"
+
+
+def test_root_prunes_an_orphaned_output(tmp_path):
+    # Mood folders already clear their stale *.TGA before writing (see
+    # convert_tree). The root pass -- the boot splash's <STEM>.TGA outputs --
+    # did not, so a source PNG renamed or deleted left its old TGA behind as an
+    # orphan nothing on disc still points at. tmp_path keeps this off the real
+    # disc tree, same as test_generator_reproduces_the_splash above.
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    import make_tga
+
+    src, dst = tmp_path / "png", tmp_path / "tga"
+    src.mkdir()
+
+    def make_png(path):
+        Image.new("RGB", (make_tga.WIDTH, make_tga.HEIGHT), (10, 20, 30)).save(path)
+
+    make_png(src / "OLDNAME.png")
+    make_tga.convert_tree(src, dst)
+    assert (dst / "OLDNAME.TGA").is_file()
+
+    (src / "OLDNAME.png").unlink()
+    make_png(src / "NEWNAME.png")
+    make_tga.convert_tree(src, dst)
+
+    assert not (dst / "OLDNAME.TGA").exists(), \
+        "a renamed/deleted root source must not leave its old TGA behind"
+    assert (dst / "NEWNAME.TGA").is_file(), \
+        "normal splash generation must still produce the new output"

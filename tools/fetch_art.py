@@ -19,7 +19,7 @@ import json
 import os
 import sys
 import time
-from collections import namedtuple
+from collections import Counter, namedtuple
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -67,25 +67,36 @@ def save_manifest(path, data):
         fh.write("\n")
 
 
-def harvest(plan, fetcher, out_dir, manifest, budget):
-    """Fetch and gate every query in the plan, stopping at `budget` survivors.
+def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None):
+    """Fetch and gate every query in the plan, stopping each mood at its own budget.
 
-    Description: A Pixabay id already in the manifest is skipped without a
-        download, which is what makes a re-run cheap and a partial run resumable.
+    Description: The budget is per mood, not global -- moods sort alphabetically
+        and a shared counter let an early one (DESERT) starve every mood after
+        it. `total_budget` is an optional ceiling across the whole run, for a
+        small first calibration batch; the per-mood cap is what keeps every
+        mood represented and stays in force regardless of it.
+
+        A Pixabay id already in the manifest is skipped without a download,
+        which is what makes a re-run cheap and a partial run resumable.
     Author: suinevere
     Dependencies: PIL, art_metrics
     Globals: LICENCE
     Params: plan -- mood -> [Query]; fetcher -- an object with .search/.download;
         out_dir -- where surviving PNGs go; manifest -- mutated in place;
-        budget -- stop after this many survivors
+        per_mood_budget -- stop each mood after this many survivors;
+        total_budget -- optional ceiling across all moods combined; None means
+            only the per-mood caps apply
     Returns: the list of surviving Candidate
     """
     out_dir = Path(out_dir)
     kept = []
 
     for mood in sorted(plan):
+        mood_kept = 0
         for query in plan[mood]:
-            if len(kept) >= budget:
+            if mood_kept >= per_mood_budget:
+                break
+            if total_budget is not None and len(kept) >= total_budget:
                 return kept
             try:
                 hits = fetcher.search(query.phrase, per_page=12)
@@ -94,7 +105,9 @@ def harvest(plan, fetcher, out_dir, manifest, budget):
                 continue
 
             for hit in hits:
-                if len(kept) >= budget:
+                if mood_kept >= per_mood_budget:
+                    break
+                if total_budget is not None and len(kept) >= total_budget:
                     return kept
                 key = str(hit["id"])
                 if key in manifest:
@@ -129,6 +142,7 @@ def harvest(plan, fetcher, out_dir, manifest, budget):
                 art_metrics.crop(im).save(path, "PNG")
                 record["phash"] = _phash(path)
                 kept.append(Candidate(query, hit, scores, call, record["phash"], path))
+                mood_kept += 1
 
     return kept
 
@@ -191,10 +205,14 @@ class PixabayFetcher:
 def main(argv):
     """Run a harvest against the shipped vocabulary.
 
+    Description: Defaults to 99 survivors per mood -- matching both the
+        vocabulary's own "target" and make_tga.convert_tree's per-mood cap --
+        and no overall ceiling, so a default run can fetch up to 99 * len(MOODS)
+        candidates across the twelve moods.
     Author: suinevere
     Dependencies: art_queries, art_nouns
     Globals: N/A
-    Params: argv -- optional single argument, the survivor budget for this run
+    Params: argv -- [] | [per_mood_budget] | [per_mood_budget, total_budget]
     Returns: 0 always; failures are reported, not raised
     """
     repo = Path(__file__).resolve().parents[1]
@@ -204,7 +222,8 @@ def main(argv):
               "https://pixabay.com/api/docs/ and export it, then re-run.")
         return 0
 
-    budget = int(argv[0]) if argv else 200
+    per_mood_budget = int(argv[0]) if argv else 99
+    total_budget = int(argv[1]) if len(argv) > 1 else None
     vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")
     nouns = art_nouns.nouns_by_mood(
         (repo / "saturn" / "src" / "classify" / "room_class_data.c").read_text())
@@ -215,9 +234,12 @@ def main(argv):
     try:
         kept = harvest(plan, PixabayFetcher(key),
                        repo / "tools" / "assets" / "candidates",
-                       manifest, budget)
+                       manifest, per_mood_budget, total_budget)
     finally:
         save_manifest(manifest_path, manifest)
+    by_mood = Counter(c.query.mood for c in kept)
+    for mood in sorted(by_mood):
+        print(f"  {mood}: {by_mood[mood]}")
     print(f"  {len(kept)} candidates written; {len(manifest)} images known")
     return 0
 

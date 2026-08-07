@@ -48,10 +48,16 @@ class StubFetcher:
 PLAN = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "dark hallway"),
                    Query("HORROR", "EXTRA", "morgue", "dark", "dark morgue")]}
 
+PLAN2 = {
+    "DESERT": [Query("DESERT", "DESERT", "oasis", "arid", "arid oasis"),
+              Query("DESERT", "DESERT", "mesa", "arid", "arid mesa")],
+    "TOWN":   [Query("TOWN", "TOWN", "alleyway", "quiet", "quiet alleyway")],
+}
+
 
 def test_harvest_writes_one_png_per_surviving_candidate(tmp_path):
     f = StubFetcher()
-    got = fetch_art.harvest(PLAN, f, tmp_path, {}, budget=99)
+    got = fetch_art.harvest(PLAN, f, tmp_path, {}, per_mood_budget=99)
     assert len(got) == 4
     for c in got:
         assert c.path.exists()
@@ -59,7 +65,7 @@ def test_harvest_writes_one_png_per_surviving_candidate(tmp_path):
 
 
 def test_provenance_lands_in_the_folder_path(tmp_path):
-    got = fetch_art.harvest(PLAN, StubFetcher(), tmp_path, {}, budget=99)
+    got = fetch_art.harvest(PLAN, StubFetcher(), tmp_path, {}, per_mood_budget=99)
     rel = sorted(str(c.path.relative_to(tmp_path)).replace("\\", "/") for c in got)
     assert rel[0].startswith("HORROR/EXTRA/morgue/")
     assert rel[-1].startswith("HORROR/HOUSE/hallway/")
@@ -68,7 +74,7 @@ def test_provenance_lands_in_the_folder_path(tmp_path):
 def test_rejected_candidates_are_recorded_but_not_written(tmp_path):
     f = StubFetcher(value=252)
     manifest = {}
-    got = fetch_art.harvest(PLAN, f, tmp_path, manifest, budget=99)
+    got = fetch_art.harvest(PLAN, f, tmp_path, manifest, per_mood_budget=99)
     assert got == []
     assert len(manifest) == 4
     assert all(r["verdict"] == "bright" for r in manifest.values())
@@ -81,15 +87,33 @@ def test_rejected_candidates_are_recorded_but_not_written(tmp_path):
 def test_an_already_seen_id_is_not_downloaded_twice(tmp_path):
     f = StubFetcher()
     manifest = {}
-    fetch_art.harvest(PLAN, f, tmp_path, manifest, budget=99)
+    fetch_art.harvest(PLAN, f, tmp_path, manifest, per_mood_budget=99)
     before = f.downloads
-    fetch_art.harvest(PLAN, f, tmp_path, manifest, budget=99)
+    fetch_art.harvest(PLAN, f, tmp_path, manifest, per_mood_budget=99)
     assert f.downloads == before, "a known id must not be fetched again"
 
 
 def test_budget_stops_the_run(tmp_path):
     f = StubFetcher()
-    got = fetch_art.harvest(PLAN, f, tmp_path, {}, budget=1)
+    got = fetch_art.harvest(PLAN, f, tmp_path, {}, per_mood_budget=1)
+    assert len(got) == 1
+
+
+def test_budget_is_per_mood_not_global(tmp_path):
+    """DESERT sorts before TOWN; a global counter would let DESERT alone
+    exhaust the budget and leave TOWN with nothing -- the bug this pins."""
+    f = StubFetcher(per_phrase=2)
+    got = fetch_art.harvest(PLAN2, f, tmp_path, {}, per_mood_budget=1)
+    by_mood = {}
+    for c in got:
+        by_mood[c.query.mood] = by_mood.get(c.query.mood, 0) + 1
+    assert by_mood == {"DESERT": 1, "TOWN": 1}
+
+
+def test_total_budget_caps_the_whole_run_across_moods(tmp_path):
+    f = StubFetcher(per_phrase=2)
+    got = fetch_art.harvest(PLAN2, f, tmp_path, {}, per_mood_budget=99,
+                            total_budget=1)
     assert len(got) == 1
 
 
@@ -101,7 +125,7 @@ def test_a_download_failure_skips_that_hit_and_continues(tmp_path):
                 raise IOError("connection reset")
             return png_bytes(70)
 
-    got = fetch_art.harvest(PLAN, Flaky(), tmp_path, {}, budget=99)
+    got = fetch_art.harvest(PLAN, Flaky(), tmp_path, {}, per_mood_budget=99)
     assert len(got) == 3
 
 

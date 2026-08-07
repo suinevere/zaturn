@@ -28,10 +28,10 @@ enum DisplayCycleRow { DCR_PALETTE, DCR_BG, DCR_TEXT, DCR_DIM };
  |   number, music/pcm audio levels, controller face-button and shift-chord
  |   mapping, sound mix mode and selected track, and display state. Any field
  |   absent from a missing, older, or truncated blob is left at its compiled
- |   default, so older saves remain readable. Must be called after
- |   display_scan_images() (so a display block naming an image can resolve it
- |   against the disc's actual TGA list) and before anything that reads these
- |   globals.
+ |   default, so older saves remain readable. An image reference resolves
+ |   against the compiled-in category tables (display_decode -> image_slot_of),
+ |   not a runtime scan, so this carries no ordering requirement against disc
+ |   access -- just call it before anything reads these globals.
  | Author: suinevere
  | Dependencies: saturn_backup.h, display.h, input.h, music.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,

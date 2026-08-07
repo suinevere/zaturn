@@ -143,13 +143,9 @@ void display_cycle_row(DisplayCycleRow which, int dir) {
     if (which != DCR_PALETTE) {
         if (which == DCR_BG) display_cycle_bg(&g_display, dir);
         else if (which == DCR_TEXT) display_cycle_text(&g_display, dir);
-        if (which == DCR_DIM) {
-            display_cycle_dim(&g_display, dir);
-#ifndef NETBIN
-            title_bg_dim_set(display_dim_offset(g_display.dim));
-#endif
-        }
-        display_apply();     // these rows cannot fail to load, unlike DCR_PALETTE
+        else if (which == DCR_DIM) display_cycle_dim(&g_display, dir);
+        display_apply();     // these rows cannot fail to load, unlike DCR_PALETTE;
+                              // also re-applies the dim -- see display_apply's comment
         return;
     }
     int tries = display_palette_count();
@@ -186,9 +182,9 @@ void display_cycle_row(DisplayCycleRow which, int dir) {
  |   older 4-byte form still parses even when a long stored dial number
  |   leaves too little room for the name-bearing current form. buf is
  |   zero-filled up front, so bytes past whatever was actually written read as
- |   an absent block. Must run after display_scan_images(), since
- |   display_decode() resolves an image reference by name against the disc's
- |   current TGA list.
+ |   an absent block. display_decode() resolves an image reference against the
+ |   compiled-in category tables rather than a runtime scan, so this carries no
+ |   ordering requirement against disc access.
  | Author: suinevere
  | Dependencies: saturn_backup.h, display.h, input.h, music.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,
@@ -227,10 +223,11 @@ void options_load(void) {
     /* The gameplay block sits between the sound block and the display one because
        the display block is the variable-width tail. Sentinel 5 rather than 3: this
        byte is where a blob written before the block existed has its display
-       sentinel, and those run 1..4, so 5 is the smallest value that cannot be
-       mistaken for one. When it is absent the display block starts here instead
-       and g_verbosity keeps its compiled default -- which is how an old save comes
-       back verbose rather than silently brief. */
+       sentinel, and those run 1..4 and 6, so 5 -- never a display sentinel -- is
+       the one value that cannot be mistaken for one. When it is absent the
+       display block starts here instead and g_verbosity keeps its compiled
+       default -- which is how an old save comes back verbose rather than
+       silently brief. */
     int gp = s + 3, dsp = gp;
     if (gp + 1 < (int) sizeof(buf) && buf[gp] == 5) {
         if (buf[gp + 1] <= VERB_VERBOSE) g_verbosity = buf[gp + 1];

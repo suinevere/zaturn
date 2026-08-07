@@ -11,6 +11,18 @@ Description: The game draws its text over the picture on VDP2 NBG0, at
       banding -- the disc is 8bpp and make_tga.py quantises to 255 colours, so a
                  wide smooth gradient becomes visible steps. Cheaper to reject
                  here than to notice on hardware.
+
+    THRESHOLDS is unvalidated: all three values are guesses, not measurements
+    against real photographs. Reference points from tools/tests/test_art_metrics.py's
+    synthetic fixtures, so a future tuning pass starts from measured numbers:
+      flat(120) mid-grey      -> luminance=120.0, busyness=0.0,   banding=0.0
+      flat(240) bright        -> luminance=240.0, busyness=0.0,   banding=0.0
+      checkerboard(4px cells) -> luminance=177.5, busyness=157.4, banding=0.0
+      wide_gamut_gradient     -> luminance=126.9, busyness=1.3,   banding=4.12
+    The wide-gamut gradient is the archetypal banding case (a smooth ramp with
+    >255 unique colours after crop) and it clears banding_max=12.0 with room to
+    spare -- it is not obvious anything realistic would ever score 12. Treat the
+    first real-photo batch from the fetcher as calibration data, not curation.
 Author: suinevere
 Dependencies: PIL
 Globals: THRESHOLDS

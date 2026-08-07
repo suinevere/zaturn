@@ -22,12 +22,21 @@ def checkerboard(size=(640, 480), cell=4):
     return im
 
 
-def gradient(size=(640, 480)):
+def wide_gamut_gradient(size=(640, 480)):
+    """A gradient whose R, G and B channels each vary independently by
+    position, so the crop keeps tens of thousands of unique colours instead
+    of the few hundred a single-axis ramp survives at 320x224. That's what
+    actually exercises 255-colour quantisation banding; a narrow-gamut ramp
+    quantises losslessly and silently reports zero banding regardless of the
+    metric's correctness."""
     im = Image.new("RGB", size)
-    for x in range(size[0]):
-        v = int(255 * x / (size[0] - 1))
-        for y in range(size[1]):
-            im.putpixel((x, y), (v, v // 2, 255 - v))
+    w, h = size
+    for x in range(w):
+        for y in range(h):
+            r = int(255 * x / (w - 1))
+            g = int(255 * y / (h - 1))
+            b = int(255 * ((x + y) % (w + h)) / (w + h - 1))
+            im.putpixel((x, y), (r, g, b))
     return im
 
 
@@ -65,8 +74,13 @@ def test_busyness_is_judged_before_brightness():
 
 
 def test_banding_is_measured_and_finite():
-    s = art_metrics.score(gradient())
-    assert s.banding >= 0.0
+    """A wide-gamut gradient (>255 unique colours after crop) must score
+    nonzero banding, pinning the metric as live. A narrow-gamut ramp that
+    quantises losslessly would pass this test even if score() stopped
+    measuring banding entirely -- see THRESHOLDS' banding_max comment for
+    the reference value this fixture produces."""
+    s = art_metrics.score(wide_gamut_gradient())
+    assert s.banding > 0.0
     assert s.banding < 255.0
 
 

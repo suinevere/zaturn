@@ -710,8 +710,8 @@ void sound_options_page(void) {
  ----------------------*/
 static void display_options_page(void) {
     MenuBacking backing;
-    enum { DR_PALETTE, DR_BG, DR_TEXT, DR_OK, DR_CANCEL };
-    static const int rows[] = { DR_PALETTE, DR_BG, DR_TEXT, DR_OK, DR_CANCEL };
+    enum { DR_PALETTE, DR_BG, DR_TEXT, DR_DIM, DR_OK, DR_CANCEL };
+    static const int rows[] = { DR_PALETTE, DR_BG, DR_TEXT, DR_DIM, DR_OK, DR_CANCEL };
     const int nrows = (int)(sizeof(rows) / sizeof(rows[0]));
 
     int sel = 0;
@@ -747,12 +747,13 @@ static void display_options_page(void) {
             if      (row == DR_PALETTE) display_cycle_row(DCR_PALETTE, dir);
             else if (row == DR_BG)      display_cycle_row(DCR_BG,      dir);
             else if (row == DR_TEXT)    display_cycle_row(DCR_TEXT,    dir);
+            else if (row == DR_DIM)     display_cycle_row(DCR_DIM,     dir);
         }
         if (ok && row == DR_OK) { options_save(); break; }
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("DISPLAY", 36, 10, &fx, &fy, &fw, &fh);
+        menu_box_fit("DISPLAY", 36, nrows + 5, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "DISPLAY");
         int x = fx + 2, y = fy + 4;
         bool nums = !g_kbd_visible;
@@ -773,6 +774,11 @@ static void display_options_page(void) {
                     if (nums) text_print(x, y, "%c %d) Text", cur, i + 1);
                     else      text_print(x, y, "%c    Text", cur);
                     text_print(x + 17, y++, "< %s >", display_text_name(g_display.text));
+                    break;
+                case DR_DIM:
+                    if (nums) text_print(x, y, "%c %d) Dimming", cur, i + 1);
+                    else      text_print(x, y, "%c    Dimming", cur);
+                    text_print(x + 17, y++, "< %s >", display_dim_name(g_display.dim));
                     break;
                 case DR_OK:
                     y++;

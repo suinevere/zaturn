@@ -1,6 +1,8 @@
 #include "../src/menu/menu_layout.h"
+#include "../src/video/display.h"
 #include <limits.h>
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 
 static void test_fit_centers_a_normal_box(void) {
@@ -142,6 +144,19 @@ static void test_visible_digit_rejects_rows_past_the_window(void) {
     assert(menu_visible_digit('9', 0, 5, 30) == -1);
 }
 
+static void test_dim_row_label_fits(void) {
+    /* The Display page numbers its rows and boxes them; "N) Background" ending at
+       column 17 is the longest label the box was sized for (menu_pages.cxx:691).
+       The new row must not be longer. */
+    int i, longest = 0;
+    for (i = 0; i < DISP_DIM_N; i++) {
+        int n = (int) strlen(display_dim_name(i));
+        if (n > longest) longest = n;
+    }
+    assert(strlen("Dimming") <= strlen("Background"));
+    assert(longest <= (int) strlen("Lighter +2"));
+}
+
 int main(void) {
     test_fit_centers_a_normal_box();
     test_fit_widens_for_a_long_title();
@@ -158,6 +173,7 @@ int main(void) {
     test_visible_digit_rejects_rows_past_the_end();
     test_visible_digit_ignores_shift();
     test_visible_digit_rejects_rows_past_the_window();
+    test_dim_row_label_fits();
     printf("test_menu_layout: OK\n");
     return 0;
 }

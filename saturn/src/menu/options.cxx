@@ -66,7 +66,12 @@ void text_set_color(unsigned short rgb555) {
  |   time is not an option, since text_print bakes the palette bank into the
  |   pattern name it writes). Sets the back plane BEFORE any
  |   image load, because it is what shows through the transparent menu frames
- |   and is on screen during the 1-2s CD read. On image-load failure it drops
+ |   and is on screen during the 1-2s CD read. Re-applies the held wallpaper
+ |   dim (title_bg_dim_set) unconditionally, same as the color and back-plane
+ |   writes above it -- this is what makes a saved dim reach VDP2 on boot and
+ |   what restores the pre-edit dim when the Display Options page cancels,
+ |   since g_display is already back to its snapshot by the time this runs.
+ |   On image-load failure it drops
  |   to a color preset -- and if the failed palette WAS Dynamic (the only one
  |   left that carries a picture), rewrites it to preset 12 (IBM PC/MDA) so the
  |   broken picture is not re-selected.
@@ -90,6 +95,7 @@ bool display_apply(void) {
     text_set_color(display_text_rgb(g_display.text));
     SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
 #ifndef NETBIN
+    title_bg_dim_set(display_dim_offset(g_display.dim));
     if (display_is_image(&g_display)) {
         if (!title_bg_show(display_image_file(g_display.image))) {
             int p = g_display.palette;

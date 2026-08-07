@@ -775,6 +775,53 @@ static void test_preset_sweep_round_trips(void) {
     }
 }
 
+static void test_old_form_preset_sweep_round_trips(void) {
+    /* Sentinels 2, 3 and 4 predate the current save form and are decoded by the
+       same branch, but they do not share one index space: 2 and 3 store the OLD
+       (pre-Dynamic) index, 0..DISP_PRESET_N-1, while 4 already stores the NEW
+       (post-Dynamic) index, DISP_PAL_PRESET0..DISP_PRESET_N, same as sentinel 6.
+       A bound written for one space silently breaks at the other space's own
+       edge -- this is the sentinel-4 twin of test_preset_sweep_round_trips,
+       which pins that edge (PAL(DISP_PRESET_N), Monochrome P3) for sentinel 6;
+       old[1] = DISP_PRESET_N there decoded to Dynamic instead of being
+       accepted or refused before the bound was split per sentinel. */
+    int i;
+
+    /* Sentinel 4: new space, DISP_PAL_PRESET0..DISP_PRESET_N inclusive. */
+    for (i = DISP_PAL_PRESET0; i <= DISP_PRESET_N; i++) {
+        unsigned char old[17];
+        DisplayState d;
+        int j;
+        for (j = 0; j < 17; j++) old[j] = 0;
+        old[0] = 4;
+        old[1] = (unsigned char) i;
+        old[2] = (unsigned char) display_preset_bg(i);
+        old[3] = (unsigned char) display_preset_text(i);
+        assert(display_decode(old, 17, &d) == 1);
+        assert(d.palette == i);
+    }
+
+    /* Sentinel 2 and 3: old space, 0..DISP_PRESET_N-1, shifted up by
+       DISP_PAL_PRESET0 on read. */
+    {
+        int sentinel;
+        for (sentinel = 2; sentinel <= 3; sentinel++) {
+            for (i = 0; i < DISP_PRESET_N; i++) {
+                unsigned char old[17];
+                DisplayState d;
+                int j, want = i + DISP_PAL_PRESET0;
+                for (j = 0; j < 17; j++) old[j] = 0;
+                old[0] = (unsigned char) sentinel;
+                old[1] = (unsigned char) i;
+                old[2] = (unsigned char) display_preset_bg(want);
+                old[3] = (unsigned char) display_preset_text(want);
+                assert(display_decode(old, 17, &d) == 1);
+                assert(d.palette == want);
+            }
+        }
+    }
+}
+
 static void test_sentinel_2_decode(void) {
     /* Of five historical save forms (1, 2, 3, 4, 6) no test decoded a sentinel-2
        blob before this: the oldest form that names a picture, and the one that
@@ -942,6 +989,7 @@ int main(void) {
     test_rotate_dynamic_category();
     test_blob_roundtrip();
     test_preset_sweep_round_trips();
+    test_old_form_preset_sweep_round_trips();
     test_sentinel_2_decode();
     test_sparse_slot_space();
     test_dim_table_and_blob();

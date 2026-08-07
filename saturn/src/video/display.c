@@ -908,12 +908,19 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
                something other than what they saved. */
             if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;
             ok = 0;
-        } else if (buf[1] < DISP_PRESET_N) {
+        } else if (buf[0] == 4
+                       ? (buf[1] >= DISP_PAL_PRESET0 && buf[1] <= DISP_PRESET_N)
+                       : (buf[1] < DISP_PRESET_N)) {
             /* Sentinels 2 and 3 predate Dynamic, so their colour-preset indices
-               are in the old space, where 0 was the first preset rather than
-               Dynamic -- they shift up one or every saved appearance silently
-               moves one entry along the row. Sentinel 4 already stores the new
-               index. Image presets are resolved by name and need no shift. */
+               are in the OLD space, 0..DISP_PRESET_N-1, where 0 was the first
+               preset rather than Dynamic -- they shift up one or every saved
+               appearance silently moves one entry along the row. Sentinel 4
+               already stores the NEW-space index, DISP_PAL_PRESET0..
+               DISP_PRESET_N inclusive, same as sentinel 6 -- <= here, not <,
+               or the last preset (Monochrome P3) fails this check and silently
+               decodes to Dynamic instead. The two groups need different bounds,
+               not one shared test. Image presets are resolved by name and need
+               no shift. */
             d->palette = (int) buf[1] + ((buf[0] == 4) ? 0 : DISP_PAL_PRESET0);
         } else ok = 0;
 

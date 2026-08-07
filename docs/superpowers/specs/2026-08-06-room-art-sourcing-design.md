@@ -270,15 +270,31 @@ materially reduces the sourcing burden at 99 per mood.
 
 ### Repository size
 
-1188 TGAs are ~86MB raw and ~40MB packed, and every re-curation churns those blobs
-permanently. `saturn/cd/data/TGA/` is committed on purpose today:
-`convert-backgrounds.sh` falls back to it when Python or the network is missing,
-so a clean checkout always builds with art.
+**Corrected 2026-08-07.** An earlier version of this section claimed
+`saturn/cd/data/TGA/` was committed on purpose, and built a Git LFS migration on
+top of that. It is false and was never true: `saturn/.gitignore:20` ignores
+`cd/data/**/*.TGA`, and `git log -- saturn/cd/data/TGA` is empty. No TGA has ever
+been tracked in this repository.
 
-The curated 320×224 PNGs are committed as plain blobs — they are the editable
-masters and the product of the review work. The generated TGAs move to **Git
-LFS**, which keeps the offline-fallback promise without the pack growing without
-bound.
+Two things follow, and the second is not this project's to fix.
+
+**There is nothing to migrate to Git LFS.** The generated TGAs are already
+outside version control, so the repository never grows with them however many
+pictures are curated. Only the 320×224 source PNGs are committed — roughly 150KB
+each, so 1188 of them is about 180MB of real blobs. That is the number worth
+watching, and it is the one LFS would actually address if it ever needs
+addressing. Plan B's Git LFS task is deleted rather than rewritten: it was
+solving a problem that does not exist.
+
+**The offline fallback does not exist either.** `convert-backgrounds.sh`'s own
+header says a missing interpreter or missing dependency leaves "the TGAs already
+committed under `saturn/cd/data/TGA/`" — but they are ignored, so a clean
+checkout has no art at all, and the script's warning path leads to a disc whose
+every mood is empty. This predates this project by a long way; it is recorded
+here because it was discovered here, not because this design introduced it.
+Whether to start tracking the TGAs, drop the fallback promise from the script's
+prose, or leave both alone is a decision for the repository owner and is
+deliberately left open.
 
 ## Sequencing
 

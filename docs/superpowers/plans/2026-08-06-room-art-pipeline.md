@@ -1519,80 +1519,25 @@ Ask the user to confirm on hardware:
 
 ---
 
-### Task 7: Git LFS for the generated TGAs
+### Task 7: (deleted 2026-08-07 — the premise was false)
 
-**Files:**
-- Create: `.gitattributes`
-- Modify: `.gitignore`
-- Create: `docs/superpowers/notes/art-lfs.md`
+This task migrated the generated TGAs to Git LFS to stop the repository growing
+with every re-curation. It rested on the spec's claim that
+`saturn/cd/data/TGA/` was committed. It never was: `saturn/.gitignore:20`
+ignores `cd/data/**/*.TGA` and `git log -- saturn/cd/data/TGA` is empty.
 
-**Interfaces:**
-- Consumes: a filled `saturn/cd/data/TGA/` (Task 6).
-- Produces: no API.
+There is nothing to migrate. The generated TGAs are already outside version
+control, so no amount of curation grows the pack with them.
 
-Do this **last**. Migrating a handful of files proves nothing, and migrating
-before the volume is real means doing it twice.
+The real number, if repository size ever needs attention, is the committed
+source PNGs: ~150KB each, so a full 1188-picture set is roughly 180MB of tracked
+blobs. That would be the thing to put in LFS, and it is a decision to take on
+evidence after Task 6 has actually filled the tree — not one to pre-commit to
+here.
 
-- [ ] **Step 1: Measure first**
-
-```bash
-du -sh saturn/cd/data/TGA
-git count-objects -vH | grep size-pack
-```
-
-Record both numbers. If the TGA tree is under ~20MB, stop and skip this task —
-plain blobs are simpler and the growth is not yet worth a dependency.
-
-- [ ] **Step 2: Install and track**
-
-```bash
-git lfs install
-git lfs track "saturn/cd/data/TGA/**/*.TGA"
-```
-
-Confirm `.gitattributes` now contains:
-
-```
-saturn/cd/data/TGA/**/*.TGA filter=lfs diff=lfs merge=lfs -text
-```
-
-- [ ] **Step 3: Migrate the existing history for that path**
-
-```bash
-git lfs migrate import --include="saturn/cd/data/TGA/**/*.TGA" --everything
-```
-
-This rewrites history. Confirm with the user before running it, and confirm no
-other clone has unpushed work.
-
-- [ ] **Step 4: Verify the fallback still holds**
-
-```bash
-git lfs ls-files | head
-rm -rf saturn/cd/data/TGA
-git checkout saturn/cd/data/TGA
-python -m pytest saturn/tests/test_category_art.py -v
-```
-
-Expected: the tree restores from LFS and the count test passes. This is the
-guarantee `convert-backgrounds.sh` depends on — a clean checkout builds with art
-even with no Python and no network.
-
-- [ ] **Step 5: Write the note**
-
-Create `docs/superpowers/notes/art-lfs.md`: that TGAs are LFS-tracked and source
-PNGs are not, why (the PNGs are the editable masters and diff-worthy; the TGAs
-are generated and churn on every re-curation), and that a contributor without
-`git lfs` gets pointer files and must install it before building the CD image.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add .gitattributes .gitignore docs/superpowers/notes/art-lfs.md
-git commit -m "build: track generated background TGAs in Git LFS"
-```
-
----
+See the spec's *Repository size* section for the related finding about
+`convert-backgrounds.sh`'s non-existent offline fallback, which is left open for
+the repository owner.
 
 ## Done when
 
@@ -1606,4 +1551,6 @@ git commit -m "build: track generated background TGAs in Git LFS"
   variable's name.
 - Each mood folder under `tools/assets/png/` holds pictures, and
   `saturn/tests/test_category_art.py` agrees with the disc.
+- Repository size has been re-measured against the filled tree, and a decision
+  taken on whether the committed source PNGs want Git LFS.
 - The user has confirmed the hardware check in Task 6 Step 7.

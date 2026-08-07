@@ -74,8 +74,9 @@ static void test_preset_contents(void) {
 
 static void test_defaults_and_palette_name(void) {
     DisplayState d;
-    /* This disc carries art, so display_defaults lands on Dynamic -- the branch
-       that a dead g_image_count made unreachable. */
+    /* This disc carries art, so display_defaults lands on Dynamic -- unreachable
+       before display_defaults checked the disc's real per-mood counts via
+       display_image_count(). */
     display_defaults(&d);
     assert(d.palette == DISP_PAL_DYNAMIC);
     assert(d.bg == DISP_BG_BLACK);
@@ -186,9 +187,9 @@ static void test_guard_follows_bg_color_under_image(void) {
 
 static void test_cycle_palette(void) {
     DisplayState d;
-    /* g_image_count is permanently zero now that nothing sets it, so Dynamic
-       (index 0) is a normal stop on the row now that this disc's art makes it
-       reachable -- nothing skips it any more. */
+    /* Dynamic (index 0) is a normal stop on the row: display_image_count() reads
+       the disc's real per-mood counts, and this disc's art makes it reachable --
+       nothing skips it any more. */
     display_defaults(&d);                  /* Dynamic */
     assert(d.palette == DISP_PAL_DYNAMIC);
 
@@ -248,6 +249,31 @@ static void test_cycle_palette(void) {
                 != display_text_rgb(display_preset_text(i)));
         }
     }
+}
+
+static void test_custom_on_dynamic_steps_forward(void) {
+    /* The regression display_cycle_palette's own comment describes: a Custom
+       built on Dynamic (index 0) must step onto PAL(0)/PAL(last), not re-select
+       Dynamic and wipe the player's colours back to black and white. This disc
+       carries art, so display_defaults lands on Dynamic and Custom-on-Dynamic is
+       reachable. */
+    DisplayState d;
+
+    display_defaults(&d);
+    assert(d.palette == DISP_PAL_DYNAMIC);
+    d.text = DISP_TEXT_CYAN;               /* diverged -> Custom, base Dynamic */
+    assert(strcmp(display_palette_name(&d), "Custom") == 0);
+
+    display_cycle_palette(&d, 1);
+    assert(d.palette == PAL(0));
+    assert(d.bg == display_preset_bg(PAL(0)) && d.text == display_preset_text(PAL(0)));
+
+    display_defaults(&d);
+    d.text = DISP_TEXT_CYAN;
+    display_cycle_palette(&d, -1);
+    assert(d.palette == PAL(DISP_PRESET_N - 1));
+    assert(d.bg == display_preset_bg(PAL(DISP_PRESET_N - 1))
+        && d.text == display_preset_text(PAL(DISP_PRESET_N - 1)));
 }
 
 /* The MOJOOPTS blob locates its display block by finding a byte that is not one
@@ -603,12 +629,12 @@ static void test_virtual_slots(void) {
        test does not go stale every time a mood gains a picture. */
     int n    = display_category_image_count(TC_HORROR);
     int slot = display_slot_make(TC_HORROR, n);
-    assert(n >= 1);
+    assert(n >= 1 && n <= 99);   /* the two-digit filename below needs both ends */
     assert(slot == TC_HORROR * 100 + n);
     assert(display_slot_valid(slot));
     {
         char want[16];
-        sprintf(want, "HORROR/%02d.TGA", n);
+        snprintf(want, sizeof(want), "HORROR/%02d.TGA", n);
         assert(strcmp(display_image_file(slot), want) == 0);
         assert(display_image_slot(want) == slot);
     }
@@ -636,6 +662,40 @@ static void test_virtual_slots(void) {
         assert(strcmp(a, "HOUSE/01.TGA") == 0);
         assert(strcmp(b, "TOWN/02.TGA") == 0);
     }
+}
+
+static void test_rotate_dynamic_category(void) {
+    /* The branch's headline behaviour: walking a category's pool never lands
+       back on the slot already showing. TC_HORROR is guaranteed >= 2 pictures by
+       test_category_art, so every step must move. Observed through g_dyn_slot
+       (no pin set), the field display_rotate_dynamic_category actually writes. */
+    int cat = TC_HORROR;
+    int n   = display_category_image_count(cat);
+    int prev, i;
+    assert(n >= 2);
+
+    display_pin_dynamic_slot(DISP_IMAGE_NONE);
+    display_set_dynamic_category(cat);
+    prev = display_dynamic_slot();
+    assert(display_slot_valid(prev));
+
+    for (i = 0; i < n * 3; i++) {
+        int now;
+        display_rotate_dynamic_category(cat);
+        now = display_dynamic_slot();
+        assert(now != prev);          /* never re-lands on the current slot */
+        assert(display_slot_valid(now));
+        prev = now;
+    }
+
+    /* No-op when the pool cannot offer a different picture. A literal
+       one-picture pool cannot occur on this disc -- test_category_art pins every
+       category with art at >= 2 -- but TC_DANGER (no art at all, n == 0) shares
+       the rotate function's n <= 1 guard and is the only reachable way to
+       exercise it. */
+    assert(display_category_image_count(TC_DANGER) == 0);
+    display_rotate_dynamic_category(TC_DANGER);
+    assert(display_dynamic_slot() == prev);
 }
 
 static void test_blob_roundtrip(void) {
@@ -694,20 +754,69 @@ static void test_blob_roundtrip(void) {
     assert(b.palette == DISP_PAL_DYNAMIC);
 }
 
+static void test_preset_sweep_round_trips(void) {
+    /* Every colour preset index, not just samples, must survive the current
+       save form -- including the top of the row, PAL(DISP_PRESET_N), which the
+       sentinel-6 decode's off-by-one (buf[1] < DISP_PRESET_N instead of <=)
+       silently defaulted to Dynamic instead of rejecting or accepting. */
+    int i;
+    for (i = DISP_PAL_PRESET0; i <= DISP_PRESET_N; i++) {
+        DisplayState a, b;
+        unsigned char buf[DISP_BLOB_BYTES];
+
+        a.palette = i;
+        a.bg      = display_preset_bg(i);
+        a.text    = display_preset_text(i);
+        a.image   = DISP_IMAGE_NONE;
+        display_encode(&a, buf);
+        assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
+        assert(b.palette == i);
+        assert(b.bg == a.bg && b.text == a.text);
+    }
+}
+
+static void test_sentinel_2_decode(void) {
+    /* Of five historical save forms (1, 2, 3, 4, 6) no test decoded a sentinel-2
+       blob before this: the oldest form that names a picture, and the one that
+       packs the image into the bg byte (DISP_BLOB_IMAGE, 0xFF) instead of giving
+       it a field of its own -- see the sentinel 2/3/4 branch's comment. The
+       color beneath the picture was never saved in this form and comes back
+       black. */
+    unsigned char old[17];
+    DisplayState d;
+    static const char *const path = "HOUSE/01.TGA";
+    int slot = display_slot_make(TC_HOUSE, 1);
+    int i;
+
+    for (i = 0; i < 17; i++) old[i] = 0;
+    old[0] = 2;                              /* pre-Dynamic, image-packed-in-bg form */
+    old[1] = 3;                              /* old-space preset index -> PAL(3) */
+    old[2] = 0xFF;                           /* DISP_BLOB_IMAGE: the image marker */
+    old[3] = DISP_TEXT_WHITE;
+    for (i = 0; path[i]; i++) old[4 + i] = (unsigned char) path[i];
+
+    assert(display_decode(old, 17, &d) == 1);
+    assert(d.palette == PAL(3));
+    assert(d.bg    == DISP_BG_BLACK);
+    assert(d.text  == DISP_TEXT_WHITE);
+    assert(d.image == slot);
+    assert(d.dim   == DISP_DIM_NORMAL);
+}
+
 static void test_sparse_slot_space(void) {
     DisplayState d;
     int good = display_slot_make(TC_HOUSE, 1);
     int gap  = TC_HOUSE * 100;              /* index 0: never a file */
 
-    /* The disc carries art, so the default appearance must be Dynamic. This is
-       what a dead g_image_count silently broke: every "any art at all" question
-       answered no, and no room picture ever appeared. */
+    /* The disc carries art, so the default appearance must be Dynamic -- before
+       display_image_count() read the disc's real per-mood counts, every "any art
+       at all" question answered no, and no room picture ever appeared. */
     assert(display_image_count() > 0);
     display_defaults(&d);
     assert(d.palette == DISP_PAL_DYNAMIC);
 
     d.image = good;
-    assert(display_is_image(&d));           /* impossible until the dead global goes */
+    assert(display_is_image(&d));           /* real slot, valid by lookup */
     d.image = gap;
     assert(!display_is_image(&d));          /* a naive < count test passes this */
     d.image = DISP_IMAGE_NONE;
@@ -740,10 +849,10 @@ static void test_dim_table_and_blob(void) {
 
     d.dim = 6;
     assert(display_encode(&d, buf) == DISP_BLOB_BYTES);
-    /* Sentinel is 6, not the brief's literal 5: byte 5 at this position in the
-       save is reserved for options.cxx's gameplay-block marker (see
-       test_five_is_not_a_display_sentinel, just below), and the brief's value
-       would have collided with it. See DISP_BLOB_BYTES's comment in display.h. */
+    /* Sentinel is 6, not 5: byte 5 at this position in the save is reserved for
+       options.cxx's gameplay-block marker (see test_five_is_not_a_display_sentinel
+       above), and 5 here would have collided with it. See DISP_BLOB_BYTES's
+       comment in display.h. */
     assert(buf[0] == 6);
     assert(buf[4] == 6);
     assert(display_decode(buf, DISP_BLOB_BYTES, &r) == 1);
@@ -753,6 +862,28 @@ static void test_dim_table_and_blob(void) {
     buf[4] = 99;
     assert(display_decode(buf, DISP_BLOB_BYTES, &r) == 0);
     assert(r.dim == DISP_DIM_NORMAL);
+}
+
+static void test_cycle_dim(void) {
+    DisplayState d;
+    int i;
+
+    display_defaults(&d);
+    assert(d.dim == DISP_DIM_NORMAL);
+
+    /* Steps through every stop and wraps back to where it started. */
+    for (i = 0; i < DISP_DIM_N; i++) {
+        display_cycle_dim(&d, 1);
+        assert(d.dim >= 0 && d.dim < DISP_DIM_N);
+    }
+    assert(d.dim == DISP_DIM_NORMAL);
+
+    /* Wraps at the low end too. */
+    d.dim = 0;
+    display_cycle_dim(&d, -1);
+    assert(d.dim == DISP_DIM_N - 1);
+    display_cycle_dim(&d, 1);
+    assert(d.dim == 0);
 }
 
 static void test_old_blobs_get_no_dim(void) {
@@ -766,9 +897,10 @@ static void test_old_blobs_get_no_dim(void) {
     old[2] = DISP_BG_BLACK;
     old[3] = DISP_TEXT_WHITE;
 
-    /* A sentinel-4 blob is 17 bytes where a sentinel-5 blob is 18. The old branch
-       must keep measuring against the OLD size, or growing DISP_BLOB_BYTES
-       silently rejects every save file already on a memory card. */
+    /* A sentinel-4 blob is 17 bytes where a sentinel-6 blob is DISP_BLOB_BYTES
+       (18). The old branch must keep measuring against the OLD size, or growing
+       DISP_BLOB_BYTES silently rejects every save file already on a memory
+       card. */
     assert(display_decode(old, 17, &d) == 1);
     assert(d.palette == DISP_PAL_PRESET0);
     assert(d.bg   == DISP_BG_BLACK);
@@ -790,6 +922,7 @@ int main(void) {
     test_legibility_guard();
     test_guard_follows_bg_color_under_image();
     test_cycle_palette();
+    test_custom_on_dynamic_steps_forward();
     test_five_is_not_a_display_sentinel();
     test_encode_decode_roundtrip();
     test_collisions_roundtrip();
@@ -806,9 +939,13 @@ int main(void) {
     test_bg_color_under_image_survives_a_save();
     test_category_art();
     test_virtual_slots();
+    test_rotate_dynamic_category();
     test_blob_roundtrip();
+    test_preset_sweep_round_trips();
+    test_sentinel_2_decode();
     test_sparse_slot_space();
     test_dim_table_and_blob();
+    test_cycle_dim();
     test_old_blobs_get_no_dim();
     printf("test_display: OK\n");
     return 0;

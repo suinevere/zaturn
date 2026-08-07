@@ -865,7 +865,10 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         } else if (buf[1] == DISP_BLOB_IMAGE) {
             if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;
             ok = 0;
-        } else if (buf[1] < DISP_PRESET_N) {
+        } else if (buf[1] <= DISP_PRESET_N) {
+            /* Post-Dynamic indices run DISP_PAL_PRESET0 (1) through DISP_PRESET_N
+               (16) inclusive -- <= here, not <, or the last preset (Monochrome
+               P3) fails this check and silently decodes to Dynamic instead. */
             d->palette = (int) buf[1];
         } else ok = 0;
 

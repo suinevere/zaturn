@@ -159,6 +159,42 @@ def test_a_download_failure_skips_that_hit_and_continues(tmp_path):
     assert len(got) == 3
 
 
+def test_reset_rejected_drops_only_metric_rejected_records():
+    manifest = {
+        "1": {"id": 1, "status": art_status.METRIC_REJECTED},
+        "2": {"id": 2, "status": art_status.CANDIDATE},
+        "3": {"id": 3, "status": art_status.METRIC_REJECTED},
+        "4": {"id": 4, "status": art_status.ACCEPTED},
+        "5": {"id": 5, "status": art_status.REJECTED},
+    }
+    dropped = fetch_art.reset_rejected(manifest)
+    assert dropped == 2
+    assert set(manifest) == {"2", "4", "5"}
+    assert manifest["2"]["status"] == art_status.CANDIDATE
+    assert manifest["4"]["status"] == art_status.ACCEPTED
+    assert manifest["5"]["status"] == art_status.REJECTED
+
+
+def test_main_reset_rejected_flag_drops_and_saves_without_fetching(monkeypatch, capsys):
+    starting = {
+        "1": {"id": 1, "status": art_status.METRIC_REJECTED},
+        "2": {"id": 2, "status": art_status.CANDIDATE},
+    }
+    saved = {}
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("--reset-rejected must not fetch")
+
+    monkeypatch.setattr(fetch_art, "load_manifest", lambda path: dict(starting))
+    monkeypatch.setattr(fetch_art, "save_manifest",
+                        lambda path, data: saved.update(data=data))
+    monkeypatch.setattr(fetch_art, "PixabayFetcher", fail_if_called)
+
+    assert fetch_art.main(["--reset-rejected"]) == 0
+    assert set(saved["data"]) == {"2"}
+    assert "dropped 1" in capsys.readouterr().out
+
+
 def test_manifest_round_trips(tmp_path):
     path = tmp_path / "m.json"
     fetch_art.save_manifest(path, {"1": {"id": 1, "licence": fetch_art.LICENCE}})

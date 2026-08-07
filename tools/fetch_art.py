@@ -286,6 +286,30 @@ def load_dotenv_into_environ(path=None, env=None):
         env.setdefault(key, value)
 
 
+def reset_rejected(manifest):
+    """Drop every manifest record whose status is METRIC_REJECTED, in place.
+
+    Description: Undoes the fetcher's own dedup for metric-rejected images
+        only. A CANDIDATE, ACCEPTED or REJECTED record survives untouched --
+        only a metric rejection is worth re-scoring, since it is the only
+        status a threshold change can flip. Once its record is gone, the
+        image's Pixabay id is no longer in the manifest, so harvest()'s
+        `if key in manifest: continue` no longer skips it and the next
+        ordinary run re-downloads and re-scores it under the current
+        thresholds.
+    Author: suinevere
+    Dependencies: art_status
+    Globals: N/A
+    Params: manifest -- dict keyed by stringified Pixabay id, mutated in place
+    Returns: the number of records dropped
+    """
+    dropped = [key for key, record in manifest.items()
+               if record.get("status") == art_status.METRIC_REJECTED]
+    for key in dropped:
+        del manifest[key]
+    return len(dropped)
+
+
 def main(argv):
     """Run a harvest against the shipped vocabulary.
 
@@ -294,14 +318,30 @@ def main(argv):
         and no overall ceiling, so a default run can fetch up to 99 * len(MOODS)
         candidates across the twelve moods. Reads PIXABAY_API_KEY from
         tools/.env when it is not already exported, so an explicit export
-        still wins over the file.
+        still wins over the file. `--reset-rejected` bypasses all of that: it
+        drops every METRIC_REJECTED manifest record, saves, and returns
+        without fetching or requiring an API key, so a threshold change can
+        be followed by an ordinary run that re-downloads and re-scores what
+        it just freed.
     Author: suinevere
-    Dependencies: art_queries, art_nouns
+    Dependencies: art_queries, art_nouns, art_status
     Globals: DOTENV_PATH
-    Params: argv -- [] | [per_mood_budget] | [per_mood_budget, total_budget]
+    Params: argv -- [] | [per_mood_budget] | [per_mood_budget, total_budget],
+        with an optional leading or trailing "--reset-rejected" anywhere in
+        argv taking over the whole run
     Returns: 0 always; failures are reported, not raised
     """
     repo = Path(__file__).resolve().parents[1]
+    manifest_path = repo / "tools" / "assets" / "art_manifest.json"
+
+    if "--reset-rejected" in argv:
+        manifest = load_manifest(manifest_path)
+        dropped = reset_rejected(manifest)
+        save_manifest(manifest_path, manifest)
+        print(f"  dropped {dropped} metric-rejected record(s); "
+              f"{len(manifest)} images still known")
+        return 0
+
     load_dotenv_into_environ()
     key = os.environ.get("PIXABAY_API_KEY", "")
     if not key:
@@ -316,7 +356,6 @@ def main(argv):
         (repo / "saturn" / "src" / "classify" / "room_class_data.c").read_text())
     plan = art_queries.build(vocab, nouns)
 
-    manifest_path = repo / "tools" / "assets" / "art_manifest.json"
     manifest = load_manifest(manifest_path)
     try:
         kept = harvest(plan, PixabayFetcher(key),

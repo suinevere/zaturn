@@ -1,2 +1,3 @@
-- [Room categorization handoff (2026-08-05)](2026-08-05-room-categorization-handoff.md) — paused mid-Task-3; `blessed.inc` is valid only until a scoring change lands.
-- [Merge order: fallback-mood before tiers](2026-08-05-merge-order-constraint.md) — merging room-categorization-tiers alone ships a genre-wipe bug.
+- [Room art pipeline handoff (2026-08-07)](2026-08-07-room-art-pipeline-handoff.md) — Plan A merged; Plan B's fetcher is built but has never run, and one bug sits in the `.env` loader.
+- [Room categorization handoff (2026-08-05)](2026-08-05-room-categorization-handoff.md) — STALE: that work merged to main; `blessed.inc` has since been re-blessed twice. Kept for the corpus-gate reasoning only.
+- [Merge order: fallback-mood before tiers](2026-08-05-merge-order-constraint.md) — DISCHARGED: both branches merged in the required order. Kept for the bug class, not as a live constraint.

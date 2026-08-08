@@ -371,7 +371,10 @@ def main(argv, repo=None):
     Description: The two subcommands are separate runs on purpose -- a review
         session (opening sheets, checking boxes) happens between them. `repo`
         defaults to the real repository root; tests pass a tmp_path so a run
-        never writes sheets or promotions into the working tree.
+        never writes sheets or promotions into the working tree. When
+        --promote has no explicit path, every verdicts*.json in the sheets
+        folder is applied oldest-modified first, so if two files disagree
+        about the same id the most recently modified file's verdict wins.
     Author: suinevere
     Dependencies: fetch_art
     Globals: N/A
@@ -426,7 +429,8 @@ def main(argv, repo=None):
         if len(argv) >= 2:
             paths = [Path(argv[1])]
         else:
-            paths = sorted((assets / "sheets").glob("verdicts*.json"))
+            paths = sorted((assets / "sheets").glob("verdicts*.json"),
+                           key=lambda p: (p.stat().st_mtime, p.name))
         if not paths:
             print("  no verdicts files found in {}".format(assets / "sheets"))
             return 0

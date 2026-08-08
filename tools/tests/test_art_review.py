@@ -1,7 +1,9 @@
 """Cover sheet generation, cross-mood dedup, and promotion into the source tree."""
 import json
+import os
 import re
 import sys
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -277,6 +279,29 @@ def test_main_promote_with_no_path_applies_every_verdicts_file(tmp_path):
     assert saved["1"]["status"] == art_status.ACCEPTED
     assert saved["2"]["status"] == art_status.ACCEPTED, \
         "every verdicts file in the folder must be applied, not just the first"
+
+
+def test_main_promote_resolves_a_same_id_conflict_in_favor_of_the_newer_file(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    sheets = assets / "sheets"
+    sheets.mkdir(parents=True)
+    rec = record(1, status=art_status.CANDIDATE)
+    make_candidate(assets / "candidates", rec)
+    fetch_art.save_manifest(assets / "art_manifest.json", {"1": rec})
+
+    older = sheets / "verdicts.json"
+    newer = sheets / "verdicts(1).json"
+    older.write_text('{"1": "reject"}', encoding="utf-8")
+    newer.write_text('{"1": "accept"}', encoding="utf-8")
+    now = time.time()
+    os.utime(older, (now - 100, now - 100))
+    os.utime(newer, (now, now))
+
+    assert art_review.main(["--promote"], repo=tmp_path) == 0
+
+    saved = json.loads((assets / "art_manifest.json").read_text(encoding="utf-8"))
+    assert saved["1"]["status"] == art_status.ACCEPTED, \
+        "the more recently modified verdicts file must win a same-id conflict"
 
 
 def test_main_promote_with_no_files_says_so(tmp_path, capsys):

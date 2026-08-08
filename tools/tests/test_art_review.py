@@ -342,6 +342,21 @@ def test_sheet_renders_a_placeholder_when_the_file_is_missing(tmp_path):
     assert "pixabay.com" in html_out
 
 
+def test_sheet_falls_back_to_candidates_for_an_accepted_record_restored_there(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.ACCEPTED)
+    make_candidate(cand, rec)
+
+    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
+
+    tile = html_out.split('data-id="1"')[1].split("</figure>")[0]
+    assert "data:image/png;base64," in tile, \
+        "refetch_missing always restores into candidates_dir, even for an " \
+        "accepted record, so the sheet must fall back there instead of " \
+        "showing a placeholder"
+    assert "no local copy" not in tile
+
+
 def test_sheet_stays_self_contained_with_a_placeholder(tmp_path):
     cand, png = tmp_path / "c", tmp_path / "png"
     rec = record(1, status=art_status.REJECTED)

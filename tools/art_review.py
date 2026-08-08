@@ -61,7 +61,10 @@ def sheet(mood, records, candidates_dir, png_dir):
         are absent by necessity: the fetcher only ever writes gate-passing
         images, so no file has existed for them. A record whose picture is gone
         -- every rejected image in a fresh clone -- still gets a tile, so the
-        decision stays flippable with no pixels and no network.
+        decision stays flippable with no pixels and no network. A record can
+        also sit in the tree its status does not expect -- refetch_missing
+        always restores into candidates_dir even for an ACCEPTED record -- so
+        a missing primary path falls back to the other tree before giving up.
     Author: suinevere
     Dependencies: html, art_status, art_nouns
     Globals: SHOWN, MOODS
@@ -82,8 +85,12 @@ def sheet(mood, records, candidates_dir, png_dir):
 
     cells = []
     for r in mine:
-        root = png_dir if r["status"] == art_status.ACCEPTED else candidates_dir
-        src = _thumb_uri(Path(root) / _rel(r))
+        rel = _rel(r)
+        primary, fallback = ((png_dir, candidates_dir)
+                             if r["status"] == art_status.ACCEPTED
+                             else (candidates_dir, png_dir))
+        src = (_thumb_uri(Path(primary) / rel)
+               or _thumb_uri(Path(fallback) / rel))
         label = {art_status.ACCEPTED: "accepted",
                  art_status.REJECTED: "rejected"}.get(r["status"], "undecided")
         checked = " checked" if r["status"] != art_status.REJECTED else ""

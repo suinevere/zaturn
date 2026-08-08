@@ -19,6 +19,7 @@ Globals: HAMMING_MAX
 import base64
 import html
 import json
+from collections import namedtuple
 from pathlib import Path
 
 import art_status
@@ -143,38 +144,89 @@ def dedup(records, already_accepted=None):
     return kept
 
 
-def promote(verdicts, manifest, candidates_dir, png_dir):
-    """Move accepted candidates into the source tree and record the outcome.
+Counts = namedtuple("Counts", "gained lost")
 
-    Description: A human reject is recorded as REJECTED, distinct from the
-        METRIC_REJECTED a failed metric gate writes -- the two must not blur
-        into one status, see art_status for why.
+
+def _rel(rec):
+    """Build a record's path relative to either image tree.
+
+    Description: The candidates tree and the source tree share one layout, so
+        one relative path locates a picture in both.
+    Author: suinevere
+    Dependencies: pathlib
+    Globals: N/A
+    Params: rec -- a manifest record
+    Returns: Path of <mood>/<donor>/<noun>/<id>.png
+    """
+    return (Path(rec["mood"]) / rec["donor"] / rec["noun"]
+            / "{}.png".format(rec["id"]))
+
+
+def _move_if_absent(src, dst):
+    """Move a picture between trees, but never over an existing destination.
+
+    Description: A destination that already exists means the move has happened
+        before and the source is a leftover -- moving it again would re-promote
+        a picture the status guard has already settled. See the reconciliation
+        rule in this feature's plan.
+    Author: suinevere
+    Dependencies: pathlib
+    Globals: N/A
+    Params: src -- where the picture is; dst -- where it belongs
+    Returns: True if the picture now sits at dst, False if neither tree has it
+    """
+    src, dst = Path(src), Path(dst)
+    if dst.exists():
+        return True
+    if not src.exists():
+        return False
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(src.read_bytes())
+    src.unlink()
+    return True
+
+
+def promote(verdicts, manifest, candidates_dir, png_dir):
+    """Apply human verdicts, moving each picture to match its new status.
+
+    Description: The manifest is the decision, and the file location follows it
+        -- so a verdict is recorded even when no picture is on disk, which is
+        the state of every rejected image in a fresh clone. A metric rejection
+        is not a human decision and is never overwritten here; art_status
+        explains why the two must not blur together.
     Author: suinevere
     Dependencies: pathlib, art_status
     Globals: N/A
     Params: verdicts -- id -> "accept"/"reject"; manifest -- mutated in place;
-        candidates_dir -- where the PNGs are; png_dir -- tools/assets/png
-    Returns: dict mapping mood to how many pictures it gained
+        candidates_dir -- the git-ignored tree; png_dir -- tools/assets/png
+    Returns: dict mapping mood to a Counts of gained and lost pictures
     """
     counts = {}
     for key, call in verdicts.items():
         rec = manifest.get(key)
-        if rec is None or rec["status"] != art_status.CANDIDATE:
-            continue
-        if call != "accept":
-            rec["status"] = art_status.REJECTED
+        if rec is None or rec["status"] == art_status.METRIC_REJECTED:
             continue
 
-        rel = Path(rec["mood"]) / rec["donor"] / rec["noun"] / f"{rec['id']}.png"
-        src, dst = Path(candidates_dir) / rel, Path(png_dir) / rel
-        if not src.exists():
-            print(f"  {rel}: candidate file is missing, skipping")
+        want = (art_status.ACCEPTED if call == "accept"
+                else art_status.REJECTED)
+        was = rec["status"]
+        rel = _rel(rec)
+        cand, png = Path(candidates_dir) / rel, Path(png_dir) / rel
+
+        if want == art_status.ACCEPTED:
+            placed = _move_if_absent(cand, png)
+        else:
+            placed = _move_if_absent(png, cand)
+        if not placed:
+            print("  {}: no local copy; recording the verdict only".format(rel))
+
+        rec["status"] = want
+        if was == want:
             continue
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_bytes(src.read_bytes())
-        src.unlink()
-        rec["status"] = art_status.ACCEPTED
-        counts[rec["mood"]] = counts.get(rec["mood"], 0) + 1
+        gained = 1 if want == art_status.ACCEPTED else 0
+        lost = 1 if was == art_status.ACCEPTED else 0
+        prev = counts.get(rec["mood"], Counts(0, 0))
+        counts[rec["mood"]] = Counts(prev.gained + gained, prev.lost + lost)
     return counts
 
 
@@ -222,7 +274,7 @@ def main(argv, repo=None):
                          assets / "png")
         fetch_art.save_manifest(manifest_path, manifest)
         for mood in sorted(counts):
-            print(f"  {mood}: +{counts[mood]}")
+            print(f"  {mood}: +{counts[mood].gained} -{counts[mood].lost}")
         return 0
 
     print("  usage: art_review.py --sheets | --promote <verdicts.json>")

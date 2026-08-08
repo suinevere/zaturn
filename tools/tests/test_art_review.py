@@ -86,7 +86,7 @@ def test_promote_moves_accepted_and_leaves_rejected(tmp_path):
 
     counts = art_review.promote({"1": "accept", "2": "reject"}, recs, cand, png)
 
-    assert counts == {"HORROR": 1}
+    assert counts == {"HORROR": art_review.Counts(gained=1, lost=0)}
     assert (png / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
     assert not (png / "HORROR" / "HOUSE" / "hallway" / "2.png").exists()
     assert recs["1"]["status"] == art_status.ACCEPTED
@@ -169,3 +169,87 @@ def test_main_promote_moves_accepted_and_updates_the_manifest_on_disk(tmp_path):
     assert (assets / "png" / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
     saved = fetch_art.load_manifest(manifest_path)
     assert saved["1"]["status"] == art_status.ACCEPTED
+
+
+def make_promoted(root, rec):
+    d = root / rec["mood"] / rec["donor"] / rec["noun"]
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{rec['id']}.png"
+    Image.new("RGB", (320, 224), (90, 90, 90)).save(p, "PNG")
+    return p
+
+
+def test_promote_unaccepts_by_moving_the_file_back(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.ACCEPTED)
+    kept = make_promoted(png, rec)
+    manifest = {"1": rec}
+
+    art_review.promote({"1": "reject"}, manifest, cand, png)
+
+    assert rec["status"] == art_status.REJECTED
+    assert not kept.exists(), "the tracked png must be removed"
+    assert (cand / "HORROR" / "HOUSE" / "hallway" / "1.png").exists(), \
+        "the file must return to candidates so it can be re-accepted"
+
+
+def test_promote_re_accepts_a_rejected_image(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.REJECTED)
+    make_candidate(cand, rec)
+    manifest = {"1": rec}
+
+    counts = art_review.promote({"1": "accept"}, manifest, cand, png)
+
+    assert rec["status"] == art_status.ACCEPTED
+    assert (png / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
+    assert counts["HORROR"].gained == 1
+
+
+def test_promote_counts_gains_and_losses_separately(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    up = record(1, status=art_status.REJECTED)
+    down = record(2, status=art_status.ACCEPTED)
+    make_candidate(cand, up)
+    make_promoted(png, down)
+    manifest = {"1": up, "2": down}
+
+    counts = art_review.promote({"1": "accept", "2": "reject"}, manifest,
+                                cand, png)
+
+    assert counts["HORROR"] == art_review.Counts(gained=1, lost=1)
+
+
+def test_promote_never_touches_a_metric_rejected_record(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.METRIC_REJECTED)
+    manifest = {"1": rec}
+
+    art_review.promote({"1": "accept"}, manifest, cand, png)
+
+    assert rec["status"] == art_status.METRIC_REJECTED, \
+        "a metric rejection is not a human decision and has no file to move"
+
+
+def test_promote_records_the_decision_when_no_file_exists(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.REJECTED)
+    manifest = {"1": rec}
+
+    art_review.promote({"1": "accept"}, manifest, cand, png)
+
+    assert rec["status"] == art_status.ACCEPTED, \
+        "a fresh clone has no pixels; the manifest still holds the decision"
+
+
+def test_promote_leaves_a_stray_candidate_alone_when_already_promoted(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.ACCEPTED)
+    make_promoted(png, rec)
+    stray = make_candidate(cand, rec)
+    manifest = {"1": rec}
+
+    counts = art_review.promote({"1": "accept"}, manifest, cand, png)
+
+    assert stray.exists(), "destination exists, so the stray must not be moved"
+    assert counts == {}, "no status changed, so nothing was gained or lost"

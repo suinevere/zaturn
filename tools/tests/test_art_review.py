@@ -353,6 +353,21 @@ def test_sheet_stays_self_contained_with_a_placeholder(tmp_path):
         "a placeholder must not reintroduce a remote image reference"
 
 
+def test_sheet_persists_marks_and_offers_to_clear_them(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.CANDIDATE)
+    make_candidate(cand, rec)
+
+    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
+
+    assert "localStorage" in html_out
+    assert "zaturn-art:HORROR:" in html_out, \
+        "marks must be namespaced per mood or two sheets collide"
+    assert "Clear marks" in html_out
+    assert "try{" in html_out, \
+        "file:// storage can throw; the page must survive it"
+
+
 def test_main_sheets_never_dedups_away_a_decided_picture(tmp_path):
     assets = tmp_path / "tools" / "assets"
     assets.mkdir(parents=True)

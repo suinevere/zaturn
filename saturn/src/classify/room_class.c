@@ -419,6 +419,42 @@ static void genre_accumulate(const char* text) {
 #define KW_VOTES(k) ((k).genre == GN_ANY || (g_genre && ((k).genre & g_genre)))
 
 /*----------------------
+ | title_first_offset
+ | Description: Byte offset of the first case-insensitive occurrence of `title`
+ |   sitting alone on its own printed line in `text` -- start-of-text or right
+ |   after a newline on the left, end-of-text or a newline on the right -- or -1
+ |   when no such line exists.
+ |
+ |   A plain substring search is too loose: rooms.inc's own corpus proved it.
+ |   "McGinty Salvage"'s room text reads "You are in the McGinty Salvage
+ |   office, ..." -- the title sits mid-sentence, not as a printed heading, and
+ |   trimming to it would cut off "You are in the ", which is what
+ |   sentence_weight's positive-phrase check needs to see to double that
+ |   sentence's hits. "Dead End"'s text ends "-- dead end.", so trimming there
+ |   would drop the room's entire description and leave one word. Thirteen
+ |   corpus rooms broke this way under a bare substring match; every one of
+ |   them had the title running mid-line, never alone on one. A banner heading,
+ |   by contrast, is always printed on a line by itself, which is exactly what
+ |   this boundary check requires.
+ | Author: suinevere
+ | Dependencies: lc
+ | Globals: N/A
+ | Params: text -- haystack; title -- the needle, in its original case
+ | Returns: offset of the first standalone-line match, or -1
+ ----------------------*/
+static int title_first_offset(const char* text, const char* title) {
+    int tl = (int) strlen(title), p, i;
+    if (tl == 0) return -1;
+    for (p = 0; text[p]; p++) {
+        if (p > 0 && text[p - 1] != '\n' && text[p - 1] != '\r') continue;
+        for (i = 0; i < tl && text[p + i] && lc(text[p + i]) == lc(title[i]); i++) ;
+        if (i == tl && (text[p + i] == 0 || text[p + i] == '\n' || text[p + i] == '\r'))
+            return p;
+    }
+    return -1;
+}
+
+/*----------------------
  | text_classify_room
  | Description: Scores room text against the keyword table and returns the
  |   winning category, or TC_NEUTRAL when nothing matched. The text is scored one
@@ -431,8 +467,29 @@ static void genre_accumulate(const char* text) {
  |   words count for TEXT_TITLE_WEIGHT extra WITHIN their tier, so a weighted
  |   title (or a doubled positive sentence) can break a tie but can no longer
  |   promote a Feature past a Structure.
+ |
+ |   Before any of that, the keyword scan is cut to start at the first
+ |   standalone-line occurrence of g_room_title in text (see
+ |   title_first_offset), when the title is set and does occur that way. Turn
+ |   one carries the interpreter's printed banner in the same buffer this
+ |   function scans, and under strict tier comparison a single banner word can
+ |   outrank the whole room: Zork III's banner is "ZORK III: The Dungeon
+ |   Master", "dungeon" is Structure, and the room's own "eerie"/"shadow" are
+ |   only Feature, so Endless Stair classified TC_DUNGEON instead of TC_HORROR.
+ |   FIRST occurrence, not last -- the banner precedes the room's own printed
+ |   heading, so the first match IS that heading, while the last match could
+ |   fall inside a body sentence that happens to repeat the title word, which
+ |   would wrongly drop that sentence from the scan. A title that does not sit
+ |   alone on its own line -- absent, or only ever running mid-sentence the way
+ |   a room's own prose does -- leaves the scan starting at text[0], same as
+ |   before this fix: brief-mode turns and computed room text carry no banner
+ |   to strip, and guessing at one would risk cutting real content.
+ |   genre_accumulate(text) above is deliberately exempt -- it still reads the
+ |   untrimmed text, because a banner line ("a fantasy story") is genuine
+ |   evidence of the STORY's genre, which is a different question from which
+ |   ROOM this is.
  | Author: suinevere
- | Dependencies: room_class.h (text_keywords, TC_*, KT_*)
+ | Dependencies: room_class.h (text_keywords, TC_*, KT_*), title_first_offset
  | Globals: g_room_title
  | Params: text -- the turn's text, opening with the room title (NULL -> NEUTRAL)
  | Returns: the winning TC_* category
@@ -456,7 +513,12 @@ int text_classify_room(const char* text) {
     }
 
     int nk = 0; const TextKeyword* kw = text_keywords(&nk);
-    int start = 0, pos = 0;
+    int start = 0, pos;
+    if (g_room_title[0] != 0) {
+        int off = title_first_offset(text, g_room_title);
+        if (off >= 0) start = off;
+    }
+    pos = start;
     for (;;) {
         char ch = text[pos];
         if (ch == 0 || ch == '.' || ch == '!' || ch == '?') {

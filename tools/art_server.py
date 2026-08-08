@@ -59,6 +59,55 @@ def _targets(assets):
     return out
 
 
+SHOWN = (art_status.ACCEPTED, art_status.REJECTED, art_status.CANDIDATE)
+
+FILTERS = {
+    "undecided": (art_status.CANDIDATE,),
+    "accepted": (art_status.ACCEPTED,),
+    "rejected": (art_status.REJECTED,),
+    "all": SHOWN,
+}
+
+
+def groups_for(records, mood, status):
+    """Split one mood's pictures into donor/noun sections.
+
+    Description: The sections mirror the on-disk tree
+        tools/assets/png/<MOOD>/<DONOR>/<noun>/, which is the subdivision the
+        owner is filling toward a target -- so each carries its own counts and a
+        thin noun is visible without arithmetic. Counts describe the whole
+        group, not the filtered view, because "two accepted here already" is
+        what decides whether to keep a third. METRIC_REJECTED never appears:
+        the fetcher writes no file for one, so there is nothing to show.
+    Author: suinevere
+    Dependencies: art_status
+    Globals: SHOWN, FILTERS
+    Params: records -- the manifest dict; mood -- the mood folder name;
+        status -- one of FILTERS' keys; anything else is treated as "all"
+    Returns: list of group dicts sorted by (donor, noun)
+    """
+    wanted = FILTERS.get(status, SHOWN)
+    mine = [r for r in records.values()
+            if r["mood"] == mood and r["status"] in SHOWN]
+    keys = sorted({(r["donor"], r["noun"]) for r in mine})
+    out = []
+    for donor, noun in keys:
+        group = [r for r in mine
+                 if r["donor"] == donor and r["noun"] == noun]
+        shown = sorted((r for r in group if r["status"] in wanted),
+                       key=lambda r: r["id"])
+        out.append({
+            "donor": donor, "noun": noun, "records": shown,
+            "accepted": sum(1 for r in group
+                            if r["status"] == art_status.ACCEPTED),
+            "rejected": sum(1 for r in group
+                            if r["status"] == art_status.REJECTED),
+            "undecided": sum(1 for r in group
+                             if r["status"] == art_status.CANDIDATE),
+        })
+    return out
+
+
 def create_app(repo=None):
     """Build the Flask app rooted at a repository.
 
@@ -165,6 +214,36 @@ def create_app(repo=None):
                              if r["status"] == art_status.CANDIDATE),
         })
 
+    @app.route("/mood/<mood>")
+    def mood_page(mood):
+        """Render one mood's pictures grouped by donor/noun with a status filter.
+
+        Description: Defaults to the undecided view because a resumed review
+            pass wants to see what is left, not what is already settled. The
+            `have` set drives the placeholder branch in the template: a record
+            can exist in the manifest with no file on disk yet, and the
+            verdict buttons must still work for it.
+        Author: suinevere
+        Dependencies: flask, art_review, fetch_art
+        Globals: N/A
+        Params: mood -- the mood folder name from the URL
+        Returns: rendered HTML; 404 for a mood with no vocabulary entry
+        """
+        from flask import abort, render_template_string, request
+        if mood not in _targets(assets):
+            abort(404)
+        manifest = fetch_art.load_manifest(assets / "art_manifest.json")
+        status = request.args.get("status", "undecided")
+        groups = groups_for(manifest, mood, status)
+        have = set()
+        for root in (assets / "png", assets / "candidates"):
+            for g in groups:
+                for r in g["records"]:
+                    if (Path(root) / art_review._rel(r)).exists():
+                        have.add(str(r["id"]))
+        return render_template_string(MOOD_HTML, mood=mood, groups=groups,
+                                      status=status, have=have)
+
     return app
 
 
@@ -184,6 +263,74 @@ td:first-child,th:first-child{text-align:left}a{color:#8cf}
 <td><span class="bar"><i style="width:{{ (100 * r.accepted // r.target) if r.target else 0 }}%"></i></span></td>
 </tr>{% endfor %}
 </table>
+"""
+
+
+MOOD_HTML = """<!doctype html><meta charset="utf-8"><title>{{ mood }}</title>
+<style>body{background:#111;color:#ddd;font:13px sans-serif;margin:24px}
+a{color:#8cf}h2{margin:26px 0 6px;font-size:14px;border-bottom:1px solid #333}
+figure{display:inline-block;margin:6px;text-align:center;width:320px}
+figcaption{font-size:11px}
+.gone{width:320px;height:224px;background:#222;color:#666;display:flex;
+align-items:center;justify-content:center}
+figure.accepted{outline:3px solid #4a8}figure.rejected{opacity:.35}
+figure:focus{outline:3px solid #8cf}
+#big{position:fixed;inset:0;background:#000d;display:none;
+align-items:center;justify-content:center}#big img{max-width:95vw}</style>
+<p><a href="/">&larr; all moods</a> &middot;
+{% for f in ["undecided","accepted","rejected","all"] %}
+<a href="/mood/{{ mood }}?status={{ f }}">{{ f }}</a>
+{% endfor %}</p>
+<h1>{{ mood }}</h1>
+{% for g in groups %}
+<h2>{{ g.donor }} / {{ g.noun }} &mdash;
+{{ g.accepted }} accepted &middot; {{ g.rejected }} rejected &middot;
+{{ g.undecided }} undecided</h2>
+{% for r in g.records %}
+<figure data-id="{{ r.id }}" tabindex="0" class="{{ r.status }}">
+{% if r.id|string in have %}<img src="/image/{{ r.id }}" width="320" height="224" alt="">
+{% else %}<div class="gone">no local copy</div>{% endif %}
+<figcaption>{{ r.phrase }}<br>
+<a href="{{ r.page_url }}" target="_blank">{{ r.id }}</a>
+<span class="st">{{ r.status }}</span><br>
+<button onclick="v('{{ r.id }}','accept')">accept</button>
+<button onclick="v('{{ r.id }}','reject')">reject</button>
+</figcaption></figure>
+{% endfor %}{% endfor %}
+<div id="big" onclick="this.style.display='none'"><img></div>
+<script>
+function v(id, call){
+  fetch('/verdict', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id:id, verdict:call})})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var f = document.querySelector('figure[data-id="'+d.id+'"]');
+    f.className = d.status;
+    f.querySelector('.st').textContent = d.status;
+  });
+}
+document.querySelectorAll('figure img').forEach(function(img){
+  img.addEventListener('click', function(){
+    var b = document.getElementById('big');
+    b.querySelector('img').src = img.src;
+    b.style.display = 'flex';
+  });
+});
+document.addEventListener('keydown', function(e){
+  var f = document.activeElement;
+  if (!f || f.tagName !== 'FIGURE') return;
+  if (e.key === 'a' || e.key === 'A') { v(f.dataset.id, 'accept'); next(f); }
+  if (e.key === 'r' || e.key === 'R') { v(f.dataset.id, 'reject'); next(f); }
+  if (e.key === 'ArrowRight') next(f);
+  if (e.key === 'ArrowLeft') prev(f);
+});
+function all(){ return Array.prototype.slice.call(
+  document.querySelectorAll('figure')); }
+function next(f){ var a = all(), i = a.indexOf(f);
+  if (i > -1 && a[i+1]) a[i+1].focus(); }
+function prev(f){ var a = all(), i = a.indexOf(f);
+  if (i > 0) a[i-1].focus(); }
+</script>
 """
 
 

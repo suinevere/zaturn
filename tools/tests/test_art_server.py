@@ -187,3 +187,109 @@ def test_verdict_never_touches_a_metric_rejected_record(tmp_path):
     saved = json.loads(
         (assets / "art_manifest.json").read_text(encoding="utf-8"))
     assert saved["1"]["status"] == art_status.METRIC_REJECTED
+
+
+def test_groups_are_sorted_and_counted(tmp_path):
+    recs = [record(1, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(2, donor="HOUSE", noun="attic",
+                   status=art_status.REJECTED),
+            record(3, donor="HOUSE", noun="attic",
+                   status=art_status.REJECTED),
+            record(4, donor="CRYPT", noun="tomb"),
+            record(5, donor="ABBEY", noun="vault"),
+            record(6, donor="MOTEL", noun="lobby")]
+    by_id = {str(r["id"]): r for r in recs}
+
+    groups = art_server.groups_for(by_id, "HORROR", "all")
+
+    assert [(g["donor"], g["noun"]) for g in groups] == \
+        [("ABBEY", "vault"), ("CRYPT", "tomb"), ("HOUSE", "attic"),
+         ("MOTEL", "lobby")]
+    attic = groups[2]
+    assert (attic["accepted"], attic["rejected"], attic["undecided"]) == \
+        (1, 2, 0)
+
+
+def test_groups_filter_by_status(tmp_path):
+    recs = [record(1, status=art_status.ACCEPTED),
+            record(2, status=art_status.CANDIDATE)]
+    by_id = {str(r["id"]): r for r in recs}
+
+    groups = art_server.groups_for(by_id, "HORROR", "undecided")
+
+    ids = [r["id"] for g in groups for r in g["records"]]
+    assert ids == [2]
+
+
+def test_groups_never_include_metric_rejected(tmp_path):
+    recs = [record(1, status=art_status.METRIC_REJECTED),
+            record(2, status=art_status.CANDIDATE)]
+    by_id = {str(r["id"]): r for r in recs}
+
+    groups = art_server.groups_for(by_id, "HORROR", "all")
+
+    ids = [r["id"] for g in groups for r in g["records"]]
+    assert ids == [2], "no file has ever existed for a metric rejection"
+
+
+def test_mood_page_defaults_to_undecided(tmp_path):
+    acc = record(1, status=art_status.ACCEPTED)
+    und = record(2, status=art_status.CANDIDATE)
+    client = build(tmp_path, [acc, und], promoted=[acc], candidates=[und])
+
+    page = client.get("/mood/HORROR").get_data(as_text=True)
+
+    assert 'data-id="2"' in page
+    assert 'data-id="1"' not in page, \
+        "a resumed pass shows what is left, not what is done"
+
+
+def test_mood_page_all_shows_every_decided_record(tmp_path):
+    acc = record(1, status=art_status.ACCEPTED)
+    und = record(2, status=art_status.CANDIDATE)
+    client = build(tmp_path, [acc, und], promoted=[acc], candidates=[und])
+
+    page = client.get("/mood/HORROR?status=all").get_data(as_text=True)
+
+    assert 'data-id="1"' in page and 'data-id="2"' in page
+
+
+def test_mood_page_shows_the_group_heading(tmp_path):
+    und = record(1, donor="HOUSE", noun="attic")
+    client = build(tmp_path, [und], candidates=[und])
+
+    page = client.get("/mood/HORROR").get_data(as_text=True)
+
+    assert "HOUSE / attic" in page
+
+
+def test_mood_page_404s_for_an_unknown_mood(tmp_path):
+    client = build(tmp_path, [record(1)], candidates=[record(1)])
+
+    assert client.get("/mood/NOPE").status_code == 404
+
+
+def test_mood_page_loses_no_record_to_grouping(tmp_path):
+    recs = [record(1, donor="HOUSE", noun="attic"),
+            record(2, donor="HOUSE", noun="cellar"),
+            record(3, donor="CRYPT", noun="tomb"),
+            record(4, mood="WATER", donor="WATER", noun="lake")]
+    client = build(tmp_path, recs, candidates=recs)
+
+    page = client.get("/mood/HORROR?status=all").get_data(as_text=True)
+
+    import re as _re
+    shown = set(_re.findall(r'data-id="(\d+)"', page))
+    assert shown == {"1", "2", "3"}, \
+        "grouping reorders and labels; it must not drop or borrow a record"
+
+
+def test_mood_page_renders_a_placeholder_for_a_missing_picture(tmp_path):
+    und = record(1, status=art_status.CANDIDATE)
+    client = build(tmp_path, [und])
+
+    page = client.get("/mood/HORROR").get_data(as_text=True)
+
+    assert 'data-id="1"' in page, "the verdict must stay clickable"
+    assert "pixabay.com" in page

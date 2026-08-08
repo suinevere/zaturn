@@ -7,5 +7,5 @@
  | Author: suinevere
  ----------------------*/
 static const unsigned char CATEGORY_ART_N[TEXT_NUM_CATEGORIES] = {
-    0, 25, 11, 23, 9, 7, 11, 21, 10, 3, 12, 16, 9, 0, 0
+    0, 25, 11, 22, 9, 7, 11, 21, 10, 3, 12, 16, 9, 0, 0
 };

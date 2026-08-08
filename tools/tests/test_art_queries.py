@@ -72,6 +72,48 @@ def test_a_mood_with_no_reachable_noun_is_rejected():
                                       "target": 99}}, NOUNS)
 
 
+SPREAD_NOUNS = {m: [] for m in MOODS}
+SPREAD_NOUNS["HOUSE"] = ["hallway", "kitchen", "attic", "cellar"]
+
+SPREAD_VOCAB = {
+    "HOUSE": {
+        "adjectives": ["cosy", "dusty", "grand"],
+        "donors": ["HOUSE"],
+        "extra_nouns": [],
+        "exclude_nouns": [],
+        "target": 99,
+    }
+}
+
+
+def test_interleaved_build_is_a_complete_cross_product():
+    got = art_queries.build(SPREAD_VOCAB, SPREAD_NOUNS)["HOUSE"]
+    pairs = [(q.noun, q.adjective) for q in got]
+    expected = {(noun, adj) for noun in SPREAD_NOUNS["HOUSE"]
+                for adj in SPREAD_VOCAB["HOUSE"]["adjectives"]}
+    assert set(pairs) == expected
+    assert len(pairs) == len(set(pairs)) == 12
+
+
+def test_first_round_spreads_adjectives_and_covers_every_noun():
+    got = art_queries.build(SPREAD_VOCAB, SPREAD_NOUNS)["HOUSE"]
+    first_round = got[:4]
+    assert len(set(q.noun for q in first_round)) == 4
+    assert len(set(q.adjective for q in first_round)) == 3
+
+
+def test_truncating_to_a_budget_does_not_repeat_one_adjective():
+    got = art_queries.build(SPREAD_VOCAB, SPREAD_NOUNS)["HOUSE"]
+    budget_prefix = got[:3]
+    assert len(set(q.adjective for q in budget_prefix)) > 1
+
+
+def test_build_order_is_deterministic():
+    first = [q.phrase for q in art_queries.build(SPREAD_VOCAB, SPREAD_NOUNS)["HOUSE"]]
+    second = [q.phrase for q in art_queries.build(SPREAD_VOCAB, SPREAD_NOUNS)["HOUSE"]]
+    assert first == second
+
+
 def test_the_shipped_vocabulary_is_valid_and_covers_every_mood():
     repo = Path(__file__).resolve().parents[2]
     vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")

@@ -65,7 +65,11 @@ def build(vocab, nouns):
     """Cross each mood's adjectives with the nouns its donors contribute.
 
     Description: Raises when a mood reaches no noun at all, because that mood
-        would silently fetch nothing.
+        would silently fetch nothing. Emits the cross product noun-major,
+        rotating the adjective per noun, so a budget that stops early still
+        draws from across the whole vocabulary instead of exhausting a
+        single adjective first. validate() already guarantees adjectives is
+        non-empty, so no zero-adjective guard is needed here.
     Author: suinevere
     Dependencies: N/A
     Globals: N/A
@@ -88,9 +92,11 @@ def build(vocab, nouns):
                 f"{mood} reaches no noun: its donors contribute none and it "
                 f"lists no extra_nouns"
             )
+        adjs = entry["adjectives"]
         plan[mood] = [
-            Query(mood, donor, noun, adj, f"{adj} {noun}")
-            for adj in entry["adjectives"]
-            for donor, noun in pairs
+            Query(mood, donor, noun, adjs[(i + j) % len(adjs)],
+                  "{} {}".format(adjs[(i + j) % len(adjs)], noun))
+            for j in range(len(adjs))
+            for i, (donor, noun) in enumerate(pairs)
         ]
     return plan

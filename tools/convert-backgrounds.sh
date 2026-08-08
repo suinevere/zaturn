@@ -73,4 +73,13 @@ if ! "$PY" -c 'import PIL' 2>/dev/null; then
     }
 fi
 
+# Apply any review verdicts sitting in tools/assets/sheets/ before converting, so
+# a picture rejected after the last build cannot survive on the disc. Promotion is
+# idempotent, so a verdicts file left in place is re-applied harmlessly on every
+# build. Non-fatal by the same rule as everything else here: a failure to apply
+# verdicts must not stop the conversion that follows.
+"$PY" "$REPO/tools/art_review.py" --promote || {
+    warn "Could not apply review verdicts. The conversion below uses the tree as it stands."
+}
+
 "$PY" "$REPO/tools/make_tga.py" "$SRC" "$DST"

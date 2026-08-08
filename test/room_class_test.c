@@ -230,6 +230,82 @@ static int assertions(void) {
     room_class_reset();
     CHECK(classify("Camp", "Your tent stands in a clearing.") == TC_DESERT);
 
+    /* ---- the banner is not the room ----
+       Turn one carries the game's printed banner in the same buffer this room's
+       text arrives in. Zork III's banner names "The Dungeon Master";
+       "dungeon" is Structure and the room's own "eerie"/"shadow" are only
+       Feature, so under strict tier comparison the banner's one Structure hit
+       used to beat the room outright. The scan must cut to the room's own
+       heading -- the FIRST occurrence of the title -- before scoring. */
+    {
+        const char* banner_stair =
+            "ZORK III: The Dungeon Master\n"
+            "Copyright (c) 1982, 1983 Infocom, Inc. All rights reserved.\n"
+            "ZORK is a registered trademark of Infocom, Inc.\n"
+            "Revision 17 / Serial number 840727\n"
+            "\n"
+            "Endless Stair\n"
+            "You are at the bottom of a seemingly endless stair, winding its way "
+            "upward beyond your vision. An eerie light, coming from all around "
+            "you, casts strange shadows on the walls. To the south is a dark and "
+            "winding trail.";
+
+        room_class_reset();
+        room_class_set_game(17, "840727");             /* Zork III -- fantasy */
+        CHECK(classify("Endless Stair", banner_stair) == TC_HORROR);
+
+        /* Same room, no banner: the fix must not disturb the uncontaminated
+           path that already worked. */
+        room_class_reset();
+        room_class_set_game(17, "840727");
+        CHECK(classify("Endless Stair",
+            "You are at the bottom of a seemingly endless stair, winding its way "
+            "upward beyond your vision. An eerie light, coming from all around "
+            "you, casts strange shadows on the walls. To the south is a dark and "
+            "winding trail.") == TC_HORROR);
+
+        /* Zork I's own banner problem (mojozork.c:1310) already worked around by
+           passing the title; must keep working once the body text is also
+           trimmed. */
+        room_class_reset();
+        room_class_set_game(88, "840726");             /* Zork I -- fantasy */
+        CHECK(classify("West of House",
+            "ZORK I: The Great Underground Empire\n"
+            "Copyright (c) 1981, 1982, 1983 Infocom, Inc. All rights reserved.\n"
+            "ZORK is a registered trademark of Infocom, Inc.\n"
+            "Revision 88 / Serial number 840726\n"
+            "\n"
+            "West of House\n"
+            "You are standing in an open field west of a white house, with a "
+            "boarded front door. There is a small mailbox here.") == TC_HOUSE);
+
+        /* Degrade path: when the supplied title does not occur verbatim in the
+           text, the scan must not trim anything -- it classifies exactly as it
+           did before this fix, banner word and all. Same contaminated Zork III
+           text as above, but with a title that never appears in it. */
+        room_class_reset();
+        room_class_set_game(17, "840727");
+        CHECK(classify("Somewhere Else Entirely", banner_stair) == TC_DUNGEON);
+
+        /* FIRST occurrence, not last: the title recurs later on a line of its
+           own (a signpost, say), after the room's real description. Taking the
+           last occurrence would start the scan there and throw away "eerie"
+           and "shadows" along with everything else that makes this room
+           TC_HORROR, leaving only the trailing sentence and TC_NEUTRAL. */
+        room_class_reset();
+        room_class_set_game(17, "840727");
+        CHECK(classify("Endless Stair",
+            "ZORK III: The Dungeon Master\n"
+            "\n"
+            "Endless Stair\n"
+            "You are at the bottom of a seemingly endless stair, winding its way "
+            "upward beyond your vision. An eerie light, coming from all around "
+            "you, casts strange shadows on the walls. To the south is a dark and "
+            "winding trail.\n"
+            "Endless Stair\n"
+            "Nothing else here matters.") == TC_HORROR);
+    }
+
     if (!fails) printf("ASSERTIONS: OK\n");
     return fails;
 }

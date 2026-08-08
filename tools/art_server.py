@@ -122,6 +122,49 @@ def create_app(repo=None):
                 return send_file(str(path), mimetype="image/png")
         abort(404)
 
+    @app.route("/verdict", methods=["POST"])
+    def verdict():
+        """Apply one verdict through promote and report the mood's refreshed counts.
+
+        Description: The manifest is the only truth, so this route never
+            assigns rec["status"] itself -- it hands the call to
+            art_review.promote, which owns all four transitions and the
+            png/candidates moves, then reads the record's status back out of
+            the manifest promote just mutated.
+        Author: suinevere
+        Dependencies: flask, art_review, art_status, fetch_art
+        Globals: N/A
+        Params: N/A -- reads JSON {"id", "verdict"} from the request body
+        Returns: JSON {"id", "status", "accepted", "rejected", "undecided"};
+            404 for an unknown id, 400 for a verdict that is not accept/reject
+        """
+        from flask import abort, jsonify, request
+        body = request.get_json(silent=True) or {}
+        pid = str(body.get("id", ""))
+        call = body.get("verdict", "")
+        if call not in ("accept", "reject"):
+            abort(400)
+        path = assets / "art_manifest.json"
+        manifest = fetch_art.load_manifest(path)
+        rec = manifest.get(pid)
+        if rec is None:
+            abort(404)
+        art_review.promote({pid: call}, manifest,
+                           assets / "candidates", assets / "png")
+        fetch_art.save_manifest(path, manifest)
+        mood = rec["mood"]
+        mine = [r for r in manifest.values() if r["mood"] == mood]
+        return jsonify({
+            "id": pid,
+            "status": rec["status"],
+            "accepted": sum(1 for r in mine
+                            if r["status"] == art_status.ACCEPTED),
+            "rejected": sum(1 for r in mine
+                            if r["status"] == art_status.REJECTED),
+            "undecided": sum(1 for r in mine
+                             if r["status"] == art_status.CANDIDATE),
+        })
+
     return app
 
 

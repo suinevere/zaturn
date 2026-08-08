@@ -98,3 +98,92 @@ def test_image_route_404s_when_the_file_is_missing(tmp_path):
 
     assert client.get("/image/1").status_code == 404, \
         "a fresh clone has the record but no pixels"
+
+
+def test_verdict_accepts_and_moves_the_file_into_png(tmp_path):
+    und = record(1, status=art_status.CANDIDATE)
+    client = build(tmp_path, [und], candidates=[und])
+    assets = tmp_path / "tools" / "assets"
+
+    resp = client.post("/verdict", json={"id": "1", "verdict": "accept"})
+
+    assert resp.get_json()["status"] == art_status.ACCEPTED
+    assert (assets / "png" / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
+    saved = json.loads(
+        (assets / "art_manifest.json").read_text(encoding="utf-8"))
+    assert saved["1"]["status"] == art_status.ACCEPTED
+
+
+def test_verdict_un_accepts_and_moves_the_file_back(tmp_path):
+    acc = record(1, status=art_status.ACCEPTED)
+    client = build(tmp_path, [acc], promoted=[acc])
+    assets = tmp_path / "tools" / "assets"
+
+    resp = client.post("/verdict", json={"id": "1", "verdict": "reject"})
+
+    assert resp.get_json()["status"] == art_status.REJECTED
+    assert not (assets / "png" / "HORROR" / "HOUSE" / "hallway"
+                / "1.png").exists()
+    assert (assets / "candidates" / "HORROR" / "HOUSE" / "hallway"
+            / "1.png").exists()
+
+
+def test_verdict_is_idempotent(tmp_path):
+    und = record(1, status=art_status.CANDIDATE)
+    client = build(tmp_path, [und], candidates=[und])
+
+    first = client.post("/verdict", json={"id": "1", "verdict": "accept"})
+    second = client.post("/verdict", json={"id": "1", "verdict": "accept"})
+
+    assert first.get_json()["status"] == art_status.ACCEPTED
+    assert second.get_json()["status"] == art_status.ACCEPTED
+    assert second.get_json()["accepted"] == 1, \
+        "applying the same verdict twice must not double-count"
+
+
+def test_verdict_returns_refreshed_counts(tmp_path):
+    a = record(1, status=art_status.CANDIDATE)
+    b = record(2, status=art_status.CANDIDATE)
+    client = build(tmp_path, [a, b], candidates=[a, b])
+
+    body = client.post("/verdict",
+                       json={"id": "1", "verdict": "accept"}).get_json()
+
+    assert body["accepted"] == 1 and body["undecided"] == 1
+
+
+def test_verdict_records_the_decision_with_no_file_present(tmp_path):
+    rej = record(1, status=art_status.REJECTED)
+    client = build(tmp_path, [rej])
+
+    body = client.post("/verdict",
+                       json={"id": "1", "verdict": "accept"}).get_json()
+
+    assert body["status"] == art_status.ACCEPTED, \
+        "the manifest is the decision; the file location merely follows it"
+
+
+def test_verdict_404s_for_an_unknown_id(tmp_path):
+    client = build(tmp_path, [record(1)], candidates=[record(1)])
+
+    assert client.post("/verdict",
+                       json={"id": "9999", "verdict": "accept"}).status_code == 404
+
+
+def test_verdict_400s_for_a_word_that_is_not_a_verdict(tmp_path):
+    client = build(tmp_path, [record(1)], candidates=[record(1)])
+
+    assert client.post("/verdict",
+                       json={"id": "1", "verdict": "maybe"}).status_code == 400
+
+
+def test_verdict_never_touches_a_metric_rejected_record(tmp_path):
+    mr = record(1, status=art_status.METRIC_REJECTED)
+    client = build(tmp_path, [mr])
+
+    client.post("/verdict", json={"id": "1", "verdict": "accept"})
+
+    assets = tmp_path / "tools" / "assets"
+    saved = json.loads(
+        (assets / "art_manifest.json").read_text(encoding="utf-8"))
+    assert saved["1"]["status"] == art_status.METRIC_REJECTED

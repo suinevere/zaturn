@@ -765,18 +765,37 @@ void music_tick(void) {
 
 /*----------------------
  | music_note_output
- | Description: Appends up to MUSIC_TEXT_MAX-1 bytes of the turn's output text to
- |   the classification buffer, stopping at a NUL, so music_on_turn can read the
- |   full turn.
+ | Description: Appends the turn's output text to the classification buffer,
+ |   stopping at a NUL, so music_on_turn can read the turn. When a turn's total
+ |   output exceeds the MUSIC_TEXT_MAX-1 capacity, the buffer keeps the NEWEST
+ |   bytes and drops the oldest: the room description is always the last thing
+ |   printed before the prompt, while a dream, cutscene or banner prints
+ |   earlier in the same turn, so trimming from the front is what throws away
+ |   the part that is not the room. Uses memmove/memcpy rather than a
+ |   byte-at-a-time shift -- O(n) per call instead of O(n^2) over a turn's
+ |   worth of appends, which matters on a 28MHz SH-2.
  | Author: suinevere
- | Dependencies: N/A
+ | Dependencies: string.h (memmove, memcpy)
  | Globals: g_turn_text, g_turn_len
  | Params: str -- output text; len -- its length
  | Returns: N/A
  ----------------------*/
 void music_note_output(const char* str, unsigned int len) {
-    for (unsigned int i = 0; i < len && str[i]; i++) {
-        if (g_turn_len < MUSIC_TEXT_MAX - 1) g_turn_text[g_turn_len++] = str[i];
+    unsigned int chunk;
+    int cap = MUSIC_TEXT_MAX - 1;
+    for (chunk = 0; chunk < len && str[chunk]; chunk++) ;
+
+    if ((int) chunk >= cap) {
+        memcpy(g_turn_text, str + (chunk - (unsigned int) cap), (size_t) cap);
+        g_turn_len = cap;
+    } else {
+        int overflow = g_turn_len + (int) chunk - cap;
+        if (overflow > 0) {
+            memmove(g_turn_text, g_turn_text + overflow, (size_t) (g_turn_len - overflow));
+            g_turn_len -= overflow;
+        }
+        memcpy(g_turn_text + g_turn_len, str, (size_t) chunk);
+        g_turn_len += (int) chunk;
     }
     g_turn_text[g_turn_len] = 0;
 }

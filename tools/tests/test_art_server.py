@@ -47,6 +47,25 @@ def build(tmp_path, records, promoted=(), candidates=(), target=99):
     return art_server.create_app(repo=tmp_path).test_client()
 
 
+def test_index_shows_asymmetric_per_mood_counts_in_the_right_columns(tmp_path):
+    recs = [record(1, status=art_status.ACCEPTED),
+            record(2, status=art_status.ACCEPTED),
+            record(3, status=art_status.ACCEPTED),
+            record(4, status=art_status.REJECTED),
+            record(5, status=art_status.REJECTED),
+            record(6, status=art_status.CANDIDATE)]
+    client = build(tmp_path, recs, candidates=recs, target=50)
+
+    page = client.get("/").get_data(as_text=True)
+
+    import re as _re
+    row = _re.search(r"<tr>.*?HORROR.*?</tr>", page, _re.S).group(0)
+    cells = _re.findall(r"<td>(.*?)</td>", row, _re.S)
+    assert cells[1] == "3", "accepted column must show the accepted count"
+    assert cells[2] == "2", "rejected column must show the rejected count"
+    assert cells[3] == "1", "undecided column must show the undecided count"
+
+
 def test_index_lists_every_mood_with_its_counts(tmp_path):
     acc = record(1, status=art_status.ACCEPTED)
     rej = record(2, status=art_status.REJECTED)
@@ -211,6 +230,32 @@ def test_groups_are_sorted_and_counted(tmp_path):
         (1, 2, 0)
 
 
+def test_groups_for_counts_describe_the_whole_group_not_the_filtered_view(
+        tmp_path):
+    recs = [record(1, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(2, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(3, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(4, donor="HOUSE", noun="attic",
+                   status=art_status.REJECTED),
+            record(5, donor="HOUSE", noun="attic",
+                   status=art_status.REJECTED),
+            record(6, donor="HOUSE", noun="attic",
+                   status=art_status.CANDIDATE)]
+    by_id = {str(r["id"]): r for r in recs}
+
+    groups = art_server.groups_for(by_id, "HORROR", "undecided")
+
+    assert len(groups) == 1
+    group = groups[0]
+    assert (group["accepted"], group["rejected"], group["undecided"]) == \
+        (3, 2, 1), "counts must describe the whole group, not the filtered view"
+    assert [r["id"] for r in group["records"]] == [6], \
+        "the filtered view still holds only what the status filter wants"
+
+
 def test_groups_filter_by_status(tmp_path):
     recs = [record(1, status=art_status.ACCEPTED),
             record(2, status=art_status.CANDIDATE)]
@@ -262,6 +307,45 @@ def test_mood_page_shows_the_group_heading(tmp_path):
     page = client.get("/mood/HORROR").get_data(as_text=True)
 
     assert "HOUSE / attic" in page
+
+
+def test_mood_page_group_heading_shows_the_right_counts_in_the_right_slots(
+        tmp_path):
+    recs = [record(1, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(2, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(3, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(4, donor="HOUSE", noun="attic",
+                   status=art_status.ACCEPTED),
+            record(5, donor="HOUSE", noun="attic",
+                   status=art_status.REJECTED),
+            record(6, donor="HOUSE", noun="attic",
+                   status=art_status.CANDIDATE),
+            record(7, donor="HOUSE", noun="attic",
+                   status=art_status.CANDIDATE)]
+    client = build(tmp_path, recs, candidates=recs)
+
+    page = client.get("/mood/HORROR?status=all").get_data(as_text=True)
+
+    assert "4 accepted" in page, "the heading must carry the accepted count"
+    assert "1 rejected" in page, "the heading must carry the rejected count"
+    assert "2 undecided" in page, "the heading must carry the undecided count"
+
+
+def test_mood_page_placeholder_for_an_accepted_record_missing_from_disk(
+        tmp_path):
+    acc = record(1, status=art_status.ACCEPTED)
+    client = build(tmp_path, [acc])
+
+    page = client.get("/mood/HORROR?status=all").get_data(as_text=True)
+
+    assert 'data-id="1"' in page, "the tile must still render"
+    assert "no local copy" in page, \
+        "status alone must not be trusted; the file is not on disk"
+    assert "v('1','accept')" in page, \
+        "the verdict controls must still work for a record with no file"
 
 
 def test_mood_page_404s_for_an_unknown_mood(tmp_path):

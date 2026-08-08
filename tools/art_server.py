@@ -128,6 +128,18 @@ def create_app(repo=None):
 
     @app.route("/")
     def index():
+        """Render the mood list with each mood's counts and progress toward target.
+
+        Description: Moods come from the vocabulary rather than the manifest,
+            so a mood with zero pictures still gets a row and a visible target;
+            a manifest record whose mood has no vocabulary entry is silently
+            left out of every row rather than crashing the page.
+        Author: suinevere
+        Dependencies: flask, fetch_art, art_queries, art_status
+        Globals: N/A
+        Params: N/A
+        Returns: rendered HTML listing every mood in the vocabulary
+        """
         manifest = fetch_art.load_manifest(assets / "art_manifest.json")
         targets = _targets(assets)
         rows = []

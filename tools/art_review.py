@@ -271,9 +271,13 @@ def main(argv, repo=None):
     if argv and argv[0] == "--sheets":
         candidates = [r for r in manifest.values()
                       if r["status"] == art_status.CANDIDATE]
+        decided = [r for r in manifest.values()
+                   if r["status"] in (art_status.ACCEPTED,
+                                      art_status.REJECTED)]
         already_accepted = [r.get("phash", "") for r in manifest.values()
                             if r["status"] == art_status.ACCEPTED]
-        kept = {str(r["id"]): r for r in dedup(candidates, already_accepted)}
+        kept = {str(r["id"]): r
+                for r in decided + dedup(candidates, already_accepted)}
         out = assets / "sheets"
         out.mkdir(parents=True, exist_ok=True)
         for mood in MOODS:

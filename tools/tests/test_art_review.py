@@ -149,8 +149,10 @@ def test_main_sheets_writes_one_page_per_mood_and_seeds_dedup_from_accepted(tmp_
     pages = list((assets / "sheets").glob("*.html"))
     assert len(pages) == len(MOODS)
     horror_html = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
-    assert "dark hallway" not in horror_html, \
+    assert 'data-id="1"' not in horror_html, \
         "candidate 1 is a near-duplicate of the already-accepted candidate 2"
+    assert 'data-id="2"' in horror_html, \
+        "a decided record must never be dropped by dedup"
 
 
 def test_main_promote_moves_accepted_and_updates_the_manifest_on_disk(tmp_path):
@@ -349,3 +351,22 @@ def test_sheet_stays_self_contained_with_a_placeholder(tmp_path):
     srcs = re.findall(r'src="([^"]*)"', html_out)
     assert all(s.startswith("data:") for s in srcs), \
         "a placeholder must not reintroduce a remote image reference"
+
+
+def test_main_sheets_never_dedups_away_a_decided_picture(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    assets.mkdir(parents=True)
+    twin = "f" * 16
+    acc = record(1, phash=twin, status=art_status.ACCEPTED)
+    rej = record(2, phash=twin, status=art_status.REJECTED)
+    make_promoted(assets / "png", acc)
+    make_candidate(assets / "candidates", rej)
+    fetch_art.save_manifest(assets / "art_manifest.json",
+                            {"1": acc, "2": rej})
+
+    assert art_review.main(["--sheets"], repo=tmp_path) == 0
+
+    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
+    assert 'data-id="2"' in page, \
+        "a rejected picture must survive dedup or its verdict cannot be reversed"
+    assert 'data-id="1"' in page

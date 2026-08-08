@@ -13,7 +13,7 @@ Description: The metric gate removes what is provably unusable; everything left
     differing is the conventional near-duplicate threshold for perceptual
     hashes, tight enough that unrelated photos essentially never collide.
 Author: suinevere
-Dependencies: base64, html, json, pathlib, io, PIL, os
+Dependencies: base64, collections, html, json, pathlib, io, PIL, os
 Globals: HAMMING_MAX
 """
 import base64

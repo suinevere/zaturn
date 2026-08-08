@@ -33,7 +33,7 @@ def make_candidate(root, rec):
 def test_sheet_is_self_contained_and_names_its_sources(tmp_path):
     rec = record(1)
     make_candidate(tmp_path, rec)
-    html = art_review.sheet("HORROR", {"1": rec}, tmp_path)
+    html = art_review.sheet("HORROR", {"1": rec}, tmp_path, tmp_path / "png")
     assert "<html" in html and "</html>" in html
     assert "data:image/png;base64," in html, "thumbnails must be embedded"
 
@@ -52,7 +52,7 @@ def test_sheet_is_self_contained_and_names_its_sources(tmp_path):
 
 
 def test_sheet_with_no_candidates_still_renders(tmp_path):
-    html = art_review.sheet("HORROR", {}, tmp_path)
+    html = art_review.sheet("HORROR", {}, tmp_path, tmp_path / "png")
     assert "<html" in html and "</html>" in html
     assert "0 candidates" in html
 
@@ -61,7 +61,7 @@ def test_sheet_covers_only_its_own_mood(tmp_path):
     recs = {"1": record(1, mood="HORROR"), "2": record(2, mood="HOUSE")}
     for r in recs.values():
         make_candidate(tmp_path, r)
-    html = art_review.sheet("HORROR", recs, tmp_path)
+    html = art_review.sheet("HORROR", recs, tmp_path, tmp_path / "png")
     assert "photos/1/" in html
     assert "photos/2/" not in html
 
@@ -73,7 +73,7 @@ def test_sheet_escapes_a_quote_in_the_phrase_and_page_url(tmp_path):
     rec["phrase"] = 'dark "haunted" hallway'
     rec["page_url"] = 'https://pixabay.com/photos/1/?ref="x"'
     make_candidate(tmp_path, rec)
-    html = art_review.sheet("HORROR", {"1": rec}, tmp_path)
+    html = art_review.sheet("HORROR", {"1": rec}, tmp_path, tmp_path / "png")
     assert '"x"' not in html
     assert "&quot;" in html
 
@@ -284,3 +284,68 @@ def test_main_promote_with_no_files_says_so(tmp_path, capsys):
 
     assert art_review.main(["--promote"], repo=tmp_path) == 0
     assert "no verdicts" in capsys.readouterr().out.lower()
+
+
+def test_sheet_shows_accepted_rejected_and_undecided_together(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    acc = record(1, status=art_status.ACCEPTED)
+    rej = record(2, status=art_status.REJECTED)
+    und = record(3, status=art_status.CANDIDATE)
+    make_promoted(png, acc)
+    for rec in (rej, und):
+        make_candidate(cand, rec)
+    recs = {"1": acc, "2": rej, "3": und}
+
+    html_out = art_review.sheet("HORROR", recs, cand, png)
+
+    for pid in ("1", "2", "3"):
+        assert 'data-id="{}"'.format(pid) in html_out
+    assert "accepted" in html_out and "rejected" in html_out
+
+
+def test_sheet_checks_the_box_to_match_stored_status(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    acc = record(1, status=art_status.ACCEPTED)
+    rej = record(2, status=art_status.REJECTED)
+    make_promoted(png, acc)
+    make_candidate(cand, rej)
+
+    html_out = art_review.sheet("HORROR", {"1": acc, "2": rej}, cand, png)
+
+    accepted_tile = html_out.split('data-id="1"')[1].split("</figure>")[0]
+    rejected_tile = html_out.split('data-id="2"')[1].split("</figure>")[0]
+    assert "checked" in accepted_tile
+    assert "checked" not in rejected_tile, \
+        "a rejected image must open unticked or the decision silently flips back"
+
+
+def test_sheet_hides_metric_rejected_records(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.METRIC_REJECTED)
+
+    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
+
+    assert 'data-id="1"' not in html_out, \
+        "the fetcher never writes these to disk, so no tile can be rendered"
+
+
+def test_sheet_renders_a_placeholder_when_the_file_is_missing(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.REJECTED)
+
+    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
+
+    assert 'data-id="1"' in html_out, "the decision must stay flippable"
+    assert "no local copy" in html_out
+    assert "pixabay.com" in html_out
+
+
+def test_sheet_stays_self_contained_with_a_placeholder(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.REJECTED)
+
+    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
+
+    srcs = re.findall(r'src="([^"]*)"', html_out)
+    assert all(s.startswith("data:") for s in srcs), \
+        "a placeholder must not reintroduce a remote image reference"

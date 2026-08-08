@@ -44,35 +44,48 @@ def _thumb_uri(path):
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode()
 
 
-def sheet(mood, records, candidates_dir):
-    """Render one mood's candidates as a self-contained HTML review page.
+SHOWN = (art_status.ACCEPTED, art_status.REJECTED, art_status.CANDIDATE)
 
-    Description: Renders with zero candidates rather than refusing to -- the
-        likely state of most moods on a first, small calibration run.
+
+def sheet(mood, records, candidates_dir, png_dir):
+    """Render one mood's whole review history as a self-contained page.
+
+    Description: Shows accepted, rejected and undecided pictures together with
+        the decision currently stored for each, because curation is taste
+        applied repeatedly and a verdict has to be reversible. Metric rejections
+        are absent by necessity: the fetcher only ever writes gate-passing
+        images, so no file has existed for them. A record whose picture is gone
+        -- every rejected image in a fresh clone -- still gets a tile, so the
+        decision stays flippable with no pixels and no network.
     Author: suinevere
-    Dependencies: html
-    Globals: N/A
+    Dependencies: html, art_status
+    Globals: SHOWN
     Params: mood -- the mood folder name; records -- the manifest dict;
-        candidates_dir -- where fetch_art wrote the PNGs
+        candidates_dir -- the git-ignored tree; png_dir -- tools/assets/png
     Returns: the HTML as a string
     """
     mine = [r for r in records.values()
-            if r["mood"] == mood and r["status"] == art_status.CANDIDATE]
+            if r["mood"] == mood and r["status"] in SHOWN]
     mine.sort(key=lambda r: (r["donor"], r["noun"], r["id"]))
 
     cells = []
     for r in mine:
-        src = _thumb_uri(Path(candidates_dir) / r["mood"] / r["donor"]
-                         / r["noun"] / f"{r['id']}.png")
+        root = png_dir if r["status"] == art_status.ACCEPTED else candidates_dir
+        src = _thumb_uri(Path(root) / _rel(r))
+        label = {art_status.ACCEPTED: "accepted",
+                 art_status.REJECTED: "rejected"}.get(r["status"], "undecided")
+        checked = " checked" if r["status"] != art_status.REJECTED else ""
+        art = (f'<img src="{src}" width="320" height="224" alt="">' if src
+               else '<div class="gone">no local copy</div>')
         cells.append(
-            f'<figure data-id="{r["id"]}">'
-            f'<img src="{src}" width="320" height="224" alt="">'
+            f'<figure data-id="{r["id"]}" data-status="{label}">'
+            f'{art}'
             f'<figcaption>{html.escape(r["phrase"])}<br>'
-            f'lum {r["luminance"]} &middot; busy {r["busyness"]} '
-            f'&middot; band {r["banding"]}<br>'
+            f'<b>{label}</b> &middot; lum {r["luminance"]} '
+            f'&middot; busy {r["busyness"]} &middot; band {r["banding"]}<br>'
             f'<a href="{html.escape(r["page_url"], quote=True)}" '
             f'target="_blank">{r["id"]}</a><br>'
-            f'<label><input type="checkbox" checked> keep</label>'
+            f'<label><input type="checkbox"{checked}> keep</label>'
             f'</figcaption></figure>'
         )
 
@@ -81,7 +94,10 @@ def sheet(mood, records, candidates_dir):
         f"<title>{mood} &mdash; {len(mine)} candidates</title>"
         "<style>body{background:#111;color:#ddd;font:13px sans-serif}"
         "figure{display:inline-block;margin:8px;text-align:center}"
-        "figcaption{max-width:320px}a{color:#8cf}</style></head><body>"
+        "figcaption{max-width:320px}a{color:#8cf}"
+        ".gone{width:320px;height:224px;background:#222;color:#666;"
+        "display:flex;align-items:center;justify-content:center}"
+        "</style></head><body>"
         f"<h1>{mood} &mdash; {len(mine)} candidates</h1>"
         + "".join(cells) +
         "<p><button onclick=\"save()\">Download verdicts.json</button></p>"
@@ -262,8 +278,8 @@ def main(argv, repo=None):
         out.mkdir(parents=True, exist_ok=True)
         for mood in MOODS:
             page = out / f"{mood}.html"
-            page.write_text(sheet(mood, kept, assets / "candidates"),
-                            encoding="utf-8")
+            page.write_text(sheet(mood, kept, assets / "candidates",
+                                  assets / "png"), encoding="utf-8")
             print(f"  {page}")
         return 0
 

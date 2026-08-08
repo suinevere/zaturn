@@ -332,20 +332,115 @@ def test_sheet_shows_accepted_rejected_and_undecided_together(tmp_path):
     assert "accepted" in html_out and "rejected" in html_out
 
 
-def test_sheet_checks_the_box_to_match_stored_status(tmp_path):
+def test_sheet_ticks_no_tile_on_load_regardless_of_status(tmp_path):
+    """Review is opt-in now: nothing is checked on load, including an
+    ACCEPTED record -- the owner must re-tick a keeper or it un-accepts."""
     cand, png = tmp_path / "c", tmp_path / "png"
     acc = record(1, status=art_status.ACCEPTED)
     rej = record(2, status=art_status.REJECTED)
+    und = record(3, status=art_status.CANDIDATE)
     make_promoted(png, acc)
     make_candidate(cand, rej)
+    make_candidate(cand, und)
 
-    html_out = art_review.sheet("HORROR", {"1": acc, "2": rej}, cand, png)
+    html_out = art_review.sheet("HORROR", {"1": acc, "2": rej, "3": und},
+                                cand, png)
 
-    accepted_tile = html_out.split('data-id="1"')[1].split("</figure>")[0]
-    rejected_tile = html_out.split('data-id="2"')[1].split("</figure>")[0]
-    assert "checked" in accepted_tile
-    assert "checked" not in rejected_tile, \
-        "a rejected image must open unticked or the decision silently flips back"
+    for pid in ("1", "2", "3"):
+        tile = html_out.split('data-id="{}"'.format(pid))[1].split(
+            "</figure>")[0]
+        assert "checked" not in tile, \
+            "the default is unticked for every status now, not just rejected"
+
+
+def test_sheet_status_label_matches_stored_status_for_every_tile(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    acc = record(1, status=art_status.ACCEPTED)
+    rej = record(2, status=art_status.REJECTED)
+    und = record(3, status=art_status.CANDIDATE)
+    make_promoted(png, acc)
+    make_candidate(cand, rej)
+    make_candidate(cand, und)
+
+    html_out = art_review.sheet("HORROR", {"1": acc, "2": rej, "3": und},
+                                cand, png)
+
+    for pid, expected in (("1", "accepted"), ("2", "rejected"),
+                          ("3", "undecided")):
+        tile = html_out.split('data-id="{}"'.format(pid))[1].split(
+            "</figure>")[0]
+        assert expected in tile, \
+            "the label is the only way to see status now the box no longer ticks"
+
+
+def test_sheet_groups_tiles_by_donor_and_noun(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    recs = {
+        "1": record(1, donor="HOUSE", noun="attic"),
+        "2": record(2, donor="HOUSE", noun="cellar"),
+        "3": record(3, donor="TOWN", noun="attic"),
+    }
+    for r in recs.values():
+        make_candidate(cand, r)
+
+    html_out = art_review.sheet("HORROR", recs, cand, png)
+
+    expected = ["HOUSE / attic", "HOUSE / cellar", "TOWN / attic"]
+    for heading in expected:
+        assert html_out.count(heading) == 1, \
+            "every (donor, noun) pair gets exactly one heading"
+    positions = [html_out.index(heading) for heading in expected]
+    assert positions == sorted(positions), \
+        "groups must appear in sorted (donor, noun) order"
+
+
+def test_sheet_group_heading_reports_its_counts(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    acc = record(1, donor="HOUSE", noun="attic", status=art_status.ACCEPTED)
+    rej1 = record(2, donor="HOUSE", noun="attic", status=art_status.REJECTED)
+    rej2 = record(3, donor="HOUSE", noun="attic", status=art_status.REJECTED)
+    make_promoted(png, acc)
+    make_candidate(cand, rej1)
+    make_candidate(cand, rej2)
+    recs = {"1": acc, "2": rej1, "3": rej2}
+
+    html_out = art_review.sheet("HORROR", recs, cand, png)
+
+    heading = html_out.split("HOUSE / attic")[1].split("</h2>")[0]
+    assert "1 accepted" in heading
+    assert "2 rejected" in heading
+    assert "0 undecided" in heading
+
+
+def test_sheet_grouping_drops_no_tile(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    recs = {
+        "1": record(1, donor="HOUSE", noun="attic"),
+        "2": record(2, donor="HOUSE", noun="cellar"),
+        "3": record(3, donor="TOWN", noun="attic"),
+        "4": record(4, donor="TOWN", noun="road"),
+    }
+    for r in recs.values():
+        make_candidate(cand, r)
+
+    html_out = art_review.sheet("HORROR", recs, cand, png)
+
+    found_ids = set(re.findall(r'data-id="(\d+)"', html_out))
+    assert found_ids == {str(r["id"]) for r in recs.values()}, \
+        "grouping must reorder and label, never drop a tile"
+
+
+def test_sheet_localstorage_restore_overrides_the_unchecked_default(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.ACCEPTED)
+    make_promoted(png, rec)
+
+    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
+
+    assert "zaturn-art:HORROR:" in html_out, \
+        "marks must be namespaced per mood or two sheets collide"
+    assert "box(f).checked=(m==='accept')" in html_out, \
+        "a stored mark must still override the new unchecked default on load"
 
 
 def test_sheet_hides_metric_rejected_records(tmp_path):
@@ -574,4 +669,5 @@ def test_a_manifest_only_clone_round_trips_a_decision(tmp_path):
     assert art_review.main(["--sheets"], repo=tmp_path) == 0
     page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
     tile = page.split('data-id="1"')[1].split("</figure>")[0]
-    assert "checked" in tile and "accepted" in tile
+    assert "accepted" in tile, \
+        "the label, not the checkbox, is what proves the decision reversed"

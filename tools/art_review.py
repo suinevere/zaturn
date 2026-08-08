@@ -12,12 +12,19 @@ Description: The metric gate removes what is provably unusable; everything left
     HAMMING_MAX = 6 is out of the 64 bits a phash carries: under 10% of bits
     differing is the conventional near-duplicate threshold for perceptual
     hashes, tight enough that unrelated photos essentially never collide.
+
+    Review is opt-in: no tile is checked on load regardless of stored status,
+    so the status label on each tile is the only way to see the current
+    decision. Tiles are grouped by (donor, noun) -- the same subdivision as
+    tools/assets/png/<MOOD>/<DONOR>/<noun>/ -- so a mood borrowing nouns from
+    other donors stays unambiguous and thin nouns are visible at a glance.
 Author: suinevere
-Dependencies: base64, collections, html, json, pathlib, io, PIL, os
+Dependencies: base64, collections, html, itertools, json, pathlib, io, PIL, os
 Globals: HAMMING_MAX
 """
 import base64
 import html
+import itertools
 import json
 import os
 from collections import namedtuple
@@ -52,6 +59,87 @@ def _thumb_uri(path):
 SHOWN = (art_status.ACCEPTED, art_status.REJECTED, art_status.CANDIDATE)
 
 
+def _status_label(status):
+    """Map a manifest status to the word shown on a tile.
+
+    Description: The single source of truth for what a tile's label reads,
+        so the sheet body and its grouping counts never drift apart.
+    Author: suinevere
+    Dependencies: art_status
+    Globals: N/A
+    Params: status -- a record's stored status
+    Returns: "accepted", "rejected", or "undecided"
+    """
+    return {art_status.ACCEPTED: "accepted",
+            art_status.REJECTED: "rejected"}.get(status, "undecided")
+
+
+def _cell(rec, candidates_dir, png_dir):
+    """Render one tile's figure markup, unticked on load regardless of status.
+
+    Description: Review is opt-in now, so the checkbox never carries the
+        stored decision -- only the status label does. A record whose
+        picture is gone still gets a tile, so the decision stays flippable
+        with no pixels and no network. A record can also sit in the tree its
+        status does not expect -- refetch_missing always restores into
+        candidates_dir even for an ACCEPTED record -- so a missing primary
+        path falls back to the other tree before giving up.
+    Author: suinevere
+    Dependencies: html, pathlib, art_status
+    Globals: N/A
+    Params: rec -- a manifest record; candidates_dir -- the git-ignored tree;
+        png_dir -- tools/assets/png
+    Returns: the tile's <figure> markup as a string
+    """
+    rel = _rel(rec)
+    primary, fallback = ((png_dir, candidates_dir)
+                         if rec["status"] == art_status.ACCEPTED
+                         else (candidates_dir, png_dir))
+    src = (_thumb_uri(Path(primary) / rel)
+           or _thumb_uri(Path(fallback) / rel))
+    label = _status_label(rec["status"])
+    art = (f'<img src="{src}" width="320" height="224" alt="">' if src
+           else '<div class="gone">no local copy</div>')
+    return (
+        f'<figure data-id="{rec["id"]}" data-status="{label}">'
+        f'{art}'
+        f'<figcaption>{html.escape(rec["phrase"])}<br>'
+        f'<b>{label}</b> &middot; lum {rec["luminance"]} '
+        f'&middot; busy {rec["busyness"]} &middot; band {rec["banding"]}<br>'
+        f'<a href="{html.escape(rec["page_url"], quote=True)}" '
+        f'target="_blank">{rec["id"]}</a><br>'
+        f'<label><input type="checkbox"> keep</label>'
+        f'</figcaption></figure>'
+    )
+
+
+def _group_section(donor, noun, group, candidates_dir, png_dir):
+    """Render one (donor, noun) group as a headed section of tiles.
+
+    Description: The heading names both parts because a mood borrows nouns
+        from other donors -- "attic" alone is ambiguous -- and carries the
+        group's own accepted/rejected/undecided counts so a thin noun is
+        visible at a glance while filling toward the per-mood target.
+    Author: suinevere
+    Dependencies: html
+    Globals: N/A
+    Params: donor, noun -- the group's key; group -- its records, already
+        sorted by id; candidates_dir -- the git-ignored tree;
+        png_dir -- tools/assets/png
+    Returns: the section's HTML as a string
+    """
+    acc = sum(1 for r in group if r["status"] == art_status.ACCEPTED)
+    rej = sum(1 for r in group if r["status"] == art_status.REJECTED)
+    und = sum(1 for r in group if r["status"] == art_status.CANDIDATE)
+    heading = (
+        f'<h2>{html.escape(donor)} / {html.escape(noun)} '
+        f'<span class="counts">{acc} accepted &middot; {rej} rejected '
+        f'&middot; {und} undecided</span></h2>'
+    )
+    cells = "".join(_cell(r, candidates_dir, png_dir) for r in group)
+    return f'<section>{heading}{cells}</section>'
+
+
 def sheet(mood, records, candidates_dir, png_dir):
     """Render one mood's whole review history as a self-contained page.
 
@@ -59,14 +147,12 @@ def sheet(mood, records, candidates_dir, png_dir):
         the decision currently stored for each, because curation is taste
         applied repeatedly and a verdict has to be reversible. Metric rejections
         are absent by necessity: the fetcher only ever writes gate-passing
-        images, so no file has existed for them. A record whose picture is gone
-        -- every rejected image in a fresh clone -- still gets a tile, so the
-        decision stays flippable with no pixels and no network. A record can
-        also sit in the tree its status does not expect -- refetch_missing
-        always restores into candidates_dir even for an ACCEPTED record -- so
-        a missing primary path falls back to the other tree before giving up.
+        images, so no file has existed for them. Every tile opens unticked --
+        review is opt-in, so the status label is what shows the current
+        decision. Tiles are grouped into headed sections by (donor, noun), in
+        stable sorted order, matching the on-disk tree.
     Author: suinevere
-    Dependencies: html, art_status, art_nouns
+    Dependencies: html, itertools, art_status, art_nouns
     Globals: SHOWN, MOODS
     Params: mood -- the mood folder name; records -- the manifest dict;
         candidates_dir -- the git-ignored tree; png_dir -- tools/assets/png
@@ -83,44 +169,30 @@ def sheet(mood, records, candidates_dir, png_dir):
             if r["mood"] == mood and r["status"] in SHOWN]
     mine.sort(key=lambda r: (r["donor"], r["noun"], r["id"]))
 
-    cells = []
-    for r in mine:
-        rel = _rel(r)
-        primary, fallback = ((png_dir, candidates_dir)
-                             if r["status"] == art_status.ACCEPTED
-                             else (candidates_dir, png_dir))
-        src = (_thumb_uri(Path(primary) / rel)
-               or _thumb_uri(Path(fallback) / rel))
-        label = {art_status.ACCEPTED: "accepted",
-                 art_status.REJECTED: "rejected"}.get(r["status"], "undecided")
-        checked = " checked" if r["status"] != art_status.REJECTED else ""
-        art = (f'<img src="{src}" width="320" height="224" alt="">' if src
-               else '<div class="gone">no local copy</div>')
-        cells.append(
-            f'<figure data-id="{r["id"]}" data-status="{label}">'
-            f'{art}'
-            f'<figcaption>{html.escape(r["phrase"])}<br>'
-            f'<b>{label}</b> &middot; lum {r["luminance"]} '
-            f'&middot; busy {r["busyness"]} &middot; band {r["banding"]}<br>'
-            f'<a href="{html.escape(r["page_url"], quote=True)}" '
-            f'target="_blank">{r["id"]}</a><br>'
-            f'<label><input type="checkbox"{checked}> keep</label>'
-            f'</figcaption></figure>'
-        )
+    sections = [
+        _group_section(donor, noun, list(group), candidates_dir, png_dir)
+        for (donor, noun), group in itertools.groupby(
+            mine, key=lambda r: (r["donor"], r["noun"]))
+    ]
 
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>{mood} &mdash; {len(mine)} candidates</title>"
         "<style>body{background:#111;color:#ddd;font:13px sans-serif}"
+        "section{margin:16px 0}"
+        "h2{font-size:16px;border-bottom:1px solid #333;padding-bottom:4px}"
+        ".counts{font-weight:normal;color:#999;font-size:12px}"
         "figure{display:inline-block;margin:8px;text-align:center}"
         "figcaption{max-width:320px}a{color:#8cf}"
         ".gone{width:320px;height:224px;background:#222;color:#666;"
         "display:flex;align-items:center;justify-content:center}"
-        "figure[data-marked] figcaption b{color:#fd6}"
+        "figure[data-status=\"accepted\"] figcaption b{color:#6f6}"
+        "figure[data-status=\"rejected\"] figcaption b{color:#f66}"
+        "figure[data-status=\"undecided\"] figcaption b{color:#fd6}"
         "</style></head><body>"
         + nav +
         f"<h1>{mood} &mdash; {len(mine)} candidates</h1>"
-        + "".join(cells) +
+        + "".join(sections) +
         "<p><button onclick=\"save()\">Download verdicts.json</button> "
         "<button onclick=\"clearMarks()\">Clear marks</button></p>"
         "<script>"

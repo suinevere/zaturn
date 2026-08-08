@@ -212,8 +212,8 @@ def test_promote_re_accepts_a_rejected_image(tmp_path):
 
 def test_promote_counts_gains_and_losses_separately(tmp_path):
     cand, png = tmp_path / "c", tmp_path / "png"
-    up = record(1, status=art_status.REJECTED)
-    down = record(2, status=art_status.ACCEPTED)
+    up = record(1, mood="HORROR", status=art_status.REJECTED)
+    down = record(2, mood="HOUSE", status=art_status.ACCEPTED)
     make_candidate(cand, up)
     make_promoted(png, down)
     manifest = {"1": up, "2": down}
@@ -221,7 +221,9 @@ def test_promote_counts_gains_and_losses_separately(tmp_path):
     counts = art_review.promote({"1": "accept", "2": "reject"}, manifest,
                                 cand, png)
 
-    assert counts["HORROR"] == art_review.Counts(gained=1, lost=1)
+    assert counts["HORROR"] == art_review.Counts(gained=1, lost=0), \
+        "a lone gain in one mood must not be conflated with the other mood's loss"
+    assert counts["HOUSE"] == art_review.Counts(gained=0, lost=1)
 
 
 def test_promote_never_touches_a_metric_rejected_record(tmp_path):

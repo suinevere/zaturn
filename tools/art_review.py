@@ -1,32 +1,20 @@
-"""Build per-mood contact sheets and promote what the reviewer accepted.
+"""Dedup near-duplicate candidates and apply review verdicts to the manifest.
 
 Description: The metric gate removes what is provably unusable; everything left
-    is a judgement call, and one sheet per mood is the cheapest way to make a few
-    hundred of them. Each thumbnail carries the phrase that found it, its three
-    scores, and a link to its Pixabay page, so a doubtful picture can be checked
-    at full size without leaving the sheet.
-
-    Verdicts live in their own file rather than in the manifest, so a review
-    session can be interrupted and resumed without a half-written manifest.
+    is a judgement call, which is now made in tools/art_server.py. This module
+    keeps the state machine that judgement writes through: cross-mood dedup so
+    the same picture is not offered for two moods, promote() as the only mover
+    of files between tools/assets/candidates and tools/assets/png, and
+    refetch_missing to restore a picture a fresh clone never had.
 
     HAMMING_MAX = 6 is out of the 64 bits a phash carries: under 10% of bits
     differing is the conventional near-duplicate threshold for perceptual
     hashes, tight enough that unrelated photos essentially never collide.
-
-    Review is opt-in: no tile is checked on load regardless of stored status,
-    so the status label on each tile is the only way to see the current
-    decision. Tiles are grouped by (donor, noun) -- the same subdivision as
-    tools/assets/png/<MOOD>/<DONOR>/<noun>/ -- so a mood borrowing nouns from
-    other donors stays unambiguous and thin nouns are visible at a glance.
 Author: suinevere
-Dependencies: base64, collections, html, itertools, json, pathlib, io, PIL, os
+Dependencies: collections, json, pathlib, io, PIL, art_status
 Globals: HAMMING_MAX
 """
-import base64
-import html
-import itertools
 import json
-import os
 from collections import namedtuple
 from io import BytesIO
 from pathlib import Path
@@ -34,190 +22,11 @@ from pathlib import Path
 from PIL import Image
 
 import art_status
-from art_nouns import MOODS
 
 HAMMING_MAX = 6
 
 
-def _thumb_uri(path):
-    """Embed a candidate PNG as a data: URI.
-
-    Description: Keeps the sheet a single self-contained file, with no
-        reference back to the candidates directory it was built from.
-    Author: suinevere
-    Dependencies: base64
-    Globals: N/A
-    Params: path -- the candidate PNG
-    Returns: a data: URI string, or "" when the file is missing
-    """
-    path = Path(path)
-    if not path.exists():
-        return ""
-    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode()
-
-
 SHOWN = (art_status.ACCEPTED, art_status.REJECTED, art_status.CANDIDATE)
-
-
-def _status_label(status):
-    """Map a manifest status to the word shown on a tile.
-
-    Description: The single source of truth for what a tile's label reads,
-        so the sheet body and its grouping counts never drift apart.
-    Author: suinevere
-    Dependencies: art_status
-    Globals: N/A
-    Params: status -- a record's stored status
-    Returns: "accepted", "rejected", or "undecided"
-    """
-    return {art_status.ACCEPTED: "accepted",
-            art_status.REJECTED: "rejected"}.get(status, "undecided")
-
-
-def _cell(rec, candidates_dir, png_dir):
-    """Render one tile's figure markup, unticked on load regardless of status.
-
-    Description: Review is opt-in now, so the checkbox never carries the
-        stored decision -- only the status label does. A record whose
-        picture is gone still gets a tile, so the decision stays flippable
-        with no pixels and no network. A record can also sit in the tree its
-        status does not expect -- refetch_missing always restores into
-        candidates_dir even for an ACCEPTED record -- so a missing primary
-        path falls back to the other tree before giving up.
-    Author: suinevere
-    Dependencies: html, pathlib, art_status
-    Globals: N/A
-    Params: rec -- a manifest record; candidates_dir -- the git-ignored tree;
-        png_dir -- tools/assets/png
-    Returns: the tile's <figure> markup as a string
-    """
-    rel = _rel(rec)
-    primary, fallback = ((png_dir, candidates_dir)
-                         if rec["status"] == art_status.ACCEPTED
-                         else (candidates_dir, png_dir))
-    src = (_thumb_uri(Path(primary) / rel)
-           or _thumb_uri(Path(fallback) / rel))
-    label = _status_label(rec["status"])
-    art = (f'<img src="{src}" width="320" height="224" alt="">' if src
-           else '<div class="gone">no local copy</div>')
-    return (
-        f'<figure data-id="{rec["id"]}" data-status="{label}">'
-        f'{art}'
-        f'<figcaption>{html.escape(rec["phrase"])}<br>'
-        f'<b>{label}</b> &middot; lum {rec["luminance"]} '
-        f'&middot; busy {rec["busyness"]} &middot; band {rec["banding"]}<br>'
-        f'<a href="{html.escape(rec["page_url"], quote=True)}" '
-        f'target="_blank">{rec["id"]}</a><br>'
-        f'<label><input type="checkbox"> keep</label>'
-        f'</figcaption></figure>'
-    )
-
-
-def _group_section(donor, noun, group, candidates_dir, png_dir):
-    """Render one (donor, noun) group as a headed section of tiles.
-
-    Description: The heading names both parts because a mood borrows nouns
-        from other donors -- "attic" alone is ambiguous -- and carries the
-        group's own accepted/rejected/undecided counts so a thin noun is
-        visible at a glance while filling toward the per-mood target.
-    Author: suinevere
-    Dependencies: html
-    Globals: N/A
-    Params: donor, noun -- the group's key; group -- its records, already
-        sorted by id; candidates_dir -- the git-ignored tree;
-        png_dir -- tools/assets/png
-    Returns: the section's HTML as a string
-    """
-    acc = sum(1 for r in group if r["status"] == art_status.ACCEPTED)
-    rej = sum(1 for r in group if r["status"] == art_status.REJECTED)
-    und = sum(1 for r in group if r["status"] == art_status.CANDIDATE)
-    heading = (
-        f'<h2>{html.escape(donor)} / {html.escape(noun)} '
-        f'<span class="counts">{acc} accepted &middot; {rej} rejected '
-        f'&middot; {und} undecided</span></h2>'
-    )
-    cells = "".join(_cell(r, candidates_dir, png_dir) for r in group)
-    return f'<section>{heading}{cells}</section>'
-
-
-def sheet(mood, records, candidates_dir, png_dir):
-    """Render one mood's whole review history as a self-contained page.
-
-    Description: Shows accepted, rejected and undecided pictures together with
-        the decision currently stored for each, because curation is taste
-        applied repeatedly and a verdict has to be reversible. Metric rejections
-        are absent by necessity: the fetcher only ever writes gate-passing
-        images, so no file has existed for them. Every tile opens unticked --
-        review is opt-in, so the status label is what shows the current
-        decision. Tiles are grouped into headed sections by (donor, noun), in
-        stable sorted order, matching the on-disk tree.
-    Author: suinevere
-    Dependencies: html, itertools, art_status, art_nouns
-    Globals: SHOWN, MOODS
-    Params: mood -- the mood folder name; records -- the manifest dict;
-        candidates_dir -- the git-ignored tree; png_dir -- tools/assets/png
-    Returns: the HTML as a string
-    """
-    here = MOODS.index(mood) if mood in MOODS else 0
-    prev_mood = MOODS[(here - 1) % len(MOODS)]
-    next_mood = MOODS[(here + 1) % len(MOODS)]
-    nav = (f'<p><a href="index.html">&larr; all moods</a> &middot; '
-           f'<a href="{prev_mood}.html">{prev_mood}</a> &middot; '
-           f'<a href="{next_mood}.html">{next_mood}</a></p>')
-
-    mine = [r for r in records.values()
-            if r["mood"] == mood and r["status"] in SHOWN]
-    mine.sort(key=lambda r: (r["donor"], r["noun"], r["id"]))
-
-    sections = [
-        _group_section(donor, noun, list(group), candidates_dir, png_dir)
-        for (donor, noun), group in itertools.groupby(
-            mine, key=lambda r: (r["donor"], r["noun"]))
-    ]
-
-    return (
-        "<!doctype html><html><head><meta charset='utf-8'>"
-        f"<title>{mood} &mdash; {len(mine)} candidates</title>"
-        "<style>body{background:#111;color:#ddd;font:13px sans-serif}"
-        "section{margin:16px 0}"
-        "h2{font-size:16px;border-bottom:1px solid #333;padding-bottom:4px}"
-        ".counts{font-weight:normal;color:#999;font-size:12px}"
-        "figure{display:inline-block;margin:8px;text-align:center}"
-        "figcaption{max-width:320px}a{color:#8cf}"
-        ".gone{width:320px;height:224px;background:#222;color:#666;"
-        "display:flex;align-items:center;justify-content:center}"
-        "figure[data-status=\"accepted\"] figcaption b{color:#6f6}"
-        "figure[data-status=\"rejected\"] figcaption b{color:#f66}"
-        "figure[data-status=\"undecided\"] figcaption b{color:#fd6}"
-        "</style></head><body>"
-        + nav +
-        f"<h1>{mood} &mdash; {len(mine)} candidates</h1>"
-        + "".join(sections) +
-        "<p><button onclick=\"save()\">Download verdicts.json</button> "
-        "<button onclick=\"clearMarks()\">Clear marks</button></p>"
-        "<script>"
-        f"var NS='zaturn-art:{mood}:';"
-        "function box(f){return f.querySelector('input');}"
-        "function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}"
-        "function load(k){try{return localStorage.getItem(k);}"
-        "catch(e){return null;}}"
-        "document.querySelectorAll('figure').forEach(function(f){"
-        "var k=NS+f.dataset.id,m=load(k);"
-        "if(m!==null){box(f).checked=(m==='accept');f.dataset.marked='1';}"
-        "box(f).addEventListener('change',function(){"
-        "store(k,box(f).checked?'accept':'reject');f.dataset.marked='1';});});"
-        "function clearMarks(){"
-        "document.querySelectorAll('figure').forEach(function(f){"
-        "try{localStorage.removeItem(NS+f.dataset.id);}catch(e){}});"
-        "location.reload();}"
-        "function save(){var o={};"
-        "document.querySelectorAll('figure').forEach(function(f){"
-        "o[f.dataset.id]=box(f).checked?'accept':'reject';});"
-        "var a=document.createElement('a');"
-        "a.href=URL.createObjectURL(new Blob([JSON.stringify(o,null,2)],"
-        "{type:'application/json'}));a.download='verdicts.json';a.click();}"
-        "</script></body></html>"
-    )
 
 
 def _hamming(a, b):
@@ -395,64 +204,19 @@ def refetch_missing(records, candidates_dir, png_dir, fetcher):
     return restored
 
 
-def index_page(records, target=99):
-    """Summarise every mood's review state and link into its sheet.
-
-    Description: A starved mood is invisible from inside a single sheet -- the
-        first curation sitting left SCIFI with nothing accepted out of
-        twenty-four and nothing surfaced it. Metric rejections are excluded
-        because they are not human decisions and carry no reviewable tile.
-    Author: suinevere
-    Dependencies: art_status, art_nouns
-    Globals: N/A
-    Params: records -- the manifest dict; target -- the per-mood picture goal
-    Returns: the HTML as a string
-    """
-    rows = []
-    for mood in MOODS:
-        mine = [r for r in records.values() if r["mood"] == mood]
-        acc = sum(1 for r in mine if r["status"] == art_status.ACCEPTED)
-        rej = sum(1 for r in mine if r["status"] == art_status.REJECTED)
-        und = sum(1 for r in mine if r["status"] == art_status.CANDIDATE)
-        flag = ' class="empty"' if acc == 0 else ""
-        rows.append(
-            f'<tr{flag}><td><a href="{mood}.html">{mood}</a></td>'
-            f"<td>{acc}</td><td>{rej}</td><td>{und}</td>"
-            f"<td>{100 * acc // target}%</td></tr>"
-        )
-
-    return (
-        "<!doctype html><html><head><meta charset='utf-8'>"
-        "<title>Room art review</title>"
-        "<style>body{background:#111;color:#ddd;font:13px sans-serif}"
-        "table{border-collapse:collapse}td,th{padding:4px 12px;"
-        "border-bottom:1px solid #333;text-align:right}"
-        "td:first-child,th:first-child{text-align:left}"
-        "a{color:#8cf}tr.empty td{color:#f88}</style></head><body>"
-        f"<h1>Room art review &mdash; target {target} per mood</h1>"
-        "<table><tr><th>mood</th><th>accepted</th><th>rejected</th>"
-        "<th>undecided</th><th>of target</th></tr>"
-        + "".join(rows) +
-        "</table></body></html>"
-    )
-
-
 def main(argv, repo=None):
-    """Write the contact sheets, or promote a downloaded verdicts file.
+    """Apply a downloaded verdicts file through promote().
 
-    Description: The two subcommands are separate runs on purpose -- a review
-        session (opening sheets, checking boxes) happens between them. `repo`
-        defaults to the real repository root; tests pass a tmp_path so a run
-        never writes sheets or promotions into the working tree. When
-        --promote has no explicit path, every verdicts*.json in the sheets
-        folder is applied oldest-modified first, so if two files disagree
-        about the same id the most recently modified file's verdict wins.
+    Description: `repo` defaults to the real repository root; tests pass a
+        tmp_path so a run never writes into the working tree. Review itself
+        now happens in tools/art_server.py, which applies a verdict the
+        moment it is clicked, so this entry point only ever has one job left:
+        apply a verdicts file someone hands it explicitly.
     Author: suinevere
     Dependencies: fetch_art
     Globals: N/A
-    Params: argv -- ["--sheets"], ["--sheets", "--refetch"], or
-        ["--promote", "<verdicts.json>"]; repo -- optional repository root
-        override, for tests
+    Params: argv -- ["--promote", "<verdicts.json>"]; repo -- optional
+        repository root override, for tests
     Returns: 0 always
     """
     import fetch_art
@@ -462,66 +226,18 @@ def main(argv, repo=None):
     manifest_path = assets / "art_manifest.json"
     manifest = fetch_art.load_manifest(manifest_path)
 
-    if argv and argv[0] == "--sheets":
-        if "--refetch" in argv:
-            key = os.environ.get("PIXABAY_API_KEY", "")
-            if not key:
-                fetch_art.load_dotenv_into_environ()
-                key = os.environ.get("PIXABAY_API_KEY", "")
-            if key:
-                n = refetch_missing(manifest, assets / "candidates",
-                                    assets / "png",
-                                    fetch_art.PixabayFetcher(key))
-                print(f"  restored {n} missing picture(s)")
-            else:
-                print("  PIXABAY_API_KEY is not set; keeping placeholders")
-
-        candidates = [r for r in manifest.values()
-                      if r["status"] == art_status.CANDIDATE]
-        decided = [r for r in manifest.values()
-                   if r["status"] in (art_status.ACCEPTED,
-                                      art_status.REJECTED)]
-        already_accepted = [r.get("phash", "") for r in manifest.values()
-                            if r["status"] == art_status.ACCEPTED]
-        kept = {str(r["id"]): r
-                for r in decided + dedup(candidates, already_accepted)}
-        out = assets / "sheets"
-        out.mkdir(parents=True, exist_ok=True)
-        for mood in MOODS:
-            page = out / f"{mood}.html"
-            page.write_text(sheet(mood, kept, assets / "candidates",
-                                  assets / "png"), encoding="utf-8")
-            print(f"  {page}")
-        idx = out / "index.html"
-        idx.write_text(index_page(kept), encoding="utf-8")
-        print(f"  {idx}")
-        return 0
-
-    if argv and argv[0] == "--promote":
-        if len(argv) >= 2:
-            paths = [Path(argv[1])]
-        else:
-            paths = sorted((assets / "sheets").glob("verdicts*.json"),
-                           key=lambda p: (p.stat().st_mtime, p.name))
-        if not paths:
-            print("  no verdicts files found in {}".format(assets / "sheets"))
-            return 0
-        counts = {}
-        for path in paths:
-            with open(path, "r", encoding="utf-8") as fh:
-                verdicts = json.load(fh)
-            for mood, got in promote(verdicts, manifest,
-                                     assets / "candidates",
-                                     assets / "png").items():
-                prev = counts.get(mood, Counts(0, 0))
-                counts[mood] = Counts(prev.gained + got.gained,
-                                      prev.lost + got.lost)
+    if argv and argv[0] == "--promote" and len(argv) >= 2:
+        with open(argv[1], "r", encoding="utf-8") as fh:
+            verdicts = json.load(fh)
+        counts = promote(verdicts, manifest, assets / "candidates",
+                         assets / "png")
         fetch_art.save_manifest(manifest_path, manifest)
         for mood in sorted(counts):
             print(f"  {mood}: +{counts[mood].gained} -{counts[mood].lost}")
         return 0
 
-    print("  usage: art_review.py --sheets | --promote <verdicts.json>")
+    print("  usage: art_review.py --promote <verdicts.json>")
+    print("  review runs at http://127.0.0.1:8080 -- python tools/art_server.py")
     return 0
 
 

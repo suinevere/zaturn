@@ -1,9 +1,6 @@
-"""Cover sheet generation, cross-mood dedup, and promotion into the source tree."""
+"""Cover cross-mood dedup, promotion into the source tree, and refetching."""
 import json
-import os
-import re
 import sys
-import time
 from pathlib import Path
 
 from PIL import Image
@@ -12,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import art_review
 import art_status
 import fetch_art
-from art_nouns import MOODS
 
 
 def record(pid, mood="HORROR", donor="HOUSE", noun="hallway", phash="0" * 16,
@@ -30,54 +26,6 @@ def make_candidate(root, rec):
     p = d / f"{rec['id']}.png"
     Image.new("RGB", (320, 224), (60, 60, 60)).save(p, "PNG")
     return p
-
-
-def test_sheet_is_self_contained_and_names_its_sources(tmp_path):
-    rec = record(1)
-    make_candidate(tmp_path, rec)
-    html = art_review.sheet("HORROR", {"1": rec}, tmp_path, tmp_path / "png")
-    assert "<html" in html and "</html>" in html
-    assert "data:image/png;base64," in html, "thumbnails must be embedded"
-
-    srcs = re.findall(r'src="([^"]*)"', html)
-    assert srcs, "expected at least one img src to check"
-    assert all(src.startswith("data:") for src in srcs), \
-        "every img src must be an embedded data: URI, not a remote reference"
-
-    hrefs = re.findall(r'href="([^"]*)"', html)
-    assert all(not href.startswith("http") or "pixabay.com/photos/" in href
-               for href in hrefs), \
-        "only the deliberate full-size Pixabay page link may point off-page"
-
-    assert "dark hallway" in html
-    assert "pixabay.com/photos/1/" in html
-
-
-def test_sheet_with_no_candidates_still_renders(tmp_path):
-    html = art_review.sheet("HORROR", {}, tmp_path, tmp_path / "png")
-    assert "<html" in html and "</html>" in html
-    assert "0 candidates" in html
-
-
-def test_sheet_covers_only_its_own_mood(tmp_path):
-    recs = {"1": record(1, mood="HORROR"), "2": record(2, mood="HOUSE")}
-    for r in recs.values():
-        make_candidate(tmp_path, r)
-    html = art_review.sheet("HORROR", recs, tmp_path, tmp_path / "png")
-    assert "photos/1/" in html
-    assert "photos/2/" not in html
-
-
-def test_sheet_escapes_a_quote_in_the_phrase_and_page_url(tmp_path):
-    """A quote in either field must not break out of its HTML attribute --
-    a Pixabay URL with a query string is exactly where one could appear."""
-    rec = record(1)
-    rec["phrase"] = 'dark "haunted" hallway'
-    rec["page_url"] = 'https://pixabay.com/photos/1/?ref="x"'
-    make_candidate(tmp_path, rec)
-    html = art_review.sheet("HORROR", {"1": rec}, tmp_path, tmp_path / "png")
-    assert '"x"' not in html
-    assert "&quot;" in html
 
 
 def test_promote_moves_accepted_and_leaves_rejected(tmp_path):
@@ -134,27 +82,6 @@ def test_dedup_keeps_a_candidate_far_from_every_accepted_hash():
     new = record(2, mood="HOUSE", phash="00000000000000ff")
     kept = art_review.dedup([new], already_accepted=["ff00ff00ff00ff00"])
     assert [r["id"] for r in kept] == [2]
-
-
-def test_main_sheets_writes_one_page_per_mood_and_seeds_dedup_from_accepted(tmp_path):
-    assets = tmp_path / "tools" / "assets"
-    cand = assets / "candidates"
-    new = record(1, mood="HORROR", phash="ff00ff00ff00ff01")
-    already = record(2, mood="HORROR", phash="ff00ff00ff00ff00",
-                     status=art_status.ACCEPTED)
-    make_candidate(cand, new)
-    fetch_art.save_manifest(assets / "art_manifest.json",
-                            {"1": new, "2": already})
-
-    assert art_review.main(["--sheets"], repo=tmp_path) == 0
-
-    pages = [p for p in (assets / "sheets").glob("*.html") if p.stem != "index"]
-    assert len(pages) == len(MOODS)
-    horror_html = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
-    assert 'data-id="1"' not in horror_html, \
-        "candidate 1 is a near-duplicate of the already-accepted candidate 2"
-    assert 'data-id="2"' in horror_html, \
-        "a decided record must never be dropped by dedup"
 
 
 def test_main_promote_moves_accepted_and_updates_the_manifest_on_disk(tmp_path):
@@ -261,313 +188,19 @@ def test_promote_leaves_a_stray_candidate_alone_when_already_promoted(tmp_path):
     assert counts == {}, "no status changed, so nothing was gained or lost"
 
 
-def test_main_promote_with_no_path_applies_every_verdicts_file(tmp_path):
+def test_main_promote_with_no_path_prints_usage_and_touches_nothing(tmp_path):
     assets = tmp_path / "tools" / "assets"
-    sheets = assets / "sheets"
-    sheets.mkdir(parents=True)
-    a = record(1, mood="HORROR")
-    b = record(2, mood="WILDER", donor="WILDER", noun="canyon")
-    for rec in (a, b):
-        make_candidate(assets / "candidates", rec)
-    fetch_art.save_manifest(assets / "art_manifest.json", {"1": a, "2": b})
-
-    (sheets / "verdicts.json").write_text('{"1": "accept"}', encoding="utf-8")
-    (sheets / "verdicts(1).json").write_text('{"2": "accept"}',
-                                             encoding="utf-8")
-
-    assert art_review.main(["--promote"], repo=tmp_path) == 0
-
-    saved = json.loads((assets / "art_manifest.json").read_text(encoding="utf-8"))
-    assert saved["1"]["status"] == art_status.ACCEPTED
-    assert saved["2"]["status"] == art_status.ACCEPTED, \
-        "every verdicts file in the folder must be applied, not just the first"
-
-
-def test_main_promote_resolves_a_same_id_conflict_in_favor_of_the_newer_file(tmp_path):
-    assets = tmp_path / "tools" / "assets"
-    sheets = assets / "sheets"
-    sheets.mkdir(parents=True)
+    assets.mkdir(parents=True)
     rec = record(1, status=art_status.CANDIDATE)
-    make_candidate(assets / "candidates", rec)
     fetch_art.save_manifest(assets / "art_manifest.json", {"1": rec})
 
-    older = sheets / "verdicts.json"
-    newer = sheets / "verdicts(1).json"
-    older.write_text('{"1": "reject"}', encoding="utf-8")
-    newer.write_text('{"1": "accept"}', encoding="utf-8")
-    now = time.time()
-    os.utime(older, (now - 100, now - 100))
-    os.utime(newer, (now, now))
-
     assert art_review.main(["--promote"], repo=tmp_path) == 0
 
-    saved = json.loads((assets / "art_manifest.json").read_text(encoding="utf-8"))
-    assert saved["1"]["status"] == art_status.ACCEPTED, \
-        "the more recently modified verdicts file must win a same-id conflict"
-
-
-def test_main_promote_with_no_files_says_so(tmp_path, capsys):
-    assets = tmp_path / "tools" / "assets"
-    (assets / "sheets").mkdir(parents=True)
-    fetch_art.save_manifest(assets / "art_manifest.json", {})
-
-    assert art_review.main(["--promote"], repo=tmp_path) == 0
-    assert "no verdicts" in capsys.readouterr().out.lower()
-
-
-def test_sheet_shows_accepted_rejected_and_undecided_together(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    acc = record(1, status=art_status.ACCEPTED)
-    rej = record(2, status=art_status.REJECTED)
-    und = record(3, status=art_status.CANDIDATE)
-    make_promoted(png, acc)
-    for rec in (rej, und):
-        make_candidate(cand, rec)
-    recs = {"1": acc, "2": rej, "3": und}
-
-    html_out = art_review.sheet("HORROR", recs, cand, png)
-
-    for pid in ("1", "2", "3"):
-        assert 'data-id="{}"'.format(pid) in html_out
-    assert "accepted" in html_out and "rejected" in html_out
-
-
-def test_sheet_ticks_no_tile_on_load_regardless_of_status(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    acc = record(1, status=art_status.ACCEPTED)
-    rej = record(2, status=art_status.REJECTED)
-    und = record(3, status=art_status.CANDIDATE)
-    make_promoted(png, acc)
-    make_candidate(cand, rej)
-    make_candidate(cand, und)
-
-    html_out = art_review.sheet("HORROR", {"1": acc, "2": rej, "3": und},
-                                cand, png)
-
-    for pid in ("1", "2", "3"):
-        tile = html_out.split('data-id="{}"'.format(pid))[1].split(
-            "</figure>")[0]
-        assert "checked" not in tile, \
-            "the default is unticked for every status now, not just rejected"
-
-
-def test_sheet_status_label_matches_stored_status_for_every_tile(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    acc = record(1, status=art_status.ACCEPTED)
-    rej = record(2, status=art_status.REJECTED)
-    und = record(3, status=art_status.CANDIDATE)
-    make_promoted(png, acc)
-    make_candidate(cand, rej)
-    make_candidate(cand, und)
-
-    html_out = art_review.sheet("HORROR", {"1": acc, "2": rej, "3": und},
-                                cand, png)
-
-    for pid, expected in (("1", "accepted"), ("2", "rejected"),
-                          ("3", "undecided")):
-        tile = html_out.split('data-id="{}"'.format(pid))[1].split(
-            "</figure>")[0]
-        assert expected in tile, \
-            "the label is the only way to see status now the box no longer ticks"
-
-
-def test_sheet_groups_tiles_by_donor_and_noun(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    recs = {
-        "1": record(1, donor="HOUSE", noun="attic"),
-        "2": record(2, donor="HOUSE", noun="cellar"),
-        "3": record(3, donor="TOWN", noun="attic"),
-    }
-    for r in recs.values():
-        make_candidate(cand, r)
-
-    html_out = art_review.sheet("HORROR", recs, cand, png)
-
-    expected = ["HOUSE / attic", "HOUSE / cellar", "TOWN / attic"]
-    for heading in expected:
-        assert html_out.count(heading) == 1, \
-            "every (donor, noun) pair gets exactly one heading"
-    positions = [html_out.index(heading) for heading in expected]
-    assert positions == sorted(positions), \
-        "groups must appear in sorted (donor, noun) order"
-
-
-def test_sheet_group_heading_reports_its_counts(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    acc = record(1, donor="HOUSE", noun="attic", status=art_status.ACCEPTED)
-    rej1 = record(2, donor="HOUSE", noun="attic", status=art_status.REJECTED)
-    rej2 = record(3, donor="HOUSE", noun="attic", status=art_status.REJECTED)
-    make_promoted(png, acc)
-    make_candidate(cand, rej1)
-    make_candidate(cand, rej2)
-    recs = {"1": acc, "2": rej1, "3": rej2}
-
-    html_out = art_review.sheet("HORROR", recs, cand, png)
-
-    heading = html_out.split("HOUSE / attic")[1].split("</h2>")[0]
-    assert "1 accepted" in heading
-    assert "2 rejected" in heading
-    assert "0 undecided" in heading
-
-
-def test_sheet_grouping_drops_no_tile(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    recs = {
-        "1": record(1, donor="HOUSE", noun="attic"),
-        "2": record(2, donor="HOUSE", noun="cellar"),
-        "3": record(3, donor="TOWN", noun="attic"),
-        "4": record(4, donor="TOWN", noun="road"),
-    }
-    for r in recs.values():
-        make_candidate(cand, r)
-
-    html_out = art_review.sheet("HORROR", recs, cand, png)
-
-    found_ids = set(re.findall(r'data-id="(\d+)"', html_out))
-    assert found_ids == {str(r["id"]) for r in recs.values()}, \
-        "grouping must reorder and label, never drop a tile"
-
-
-def test_sheet_localstorage_restore_overrides_the_unchecked_default(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    rec = record(1, status=art_status.ACCEPTED)
-    make_promoted(png, rec)
-
-    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
-
-    assert "zaturn-art:HORROR:" in html_out, \
-        "marks must be namespaced per mood or two sheets collide"
-    assert "box(f).checked=(m==='accept')" in html_out, \
-        "a stored mark must still override the new unchecked default on load"
-
-
-def test_sheet_hides_metric_rejected_records(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    rec = record(1, status=art_status.METRIC_REJECTED)
-
-    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
-
-    assert 'data-id="1"' not in html_out, \
-        "the fetcher never writes these to disk, so no tile can be rendered"
-
-
-def test_sheet_renders_a_placeholder_when_the_file_is_missing(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    rec = record(1, status=art_status.REJECTED)
-
-    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
-
-    assert 'data-id="1"' in html_out, "the decision must stay flippable"
-    assert "no local copy" in html_out
-    assert "pixabay.com" in html_out
-
-
-def test_sheet_falls_back_to_candidates_for_an_accepted_record_restored_there(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    rec = record(1, status=art_status.ACCEPTED)
-    make_candidate(cand, rec)
-
-    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
-
-    tile = html_out.split('data-id="1"')[1].split("</figure>")[0]
-    assert "data:image/png;base64," in tile, \
-        "refetch_missing always restores into candidates_dir, even for an " \
-        "accepted record, so the sheet must fall back there instead of " \
-        "showing a placeholder"
-    assert "no local copy" not in tile
-
-
-def test_sheet_stays_self_contained_with_a_placeholder(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    rec = record(1, status=art_status.REJECTED)
-
-    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
-
-    srcs = re.findall(r'src="([^"]*)"', html_out)
-    assert all(s.startswith("data:") for s in srcs), \
-        "a placeholder must not reintroduce a remote image reference"
-
-
-def test_sheet_persists_marks_and_offers_to_clear_them(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-    rec = record(1, status=art_status.CANDIDATE)
-    make_candidate(cand, rec)
-
-    html_out = art_review.sheet("HORROR", {"1": rec}, cand, png)
-
-    assert "localStorage" in html_out
-    assert "zaturn-art:HORROR:" in html_out, \
-        "marks must be namespaced per mood or two sheets collide"
-    assert "Clear marks" in html_out
-    assert "try{" in html_out, \
-        "file:// storage can throw; the page must survive it"
-
-
-def test_main_sheets_never_dedups_away_a_decided_picture(tmp_path):
-    assets = tmp_path / "tools" / "assets"
-    assets.mkdir(parents=True)
-    twin = "f" * 16
-    acc = record(1, phash=twin, status=art_status.ACCEPTED)
-    rej = record(2, phash=twin, status=art_status.REJECTED)
-    make_promoted(assets / "png", acc)
-    make_candidate(assets / "candidates", rej)
-    fetch_art.save_manifest(assets / "art_manifest.json",
-                            {"1": acc, "2": rej})
-
-    assert art_review.main(["--sheets"], repo=tmp_path) == 0
-
-    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
-    assert 'data-id="2"' in page, \
-        "a rejected picture must survive dedup or its verdict cannot be reversed"
-    assert 'data-id="1"' in page
-
-
-def test_index_counts_each_mood_and_links_to_its_sheet():
-    recs = {"1": record(1, status=art_status.ACCEPTED),
-            "2": record(2, status=art_status.REJECTED),
-            "3": record(3, status=art_status.CANDIDATE),
-            "4": record(4, status=art_status.METRIC_REJECTED)}
-
-    page = art_review.index_page(recs)
-
-    row = [r for r in page.split("<tr") if "HORROR.html" in r][0]
-    cells = re.findall(r"<td>(\d+)</td>", row)
-    assert cells == ["1", "1", "1"], \
-        ("accepted, rejected, undecided -- one each, and the metric "
-         "rejection must not be counted anywhere")
-    assert 'href="HORROR.html"' in page
-    for mood in MOODS:
-        assert mood in page, "every mood needs a row even at zero"
-
-
-def test_index_flags_a_mood_that_accepted_nothing():
-    recs = {"1": record(1, status=art_status.REJECTED)}
-
-    page = art_review.index_page(recs)
-
-    row = [r for r in page.split("<tr") if "HORROR.html" in r][0]
-    assert "empty" in row, \
-        "a mood with no accepted pictures is the thing the index exists to show"
-
-
-def test_main_sheets_also_writes_the_index(tmp_path):
-    assets = tmp_path / "tools" / "assets"
-    assets.mkdir(parents=True)
-    fetch_art.save_manifest(assets / "art_manifest.json", {})
-
-    assert art_review.main(["--sheets"], repo=tmp_path) == 0
-    assert (assets / "sheets" / "index.html").exists()
-
-
-def test_sheet_links_to_its_neighbouring_moods(tmp_path):
-    cand, png = tmp_path / "c", tmp_path / "png"
-
-    html_out = art_review.sheet(MOODS[0], {}, cand, png)
-
-    assert 'href="index.html"' in html_out
-    assert 'href="{}.html"'.format(MOODS[1]) in html_out
-    assert 'href="{}.html"'.format(MOODS[-1]) in html_out, \
-        "the first mood wraps to the last so no page is a dead end"
+    saved = json.loads(
+        (assets / "art_manifest.json").read_text(encoding="utf-8"))
+    assert saved["1"]["status"] == art_status.CANDIDATE, \
+        "with no path, --promote must apply nothing -- the folder-glob form " \
+        "went with the browser round trip that produced verdicts*.json files"
 
 
 class StubFetcher:
@@ -624,48 +257,3 @@ def test_refetch_degrades_when_a_download_fails(tmp_path, capsys):
 
     assert n == 1, "one failure must not abort the rest of the run"
     assert "gone.png" in capsys.readouterr().out
-
-
-def test_main_sheets_makes_no_network_call_without_the_flag(tmp_path, monkeypatch):
-    assets = tmp_path / "tools" / "assets"
-    assets.mkdir(parents=True)
-    rec = record(1, status=art_status.REJECTED)
-    rec["image_url"] = "https://example.invalid/1.png"
-    fetch_art.save_manifest(assets / "art_manifest.json", {"1": rec})
-
-    def forbidden(*args, **kwargs):
-        raise AssertionError("no network path may run without --refetch")
-
-    monkeypatch.setattr(fetch_art, "load_dotenv_into_environ", forbidden)
-    monkeypatch.setattr(fetch_art, "PixabayFetcher", forbidden)
-
-    assert art_review.main(["--sheets"], repo=tmp_path) == 0
-    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
-    tile = page.split('data-id="1"')[1].split("</figure>")[0]
-    assert "no local copy" in tile
-
-
-def test_a_manifest_only_clone_round_trips_a_decision(tmp_path):
-    assets = tmp_path / "tools" / "assets"
-    assets.mkdir(parents=True)
-    rec = record(1, status=art_status.REJECTED)
-    fetch_art.save_manifest(assets / "art_manifest.json", {"1": rec})
-
-    assert art_review.main(["--sheets"], repo=tmp_path) == 0
-    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
-    assert 'data-id="1"' in page and "no local copy" in page
-
-    (assets / "sheets" / "verdicts.json").write_text(
-        '{"1": "accept"}', encoding="utf-8")
-    assert art_review.main(["--promote"], repo=tmp_path) == 0
-
-    saved = json.loads(
-        (assets / "art_manifest.json").read_text(encoding="utf-8"))
-    assert saved["1"]["status"] == art_status.ACCEPTED, \
-        "no pixels and no network, and the decision still reverses"
-
-    assert art_review.main(["--sheets"], repo=tmp_path) == 0
-    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
-    tile = page.split('data-id="1"')[1].split("</figure>")[0]
-    assert "accepted" in tile, \
-        "the label, not the checkbox, is what proves the decision reversed"

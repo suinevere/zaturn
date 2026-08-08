@@ -23,6 +23,7 @@ from collections import namedtuple
 from pathlib import Path
 
 import art_status
+from art_nouns import MOODS
 
 HAMMING_MAX = 6
 
@@ -58,12 +59,19 @@ def sheet(mood, records, candidates_dir, png_dir):
         -- every rejected image in a fresh clone -- still gets a tile, so the
         decision stays flippable with no pixels and no network.
     Author: suinevere
-    Dependencies: html, art_status
-    Globals: SHOWN
+    Dependencies: html, art_status, art_nouns
+    Globals: SHOWN, MOODS
     Params: mood -- the mood folder name; records -- the manifest dict;
         candidates_dir -- the git-ignored tree; png_dir -- tools/assets/png
     Returns: the HTML as a string
     """
+    here = MOODS.index(mood) if mood in MOODS else 0
+    prev_mood = MOODS[(here - 1) % len(MOODS)]
+    next_mood = MOODS[(here + 1) % len(MOODS)]
+    nav = (f'<p><a href="index.html">&larr; all moods</a> &middot; '
+           f'<a href="{prev_mood}.html">{prev_mood}</a> &middot; '
+           f'<a href="{next_mood}.html">{next_mood}</a></p>')
+
     mine = [r for r in records.values()
             if r["mood"] == mood and r["status"] in SHOWN]
     mine.sort(key=lambda r: (r["donor"], r["noun"], r["id"]))
@@ -99,6 +107,7 @@ def sheet(mood, records, candidates_dir, png_dir):
         "display:flex;align-items:center;justify-content:center}"
         "figure[data-marked] figcaption b{color:#fd6}"
         "</style></head><body>"
+        + nav +
         f"<h1>{mood} &mdash; {len(mine)} candidates</h1>"
         + "".join(cells) +
         "<p><button onclick=\"save()\">Download verdicts.json</button> "
@@ -263,6 +272,48 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
     return counts
 
 
+def index_page(records, target=99):
+    """Summarise every mood's review state and link into its sheet.
+
+    Description: A starved mood is invisible from inside a single sheet -- the
+        first curation sitting left SCIFI with nothing accepted out of
+        twenty-four and nothing surfaced it. Metric rejections are excluded
+        because they are not human decisions and carry no reviewable tile.
+    Author: suinevere
+    Dependencies: art_status, art_nouns
+    Globals: N/A
+    Params: records -- the manifest dict; target -- the per-mood picture goal
+    Returns: the HTML as a string
+    """
+    rows = []
+    for mood in MOODS:
+        mine = [r for r in records.values() if r["mood"] == mood]
+        acc = sum(1 for r in mine if r["status"] == art_status.ACCEPTED)
+        rej = sum(1 for r in mine if r["status"] == art_status.REJECTED)
+        und = sum(1 for r in mine if r["status"] == art_status.CANDIDATE)
+        flag = ' class="empty"' if acc == 0 else ""
+        rows.append(
+            f'<tr{flag}><td><a href="{mood}.html">{mood}</a></td>'
+            f"<td>{acc}</td><td>{rej}</td><td>{und}</td>"
+            f"<td>{100 * acc // target}%</td></tr>"
+        )
+
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<title>Room art review</title>"
+        "<style>body{background:#111;color:#ddd;font:13px sans-serif}"
+        "table{border-collapse:collapse}td,th{padding:4px 12px;"
+        "border-bottom:1px solid #333;text-align:right}"
+        "td:first-child,th:first-child{text-align:left}"
+        "a{color:#8cf}tr.empty td{color:#f88}</style></head><body>"
+        f"<h1>Room art review &mdash; target {target} per mood</h1>"
+        "<table><tr><th>mood</th><th>accepted</th><th>rejected</th>"
+        "<th>undecided</th><th>of target</th></tr>"
+        + "".join(rows) +
+        "</table></body></html>"
+    )
+
+
 def main(argv, repo=None):
     """Write the contact sheets, or promote a downloaded verdicts file.
 
@@ -278,7 +329,6 @@ def main(argv, repo=None):
     Returns: 0 always
     """
     import fetch_art
-    from art_nouns import MOODS
 
     repo = repo or Path(__file__).resolve().parents[1]
     assets = repo / "tools" / "assets"
@@ -302,6 +352,9 @@ def main(argv, repo=None):
             page.write_text(sheet(mood, kept, assets / "candidates",
                                   assets / "png"), encoding="utf-8")
             print(f"  {page}")
+        idx = out / "index.html"
+        idx.write_text(index_page(kept), encoding="utf-8")
+        print(f"  {idx}")
         return 0
 
     if argv and argv[0] == "--promote":

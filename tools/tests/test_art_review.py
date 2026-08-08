@@ -146,7 +146,7 @@ def test_main_sheets_writes_one_page_per_mood_and_seeds_dedup_from_accepted(tmp_
 
     assert art_review.main(["--sheets"], repo=tmp_path) == 0
 
-    pages = list((assets / "sheets").glob("*.html"))
+    pages = [p for p in (assets / "sheets").glob("*.html") if p.stem != "index"]
     assert len(pages) == len(MOODS)
     horror_html = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
     assert 'data-id="1"' not in horror_html, \
@@ -385,3 +385,51 @@ def test_main_sheets_never_dedups_away_a_decided_picture(tmp_path):
     assert 'data-id="2"' in page, \
         "a rejected picture must survive dedup or its verdict cannot be reversed"
     assert 'data-id="1"' in page
+
+
+def test_index_counts_each_mood_and_links_to_its_sheet():
+    recs = {"1": record(1, status=art_status.ACCEPTED),
+            "2": record(2, status=art_status.REJECTED),
+            "3": record(3, status=art_status.CANDIDATE),
+            "4": record(4, status=art_status.METRIC_REJECTED)}
+
+    page = art_review.index_page(recs)
+
+    row = [r for r in page.split("<tr") if "HORROR.html" in r][0]
+    cells = re.findall(r"<td>(\d+)</td>", row)
+    assert cells == ["1", "1", "1"], \
+        ("accepted, rejected, undecided -- one each, and the metric "
+         "rejection must not be counted anywhere")
+    assert 'href="HORROR.html"' in page
+    for mood in MOODS:
+        assert mood in page, "every mood needs a row even at zero"
+
+
+def test_index_flags_a_mood_that_accepted_nothing():
+    recs = {"1": record(1, status=art_status.REJECTED)}
+
+    page = art_review.index_page(recs)
+
+    row = [r for r in page.split("<tr") if "HORROR.html" in r][0]
+    assert "empty" in row, \
+        "a mood with no accepted pictures is the thing the index exists to show"
+
+
+def test_main_sheets_also_writes_the_index(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    assets.mkdir(parents=True)
+    fetch_art.save_manifest(assets / "art_manifest.json", {})
+
+    assert art_review.main(["--sheets"], repo=tmp_path) == 0
+    assert (assets / "sheets" / "index.html").exists()
+
+
+def test_sheet_links_to_its_neighbouring_moods(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+
+    html_out = art_review.sheet(MOODS[0], {}, cand, png)
+
+    assert 'href="index.html"' in html_out
+    assert 'href="{}.html"'.format(MOODS[1]) in html_out
+    assert 'href="{}.html"'.format(MOODS[-1]) in html_out, \
+        "the first mood wraps to the last so no page is a dead end"

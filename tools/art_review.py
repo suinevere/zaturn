@@ -267,11 +267,24 @@ def main(argv, repo=None):
             print(f"  {page}")
         return 0
 
-    if len(argv) >= 2 and argv[0] == "--promote":
-        with open(argv[1], "r", encoding="utf-8") as fh:
-            verdicts = json.load(fh)
-        counts = promote(verdicts, manifest, assets / "candidates",
-                         assets / "png")
+    if argv and argv[0] == "--promote":
+        if len(argv) >= 2:
+            paths = [Path(argv[1])]
+        else:
+            paths = sorted((assets / "sheets").glob("verdicts*.json"))
+        if not paths:
+            print("  no verdicts files found in {}".format(assets / "sheets"))
+            return 0
+        counts = {}
+        for path in paths:
+            with open(path, "r", encoding="utf-8") as fh:
+                verdicts = json.load(fh)
+            for mood, got in promote(verdicts, manifest,
+                                     assets / "candidates",
+                                     assets / "png").items():
+                prev = counts.get(mood, Counts(0, 0))
+                counts[mood] = Counts(prev.gained + got.gained,
+                                      prev.lost + got.lost)
         fetch_art.save_manifest(manifest_path, manifest)
         for mood in sorted(counts):
             print(f"  {mood}: +{counts[mood].gained} -{counts[mood].lost}")

@@ -253,3 +253,34 @@ def test_promote_leaves_a_stray_candidate_alone_when_already_promoted(tmp_path):
 
     assert stray.exists(), "destination exists, so the stray must not be moved"
     assert counts == {}, "no status changed, so nothing was gained or lost"
+
+
+def test_main_promote_with_no_path_applies_every_verdicts_file(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    sheets = assets / "sheets"
+    sheets.mkdir(parents=True)
+    a = record(1, mood="HORROR")
+    b = record(2, mood="WILDER", donor="WILDER", noun="canyon")
+    for rec in (a, b):
+        make_candidate(assets / "candidates", rec)
+    fetch_art.save_manifest(assets / "art_manifest.json", {"1": a, "2": b})
+
+    (sheets / "verdicts.json").write_text('{"1": "accept"}', encoding="utf-8")
+    (sheets / "verdicts(1).json").write_text('{"2": "accept"}',
+                                             encoding="utf-8")
+
+    assert art_review.main(["--promote"], repo=tmp_path) == 0
+
+    saved = json.loads((assets / "art_manifest.json").read_text(encoding="utf-8"))
+    assert saved["1"]["status"] == art_status.ACCEPTED
+    assert saved["2"]["status"] == art_status.ACCEPTED, \
+        "every verdicts file in the folder must be applied, not just the first"
+
+
+def test_main_promote_with_no_files_says_so(tmp_path, capsys):
+    assets = tmp_path / "tools" / "assets"
+    (assets / "sheets").mkdir(parents=True)
+    fetch_art.save_manifest(assets / "art_manifest.json", {})
+
+    assert art_review.main(["--promote"], repo=tmp_path) == 0
+    assert "no verdicts" in capsys.readouterr().out.lower()

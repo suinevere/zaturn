@@ -502,3 +502,28 @@ def test_main_sheets_makes_no_network_call_without_the_flag(tmp_path):
     page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
     tile = page.split('data-id="1"')[1].split("</figure>")[0]
     assert "no local copy" in tile
+
+
+def test_a_manifest_only_clone_round_trips_a_decision(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    assets.mkdir(parents=True)
+    rec = record(1, status=art_status.REJECTED)
+    fetch_art.save_manifest(assets / "art_manifest.json", {"1": rec})
+
+    assert art_review.main(["--sheets"], repo=tmp_path) == 0
+    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
+    assert 'data-id="1"' in page and "no local copy" in page
+
+    (assets / "sheets" / "verdicts.json").write_text(
+        '{"1": "accept"}', encoding="utf-8")
+    assert art_review.main(["--promote"], repo=tmp_path) == 0
+
+    saved = json.loads(
+        (assets / "art_manifest.json").read_text(encoding="utf-8"))
+    assert saved["1"]["status"] == art_status.ACCEPTED, \
+        "no pixels and no network, and the decision still reverses"
+
+    assert art_review.main(["--sheets"], repo=tmp_path) == 0
+    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
+    tile = page.split('data-id="1"')[1].split("</figure>")[0]
+    assert "checked" in tile and "accepted" in tile

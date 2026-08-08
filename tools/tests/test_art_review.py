@@ -333,8 +333,6 @@ def test_sheet_shows_accepted_rejected_and_undecided_together(tmp_path):
 
 
 def test_sheet_ticks_no_tile_on_load_regardless_of_status(tmp_path):
-    """Review is opt-in now: nothing is checked on load, including an
-    ACCEPTED record -- the owner must re-tick a keeper or it un-accepts."""
     cand, png = tmp_path / "c", tmp_path / "png"
     acc = record(1, status=art_status.ACCEPTED)
     rej = record(2, status=art_status.REJECTED)

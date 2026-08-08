@@ -96,6 +96,32 @@ def create_app(repo=None):
             })
         return render_template_string(INDEX_HTML, rows=rows)
 
+    @app.route("/image/<pid>")
+    def image(pid):
+        """Serve one picture's bytes from whichever tree currently holds it.
+
+        Description: A record's status determines which tree its file lives
+            in, but the route does not trust status -- it looks at both trees
+            and serves whichever actually has the file, so a manifest that is
+            momentarily out of step with disk still serves what is there.
+        Author: suinevere
+        Dependencies: flask, fetch_art, art_review
+        Globals: N/A
+        Params: pid -- the record id from the URL
+        Returns: the PNG file, or 404 when the id is unknown or no file exists
+        """
+        from flask import abort, send_file
+        manifest = fetch_art.load_manifest(assets / "art_manifest.json")
+        rec = manifest.get(str(pid))
+        if rec is None:
+            abort(404)
+        rel = art_review._rel(rec)
+        for root in (assets / "png", assets / "candidates"):
+            path = Path(root) / rel
+            if path.exists():
+                return send_file(str(path), mimetype="image/png")
+        abort(404)
+
     return app
 
 

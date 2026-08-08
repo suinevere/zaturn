@@ -68,3 +68,33 @@ def test_index_reads_the_target_from_the_vocabulary(tmp_path):
     assert "40" in page, "target comes from art_queries.json, not a constant"
     assert "99" not in page, \
         "a hardcoded 99 must not coincidentally satisfy this assertion"
+
+
+def test_image_route_serves_an_accepted_picture_from_png(tmp_path):
+    acc = record(1, status=art_status.ACCEPTED)
+    client = build(tmp_path, [acc], promoted=[acc])
+
+    resp = client.get("/image/1")
+
+    assert resp.status_code == 200
+    assert resp.data[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_image_route_serves_a_rejected_picture_from_candidates(tmp_path):
+    rej = record(2, status=art_status.REJECTED)
+    client = build(tmp_path, [rej], candidates=[rej])
+
+    assert client.get("/image/2").status_code == 200
+
+
+def test_image_route_404s_for_an_unknown_id(tmp_path):
+    client = build(tmp_path, [record(1)], candidates=[record(1)])
+
+    assert client.get("/image/9999").status_code == 404
+
+
+def test_image_route_404s_when_the_file_is_missing(tmp_path):
+    client = build(tmp_path, [record(1)])
+
+    assert client.get("/image/1").status_code == 404, \
+        "a fresh clone has the record but no pixels"

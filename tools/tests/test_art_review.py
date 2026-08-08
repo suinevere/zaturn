@@ -433,3 +433,72 @@ def test_sheet_links_to_its_neighbouring_moods(tmp_path):
     assert 'href="{}.html"'.format(MOODS[1]) in html_out
     assert 'href="{}.html"'.format(MOODS[-1]) in html_out, \
         "the first mood wraps to the last so no page is a dead end"
+
+
+class StubFetcher:
+    def __init__(self, blobs):
+        self.blobs = blobs
+        self.asked = []
+
+    def download(self, url):
+        self.asked.append(url)
+        if url not in self.blobs:
+            raise OSError("404")
+        return self.blobs[url]
+
+
+def png_bytes():
+    from io import BytesIO
+    buf = BytesIO()
+    Image.new("RGB", (320, 224), (10, 20, 30)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_refetch_restores_a_missing_rejected_picture(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.REJECTED)
+    rec["image_url"] = "https://example.invalid/1.png"
+    fetcher = StubFetcher({rec["image_url"]: png_bytes()})
+
+    n = art_review.refetch_missing({"1": rec}, cand, png, fetcher)
+
+    assert n == 1
+    assert (cand / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
+
+
+def test_refetch_skips_a_picture_already_on_disk(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(1, status=art_status.REJECTED)
+    rec["image_url"] = "https://example.invalid/1.png"
+    make_candidate(cand, rec)
+    fetcher = StubFetcher({})
+
+    assert art_review.refetch_missing({"1": rec}, cand, png, fetcher) == 0
+    assert fetcher.asked == [], "no network for a picture that is already here"
+
+
+def test_refetch_degrades_when_a_download_fails(tmp_path, capsys):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    a = record(1, status=art_status.REJECTED)
+    b = record(2, status=art_status.REJECTED, noun="cellar")
+    a["image_url"] = "https://example.invalid/gone.png"
+    b["image_url"] = "https://example.invalid/2.png"
+    fetcher = StubFetcher({b["image_url"]: png_bytes()})
+
+    n = art_review.refetch_missing({"1": a, "2": b}, cand, png, fetcher)
+
+    assert n == 1, "one failure must not abort the rest of the run"
+    assert "gone.png" in capsys.readouterr().out
+
+
+def test_main_sheets_makes_no_network_call_without_the_flag(tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    assets.mkdir(parents=True)
+    rec = record(1, status=art_status.REJECTED)
+    rec["image_url"] = "https://example.invalid/1.png"
+    fetch_art.save_manifest(assets / "art_manifest.json", {"1": rec})
+
+    assert art_review.main(["--sheets"], repo=tmp_path) == 0
+    page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")
+    tile = page.split('data-id="1"')[1].split("</figure>")[0]
+    assert "no local copy" in tile

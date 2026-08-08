@@ -13,14 +13,18 @@ Description: The metric gate removes what is provably unusable; everything left
     differing is the conventional near-duplicate threshold for perceptual
     hashes, tight enough that unrelated photos essentially never collide.
 Author: suinevere
-Dependencies: base64, html, json, pathlib
+Dependencies: base64, html, json, pathlib, io, PIL, os
 Globals: HAMMING_MAX
 """
 import base64
 import html
 import json
+import os
 from collections import namedtuple
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image
 
 import art_status
 from art_nouns import MOODS
@@ -272,6 +276,46 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
     return counts
 
 
+def refetch_missing(records, candidates_dir, png_dir, fetcher):
+    """Re-download pictures the manifest knows about but the disk has lost.
+
+    Description: A fresh clone has no candidates tree, so every rejected
+        picture's pixels are gone while its verdict survives in the manifest.
+        Restores them into the candidates tree from the recorded image_url.
+        A failed download reports and is skipped -- the sheet falls back to a
+        placeholder tile and the run continues.
+    Author: suinevere
+    Dependencies: PIL, pathlib, art_status
+    Globals: N/A
+    Params: records -- the manifest dict; candidates_dir -- the git-ignored
+        tree; png_dir -- tools/assets/png; fetcher -- anything with download()
+    Returns: how many pictures were restored
+    """
+    restored = 0
+    for rec in records.values():
+        if rec["status"] not in SHOWN:
+            continue
+        rel = _rel(rec)
+        if (Path(png_dir) / rel).exists() or (Path(candidates_dir)
+                                              / rel).exists():
+            continue
+        url = rec.get("image_url", "")
+        if not url:
+            print("  {}: no image_url recorded, cannot restore".format(rel))
+            continue
+        try:
+            im = Image.open(BytesIO(fetcher.download(url)))
+            im.load()
+        except Exception as exc:
+            print("  {}: refetch failed ({})".format(url, exc))
+            continue
+        dst = Path(candidates_dir) / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        im.convert("RGB").save(dst, "PNG")
+        restored += 1
+    return restored
+
+
 def index_page(records, target=99):
     """Summarise every mood's review state and link into its sheet.
 
@@ -324,8 +368,9 @@ def main(argv, repo=None):
     Author: suinevere
     Dependencies: fetch_art
     Globals: N/A
-    Params: argv -- ["--sheets"] or ["--promote", "<verdicts.json>"];
-        repo -- optional repository root override, for tests
+    Params: argv -- ["--sheets"], ["--sheets", "--refetch"], or
+        ["--promote", "<verdicts.json>"]; repo -- optional repository root
+        override, for tests
     Returns: 0 always
     """
     import fetch_art
@@ -336,6 +381,19 @@ def main(argv, repo=None):
     manifest = fetch_art.load_manifest(manifest_path)
 
     if argv and argv[0] == "--sheets":
+        if "--refetch" in argv:
+            key = os.environ.get("PIXABAY_API_KEY", "")
+            if not key:
+                fetch_art.load_dotenv_into_environ()
+                key = os.environ.get("PIXABAY_API_KEY", "")
+            if key:
+                n = refetch_missing(manifest, assets / "candidates",
+                                    assets / "png",
+                                    fetch_art.PixabayFetcher(key))
+                print(f"  restored {n} missing picture(s)")
+            else:
+                print("  PIXABAY_API_KEY is not set; keeping placeholders")
+
         candidates = [r for r in manifest.values()
                       if r["status"] == art_status.CANDIDATE]
         decided = [r for r in manifest.values()

@@ -5,10 +5,20 @@
          saturn/src/sound/music_data.c saturn/src/classify/room_class.c \
          saturn/src/classify/room_class_data.c && /tmp/mt */
 #include <stdio.h>
+#include <string.h>
 #include "sound/music.h"
 #include "classify/room_class.h"
 
 #define CHECK(c) do{ if(!(c)){ printf("FAIL: %s\n", #c); fails++; } }while(0)
+
+/* --- engine harness for the music_note_output overflow tests below: the
+   buffer's content can only be observed by driving a turn to a category
+   announcement, so these mirror test/music_category_test.c's pattern rather
+   than adding a getter that would exist only for tests. --- */
+static int g_ov_cats[4], g_ov_ncat;
+static void ov_rec_cat(int c) { if (g_ov_ncat < 4) g_ov_cats[g_ov_ncat++] = c; }
+static void ov_play(int t, int loop) { (void) t; (void) loop; }
+static int  ov_isplaying(void) { return 1; }
 
 int main(void) {
     int fails = 0;
@@ -73,6 +83,100 @@ int main(void) {
     music_seed(777); int a1 = music_category_track(TC_HORROR);
     music_seed(777); int a2 = music_category_track(TC_HORROR);
     CHECK(a1 == a2);
+
+    /* --- music_note_output keeps the NEWEST bytes on overflow, not the oldest ---
+       Feed a keyword near the front of a chunk that alone blows past
+       MUSIC_TEXT_MAX, pad past the limit with keyword-free filler across
+       several calls, then close with a different-category keyword. If the
+       buffer kept the oldest bytes (the pre-fix behavior) "lake" would still
+       be in there and WATER would win; keeping the newest drops it and
+       WILDERNESS wins on "forest" alone. */
+    {
+        char pad[600];
+        int i;
+        for (i = 0; i < 599; i++) pad[i] = 'x';
+        pad[599] = 0;
+
+        music_set_backend(ov_play);
+        music_set_isplaying(ov_isplaying);
+        music_set_category_fn(ov_rec_cat);
+        music_set_game(0, "000000");
+        music_reset();
+
+        g_ov_ncat = 0;
+        music_note_output("A lake shimmers in the distance. ", 34);
+        music_note_output(pad, 599);
+        music_note_output("A dense forest surrounds you on every side.", 44);
+        music_on_turn(500);
+        CHECK(g_ov_ncat == 1);
+        CHECK(g_ov_cats[0] == TC_WILDERNESS);   /* forest survived */
+        CHECK(g_ov_cats[0] != TC_WATER);        /* lake did not */
+    }
+
+    /* --- regression: Zork III turn one must classify HORROR, not WATER ---
+       Turn one is ~600 bytes of dream sequence (which mentions "a cool, clear
+       lake"), THEN the banner, THEN "Endless Stair" and its room text. Before
+       the fix, only the first MUSIC_TEXT_MAX-1 bytes -- the dream alone --
+       ever reached the classifier, and "lake" (TC_WATER, KT_BIOME) beat the
+       room's own "eerie"/"shadow" (TC_HORROR, KT_FEATURE) under strict tier
+       comparison. Fed here across three calls the way the interpreter prints
+       it: the dream paragraph, then the banner, then the room. This is the
+       real captured turn-one text, not a paraphrase. */
+    {
+        music_set_backend(ov_play);
+        music_set_isplaying(ov_isplaying);
+        music_set_category_fn(ov_rec_cat);
+        music_set_game(17, "840727");           /* Zork III, per mojozork */
+        music_reset();
+        music_note_room_title("Endless Stair"); /* per mojozork's location object */
+
+        g_ov_ncat = 0;
+        music_note_output(
+            "As in a dream, you see yourself tumbling down a great, dark staircase. "
+            "All about you are shadowy images of struggles against fierce opponents "
+            "and diabolical traps. These give way to another round of images: of "
+            "imposing stone figures, a cool, clear lake, and, now, of an old, yet "
+            "oddly youthful man. He turns toward you slowly, his long, silver hair "
+            "dancing about him in a fresh breeze. \"You have reached the final test, "
+            "my friend! You are proved clever and powerful, but this is not yet "
+            "enough! Seek me when you feel yourself worthy!\" The dream dissolves "
+            "around you as his last words echo through the void....\n"
+            "\n", 611);
+        music_note_output(
+            "ZORK III: The Dungeon Master\n"
+            "Copyright 1982 by Infocom, Inc. All rights reserved.\n"
+            "ZORK is a trademark of Infocom, Inc.\n"
+            "Release 17 / Serial number 840727\n"
+            "\n", 154);
+        music_note_output(
+            "Endless Stair\n"
+            "You are at the bottom of a seemingly endless stair, winding its way "
+            "upward beyond your vision. An eerie light, coming from all around you, "
+            "casts strange shadows on the walls. To the south is a dark and winding "
+            "trail.\n"
+            "Your old friend, the brass lantern, is at your feet.\n"
+            "\n", 285);
+        music_on_turn(180);
+        CHECK(g_ov_ncat == 1);
+        CHECK(g_ov_cats[0] == TC_HORROR);
+        CHECK(g_ov_cats[0] != TC_WATER);
+    }
+
+    /* --- a short turn (well under MUSIC_TEXT_MAX) classifies exactly as
+       before -- the non-overflow append path is untouched by the fix. --- */
+    {
+        music_set_backend(ov_play);
+        music_set_isplaying(ov_isplaying);
+        music_set_category_fn(ov_rec_cat);
+        music_set_game(0, "000000");
+        music_reset();
+
+        g_ov_ncat = 0;
+        music_note_output("A damp cave with a narrow tunnel.", 34);
+        music_on_turn(600);
+        CHECK(g_ov_ncat == 1);
+        CHECK(g_ov_cats[0] == TC_UNDERGROUND);
+    }
 
     printf(fails ? "\n%d FAILURES\n" : "\nALL PASS\n", fails);
     return fails ? 1 : 0;

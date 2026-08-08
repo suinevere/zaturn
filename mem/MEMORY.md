@@ -1,3 +1,4 @@
-- [Room art pipeline handoff (2026-08-07)](2026-08-07-room-art-pipeline-handoff.md) — Plan A merged; Plan B's fetcher is built but has never run, and one bug sits in the `.env` loader.
+- [Classify from captured turn text (2026-08-08)](2026-08-08-classify-from-captured-turn-text.md) — a wrong room mood is a question about the bytes in `g_turn_text`; capture the real turn with host mojozork before reasoning about the classifier.
+- [Room art pipeline handoff (2026-08-07)](2026-08-07-room-art-pipeline-handoff.md) — PARTLY STALE: the `.env` bug is closed and sitting 1 shipped 120 backgrounds; the calibration warnings and the two owner decisions still stand.
 - [Room categorization handoff (2026-08-05)](2026-08-05-room-categorization-handoff.md) — STALE: that work merged to main; `blessed.inc` has since been re-blessed twice. Kept for the corpus-gate reasoning only.
 - [Merge order: fallback-mood before tiers](2026-08-05-merge-order-constraint.md) — DISCHARGED: both branches merged in the required order. Kept for the bug class, not as a live constraint.

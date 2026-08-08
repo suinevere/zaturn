@@ -1,9 +1,27 @@
 ---
 name: room-art-pipeline-handoff
-description: Plan A shipped and merged; Plan B's fetch pipeline is built and reviewed but has never run, and one open bug sits in the .env loader.
+description: PARTLY STALE (2026-08-08) — the .env bug is closed and the pipeline has run; the calibration warnings and the two owner decisions still stand.
 metadata:
   type: project
 ---
+
+**Superseded in part on 2026-08-08.** Three sections below are no longer true and
+are kept only so the reasoning survives:
+
+- *The one open bug* — closed in `7d67dd9`, mutation-verified twice.
+- *Before running Task 6* — the pipeline has run. Sitting 1 committed 120
+  backgrounds across eleven moods (`b126c47`); SCIFI took nothing. The calibration
+  advice was right: `busyness_max` was mis-scaled at 18.0 and is now 35.0
+  (`ca424ea`), `banding_max` has still never fired against a real photograph, and
+  whether 35.0 is the right legibility limit remains unproven pending the hardware
+  check. The key was never rotated — the owner chose to keep using it.
+- *Suggested skills* — review decisions are reversible now; see
+  `docs/superpowers/specs/2026-08-08-art-review-persistence-design.md`.
+
+Still live: the two decisions left for the repository owner, and the whole
+*What this project taught* section, which has since grown from six defective
+checks to nine. See also [[classify-from-captured-turn-text]] for the two
+classifier bugs found afterwards.
 
 Paused 2026-08-07 before Task 6, the only remaining work. Branch
 `room-art-pipeline` @ `35efe79`, 17 commits ahead of `origin/main`, working tree

@@ -533,12 +533,18 @@ def test_refetch_degrades_when_a_download_fails(tmp_path, capsys):
     assert "gone.png" in capsys.readouterr().out
 
 
-def test_main_sheets_makes_no_network_call_without_the_flag(tmp_path):
+def test_main_sheets_makes_no_network_call_without_the_flag(tmp_path, monkeypatch):
     assets = tmp_path / "tools" / "assets"
     assets.mkdir(parents=True)
     rec = record(1, status=art_status.REJECTED)
     rec["image_url"] = "https://example.invalid/1.png"
     fetch_art.save_manifest(assets / "art_manifest.json", {"1": rec})
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no network path may run without --refetch")
+
+    monkeypatch.setattr(fetch_art, "load_dotenv_into_environ", forbidden)
+    monkeypatch.setattr(fetch_art, "PixabayFetcher", forbidden)
 
     assert art_review.main(["--sheets"], repo=tmp_path) == 0
     page = (assets / "sheets" / "HORROR.html").read_text(encoding="utf-8")

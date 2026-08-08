@@ -58,8 +58,8 @@ def crop(im):
     """Centre-crop and resize any image to exactly 320x224.
 
     Description: Scales the shorter side to fit, then takes the middle. Naive on
-        purpose: a saliency crop would need a model, and the contact sheet is
-        where a badly-framed picture gets rejected anyway.
+        purpose: a saliency crop would need a model, and human review is where a
+        badly-framed picture gets rejected anyway.
     Author: suinevere
     Dependencies: PIL
     Globals: WIDTH, HEIGHT
@@ -112,7 +112,7 @@ def score(im):
 
 
 def verdict(s):
-    """Decide whether a candidate survives to the contact sheet.
+    """Decide whether a candidate survives to human review.
 
     Description: Busyness is judged first because it is the only failure no
         player setting can undo -- the Dimming row shifts every pixel by the same

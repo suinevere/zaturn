@@ -10,7 +10,7 @@ Description: Walks the query plan, asks Pixabay for each phrase, crops every hit
     wastes the 399 before it.
 
     Nothing here decides what ships. Surviving the metric gate only earns a place
-    on a contact sheet; a human accepts or rejects from there.
+    in the review server (tools/art_server.py); a human accepts or rejects there.
 Author: suinevere
 Dependencies: requests, PIL, art_metrics, art_queries, art_nouns, art_status
 Globals: ENDPOINT, LICENCE

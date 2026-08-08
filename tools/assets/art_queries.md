@@ -3,8 +3,8 @@
 This file is the only place search terms are written. `tools/art_queries.py`
 turns it into the phrases the fetcher searches for; nothing else in the
 pipeline invents a word. Changing an adjective, a donor, an extra noun, or an
-exclusion means re-running the fetcher and reviewing a fresh contact sheet --
-the old images do not get relabeled, they get replaced.
+exclusion means re-running the fetcher and reviewing the fresh candidates it
+brings back -- the old images do not get relabeled, they get replaced.
 
 Each of the twelve moods (`WILDER`, `UNDRGRND`, `WATER`, `NAUTICAL`, `TOWN`,
 `DUNGN`, `DESERT`, `MAGIC`, `SCIFI`, `HORROR`, `MYSTERY`, `HOUSE`) has one

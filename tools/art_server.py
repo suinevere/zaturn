@@ -10,6 +10,7 @@ Author: suinevere
 Dependencies: flask, art_queries, art_review, art_status, fetch_art
 Globals: N/A
 """
+import socket
 import sys
 from pathlib import Path
 
@@ -18,7 +19,19 @@ import art_review
 import art_status
 import fetch_art
 
-HOST = "127.0.0.1"
+"""HOST / PORT
+
+Description: The interface and port the review UI listens on. HOST is
+    0.0.0.0 -- every interface, not just loopback -- so the operator can
+    review from another machine on the LAN by hostname. That is a deliberate
+    exposure with a real consequence: there is no authentication, and
+    POST /verdict moves and deletes files inside the repository, so anyone
+    who can reach this port can re-curate the pool. Acceptable only on a
+    trusted network. PORT is fixed rather than hunted for, because the
+    operator keeps that URL open.
+Author: suinevere
+"""
+HOST = "0.0.0.0"
 PORT = 8080
 
 
@@ -347,14 +360,17 @@ function prev(f){ var a = all(), i = a.indexOf(f);
 
 
 def main(argv):
-    """Run the review server on loopback.
+    """Run the review server on every interface.
 
     Description: A missing Flask, or a port already bound, prints an actionable
         line and returns 0 rather than raising -- the everything-degrades rule
-        the rest of these tools follow. The port is fixed rather than hunted
-        for, because the operator keeps that URL open.
+        the rest of these tools follow. Prints both the loopback and the
+        hostname URL, because the whole point of binding every interface is
+        reaching it from another machine and the operator needs the name to
+        type. A hostname that will not resolve degrades to printing the
+        loopback URL alone rather than failing to start.
     Author: suinevere
-    Dependencies: flask
+    Dependencies: flask, socket
     Globals: HOST, PORT
     Params: argv -- unused, accepted so the entry point matches its siblings
     Returns: 0 always
@@ -365,6 +381,12 @@ def main(argv):
         print("  Flask is not installed. Run:")
         print("    python -m pip install -r tools/requirements-review.txt")
         return 0
+    print(f"  review UI: http://127.0.0.1:{PORT}")
+    try:
+        print(f"             http://{socket.gethostname()}:{PORT}  (this LAN)")
+    except OSError:
+        pass
+    print("  no authentication -- anyone who can reach this port can re-curate.")
     app = create_app()
     try:
         app.run(host=HOST, port=PORT, debug=False)

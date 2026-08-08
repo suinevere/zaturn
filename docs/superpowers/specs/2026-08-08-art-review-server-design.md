@@ -177,7 +177,13 @@ Inherited and binding:
   comments inside function bodies.
 - `art_status` constants only; no bare status strings.
 - No API key in any file, fixture, or commit message.
-- Bind to `127.0.0.1` only.
+- Bind to `0.0.0.0`. **Changed 2026-08-08**, after the owner asked to review from
+  a second machine: loopback-only made the host unreachable by name no matter
+  what local DNS resolved, because nothing was listening on the LAN interface.
+  The exposure is deliberate and its consequence is real — there is no
+  authentication and `POST /verdict` moves and deletes files inside the
+  repository, so anyone who can reach the port can re-curate the pool. Acceptable
+  only on a trusted network; revisit if this ever runs anywhere else.
 
 ## Open questions
 

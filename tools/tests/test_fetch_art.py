@@ -70,8 +70,26 @@ class FakeSession:
         self.responses = list(responses)
         self.calls = []
 
-    def get(self, url, timeout=None, params=None):
-        self.calls.append((url, params))
+    def get(self, url, timeout=None, params=None, headers=None):
+        self.calls.append((url, params, headers))
+        return self.responses.pop(0)
+
+
+class PingRaisesSession:
+    """A FakeSession-alike whose .get raises only for one specific url,
+    so a download-ping's connection failure can be pinned without also
+    breaking the image bytes fetch that must still succeed after it."""
+
+    def __init__(self, raising_url, exc, responses):
+        self.raising_url = raising_url
+        self.exc = exc
+        self.responses = list(responses)
+        self.calls = []
+
+    def get(self, url, timeout=None, params=None, headers=None):
+        self.calls.append((url, params, headers))
+        if url == self.raising_url:
+            raise self.exc
         return self.responses.pop(0)
 
 
@@ -260,6 +278,211 @@ def test_pixabay_fetcher_download_returns_response_content():
     session = FakeSession([FakeResponse(200, content=b"pngbytes")])
     f = fetch_art.PixabayFetcher("key", session=session, pause=0)
     assert f.download("https://cdn.example/x.jpg") == b"pngbytes"
+
+
+def test_unsplash_fetcher_search_maps_hits_to_shared_hit_shape():
+    payload = {"results": [
+        {"id": "abc123",
+         "urls": {"regular": "https://images.unsplash.com/abc123",
+                  "full": "https://images.unsplash.com/abc123-full"},
+         "links": {"html": "https://unsplash.com/photos/abc123",
+                   "download_location":
+                       "https://api.unsplash.com/photos/abc123/download"},
+         "user": {"name": "Priya Shah",
+                   "links": {"html": "https://unsplash.com/@priyashah"}}},
+    ]}
+    session = FakeSession([FakeResponse(200, payload)])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
+    hits = f.search("cracked sandstone canyon", per_page=12)
+    assert hits == [{
+        "id": "abc123",
+        "page_url": "https://unsplash.com/photos/abc123",
+        "image_url": "https://images.unsplash.com/abc123",
+        "author": "Priya Shah",
+        "author_url": "https://unsplash.com/@priyashah",
+    }]
+    assert f.used == 1
+
+
+def test_unsplash_fetcher_search_prefers_regular_falls_back_to_full():
+    payload = {"results": [
+        {"id": "noregular",
+         "urls": {"full": "https://images.unsplash.com/noregular-full"},
+         "links": {"html": "", "download_location": ""},
+         "user": {"name": "", "links": {}}},
+    ]}
+    session = FakeSession([FakeResponse(200, payload)])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
+    hits = f.search("hazy mesa", per_page=12)
+    assert hits[0]["image_url"] == "https://images.unsplash.com/noregular-full"
+
+
+def test_unsplash_fetcher_search_returns_empty_on_non_200():
+    session = FakeSession([FakeResponse(503, {})])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
+    assert f.search("cracked sandstone canyon", per_page=12) == []
+    assert f.used == 1, "the failed call still spent one request"
+
+
+def test_unsplash_fetcher_download_fires_the_download_location_ping():
+    session = FakeSession([
+        FakeResponse(200, content=b""),
+        FakeResponse(200, content=b"realimagebytes"),
+    ])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
+    f._download_locations["https://images.unsplash.com/p7"] = \
+        "https://api.unsplash.com/photos/p7/download"
+    result = f.download("https://images.unsplash.com/p7")
+    assert result == b"realimagebytes"
+    called_urls = [c[0] for c in session.calls]
+    assert "https://api.unsplash.com/photos/p7/download" in called_urls, \
+        "download() must ping links.download_location, per Unsplash's API guidelines"
+    assert f.used == 1, "the ping must count against the budget"
+
+
+def test_unsplash_fetcher_download_ping_http_failure_does_not_lose_the_image():
+    session = FakeSession([
+        FakeResponse(503, content=b"ping error body"),
+        FakeResponse(200, content=b"keptbytes"),
+    ])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
+    f._download_locations["https://images.unsplash.com/z9"] = \
+        "https://api.unsplash.com/photos/z9/download"
+    assert f.download("https://images.unsplash.com/z9") == b"keptbytes"
+
+
+def test_unsplash_fetcher_download_ping_connection_error_does_not_lose_the_image():
+    ping_url = "https://api.unsplash.com/photos/m4/download"
+    session = PingRaisesSession(ping_url, IOError("connection reset"),
+                                responses=[FakeResponse(200, content=b"survives")])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
+    f._download_locations["https://images.unsplash.com/m4"] = ping_url
+    assert f.download("https://images.unsplash.com/m4") == b"survives"
+
+
+def test_unsplash_fetcher_search_budget_stops_the_run_and_reports_skips(capsys):
+    session = FakeSession([FakeResponse(200, {"results": []})])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=1)
+    f.search("first phrase", per_page=12)
+    assert f.used == 1
+    hits = f.search("second phrase", per_page=12)
+    assert hits == [], "a spent budget must degrade to an empty search, not raise"
+    assert f.skipped == 1
+    assert "budget" in capsys.readouterr().out.lower()
+
+
+def test_unsplash_fetcher_download_ping_skipped_when_budget_exhausted_but_image_still_fetched(capsys):
+    session = FakeSession([FakeResponse(200, content=b"stillfetched")])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=0)
+    f._download_locations["https://images.unsplash.com/q3"] = \
+        "https://api.unsplash.com/photos/q3/download"
+    result = f.download("https://images.unsplash.com/q3")
+    assert result == b"stillfetched"
+    assert f.skipped == 1
+    assert "budget" in capsys.readouterr().out.lower()
+
+
+def test_unsplash_fetcher_report_prints_used_and_skipped_counts(capsys):
+    f = fetch_art.UnsplashFetcher("access-key-fake",
+                                  session=FakeSession([]), budget=7)
+    f.used = 5
+    f.skipped = 3
+    f.report()
+    out = capsys.readouterr().out
+    assert "5" in out and "7" in out and "3" in out
+
+
+def test_harvest_records_unsplash_source_licence_author_fields(tmp_path):
+    payload = {"results": [
+        {"id": "u1",
+         "urls": {"regular": "https://images.unsplash.com/u1"},
+         "links": {"html": "https://unsplash.com/photos/u1",
+                   "download_location":
+                       "https://api.unsplash.com/photos/u1/download"},
+         "user": {"name": "Asymmetric Artist",
+                   "links": {"html": "https://unsplash.com/@asymmetric"}}},
+    ]}
+    session = FakeSession([
+        FakeResponse(200, payload),
+        FakeResponse(200, content=b""),
+        FakeResponse(200, content=png_bytes(70)),
+    ])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
+    plan = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "dark hallway")]}
+    manifest = {}
+    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_mood_budget=99)
+    assert len(got) == 1
+    rec = manifest["u1"]
+    assert rec["source"] == "unsplash"
+    assert rec["licence"] == "Unsplash License"
+    assert rec["author"] == "Asymmetric Artist"
+    assert rec["author_url"] == "https://unsplash.com/@asymmetric"
+
+
+def test_harvest_continues_cleanly_when_unsplash_budget_runs_out(tmp_path):
+    payload = {"results": [
+        {"id": "b1", "urls": {"regular": "https://images.unsplash.com/b1"},
+         "links": {"html": "https://unsplash.com/photos/b1",
+                   "download_location": ""},
+         "user": {"name": "First", "links": {"html": "https://unsplash.com/@first"}}}
+    ]}
+    session = FakeSession([FakeResponse(200, payload),
+                           FakeResponse(200, content=png_bytes(70))])
+    f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=1)
+    plan = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "one"),
+                       Query("HORROR", "EXTRA", "morgue", "dark", "two")]}
+    manifest = {}
+    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_mood_budget=99)
+    assert len(got) == 1, "the second query's search must degrade, not crash the run"
+    assert f.used == 1
+    assert f.skipped == 1
+
+
+def test_harvest_records_pixabay_source_field_via_real_fetcher(tmp_path):
+    payload = {"hits": [
+        {"id": 501, "pageURL": "https://pixabay.com/photos/501/",
+         "largeImageURL": "https://cdn.example/large501.jpg"},
+    ]}
+    session = FakeSession([FakeResponse(200, payload),
+                           FakeResponse(200, content=png_bytes(70))])
+    f = fetch_art.PixabayFetcher("key-fake", session=session, pause=0)
+    plan = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "dark hallway")]}
+    manifest = {}
+    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_mood_budget=99)
+    assert len(got) == 1
+    assert manifest["501"]["source"] == "pixabay"
+    assert manifest["501"]["licence"] == fetch_art.LICENCE
+    assert "author" not in manifest["501"], \
+        "Pixabay hits carry no author field, so none must be invented"
+
+
+def test_main_source_flag_selects_unsplash_and_reports_missing_key(monkeypatch, capsys, tmp_path):
+    monkeypatch.delenv("UNSPLASH_ID", raising=False)
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
+    assert fetch_art.main(["--source", "unsplash"]) == 0
+    assert "UNSPLASH_ID" in capsys.readouterr().out
+
+
+def test_main_budget_flag_is_parsed_without_disturbing_positional_args(monkeypatch, tmp_path):
+    monkeypatch.setenv("PIXABAY_API_KEY", "test-key-fake")
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
+    saved = {}
+    seen_budget = {}
+
+    monkeypatch.setattr(fetch_art, "load_manifest", lambda path: {})
+    monkeypatch.setattr(fetch_art, "save_manifest",
+                        lambda path, data: saved.update(data=data))
+    monkeypatch.setattr(fetch_art, "PixabayFetcher",
+                        lambda key: StubFetcher(per_phrase=1, value=70))
+
+    def fake_harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None):
+        seen_budget["per_mood_budget"] = per_mood_budget
+        return []
+
+    monkeypatch.setattr(fetch_art, "harvest", fake_harvest)
+    assert fetch_art.main(["3", "--budget", "10"]) == 0
+    assert seen_budget["per_mood_budget"] == 3, \
+        "--budget must not shift the positional per_mood_budget argument"
 
 
 def test_dotenv_key_found_in_file_when_environment_is_empty(tmp_path):

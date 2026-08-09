@@ -33,6 +33,7 @@ import art_status
 
 ENDPOINT = "https://pixabay.com/api/"
 LICENCE = "Pixabay Content License"
+UNSPLASH_ENDPOINT = "https://api.unsplash.com/search/photos"
 DOTENV_PATH = Path(__file__).resolve().parent / ".env"
 
 Candidate = namedtuple("Candidate", "query hit scores verdict phash path")
@@ -83,10 +84,17 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
 
         A Pixabay id already in the manifest is skipped without a download,
         which is what makes a re-run cheap and a partial run resumable.
+
+        Each record's "source" and "licence" come from the fetcher's own
+        .source/.licence attributes, defaulting to Pixabay's when absent, so
+        harvest() never has to know which fetcher it was given. A hit's
+        "author"/"author_url" (Unsplash only) land in the record only when
+        the hit carries them, so Pixabay records never gain invented fields.
     Author: suinevere
     Dependencies: PIL, art_metrics, art_status
     Globals: LICENCE
-    Params: plan -- mood -> [Query]; fetcher -- an object with .search/.download;
+    Params: plan -- mood -> [Query]; fetcher -- an object with .search/.download,
+        and optionally .source/.licence;
         out_dir -- where surviving PNGs go; manifest -- mutated in place;
         per_mood_budget -- stop each mood after this many survivors;
         total_budget -- optional ceiling across all moods combined; None means
@@ -130,7 +138,9 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
                     "id": hit["id"], "page_url": hit["page_url"],
                     "image_url": hit["image_url"], "phrase": query.phrase,
                     "mood": query.mood, "donor": query.donor, "noun": query.noun,
-                    "licence": LICENCE, "fetched": date.today().isoformat(),
+                    "source": getattr(fetcher, "source", "pixabay"),
+                    "licence": getattr(fetcher, "licence", LICENCE),
+                    "fetched": date.today().isoformat(),
                     "luminance": round(scores.luminance, 2),
                     "busyness": round(scores.busyness, 2),
                     "banding": round(scores.banding, 2),
@@ -138,6 +148,10 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
                     "status": (art_status.METRIC_REJECTED if call != "pass"
                                else art_status.CANDIDATE),
                 }
+                if "author" in hit:
+                    record["author"] = hit["author"]
+                if "author_url" in hit:
+                    record["author_url"] = hit["author_url"]
                 manifest[key] = record
                 if call != "pass":
                     continue
@@ -182,6 +196,9 @@ class PixabayFetcher:
     Globals: ENDPOINT
     """
 
+    source = "pixabay"
+    licence = LICENCE
+
     def __init__(self, key, session=None, pause=0.7):
         if session is None:
             import requests
@@ -225,6 +242,143 @@ class PixabayFetcher:
         r = self.session.get(url, timeout=60)
         r.raise_for_status()
         return r.content
+
+
+class UnsplashFetcher:
+    """Search and download against the live Unsplash API, under a hard request budget.
+
+    Description: Mirrors PixabayFetcher's shape -- search(phrase) returning
+        hit dicts, download(url) returning bytes -- so harvest() runs against
+        either without knowing which it has. Unlike Pixabay's roomy 100
+        requests/minute, Unsplash's demo-tier quota is a brutal 50
+        requests/hour, so every HTTP call this fetcher makes -- each search
+        and each download-location ping Unsplash's API guidelines require --
+        is counted against an explicit budget and refused once spent, never
+        slept through. A non-200 search degrades to an empty list, matching
+        PixabayFetcher; a failed or budget-skipped ping is reported and
+        ignored, since the ping is a courtesy to Unsplash, not a condition
+        of the image download that already succeeded.
+    Author: suinevere
+    Dependencies: requests
+    Globals: UNSPLASH_ENDPOINT
+    """
+
+    source = "unsplash"
+    licence = "Unsplash License"
+
+    def __init__(self, access_key, session=None, budget=50):
+        if session is None:
+            import requests
+            session = requests.Session()
+        self.access_key = access_key
+        self.session = session
+        self.budget = budget
+        self.used = 0
+        self.skipped = 0
+        self._download_locations = {}
+
+    def _spend(self):
+        """Reserve one request against the budget, if any remains.
+
+        Author: suinevere
+        Dependencies: N/A
+        Globals: N/A
+        Params: N/A
+        Returns: True (and increments self.used) if budget remains;
+            otherwise increments self.skipped and returns False
+        """
+        if self.used >= self.budget:
+            self.skipped += 1
+            return False
+        self.used += 1
+        return True
+
+    def search(self, phrase, per_page=12):
+        """Query Unsplash for one phrase and map hits to the shape harvest() expects.
+
+        Description: Records each hit's links.download_location alongside
+            its image_url, so a later download(url) call can find and ping
+            it without harvest() ever passing more than the url through.
+        Author: suinevere
+        Dependencies: requests
+        Globals: UNSPLASH_ENDPOINT
+        Params: phrase -- a search phrase; per_page -- Unsplash's page size
+        Returns: a list of {id, page_url, image_url, author, author_url}
+            dicts, empty when the budget is spent or on any non-200 response
+        """
+        if not self._spend():
+            print(f"  {phrase}: Unsplash budget exhausted "
+                  f"({self.used}/{self.budget} used), skipping search")
+            return []
+        r = self.session.get(
+            UNSPLASH_ENDPOINT, timeout=30,
+            headers={"Authorization": f"Client-ID {self.access_key}"},
+            params={"query": phrase, "per_page": per_page,
+                    "orientation": "landscape"})
+        if r.status_code != 200:
+            print(f"  {phrase}: HTTP {r.status_code}")
+            return []
+        hits = []
+        for h in r.json().get("results", []):
+            urls = h.get("urls", {})
+            image_url = urls.get("regular") or urls.get("full") or urls.get("small", "")
+            links = h.get("links", {})
+            location = links.get("download_location", "")
+            if location:
+                self._download_locations[image_url] = location
+            user = h.get("user", {})
+            hits.append({
+                "id": h["id"], "page_url": links.get("html", ""),
+                "image_url": image_url,
+                "author": user.get("name", ""),
+                "author_url": user.get("links", {}).get("html", ""),
+            })
+        return hits
+
+    def download(self, url):
+        """Ping Unsplash's required download-tracking endpoint, then fetch the bytes.
+
+        Description: The ping fires only when this url's search() call
+            recorded a download_location for it, and only while budget
+            remains; either a failed ping or a budget-skipped one is
+            reported and ignored, and the image bytes are always still
+            fetched afterward.
+        Author: suinevere
+        Dependencies: requests
+        Globals: N/A
+        Params: url -- an image_url returned by search()
+        Returns: the response body as bytes
+        """
+        location = self._download_locations.get(url, "")
+        if location:
+            if self._spend():
+                try:
+                    ping = self.session.get(
+                        location, timeout=30,
+                        headers={"Authorization": f"Client-ID {self.access_key}"})
+                    if ping.status_code != 200:
+                        print(f"  download ping failed for {url}: "
+                              f"HTTP {ping.status_code}")
+                except Exception as exc:
+                    print(f"  download ping failed for {url}: {exc}")
+            else:
+                print(f"  Unsplash budget exhausted ({self.used}/{self.budget} "
+                      f"used), skipping download ping for {url}")
+        r = self.session.get(url, timeout=60)
+        r.raise_for_status()
+        return r.content
+
+    def report(self):
+        """Print how many requests this fetcher spent and how many it skipped.
+
+        Author: suinevere
+        Dependencies: N/A
+        Globals: N/A
+        Params: N/A
+        Returns: N/A
+        """
+        print(f"  Unsplash: {self.used}/{self.budget} requests used, "
+              f"{self.skipped} skipped")
 
 
 def _parse_dotenv(path):
@@ -316,24 +470,35 @@ def main(argv):
     Description: Defaults to 99 survivors per mood -- matching both the
         vocabulary's own "target" and make_tga.convert_tree's per-mood cap --
         and no overall ceiling, so a default run can fetch up to 99 * len(MOODS)
-        candidates across the twelve moods. Reads PIXABAY_API_KEY from
-        tools/.env when it is not already exported, so an explicit export
-        still wins over the file. `--reset-rejected` bypasses all of that: it
-        drops every METRIC_REJECTED manifest record, saves, and returns
-        without fetching or requiring an API key, so a threshold change can
-        be followed by an ordinary run that re-downloads and re-scores what
-        it just freed.
+        candidates across the twelve moods. Reads PIXABAY_API_KEY and
+        UNSPLASH_ID from tools/.env when not already exported, so an
+        explicit export still wins over the file.
+
+        `--source pixabay|unsplash|both` picks which fetcher(s) run;
+        default "pixabay" so every existing invocation's behaviour is
+        unchanged. `--budget N` caps the Unsplash fetcher's own request
+        count (search calls plus download pings) at N; default 50, the
+        owner's stated hourly quota. Both flags are pulled out of argv
+        before the positional per_mood_budget/total_budget are read, so
+        their position in argv does not matter.
+
+        `--reset-rejected` bypasses all of that: it drops every
+        METRIC_REJECTED manifest record, saves, and returns without
+        fetching or requiring an API key, so a threshold change can be
+        followed by an ordinary run that re-downloads and re-scores what it
+        just freed.
     Author: suinevere
     Dependencies: art_queries, art_nouns, art_status
     Globals: DOTENV_PATH
     Params: argv -- [] | [per_mood_budget] | [per_mood_budget, total_budget],
-        with an optional leading or trailing "--reset-rejected" anywhere in
-        argv taking over the whole run
+        with an optional "--reset-rejected" flag, "--source X" and
+        "--budget N" anywhere in argv
     Returns: 0 always; failures are reported, not raised
     """
     repo = Path(__file__).resolve().parents[1]
     manifest_path = repo / "tools" / "assets" / "art_manifest.json"
 
+    argv = list(argv)
     if "--reset-rejected" in argv:
         manifest = load_manifest(manifest_path)
         dropped = reset_rejected(manifest)
@@ -342,11 +507,42 @@ def main(argv):
               f"{len(manifest)} images still known")
         return 0
 
+    source = "pixabay"
+    if "--source" in argv:
+        i = argv.index("--source")
+        source = argv[i + 1]
+        del argv[i:i + 2]
+
+    budget = None
+    if "--budget" in argv:
+        i = argv.index("--budget")
+        budget = int(argv[i + 1])
+        del argv[i:i + 2]
+
     load_dotenv_into_environ()
-    key = os.environ.get("PIXABAY_API_KEY", "")
-    if not key:
-        print("  PIXABAY_API_KEY is not set. Get a free key at "
-              "https://pixabay.com/api/docs/ and export it, then re-run.")
+
+    fetchers = []
+    if source in ("pixabay", "both"):
+        key = os.environ.get("PIXABAY_API_KEY", "")
+        if not key:
+            print("  PIXABAY_API_KEY is not set. Get a free key at "
+                  "https://pixabay.com/api/docs/ and export it, then re-run.")
+            if source == "pixabay":
+                return 0
+        else:
+            fetchers.append(PixabayFetcher(key))
+    if source in ("unsplash", "both"):
+        access_key = os.environ.get("UNSPLASH_ID", "")
+        if not access_key:
+            print("  UNSPLASH_ID is not set. Get a free Access Key at "
+                  "https://unsplash.com/developers and export it, then re-run.")
+            if source == "unsplash":
+                return 0
+        else:
+            fetchers.append(UnsplashFetcher(
+                access_key, budget=budget if budget is not None else 50))
+
+    if not fetchers:
         return 0
 
     per_mood_budget = int(argv[0]) if argv else 99
@@ -357,10 +553,15 @@ def main(argv):
     plan = art_queries.build(vocab, nouns)
 
     manifest = load_manifest(manifest_path)
+    kept = []
     try:
-        kept = harvest(plan, PixabayFetcher(key),
-                       repo / "tools" / "assets" / "candidates",
-                       manifest, per_mood_budget, total_budget)
+        for fetcher in fetchers:
+            kept.extend(harvest(plan, fetcher,
+                                repo / "tools" / "assets" / "candidates",
+                                manifest, per_mood_budget, total_budget))
+            report = getattr(fetcher, "report", None)
+            if report is not None:
+                report()
     finally:
         save_manifest(manifest_path, manifest)
     by_mood = Counter(c.query.mood for c in kept)

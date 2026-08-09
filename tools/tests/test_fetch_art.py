@@ -8,6 +8,7 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import art_nouns
 import art_status
 import fetch_art
 from art_queries import Query
@@ -483,6 +484,100 @@ def test_main_budget_flag_is_parsed_without_disturbing_positional_args(monkeypat
     assert fetch_art.main(["3", "--budget", "10"]) == 0
     assert seen_budget["per_mood_budget"] == 3, \
         "--budget must not shift the positional per_mood_budget argument"
+
+
+def _stub_main_for_mood_capture(monkeypatch, tmp_path, seen):
+    """Wire main() so the plan reaching harvest() is captured, not fetched.
+
+    Description: Shared rigging for the --mood tests below -- a real
+        PixabayFetcher key so main() proceeds past the key check, and a
+        fake harvest() that records the mood keys (and each mood's own
+        query count, which differs mood to mood in the real vocabulary,
+        so a passing assertion cannot be a coincidence of equal lengths)
+        instead of touching the network.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: N/A
+    Params: monkeypatch -- pytest fixture; tmp_path -- pytest fixture;
+        seen -- dict this function fills with "moods" and "counts"
+    Returns: N/A
+    """
+    monkeypatch.setenv("PIXABAY_API_KEY", "test-key-fake")
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
+    monkeypatch.setattr(fetch_art, "load_manifest", lambda path: {})
+    monkeypatch.setattr(fetch_art, "save_manifest", lambda path, data: None)
+    monkeypatch.setattr(fetch_art, "PixabayFetcher",
+                        lambda key: StubFetcher(per_phrase=1, value=70))
+
+    def fake_harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None):
+        seen["moods"] = sorted(plan)
+        seen["counts"] = {mood: len(queries) for mood, queries in plan.items()}
+        return []
+
+    monkeypatch.setattr(fetch_art, "harvest", fake_harvest)
+
+
+def test_main_mood_flag_restricts_the_plan_to_the_named_mood(monkeypatch, tmp_path):
+    seen = {}
+    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--mood", "SCIFI"]) == 0
+    assert seen["moods"] == ["SCIFI"], \
+        "every other mood must be entirely unqueried, not just budget-starved"
+    assert seen["counts"]["SCIFI"] > 0
+
+
+def test_main_mood_flag_accepts_multiple_comma_separated_moods(monkeypatch, tmp_path):
+    seen = {}
+    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--mood", "SCIFI,TOWN"]) == 0
+    assert seen["moods"] == ["SCIFI", "TOWN"]
+    assert seen["counts"]["SCIFI"] != seen["counts"]["TOWN"], \
+        "SCIFI and TOWN must draw from genuinely different query counts, " \
+        "so this assertion cannot pass by fixture coincidence"
+
+
+def test_main_mood_flag_is_case_insensitive(monkeypatch, tmp_path):
+    seen = {}
+    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--mood", "scifi"]) == 0
+    assert seen["moods"] == ["SCIFI"]
+
+
+def test_main_mood_flag_reports_an_unknown_mood_but_still_runs_the_known_ones(
+        monkeypatch, tmp_path, capsys):
+    seen = {}
+    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--mood", "SCIFI,NOTAMOOD"]) == 0
+    assert seen["moods"] == ["SCIFI"]
+    out = capsys.readouterr().out
+    assert "NOTAMOOD" in out
+
+
+def test_main_mood_flag_all_unknown_prints_the_valid_list_and_fetches_nothing(
+        monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("PIXABAY_API_KEY", "test-key-fake")
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("an all-unknown --mood must not reach harvest")
+
+    monkeypatch.setattr(fetch_art, "PixabayFetcher", fail_if_called)
+    monkeypatch.setattr(fetch_art, "harvest", fail_if_called)
+
+    assert fetch_art.main(["--mood", "NOTAMOOD,ALSOFAKE"]) == 0
+    out = capsys.readouterr().out
+    for mood in art_nouns.MOODS:
+        assert mood in out, f"the everything-degrades message must name {mood}"
+
+
+def test_main_without_mood_flag_plans_all_twelve_moods_as_before(monkeypatch, tmp_path):
+    seen = {}
+    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main([]) == 0
+    assert seen["moods"] == sorted(art_nouns.MOODS)
+    assert len(set(seen["counts"].values())) > 1, \
+        "the real vocabulary's per-mood query counts differ; a flattened " \
+        "fixture would defeat the point of asserting against them"
 
 
 def test_dotenv_key_found_in_file_when_environment_is_empty(tmp_path):

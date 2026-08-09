@@ -440,6 +440,40 @@ def load_dotenv_into_environ(path=None, env=None):
         env.setdefault(key, value)
 
 
+def _resolve_mood_filter(raw):
+    """Validate a comma-separated --mood argument against the canonical mood set.
+
+    Description: Matches each name case-insensitively against art_nouns.MOODS,
+        the twelve exact folder spellings; anything else is reported by the
+        caller and dropped rather than raising, so one typo does not sink an
+        otherwise valid run. Order is preserved and duplicates collapsed, but
+        neither is load-bearing for the caller, which only filters a dict by
+        membership.
+    Author: suinevere
+    Dependencies: art_nouns
+    Globals: N/A
+    Params: raw -- the --mood argument's raw string, e.g. "SCIFI,TOWN" or "scifi"
+    Returns: (valid, invalid) -- valid is a deduplicated list of canonical
+        mood names; invalid is the list of names (as typed) that matched
+        nothing in art_nouns.MOODS
+    """
+    valid = []
+    invalid = []
+    seen = set()
+    for name in raw.split(","):
+        name = name.strip()
+        if not name:
+            continue
+        canonical = name.upper()
+        if canonical in art_nouns.MOODS:
+            if canonical not in seen:
+                valid.append(canonical)
+                seen.add(canonical)
+        else:
+            invalid.append(name)
+    return valid, invalid
+
+
 def reset_rejected(manifest):
     """Drop every manifest record whose status is METRIC_REJECTED, in place.
 
@@ -487,12 +521,21 @@ def main(argv):
         fetching or requiring an API key, so a threshold change can be
         followed by an ordinary run that re-downloads and re-scores what it
         just freed.
+
+        `--mood NAME[,NAME...]` restricts the plan handed to harvest() to
+        those moods only, checked case-insensitively against art_nouns.MOODS
+        before any fetcher is built. An unknown name is reported and
+        dropped, not fatal; if every named mood is unknown, the run prints
+        the twelve valid names and returns 0 without building a fetcher or
+        fetching anything -- the everything-degrades rule. Absent, every
+        mood in the vocabulary is planned, exactly as before this flag
+        existed.
     Author: suinevere
     Dependencies: art_queries, art_nouns, art_status
     Globals: DOTENV_PATH
     Params: argv -- [] | [per_mood_budget] | [per_mood_budget, total_budget],
-        with an optional "--reset-rejected" flag, "--source X" and
-        "--budget N" anywhere in argv
+        with an optional "--reset-rejected" flag, "--source X", "--budget N"
+        and "--mood NAME[,NAME...]" anywhere in argv
     Returns: 0 always; failures are reported, not raised
     """
     repo = Path(__file__).resolve().parents[1]
@@ -518,6 +561,19 @@ def main(argv):
         i = argv.index("--budget")
         budget = int(argv[i + 1])
         del argv[i:i + 2]
+
+    selected_moods = None
+    if "--mood" in argv:
+        i = argv.index("--mood")
+        mood_arg = argv[i + 1]
+        del argv[i:i + 2]
+        selected_moods, unknown_moods = _resolve_mood_filter(mood_arg)
+        for bad in unknown_moods:
+            print(f"  {bad}: not a known mood, ignoring")
+        if not selected_moods:
+            print("  no valid --mood names given; choose one or more of: "
+                  + ", ".join(art_nouns.MOODS))
+            return 0
 
     load_dotenv_into_environ()
 
@@ -551,6 +607,9 @@ def main(argv):
     nouns = art_nouns.nouns_by_mood(
         (repo / "saturn" / "src" / "classify" / "room_class_data.c").read_text())
     plan = art_queries.build(vocab, nouns)
+    if selected_moods is not None:
+        plan = {mood: queries for mood, queries in plan.items()
+                if mood in selected_moods}
 
     manifest = load_manifest(manifest_path)
     kept = []

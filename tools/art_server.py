@@ -210,13 +210,14 @@ def create_app(repo=None):
         Globals: N/A
         Params: N/A -- reads JSON {"id", "verdict"} from the request body
         Returns: JSON {"id", "status", "accepted", "rejected", "undecided"};
-            404 for an unknown id, 400 for a verdict that is not accept/reject
+            404 for an unknown id, 400 for a verdict that is not
+            accept/reject/unmark
         """
         from flask import abort, jsonify, request
         body = request.get_json(silent=True) or {}
         pid = str(body.get("id", ""))
         call = body.get("verdict", "")
-        if call not in ("accept", "reject"):
+        if call not in ("accept", "reject", "unmark"):
             abort(400)
         path = assets / "art_manifest.json"
         manifest = fetch_art.load_manifest(path)
@@ -296,6 +297,7 @@ MOOD_HTML = """<!doctype html><meta charset="utf-8"><title>{{ mood }}</title>
 a{color:#8cf}h2{margin:26px 0 6px;font-size:14px;border-bottom:1px solid #333}
 figure{display:inline-block;margin:6px;text-align:center;width:320px}
 figcaption{font-size:11px}
+figure img{cursor:pointer}
 .gone{width:320px;height:224px;background:#222;color:#666;display:flex;
 align-items:center;justify-content:center}
 figure.accepted{outline:3px solid #4a8}figure.rejected{opacity:.35}
@@ -313,13 +315,12 @@ align-items:center;justify-content:center}#big img{max-width:95vw}</style>
 {{ g.undecided }} undecided</h2>
 {% for r in g.records %}
 <figure data-id="{{ r.id }}" tabindex="0" class="{{ r.status }}">
-{% if r.id|string in have %}<img src="/image/{{ r.id }}" width="320" height="224" alt="">
+{% if r.id|string in have %}<img src="/image/{{ r.id }}" width="320" height="224" alt="" tabindex="-1" onclick="toggle('{{ r.id }}')">
 {% else %}<div class="gone">no local copy</div>{% endif %}
 <figcaption>{{ r.phrase }}<br>
-<a href="{{ r.page_url }}" target="_blank">{{ r.id }}</a>
-<span class="st">{{ r.status }}</span><br>
-<button onclick="v('{{ r.id }}','accept')">accept</button>
-<button onclick="v('{{ r.id }}','reject')">reject</button>
+<a href="{{ r.page_url }}" target="_blank" tabindex="-1">{{ r.id }}</a>
+<button type="button" tabindex="-1" onclick="zoom('{{ r.id }}')">zoom</button>
+<span class="st">{{ r.status }}</span>
 </figcaption></figure>
 {% endfor %}{% endfor %}
 <div id="big" onclick="this.style.display='none'"><img></div>
@@ -334,18 +335,24 @@ function v(id, call){
     f.querySelector('.st').textContent = d.status;
   });
 }
-document.querySelectorAll('figure img').forEach(function(img){
-  img.addEventListener('click', function(){
-    var b = document.getElementById('big');
-    b.querySelector('img').src = img.src;
-    b.style.display = 'flex';
-  });
-});
+function toggle(id){
+  var f = document.querySelector('figure[data-id="'+id+'"]');
+  var call = f.classList.contains('accepted') ? 'unmark' : 'accept';
+  v(id, call);
+}
+function zoom(id){
+  var img = document.querySelector('figure[data-id="'+id+'"] img');
+  if (!img) return;
+  var b = document.getElementById('big');
+  b.querySelector('img').src = img.src;
+  b.style.display = 'flex';
+}
 document.addEventListener('keydown', function(e){
   var f = document.activeElement;
   if (!f || f.tagName !== 'FIGURE') return;
   if (e.key === 'a' || e.key === 'A') { v(f.dataset.id, 'accept'); next(f); }
   if (e.key === 'r' || e.key === 'R') { v(f.dataset.id, 'reject'); next(f); }
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(f.dataset.id); }
   if (e.key === 'ArrowRight') next(f);
   if (e.key === 'ArrowLeft') prev(f);
 });

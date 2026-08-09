@@ -344,8 +344,8 @@ def test_mood_page_placeholder_for_an_accepted_record_missing_from_disk(
     assert 'data-id="1"' in page, "the tile must still render"
     assert "no local copy" in page, \
         "status alone must not be trusted; the file is not on disk"
-    assert "v('1','accept')" in page, \
-        "the verdict controls must still work for a record with no file"
+    assert 'data-id="1" tabindex="0"' in page, \
+        "no picture to click, so the tile must stay focusable for the A key"
 
 
 def test_mood_page_404s_for_an_unknown_mood(tmp_path):
@@ -377,3 +377,80 @@ def test_mood_page_renders_a_placeholder_for_a_missing_picture(tmp_path):
 
     assert 'data-id="1"' in page, "the verdict must stay clickable"
     assert "pixabay.com" in page
+
+
+def test_verdict_unmark_returns_accepted_to_candidate_and_moves_the_file_back(
+        tmp_path):
+    acc = record(1, status=art_status.ACCEPTED)
+    client = build(tmp_path, [acc], promoted=[acc])
+    assets = tmp_path / "tools" / "assets"
+
+    resp = client.post("/verdict", json={"id": "1", "verdict": "unmark"})
+
+    assert resp.get_json()["status"] == art_status.CANDIDATE
+    assert not (assets / "png" / "HORROR" / "HOUSE" / "hallway"
+                / "1.png").exists()
+    assert (assets / "candidates" / "HORROR" / "HOUSE" / "hallway"
+            / "1.png").exists()
+    saved = json.loads(
+        (assets / "art_manifest.json").read_text(encoding="utf-8"))
+    assert saved["1"]["status"] == art_status.CANDIDATE
+
+
+def test_verdict_unmark_returns_refreshed_counts(tmp_path):
+    a = record(1, status=art_status.ACCEPTED)
+    b = record(2, status=art_status.ACCEPTED)
+    c = record(3, status=art_status.CANDIDATE)
+    client = build(tmp_path, [a, b, c], promoted=[a, b], candidates=[c])
+
+    body = client.post("/verdict",
+                       json={"id": "1", "verdict": "unmark"}).get_json()
+
+    assert body["status"] == art_status.CANDIDATE
+    assert body["accepted"] == 1
+    assert body["undecided"] == 2
+
+
+def test_verdict_400s_for_banana(tmp_path):
+    client = build(tmp_path, [record(1)], candidates=[record(1)])
+
+    resp = client.post("/verdict", json={"id": "1", "verdict": "banana"})
+
+    assert resp.status_code == 400
+
+
+def test_mood_page_has_no_accept_or_reject_buttons_but_has_a_zoom_control(
+        tmp_path):
+    a = record(1, status=art_status.CANDIDATE)
+    b = record(2, status=art_status.CANDIDATE, noun="cellar")
+    client = build(tmp_path, [a, b], candidates=[a, b])
+
+    page = client.get("/mood/HORROR").get_data(as_text=True)
+
+    assert ">accept</button>" not in page, \
+        "clicking the picture is the accept control now"
+    assert ">reject</button>" not in page, \
+        "reject is no longer a separate button"
+    assert ">zoom</button>" in page, \
+        "enlarge moved to an explicit caption control"
+
+
+def test_mood_page_only_figures_are_in_the_tab_order(tmp_path):
+    a = record(1, status=art_status.ACCEPTED)
+    b = record(2, status=art_status.CANDIDATE, noun="cellar")
+    client = build(tmp_path, [a, b], promoted=[a], candidates=[b],
+                   target=99)
+
+    import re as _re
+    page = client.get("/mood/HORROR?status=all").get_data(as_text=True)
+
+    figures = _re.findall(r"<figure.*?</figure>", page, _re.S)
+    assert len(figures) == 2
+    for figure_html in figures:
+        close = figure_html.index(">") + 1
+        inner = figure_html[close:-len("</figure>")]
+        controls = _re.findall(r"<(?:a|button|img)\b[^>]*>", inner)
+        assert controls, "expected at least one focusable control to check"
+        for control in controls:
+            assert 'tabindex="-1"' in control, \
+                "every control inside a figure must be out of the tab order"

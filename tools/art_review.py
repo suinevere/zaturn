@@ -131,8 +131,9 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
     Author: suinevere
     Dependencies: pathlib, art_status
     Globals: N/A
-    Params: verdicts -- id -> "accept"/"reject"; manifest -- mutated in place;
-        candidates_dir -- the git-ignored tree; png_dir -- tools/assets/png
+    Params: verdicts -- id -> "accept"/"reject"/"unmark"; manifest -- mutated
+        in place; candidates_dir -- the git-ignored tree; png_dir --
+        tools/assets/png
     Returns: dict mapping mood to a Counts of gained and lost pictures
     """
     counts = {}
@@ -141,8 +142,12 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
         if rec is None or rec["status"] == art_status.METRIC_REJECTED:
             continue
 
-        want = (art_status.ACCEPTED if call == "accept"
-                else art_status.REJECTED)
+        if call == "accept":
+            want = art_status.ACCEPTED
+        elif call == "unmark":
+            want = art_status.CANDIDATE
+        else:
+            want = art_status.REJECTED
         was = rec["status"]
         rel = _rel(rec)
         cand, png = Path(candidates_dir) / rel, Path(png_dir) / rel
@@ -205,18 +210,20 @@ def refetch_missing(records, candidates_dir, png_dir, fetcher):
 
 
 def main(argv, repo=None):
-    """Apply a downloaded verdicts file through promote().
+    """Apply a downloaded verdicts file through promote(), or sweep undecided ones.
 
     Description: `repo` defaults to the real repository root; tests pass a
         tmp_path so a run never writes into the working tree. Review itself
         now happens in tools/art_server.py, which applies a verdict the
-        moment it is clicked, so this entry point only ever has one job left:
-        apply a verdicts file someone hands it explicitly.
+        moment it is clicked, so this entry point has two jobs left: apply a
+        verdicts file someone hands it explicitly, and reject whatever the
+        operator never clicked before asking for a sweep.
     Author: suinevere
-    Dependencies: fetch_art
+    Dependencies: fetch_art, art_status
     Globals: N/A
-    Params: argv -- ["--promote", "<verdicts.json>"]; repo -- optional
-        repository root override, for tests
+    Params: argv -- ["--promote", "<verdicts.json>"] or
+        ["--reject-unmarked", "[MOOD]"]; repo -- optional repository root
+        override, for tests
     Returns: 0 always
     """
     import fetch_art
@@ -236,7 +243,27 @@ def main(argv, repo=None):
             print(f"  {mood}: +{counts[mood].gained} -{counts[mood].lost}")
         return 0
 
+    if argv and argv[0] == "--reject-unmarked":
+        mood_filter = argv[1] if len(argv) >= 2 else None
+        verdicts = {}
+        for key, rec in manifest.items():
+            if rec["status"] != art_status.CANDIDATE:
+                continue
+            if mood_filter is not None and rec["mood"] != mood_filter:
+                continue
+            verdicts[key] = "reject"
+        swept = {}
+        for key in verdicts:
+            mood = manifest[key]["mood"]
+            swept[mood] = swept.get(mood, 0) + 1
+        promote(verdicts, manifest, assets / "candidates", assets / "png")
+        fetch_art.save_manifest(manifest_path, manifest)
+        for mood in sorted(swept):
+            print(f"  {mood}: rejected {swept[mood]} unmarked candidate(s)")
+        return 0
+
     print("  usage: art_review.py --promote <verdicts.json>")
+    print("  usage: art_review.py --reject-unmarked [MOOD]")
     print("  review runs at http://127.0.0.1:8080 -- python tools/art_server.py")
     return 0
 

@@ -257,3 +257,100 @@ def test_refetch_degrades_when_a_download_fails(tmp_path, capsys):
 
     assert n == 1, "one failure must not abort the rest of the run"
     assert "gone.png" in capsys.readouterr().out
+
+
+def test_promote_unmark_returns_accepted_to_candidate_and_moves_file_back(
+        tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(7, status=art_status.ACCEPTED)
+    kept = make_promoted(png, rec)
+    manifest = {"7": rec}
+
+    counts = art_review.promote({"7": "unmark"}, manifest, cand, png)
+
+    assert rec["status"] == art_status.CANDIDATE
+    assert not kept.exists(), "the tracked png must be removed"
+    assert (cand / "HORROR" / "HOUSE" / "hallway" / "7.png").exists(), \
+        "the file must return to candidates so it stays in play"
+    assert counts == {"HORROR": art_review.Counts(gained=0, lost=1)}, \
+        "unmarking an accepted record is a pure loss"
+
+
+def test_promote_unmark_on_a_candidate_is_a_no_op(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(11, status=art_status.CANDIDATE)
+    kept = make_candidate(cand, rec)
+    manifest = {"11": rec}
+
+    counts = art_review.promote({"11": "unmark"}, manifest, cand, png)
+
+    assert rec["status"] == art_status.CANDIDATE
+    assert kept.exists()
+    assert counts == {}, \
+        "unmarking something already undecided changes nothing and reports nothing"
+
+
+def test_promote_unmark_never_touches_a_metric_rejected_record(tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = record(23, status=art_status.METRIC_REJECTED)
+    manifest = {"23": rec}
+
+    art_review.promote({"23": "unmark"}, manifest, cand, png)
+
+    assert rec["status"] == art_status.METRIC_REJECTED, \
+        "a metric rejection is not a human decision and unmark must not touch it"
+
+
+def test_main_reject_unmarked_sweeps_only_candidate_records(tmp_path, capsys):
+    assets = tmp_path / "tools" / "assets"
+    cand, png = assets / "candidates", assets / "png"
+    c1 = record(1, status=art_status.CANDIDATE)
+    c2 = record(2, status=art_status.CANDIDATE, noun="cellar")
+    c3 = record(3, status=art_status.CANDIDATE, noun="attic")
+    acc = record(4, status=art_status.ACCEPTED, noun="stairs")
+    rej = record(5, status=art_status.REJECTED, noun="landing")
+    other = record(6, mood="TOWN", donor="TOWN", noun="square",
+                   status=art_status.CANDIDATE)
+    for rec in (c1, c2, c3, other):
+        make_candidate(cand, rec)
+    make_promoted(png, acc)
+    make_candidate(cand, rej)
+    manifest = {"1": c1, "2": c2, "3": c3, "4": acc, "5": rej, "6": other}
+    fetch_art.save_manifest(assets / "art_manifest.json", manifest)
+
+    assert art_review.main(["--reject-unmarked"], repo=tmp_path) == 0
+
+    saved = fetch_art.load_manifest(assets / "art_manifest.json")
+    assert saved["1"]["status"] == art_status.REJECTED
+    assert saved["2"]["status"] == art_status.REJECTED
+    assert saved["3"]["status"] == art_status.REJECTED
+    assert saved["6"]["status"] == art_status.REJECTED
+    assert saved["4"]["status"] == art_status.ACCEPTED, \
+        "an accepted record must never be swept"
+    assert saved["5"]["status"] == art_status.REJECTED, \
+        "an already-rejected record must stay rejected, not be touched twice"
+    out = capsys.readouterr().out
+    assert "HORROR" in out and "TOWN" in out
+
+
+def test_main_reject_unmarked_scoped_to_one_mood_leaves_other_moods_untouched(
+        tmp_path):
+    assets = tmp_path / "tools" / "assets"
+    cand = assets / "candidates"
+    h1 = record(1, status=art_status.CANDIDATE)
+    h2 = record(2, status=art_status.CANDIDATE, noun="cellar")
+    t1 = record(3, mood="TOWN", donor="TOWN", noun="square",
+               status=art_status.CANDIDATE)
+    for rec in (h1, h2, t1):
+        make_candidate(cand, rec)
+    manifest = {"1": h1, "2": h2, "3": t1}
+    fetch_art.save_manifest(assets / "art_manifest.json", manifest)
+
+    assert art_review.main(["--reject-unmarked", "HORROR"],
+                           repo=tmp_path) == 0
+
+    saved = fetch_art.load_manifest(assets / "art_manifest.json")
+    assert saved["1"]["status"] == art_status.REJECTED
+    assert saved["2"]["status"] == art_status.REJECTED
+    assert saved["3"]["status"] == art_status.CANDIDATE, \
+        "a mood-scoped sweep must leave every other mood's candidates alone"

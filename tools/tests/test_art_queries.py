@@ -215,3 +215,34 @@ def test_a_mood_never_searches_a_noun_the_wider_world_reads_differently():
             f"words is not this mood. Exclude them and add a qualified "
             f"extra_noun such as \"sailing ship cabin\"."
         )
+
+
+def test_noun_genre_rejects_an_unknown_genre_name():
+    vocab = {"HORROR": {"adjectives": ["dark"], "donors": ["HOUSE"],
+                        "extra_nouns": ["morgue"], "exclude_nouns": [],
+                        "noun_genre": {"morgue": "GOTHIC"}, "target": 99}}
+    with pytest.raises(ValueError, match="GOTHIC"):
+        art_queries.validate(vocab)
+
+
+def test_noun_genre_rejects_a_noun_the_mood_cannot_reach():
+    vocab = {"HORROR": {"adjectives": ["dark"], "donors": ["HOUSE"],
+                        "extra_nouns": ["morgue"], "exclude_nouns": [],
+                        "noun_genre": {"quarterdeck": "MODERN"}, "target": 99}}
+    with pytest.raises(ValueError, match="quarterdeck"):
+        art_queries.validate(vocab)
+
+
+def test_noun_genre_is_optional():
+    vocab = {"HORROR": {"adjectives": ["dark"], "donors": ["HOUSE"],
+                        "extra_nouns": ["morgue"], "exclude_nouns": [],
+                        "target": 99}}
+    assert art_queries.validate(vocab) is vocab
+
+
+def test_the_shipped_vocabulary_tags_both_nautical_periods():
+    repo = Path(__file__).resolve().parents[2]
+    vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")
+    tags = vocab["NAUTICAL"]["noun_genre"]
+    assert tags["sailing ship cabin"] == "FANTASY"
+    assert tags["submarine interior"] == "MODERN"

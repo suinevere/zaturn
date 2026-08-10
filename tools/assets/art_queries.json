@@ -105,7 +105,20 @@
       "deck",
       "hull"
     ],
-    "target": 99
+    "target": 99,
+    "noun_genre": {
+      "sailing ship cabin": "FANTASY",
+      "sailing ship deck": "FANTASY",
+      "tall ship deck": "FANTASY",
+      "wooden ship hull": "FANTASY",
+      "galleon interior": "FANTASY",
+      "quarterdeck": "FANTASY",
+      "rigging": "FANTASY",
+      "submarine interior": "MODERN",
+      "submarine control room": "MODERN",
+      "cargo ship deck": "MODERN",
+      "steel ship hull": "MODERN"
+    }
   },
   "TOWN": {
     "adjectives": [

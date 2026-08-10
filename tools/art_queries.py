@@ -19,6 +19,17 @@ from art_nouns import MOODS
 
 Query = namedtuple("Query", "mood donor noun adjective phrase")
 
+"""
+----------------------
+| GENRES
+| Description: The genre names noun_genre may use, matching room_class.h's
+|   GN_FANTASY / GN_SCIFI / GN_MODERN. An untagged noun is neutral and serves
+|   every game, which is what most art is.
+| Author: suinevere
+----------------------
+"""
+GENRES = ("FANTASY", "SCIFI", "MODERN")
+
 
 def validate(vocab):
     """Reject a vocabulary that names a mood or donor that does not exist.
@@ -28,7 +39,7 @@ def validate(vocab):
         is not worth discovering after an afternoon of review.
     Author: suinevere
     Dependencies: N/A
-    Globals: MOODS
+    Globals: MOODS, GENRES
     Params: vocab -- the parsed art_queries.json
     Returns: the vocabulary, unchanged
     """
@@ -43,6 +54,18 @@ def validate(vocab):
         target = entry.get("target")
         if not isinstance(target, int) or isinstance(target, bool) or target <= 0:
             raise ValueError(f"{mood} has no positive integer target")
+        tags = entry.get("noun_genre", {})
+        reachable = set(entry.get("extra_nouns", []))
+        for noun, genre in tags.items():
+            if genre not in GENRES:
+                raise ValueError(
+                    f"{mood}: noun_genre {noun!r} has genre {genre!r}; "
+                    f"expected one of {GENRES}")
+            if noun not in reachable:
+                raise ValueError(
+                    f"{mood}: noun_genre names {noun!r}, which is not one of "
+                    f"this mood's extra_nouns; only a qualified noun carries "
+                    f"a period")
     return vocab
 
 

@@ -35,10 +35,21 @@ ENUM_ORDER = [None, "WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
 
 
 def parse_inc():
+    """Parse CATEGORY_BAND's {base, count} rows out of the generated .inc.
+
+    Returns a list of rows, one per TC_* enum slot, each a list of (base,
+    count) tuples in ART_BAND_* (neutral first) order.
+    """
     text = INC.read_text()
-    body = re.search(r"CATEGORY_ART_N\[TEXT_NUM_CATEGORIES\]\s*=\s*\{(.*?)\}",
-                     text, re.S).group(1)
-    return [int(v) for v in re.findall(r"\d+", body)]
+    body = re.search(
+        r"CATEGORY_BAND\[TEXT_NUM_CATEGORIES\]\[ART_BAND_N\]\s*=\s*\{(.*)\};",
+        text, re.S).group(1)
+    rows = re.findall(r"\{\s*((?:\{\s*\d+\s*,\s*\d+\s*\}\s*,?\s*)+)\}", body)
+    return [
+        [tuple(int(v) for v in cell.split(","))
+         for cell in re.findall(r"\{\s*(\d+\s*,\s*\d+)\s*\}", row)]
+        for row in rows
+    ]
 
 
 def test_inc_has_one_entry_per_category():
@@ -46,13 +57,23 @@ def test_inc_has_one_entry_per_category():
 
 
 def test_counts_match_the_disc():
-    counts = parse_inc()
+    rows = parse_inc()
     for slot, mood in enumerate(ENUM_ORDER):
+        bases = [base for base, _ in rows[slot]]
+        counts = [count for _, count in rows[slot]]
+
         if mood is None:
-            assert counts[slot] == 0, f"row {slot} must carry no art"
-            continue
-        n = len(list((TGA / mood).glob("*.TGA"))) if (TGA / mood).is_dir() else 0
-        assert counts[slot] == n, f"{mood}: table says {counts[slot]}, disc has {n}"
+            assert sum(counts) == 0, f"row {slot} must carry no art"
+        else:
+            n = len(list((TGA / mood).glob("*.TGA"))) if (TGA / mood).is_dir() else 0
+            assert sum(counts) == n, \
+                f"{mood}: bands sum to {sum(counts)}, disc has {n}"
+
+        want_base = 0
+        for base, count in zip(bases, counts):
+            assert base == want_base, \
+                f"row {slot} band base {base} does not follow the bands before it"
+            want_base += count
 
 
 def test_filenames_are_two_digits_from_one():

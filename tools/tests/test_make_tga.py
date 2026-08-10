@@ -339,6 +339,19 @@ def test_convert_tree_caps_at_99_across_bands_not_per_band():
               "a per-band cap would admit all 70 + 50 and never reject any")
 
 
+def test_write_inc_emits_bases_that_follow_the_bands_before_them():
+    print("test_write_inc_emits_bases_that_follow_the_bands_before_them")
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "category_art.inc"
+        make_tga.write_inc({"NAUTICAL": [3, 2, 0, 1]}, out)
+        text = out.read_text()
+
+        check("{ 0, 3}, { 3, 2}, { 5, 0}, { 5, 1}" in text,
+              "NAUTICAL bases accumulate: 0, 3, 5, 5")
+        check("CATEGORY_ART_N" not in text,
+              "the flat count row is gone, not left beside the table")
+
+
 def main():
     for t in (test_encode_tga_structure,
               test_encode_tga_pixel_roundtrip,
@@ -354,7 +367,8 @@ def main():
               test_convert_tree_clears_stale_mood_tgas,
               test_convert_tree_clears_stale_root_level_tgas,
               test_convert_tree_packs_each_genre_band_gaplessly,
-              test_convert_tree_caps_at_99_across_bands_not_per_band):
+              test_convert_tree_caps_at_99_across_bands_not_per_band,
+              test_write_inc_emits_bases_that_follow_the_bands_before_them):
         try:
             t()
         except AssertionError:

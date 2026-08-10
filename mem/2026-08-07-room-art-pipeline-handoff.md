@@ -20,8 +20,10 @@ are kept only so the reasoning survives:
 
 Still live: the two decisions left for the repository owner, and the whole
 *What this project taught* section, which has since grown from six defective
-checks to nine. See also [[classify-from-captured-turn-text]] for the two
-classifier bugs found afterwards.
+checks to fourteen. See also [[classify-from-captured-turn-text]] for the two
+classifier bugs found afterwards, and [[art-review-server-handoff]], which
+supersedes the review half of this document entirely — the contact sheets it
+describes no longer exist.
 
 Paused 2026-08-07 before Task 6, the only remaining work. Branch
 `room-art-pipeline` @ `35efe79`, 17 commits ahead of `origin/main`, working tree

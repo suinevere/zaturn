@@ -127,3 +127,34 @@ def test_the_shipped_vocabulary_is_valid_and_covers_every_mood():
             f"{mood}: {len(plan[mood])} queries for a target of "
             f"{vocab[mood]['target']} -- add adjectives, donors or extra_nouns"
         )
+
+
+def test_scifi_never_searches_a_noun_another_mood_also_owns():
+    """A bare shared noun resolves to the other mood's sense, not this one.
+
+    "cabin" is NAUTICAL's and the woods'; a SCIFI adjective does not reclaim
+    it, so SCIFI must reach such nouns only through a qualified extra_noun.
+    """
+    from collections import defaultdict
+
+    from art_nouns import nouns_by_mood
+
+    repo = Path(__file__).resolve().parents[2]
+    vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")
+    src = (repo / "saturn" / "src" / "classify" / "room_class_data.c").read_text()
+    nouns = nouns_by_mood(src)
+
+    owners = defaultdict(set)
+    for mood, words in nouns.items():
+        for word in words:
+            owners[word].add(mood)
+    shared = {word for word, moods in owners.items() if len(moods) > 1}
+
+    plan = art_queries.build(vocab, nouns)
+    offenders = sorted({q.noun for q in plan["SCIFI"] if q.noun in shared})
+
+    assert offenders == [], (
+        f"SCIFI searches bare shared noun(s) {offenders}; another mood owns "
+        f"the photographic sense. Add them to SCIFI's exclude_nouns and, if "
+        f"the room still needs coverage, add a qualified extra_noun."
+    )

@@ -492,9 +492,9 @@ def _stub_main_for_mood_capture(monkeypatch, tmp_path, seen):
     Description: Shared rigging for the --mood tests below -- a real
         PixabayFetcher key so main() proceeds past the key check, and a
         fake harvest() that records the mood keys (and each mood's own
-        query count, which differs mood to mood in the real vocabulary,
-        so a passing assertion cannot be a coincidence of equal lengths)
-        instead of touching the network.
+        query set, whose phrases are disjoint mood to mood, so a passing
+        assertion cannot be a coincidence -- two moods can and do reach
+        equal noun counts) instead of touching the network.
     Author: suinevere
     Dependencies: N/A
     Globals: N/A
@@ -512,6 +512,8 @@ def _stub_main_for_mood_capture(monkeypatch, tmp_path, seen):
     def fake_harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None):
         seen["moods"] = sorted(plan)
         seen["counts"] = {mood: len(queries) for mood, queries in plan.items()}
+        seen["phrases"] = {mood: {q.phrase for q in queries}
+                           for mood, queries in plan.items()}
         return []
 
     monkeypatch.setattr(fetch_art, "harvest", fake_harvest)
@@ -531,9 +533,10 @@ def test_main_mood_flag_accepts_multiple_comma_separated_moods(monkeypatch, tmp_
     _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
     assert fetch_art.main(["--mood", "SCIFI,TOWN"]) == 0
     assert seen["moods"] == ["SCIFI", "TOWN"]
-    assert seen["counts"]["SCIFI"] != seen["counts"]["TOWN"], \
-        "SCIFI and TOWN must draw from genuinely different query counts, " \
-        "so this assertion cannot pass by fixture coincidence"
+    assert not seen["phrases"]["SCIFI"] & seen["phrases"]["TOWN"], \
+        "SCIFI and TOWN must draw from genuinely different vocabularies, " \
+        "so this assertion cannot pass by fixture coincidence. Disjoint " \
+        "phrases, not unequal counts: two moods can hold equal noun counts."
 
 
 def test_main_mood_flag_is_case_insensitive(monkeypatch, tmp_path):

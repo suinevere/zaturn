@@ -1,38 +1,310 @@
 {
-  "WILDER":   { "adjectives": ["misty", "sunlit", "overgrown", "windswept", "verdant", "remote", "wild", "dense"],
-                "donors": ["WILDER"], "extra_nouns": ["moorland", "clearing", "ravine"],
-                "exclude_nouns": [], "target": 99 },
-  "UNDRGRND": { "adjectives": ["dim", "damp", "narrow", "deep", "torchlit", "carved", "winding", "echoing"],
-                "donors": ["UNDRGRND"], "extra_nouns": ["catacomb", "mineshaft", "cavern lake"],
-                "exclude_nouns": [], "target": 99 },
-  "WATER":    { "adjectives": ["still", "rushing", "moonlit", "misty", "deep", "clear", "reflective", "cold", "glassy", "storm-tossed"],
-                "donors": ["WATER"], "extra_nouns": ["waterfall", "reservoir", "estuary", "millpond", "rapids", "fjord", "lagoon", "creek bed"],
-                "exclude_nouns": [], "target": 99 },
-  "NAUTICAL": { "adjectives": ["stormy", "weathered", "creaking", "foggy", "open", "moored", "sunlit", "vast"],
-                "donors": ["NAUTICAL"], "extra_nouns": ["quarterdeck", "rigging", "dockside"],
-                "exclude_nouns": [], "target": 99 },
-  "TOWN":     { "adjectives": ["cobbled", "bustling", "quiet", "medieval", "narrow", "lamplit", "old", "rainy"],
-                "donors": ["TOWN"], "extra_nouns": ["marketplace", "town square", "alleyway"],
-                "exclude_nouns": [], "target": 99 },
-  "DUNGN":    { "adjectives": ["stone", "torchlit", "grim", "vaulted", "barred", "cold", "ancient", "oppressive"],
-                "donors": ["DUNGN", "UNDRGRND"], "extra_nouns": ["oubliette", "guardroom"],
-                "exclude_nouns": [], "target": 99 },
-  "DESERT":   { "adjectives": ["arid", "sunbaked", "vast", "windswept", "golden", "cracked", "empty", "hazy", "scorched", "moonlit"],
-                "donors": ["DESERT"], "extra_nouns": ["oasis", "salt flat", "sandstone canyon", "sand sea", "wadi", "mesa", "scrubland", "caravan track"],
-                "exclude_nouns": [], "target": 99 },
-  "MAGIC":    { "adjectives": ["glowing", "ethereal", "ornate", "arcane", "shimmering", "otherworldly", "gilded", "starlit"],
-                "donors": ["HOUSE", "UNDRGRND", "WILDER"], "extra_nouns": ["stone circle", "observatory"],
-                "exclude_nouns": ["kitchen", "closet"], "target": 99 },
-  "SCIFI":    { "adjectives": ["futuristic", "metallic", "neon", "sterile", "industrial", "backlit", "cavernous", "chrome"],
-                "donors": ["SCIFI"], "extra_nouns": ["airlock", "server hall", "launch bay"],
-                "exclude_nouns": [], "target": 99 },
-  "HORROR":   { "adjectives": ["dark", "abandoned", "derelict", "decaying", "eerie", "ruined", "gloomy", "foggy"],
-                "donors": ["HOUSE", "UNDRGRND", "DUNGN"], "extra_nouns": ["morgue", "asylum ward"],
-                "exclude_nouns": ["kitchen", "porch"], "target": 99 },
-  "MYSTERY":  { "adjectives": ["shadowed", "dimly lit", "deserted", "rain-streaked", "smoky", "hushed", "veiled", "noir"],
-                "donors": ["HOUSE", "TOWN"], "extra_nouns": ["study desk", "reading room"],
-                "exclude_nouns": [], "target": 99 },
-  "HOUSE":    { "adjectives": ["cosy", "victorian", "wooden", "antique", "sunlit", "cluttered", "panelled", "quiet"],
-                "donors": ["HOUSE"], "extra_nouns": ["staircase", "landing", "conservatory"],
-                "exclude_nouns": [], "target": 99 }
+  "WILDER": {
+    "adjectives": [
+      "misty",
+      "sunlit",
+      "overgrown",
+      "windswept",
+      "verdant",
+      "remote",
+      "wild",
+      "dense"
+    ],
+    "donors": [
+      "WILDER"
+    ],
+    "extra_nouns": [
+      "moorland",
+      "clearing",
+      "ravine"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "UNDRGRND": {
+    "adjectives": [
+      "dim",
+      "damp",
+      "narrow",
+      "deep",
+      "torchlit",
+      "carved",
+      "winding",
+      "echoing"
+    ],
+    "donors": [
+      "UNDRGRND"
+    ],
+    "extra_nouns": [
+      "catacomb",
+      "mineshaft",
+      "cavern lake"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "WATER": {
+    "adjectives": [
+      "still",
+      "rushing",
+      "moonlit",
+      "misty",
+      "deep",
+      "clear",
+      "reflective",
+      "cold",
+      "glassy",
+      "storm-tossed"
+    ],
+    "donors": [
+      "WATER"
+    ],
+    "extra_nouns": [
+      "waterfall",
+      "reservoir",
+      "estuary",
+      "millpond",
+      "rapids",
+      "fjord",
+      "lagoon",
+      "creek bed"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "NAUTICAL": {
+    "adjectives": [
+      "stormy",
+      "weathered",
+      "creaking",
+      "foggy",
+      "open",
+      "moored",
+      "sunlit",
+      "vast"
+    ],
+    "donors": [
+      "NAUTICAL"
+    ],
+    "extra_nouns": [
+      "quarterdeck",
+      "rigging",
+      "dockside"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "TOWN": {
+    "adjectives": [
+      "cobbled",
+      "bustling",
+      "quiet",
+      "medieval",
+      "narrow",
+      "lamplit",
+      "old",
+      "rainy"
+    ],
+    "donors": [
+      "TOWN"
+    ],
+    "extra_nouns": [
+      "marketplace",
+      "town square",
+      "alleyway"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "DUNGN": {
+    "adjectives": [
+      "stone",
+      "torchlit",
+      "grim",
+      "vaulted",
+      "barred",
+      "cold",
+      "ancient",
+      "oppressive"
+    ],
+    "donors": [
+      "DUNGN",
+      "UNDRGRND"
+    ],
+    "extra_nouns": [
+      "oubliette",
+      "guardroom"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "DESERT": {
+    "adjectives": [
+      "arid",
+      "sunbaked",
+      "vast",
+      "windswept",
+      "golden",
+      "cracked",
+      "empty",
+      "hazy",
+      "scorched",
+      "moonlit"
+    ],
+    "donors": [
+      "DESERT"
+    ],
+    "extra_nouns": [
+      "oasis",
+      "salt flat",
+      "sandstone canyon",
+      "sand sea",
+      "wadi",
+      "mesa",
+      "scrubland",
+      "caravan track"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "MAGIC": {
+    "adjectives": [
+      "glowing",
+      "ethereal",
+      "ornate",
+      "arcane",
+      "shimmering",
+      "otherworldly",
+      "gilded",
+      "starlit"
+    ],
+    "donors": [
+      "HOUSE",
+      "UNDRGRND",
+      "WILDER"
+    ],
+    "extra_nouns": [
+      "stone circle",
+      "observatory"
+    ],
+    "exclude_nouns": [
+      "kitchen",
+      "closet"
+    ],
+    "target": 99
+  },
+  "SCIFI": {
+    "adjectives": [
+      "futuristic",
+      "metallic",
+      "neon",
+      "sterile",
+      "industrial",
+      "backlit",
+      "cavernous",
+      "chrome"
+    ],
+    "donors": [
+      "SCIFI"
+    ],
+    "extra_nouns": [
+      "spaceship interior",
+      "spacecraft interior",
+      "starship interior",
+      "space station interior",
+      "space capsule interior",
+      "orbital station interior",
+      "spaceship corridor",
+      "space station corridor",
+      "spaceship airlock",
+      "spaceship cockpit",
+      "spaceship laboratory",
+      "spaceship engine room",
+      "space station module"
+    ],
+    "exclude_nouns": [
+      "cabin",
+      "chamber",
+      "deck",
+      "hall",
+      "hull",
+      "shaft",
+      "ship",
+      "airlock",
+      "cockpit",
+      "laboratory",
+      "module"
+    ],
+    "target": 99
+  },
+  "HORROR": {
+    "adjectives": [
+      "dark",
+      "abandoned",
+      "derelict",
+      "decaying",
+      "eerie",
+      "ruined",
+      "gloomy",
+      "foggy"
+    ],
+    "donors": [
+      "HOUSE",
+      "UNDRGRND",
+      "DUNGN"
+    ],
+    "extra_nouns": [
+      "morgue",
+      "asylum ward"
+    ],
+    "exclude_nouns": [
+      "kitchen",
+      "porch"
+    ],
+    "target": 99
+  },
+  "MYSTERY": {
+    "adjectives": [
+      "shadowed",
+      "dimly lit",
+      "deserted",
+      "rain-streaked",
+      "smoky",
+      "hushed",
+      "veiled",
+      "noir"
+    ],
+    "donors": [
+      "HOUSE",
+      "TOWN"
+    ],
+    "extra_nouns": [
+      "study desk",
+      "reading room"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  },
+  "HOUSE": {
+    "adjectives": [
+      "cosy",
+      "victorian",
+      "wooden",
+      "antique",
+      "sunlit",
+      "cluttered",
+      "panelled",
+      "quiet"
+    ],
+    "donors": [
+      "HOUSE"
+    ],
+    "extra_nouns": [
+      "staircase",
+      "landing",
+      "conservatory"
+    ],
+    "exclude_nouns": [],
+    "target": 99
+  }
 }

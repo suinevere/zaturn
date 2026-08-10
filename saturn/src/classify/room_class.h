@@ -145,6 +145,7 @@ void room_class_reset(void);
  ----------------------*/
 void room_class_set_game(unsigned int release, const char* serial);
 int  room_class_genre_locked(void);
+unsigned char room_class_genre(void);
 
 #ifdef __cplusplus
 }

@@ -333,6 +333,19 @@ void room_class_set_game(unsigned int release, const char* serial) {
 int room_class_genre_locked(void) { return g_genre_lock; }
 
 /*----------------------
+ | room_class_genre
+ | Description: The resolved genre mask, or 0 while it is still unresolved.
+ |   Callers outside classification use this to pick art; 0 means "no opinion
+ |   yet", which they answer with neutral art rather than a guess.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_genre
+ | Params: N/A
+ | Returns: GN_FANTASY, GN_SCIFI, GN_MODERN, or 0
+ ----------------------*/
+unsigned char room_class_genre(void) { return g_genre; }
+
+/*----------------------
  | text_room_title
  | Description: Copies the first non-blank line of a turn's text into `out` (at
  |   most TEXT_TITLE_MAX-1 chars), which on the turn a room is entered is the room

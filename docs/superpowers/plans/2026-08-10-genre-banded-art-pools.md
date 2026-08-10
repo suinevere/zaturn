@@ -506,7 +506,7 @@ stub returning a constant fails one of them.
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `gcc -O2 -I saturn/src -o /tmp/trg saturn/tests/test_room_genre.c saturn/src/classify/room_class.c saturn/src/classify/room_class_data.c && /tmp/trg`
+Run: `gcc -O2 -I saturn/src -I saturn/src/sound -o /tmp/trg.exe saturn/tests/test_room_genre.c saturn/src/classify/room_class.c saturn/src/classify/room_class_data.c && /tmp/trg.exe`
 Expected: FAIL at link with `undefined reference to 'room_class_genre'`.
 
 - [ ] **Step 3: Implement the reader**
@@ -536,7 +536,7 @@ unsigned char room_class_genre(void);
 
 - [ ] **Step 4: Run it to verify it passes**
 
-Run: `gcc -O2 -I saturn/src -o /tmp/trg saturn/tests/test_room_genre.c saturn/src/classify/room_class.c saturn/src/classify/room_class_data.c && /tmp/trg`
+Run: `gcc -O2 -I saturn/src -I saturn/src/sound -o /tmp/trg.exe saturn/tests/test_room_genre.c saturn/src/classify/room_class.c saturn/src/classify/room_class_data.c && /tmp/trg.exe`
 Expected: `test_room_genre ok`.
 
 - [ ] **Step 5: Commit**

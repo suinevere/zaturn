@@ -28,6 +28,7 @@ extern "C" {
 #include "saturn_glue.h"
 #include "sound.h"
 #include "music.h"
+#include "room_class.h"
 }
 #include "app_state.h"
 #include "input.h"
@@ -88,6 +89,25 @@ using namespace SRL::Types;
 #define STORY_READ_CHUNK (2048 * 8)
 
 /*----------------------
+ | art_band_of_genre
+ | Description: The display art band a classifier genre mask selects. Kept
+ |   here rather than in display.c so the display model never includes
+ |   room_class.h. An unresolved genre is band 0, the neutral band, which is
+ |   the same answer as "this game has no period art".
+ | Author: suinevere
+ | Dependencies: room_class.h
+ | Globals: N/A
+ | Params: genre -- GN_FANTASY, GN_SCIFI, GN_MODERN or 0
+ | Returns: 0..3, matching display.c's ART_BAND_* order
+ ----------------------*/
+static int art_band_of_genre(unsigned char genre) {
+    if (genre == GN_FANTASY) return 1;
+    if (genre == GN_SCIFI)   return 2;
+    if (genre == GN_MODERN)  return 3;
+    return 0;
+}
+
+/*----------------------
  | on_text_category
  | Description: The background art's half of a text-category change. Moves the
  |   Dynamic palette's picture to the new mood's art and repaints. A category
@@ -123,6 +143,7 @@ using namespace SRL::Types;
  | Returns: N/A
  ----------------------*/
 static void on_text_category(int cat) {
+    display_set_art_band(art_band_of_genre(room_class_genre()));
     display_set_dynamic_category(cat);
     if (g_in_game) {
         for (int r = 0; r < console_height(); r++) text_clear_line(r);
@@ -151,6 +172,7 @@ static void on_text_category(int cat) {
  | Returns: N/A
  ----------------------*/
 static void on_text_rotate(int cat) {
+    display_set_art_band(art_band_of_genre(room_class_genre()));
     display_rotate_dynamic_category(cat);
     if (g_display.palette != DISP_PAL_DYNAMIC) return;
     int slot = display_dynamic_slot();
@@ -369,6 +391,7 @@ int main(void) {
     // Ahead of the splash rather than after it, because the splash is what warms
     // the art cache (display_preload_categories) and TC_HOUSE is the first picture
     // it takes. Shuffling afterwards would preload one house and then show another.
+    display_set_art_band(0);
     display_shuffle_category(TC_HOUSE, boot_entropy());
     display_set_dynamic_category(TC_HOUSE);
     if (g_display.palette == DISP_PAL_DYNAMIC) {

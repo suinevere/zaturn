@@ -201,22 +201,105 @@ static const char *const CATEGORY_DIR[TEXT_NUM_CATEGORIES] = {
     "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE", 0, 0
 };
 
+/*----------------------
+ | ArtBand / ART_BAND_N / g_art_band
+ | Description: A category's 1..99 index range is packed into bands, one per
+ |   genre plus a neutral band every game falls back to. base is 0-based, so
+ |   the nth picture of a band is index base + n + 1. g_art_band is the band
+ |   the running game prefers; 0 until something sets it, which is the neutral
+ |   band and today's behaviour.
+ |
+ |   A folder per genre was not possible: g_file_buf is exactly
+ |   "UNDRGRND/99.TGA" and the ISO 8.3 rule caps a stem at eight characters,
+ |   so a suffixed name overflows both that buffer and the save blob's frozen
+ |   name field. Banding the index changes no path at all.
+ | Author: suinevere
+ ----------------------*/
+typedef struct { unsigned char base, count; } ArtBand;
+#define ART_BAND_N 4
+static int g_art_band = 0;
+
 #include "category_art.inc"
 
 #define SLOT_STRIDE 100
+
+/*----------------------
+ | effective_band
+ | Description: The band a category will actually draw from: the current one
+ |   when it holds pictures, otherwise the neutral band. Falling back is the
+ |   normal path, not an error one -- most moods carry no period art at all,
+ |   and a game whose genre is unresolved has no band of its own yet.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: CATEGORY_BAND, g_art_band
+ | Params: cat -- the TC_* category
+ | Returns: a pointer to the band to use
+ ----------------------*/
+static const ArtBand *effective_band(int cat) {
+    const ArtBand *b = &CATEGORY_BAND[cat][g_art_band];
+    return b->count ? b : &CATEGORY_BAND[cat][0];
+}
+
+/*----------------------
+ | category_total
+ | Description: The whole category's picture count, across every band --
+ |   the last band's base plus its count, because bases accumulate.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: CATEGORY_BAND
+ | Params: cat -- the TC_* category
+ | Returns: how many pictures the category carries in total
+ ----------------------*/
+static int category_total(int cat) {
+    const ArtBand *last = &CATEGORY_BAND[cat][ART_BAND_N - 1];
+    return (int) last->base + (int) last->count;
+}
+
+/*----------------------
+ | display_set_art_band
+ | Description: See display.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_art_band
+ | Params: band -- 0 neutral, 1 fantasy, 2 sci-fi, 3 modern
+ | Returns: N/A
+ ----------------------*/
+void display_set_art_band(int band) {
+    if (band < 0 || band >= ART_BAND_N) return;
+    g_art_band = band;
+}
+
+/*----------------------
+ | display_next_in_band
+ | Description: See display.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: cur -- the current absolute 0-based index; base -- the band's base;
+ |   count -- the band's width
+ | Returns: the next absolute index inside the band, wrapping; cur unchanged
+ |   if count <= 0; snapped to base if cur falls outside the band
+ ----------------------*/
+int display_next_in_band(int cur, int base, int count) {
+    int off;
+    if (count <= 0) return cur;
+    off = cur - base;
+    if (off < 0 || off >= count) return base;
+    return base + ((off + 1) % count);
+}
 
 /*----------------------
  | display_slot_make
  | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: CATEGORY_ART_N
+ | Globals: CATEGORY_BAND (via category_total)
  | Params: cat -- the TC_* category; index -- 1-based, 1..the category's count
  | Returns: the slot, or DISP_IMAGE_NONE when the category or index is out of range
  ----------------------*/
 int display_slot_make(int cat, int index) {
     if (cat < 0 || cat >= TEXT_NUM_CATEGORIES) return DISP_IMAGE_NONE;
-    if (index < 1 || index > (int) CATEGORY_ART_N[cat]) return DISP_IMAGE_NONE;
+    if (index < 1 || index > category_total(cat)) return DISP_IMAGE_NONE;
     return cat * SLOT_STRIDE + index;
 }
 
@@ -333,13 +416,13 @@ int display_image_slot(const char *name) {
  |   answers "is this slot real".
  | Author: suinevere
  | Dependencies: N/A
- | Globals: CATEGORY_ART_N
+ | Globals: CATEGORY_BAND (via category_total)
  | Params: N/A
  | Returns: how many pictures the disc carries in total
  ----------------------*/
 int display_image_count(void) {
     int cat, n = 0;
-    for (cat = 0; cat < TEXT_NUM_CATEGORIES; cat++) n += (int) CATEGORY_ART_N[cat];
+    for (cat = 0; cat < TEXT_NUM_CATEGORIES; cat++) n += category_total(cat);
     return n;
 }
 
@@ -417,15 +500,14 @@ static unsigned char g_cat_rot[TEXT_NUM_CATEGORIES];
  | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_cat_rot, CATEGORY_ART_N
+ | Globals: g_cat_rot, CATEGORY_BAND, g_art_band (via effective_band)
  | Params: cat -- the TC_* category
  | Returns: the pool's current filename, or NULL to hold what is showing
  ----------------------*/
 const char *display_category_image(int cat) {
     if (cat < 0 || cat >= TEXT_NUM_CATEGORIES) return 0;
-    if (CATEGORY_ART_N[cat] == 0) return 0;
-    return display_image_file(display_slot_make(
-        cat, (int) (g_cat_rot[cat] % CATEGORY_ART_N[cat]) + 1));
+    if (effective_band(cat)->count == 0) return 0;
+    return display_image_file(display_slot_make(cat, (int) g_cat_rot[cat] + 1));
 }
 
 /*----------------------
@@ -433,13 +515,13 @@ const char *display_category_image(int cat) {
  | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: CATEGORY_ART_N
+ | Globals: CATEGORY_BAND, g_art_band (via effective_band)
  | Params: cat -- the TC_* category
  | Returns: how many pictures the category can draw on, 0 if none
  ----------------------*/
 int display_category_image_count(int cat) {
     if (cat < 0 || cat >= TEXT_NUM_CATEGORIES) return 0;
-    return (int) CATEGORY_ART_N[cat];
+    return (int) effective_band(cat)->count;
 }
 
 /*----------------------
@@ -457,16 +539,17 @@ int display_category_image_count(int cat) {
  |   jump the moment the title faded out.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_cat_rot
- | Params: cat -- the TC_* category; r -- any value; reduced modulo the pool size
+ | Globals: g_cat_rot, CATEGORY_BAND, g_art_band (via effective_band)
+ | Params: cat -- the TC_* category; r -- any value; reduced modulo the band's
+ |   width
  | Returns: N/A
  ----------------------*/
 void display_shuffle_category(int cat, unsigned int r) {
-    int n;
+    const ArtBand *b;
     if (cat < 0 || cat >= TEXT_NUM_CATEGORIES) return;
-    n = (int) CATEGORY_ART_N[cat];
-    if (n <= 0) return;                       /* no pool: nothing to point at */
-    g_cat_rot[cat] = (unsigned char)(r % (unsigned int) n);
+    b = effective_band(cat);
+    if (!b->count) return;
+    g_cat_rot[cat] = (unsigned char)(b->base + r % (unsigned int) b->count);
 }
 
 /*----------------------
@@ -474,23 +557,22 @@ void display_shuffle_category(int cat, unsigned int r) {
  | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_cat_rot, g_dyn_slot, CATEGORY_ART_N
+ | Globals: g_cat_rot, g_dyn_slot, CATEGORY_BAND, g_art_band (via effective_band)
  | Params: cat -- the TC_* category to advance
  | Returns: N/A
  ----------------------*/
 void display_rotate_dynamic_category(int cat) {
+    const ArtBand *b;
     int n, i;
     if (cat < 0 || cat >= TEXT_NUM_CATEGORIES) return;
-    n = (int) CATEGORY_ART_N[cat];
-    if (n <= 1) return;          /* one picture (or none): nothing to rotate to */
+    b = effective_band(cat);
+    n = (int) b->count;
+    if (n <= 1) return;
 
-    /* Walk the pool for the next entry that is not what is already showing. Every
-       index 1..n is a real slot by construction now -- CATEGORY_ART_N is generated
-       from the files that actually converted -- so a single step always lands on
-       a valid picture; walking still guards against landing back on g_dyn_slot. */
     for (i = 0; i < n; i++) {
         int slot;
-        g_cat_rot[cat] = (unsigned char)((g_cat_rot[cat] + 1) % n);
+        g_cat_rot[cat] = (unsigned char) display_next_in_band(
+            (int) g_cat_rot[cat], b->base, b->count);
         slot = display_slot_make(cat, (int) g_cat_rot[cat] + 1);
         if (slot >= 0 && slot != g_dyn_slot) { g_dyn_slot = slot; return; }
     }

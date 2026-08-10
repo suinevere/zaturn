@@ -698,6 +698,71 @@ static void test_rotate_dynamic_category(void) {
     assert(display_dynamic_slot() == prev);
 }
 
+/* --- genre-banded selection --------------------------------------------- */
+
+static void test_next_in_band_wraps_inside_its_band(void) {
+    /* Pure arithmetic: base 5, count 3, so the band covers absolute indices
+       5, 6, 7. Non-zero base, asymmetric numbers on purpose -- a base equal
+       to 0 or a count of 1 would hide a dropped "base +" in the wrap. */
+    assert(display_next_in_band(5, 5, 3) == 6);
+    assert(display_next_in_band(6, 5, 3) == 7);
+    assert(display_next_in_band(7, 5, 3) == 5);
+
+    /* cur outside the band snaps to base rather than wrapping in place. */
+    assert(display_next_in_band(0, 5, 3) == 5);
+
+    /* An empty band is a no-op: nothing to advance to. */
+    assert(display_next_in_band(42, 5, 0) == 42);
+}
+
+static void test_empty_band_falls_back_to_neutral(void) {
+    /* No category on this disc carries period art yet, so every non-neutral
+       band is empty -- exactly the fallback path this test can exercise
+       today. True cross-band confinement (a game whose genre band actually
+       holds pictures) stays untested until period art exists on disc; see
+       the report for that limitation written down rather than hidden behind
+       a test that cannot fail either way. */
+    int cat = TC_HOUSE;
+    int neutral_n, band_n, i;
+
+    display_set_art_band(0);
+    neutral_n = display_category_image_count(cat);
+    assert(neutral_n >= 2);
+
+    display_set_art_band(3);
+    band_n = display_category_image_count(cat);
+    assert(band_n == neutral_n);
+
+    for (i = 0; i < neutral_n * 2; i++) {
+        int slot, index;
+        display_rotate_dynamic_category(cat);
+        slot = display_image_slot(display_category_image(cat));
+        assert(slot >= 0);
+        index = slot % 100;
+        assert(index >= 1 && index <= neutral_n);
+    }
+
+    display_set_art_band(0);
+}
+
+static void test_art_band_setter_rejects_out_of_range(void) {
+    int cat = TC_HOUSE;
+    int before, after;
+
+    display_set_art_band(0);
+    before = display_category_image_count(cat);
+
+    display_set_art_band(-1);
+    after = display_category_image_count(cat);
+    assert(after == before);
+
+    display_set_art_band(4);            /* one past the last band (modern, 3) */
+    after = display_category_image_count(cat);
+    assert(after == before);
+
+    display_set_art_band(0);
+}
+
 static void test_blob_roundtrip(void) {
     unsigned char buf[DISP_BLOB_BYTES];
     DisplayState a, b;
@@ -987,6 +1052,9 @@ int main(void) {
     test_category_art();
     test_virtual_slots();
     test_rotate_dynamic_category();
+    test_next_in_band_wraps_inside_its_band();
+    test_empty_band_falls_back_to_neutral();
+    test_art_band_setter_rejects_out_of_range();
     test_blob_roundtrip();
     test_preset_sweep_round_trips();
     test_old_form_preset_sweep_round_trips();

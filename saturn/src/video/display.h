@@ -225,6 +225,30 @@ void display_rotate_dynamic_category(int cat);
 void display_shuffle_category(int cat, unsigned int r);
 
 /*----------------------
+ | display_set_art_band
+ | Description: Which genre band every category draws from until told
+ |   otherwise. The caller maps the classifier's genre mask to a band, so the
+ |   display model gains no dependency on classification. A band a category
+ |   has no pictures in falls back to the neutral band, so setting one is
+ |   always safe.
+ | Author: suinevere
+ ----------------------*/
+void display_set_art_band(int band);
+
+/*----------------------
+ | display_next_in_band
+ | Description: The next absolute 0-based index inside a band, wrapping --
+ |   the arithmetic display_rotate_dynamic_category walks with. If cur falls
+ |   outside [base, base+count), it snaps to base rather than wrapping from
+ |   where it happens to sit; that path is load-bearing, not defensive
+ |   padding -- it is what a game hitting mid-play when its genre resolves
+ |   underneath g_cat_rot lands on: the old band's index, snapped into the
+ |   new one.
+ | Author: suinevere
+ ----------------------*/
+int display_next_in_band(int cur, int base, int count);
+
+/*----------------------
  | display_set_dynamic_category / display_dynamic_slot
  | Description: set_dynamic_category resolves a text category to an image slot and
  |   remembers it, ignoring any category with no art so the wallpaper holds;

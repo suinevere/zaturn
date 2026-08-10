@@ -193,20 +193,24 @@ const char *display_image_file(int slot);
  |   way it would resolve any other disc path. NULL comes back for the two
  |   turn-text event categories (TC_DANGER, TC_TRIUMPH): those are moments, not
  |   places, so the music shifts for them while the wallpaper holds on the room's
- |   own picture instead of flicking away and back.
+ |   own picture instead of flicking away and back. Scoped to the category's
+ |   active genre band (see display_set_art_band); a category with no pictures
+ |   in that band draws from its neutral band instead.
  | Author: suinevere
  ----------------------*/
 const char *display_category_image(int cat);
 
 /*----------------------
  | display_category_image_count / display_rotate_dynamic_category
- | Description: image_count is how many pictures a category can draw on (0 for the
- |   two event categories). rotate moves that category to a different one of them
- |   and makes it current -- what the engine asks for after MUSIC_ROTATE_ROOMS
- |   rooms of one unbroken mood, so a long stretch in one category does not sit on
- |   one picture. A category with fewer than two pictures holds what it has, which
- |   is also how a pool of one behaves: the rotation becomes a no-op rather than a
- |   flicker back to the same image.
+ | Description: image_count is how many pictures a category can draw on from its
+ |   active genre band (0 for the two event categories; a category with none in
+ |   that band counts its neutral band instead -- see display_set_art_band).
+ |   rotate moves that category to a different one of them and makes it current
+ |   -- what the engine asks for after MUSIC_ROTATE_ROOMS rooms of one unbroken
+ |   mood, so a long stretch in one category does not sit on one picture. A
+ |   category with fewer than two pictures in its active band holds what it has,
+ |   which is also how a pool of one behaves: the rotation becomes a no-op rather
+ |   than a flicker back to the same image.
  | Author: suinevere
  ----------------------*/
 int  display_category_image_count(int cat);
@@ -214,12 +218,14 @@ void display_rotate_dynamic_category(int cat);
 
 /*----------------------
  | display_shuffle_category
- | Description: Points a category's pool at an arbitrary one of its pictures,
- |   chosen by `r` (reduced modulo the pool size; any value is legal, and a
- |   category with no pool is a no-op). Unlike display_rotate_dynamic_category it
- |   does not change what is currently on screen -- follow it with
- |   display_set_dynamic_category if the new pick should become the showing slot.
- |   The title screen uses it so the house behind Z-ATURN differs from boot to boot.
+ | Description: Points a category's pool at an arbitrary one of its pictures
+ |   from its active genre band, chosen by `r` (reduced modulo the band's
+ |   width, not the category's whole pool; any value is legal, and a category
+ |   with no pictures in that band -- including its neutral fallback -- is a
+ |   no-op). Unlike display_rotate_dynamic_category it does not change what is
+ |   currently on screen -- follow it with display_set_dynamic_category if the
+ |   new pick should become the showing slot. The title screen uses it so the
+ |   house behind Z-ATURN differs from boot to boot.
  | Author: suinevere
  ----------------------*/
 void display_shuffle_category(int cat, unsigned int r);
@@ -230,7 +236,12 @@ void display_shuffle_category(int cat, unsigned int r);
  |   otherwise. The caller maps the classifier's genre mask to a band, so the
  |   display model gains no dependency on classification. A band a category
  |   has no pictures in falls back to the neutral band, so setting one is
- |   always safe.
+ |   always safe. Re-seats every category's rotor to its new effective band's
+ |   base whenever the band actually changes, so a rotor left mid-band from
+ |   before the switch cannot surface a picture from the wrong band on a read
+ |   path that does not rotate or shuffle first. A no-op when the requested
+ |   band already matches the current one, so calling this ahead of every
+ |   rotation (as Task 6 does) does not reset an in-progress rotation.
  | Author: suinevere
  ----------------------*/
 void display_set_art_band(int band);

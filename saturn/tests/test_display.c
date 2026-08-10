@@ -746,7 +746,19 @@ static void test_empty_band_falls_back_to_neutral(void) {
 }
 
 static void test_art_band_setter_rejects_out_of_range(void) {
-    int cat = TC_HOUSE;
+    /* TC_WILDERNESS (row 1) is chosen, not TC_HOUSE, because it is
+       discriminating: CATEGORY_BAND[1][4] aliases the next row's own band 0
+       (TC_UNDERGROUND, {0,25}) in memory, so an unguarded high value would
+       visibly swap 40 for 25. TC_HOUSE's own next row is TC_DANGER, an
+       all-zero row, so the same swap there would fall back to the SAME
+       neutral count and prove nothing.
+       The low-range case (-1) cannot be made to fail against today's table:
+       CATEGORY_BAND[cat][-1] aliases the row before, column 3 (modern),
+       which is {base,0} for every row without exception -- so an unguarded
+       access there still falls back to that row's own neutral band, same
+       as a rejected call would. This is an honest gap, not coverage; it
+       stays here as documentation, not as a discriminating assertion. */
+    int cat = TC_WILDERNESS;
     int before, after;
 
     display_set_art_band(0);
@@ -756,9 +768,55 @@ static void test_art_band_setter_rejects_out_of_range(void) {
     after = display_category_image_count(cat);
     assert(after == before);
 
-    display_set_art_band(4);            /* one past the last band (modern, 3) */
+    display_set_art_band(4);            /* aliases TC_UNDERGROUND's band 0 */
     after = display_category_image_count(cat);
     assert(after == before);
+
+    display_set_art_band(0);
+}
+
+static void test_band_change_reseats_rotor(void) {
+    /* IMPORTANT 1 from review round 1: a rotor left mid-band from before a
+       band switch validates fine against category_total and would surface
+       the WRONG band's picture on every read path that does not rotate or
+       shuffle first (display_set_dynamic_category, the preload/warm-cache
+       paths, the boot-time TC_HOUSE read) -- silently, no crash. The fix
+       re-seats every category's rotor to its new effective band's base the
+       moment the band actually changes. */
+    int cat = TC_HOUSE;
+    int slot, index;
+
+    display_set_art_band(0);
+    display_shuffle_category(cat, 5);   /* g_cat_rot[cat] now mid-band, at 5 */
+
+    display_set_art_band(1);            /* a real change: must re-seat */
+
+    slot = display_image_slot(display_category_image(cat));
+    assert(slot >= 0);
+    index = slot % 100;
+    assert(index == 1);                 /* snapped to the fallback band's base + 1 */
+
+    display_set_art_band(0);
+}
+
+static void test_same_band_reseat_is_a_noop(void) {
+    /* The guard the re-seat needs: Task 6 calls display_set_art_band ahead
+       of every rotation on every room change, most of which do not change
+       genre. Re-seating on every call, even a same-band one, would reset an
+       in-progress rotation each time and rotation would stop working. */
+    int cat = TC_HOUSE;
+    int slot, index;
+
+    display_set_art_band(2);            /* land on a known band first */
+    display_set_art_band(0);            /* a real transition into neutral */
+    display_shuffle_category(cat, 5);   /* g_cat_rot[cat] now mid-band, at 5 */
+
+    display_set_art_band(0);            /* same band again: must NOT re-seat */
+
+    slot = display_image_slot(display_category_image(cat));
+    assert(slot >= 0);
+    index = slot % 100;
+    assert(index == 6);                 /* untouched: 5 survives, +1 for the 1-based index */
 
     display_set_art_band(0);
 }
@@ -1055,6 +1113,8 @@ int main(void) {
     test_next_in_band_wraps_inside_its_band();
     test_empty_band_falls_back_to_neutral();
     test_art_band_setter_rejects_out_of_range();
+    test_band_change_reseats_rotor();
+    test_same_band_reseat_is_a_noop();
     test_blob_roundtrip();
     test_preset_sweep_round_trips();
     test_old_form_preset_sweep_round_trips();

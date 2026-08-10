@@ -310,6 +310,35 @@ def test_convert_tree_packs_each_genre_band_gaplessly():
         check(len(first) > 0, "neutral band occupies the lowest indices")
 
 
+def test_convert_tree_caps_at_99_across_bands_not_per_band():
+    print("test_convert_tree_caps_at_99_across_bands_not_per_band")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        src, dst = root / "png", root / "TGA"
+        ANY_COUNT, FANTASY_COUNT = 70, 50
+        d_any = src / "WILDER" / "EXTRA" / "cliff"
+        d_fantasy = src / "WILDER" / "EXTRA" / "temple"
+        d_any.mkdir(parents=True)
+        d_fantasy.mkdir(parents=True)
+        for i in range(ANY_COUNT):
+            make_png(d_any / f"cliff{i:03d}.png")
+        for i in range(FANTASY_COUNT):
+            make_png(d_fantasy / f"temple{i:03d}.png")
+
+        counts = make_tga.convert_tree(
+            src, dst, genre_of=lambda m, n: {"temple": "FANTASY"}.get(n))
+
+        check(counts["WILDER"] == [70, 29, 0, 0],
+              "the cap falls inside the fantasy band: all 70 neutral, "
+              "only 29 of 50 fantasy pictures fit before 99 is reached")
+        check(sum(counts["WILDER"]) == 99,
+              "band counts sum to exactly the category cap")
+        made = list((dst / "WILDER").glob("*.TGA"))
+        check(len(made) == 99,
+              "exactly 99 files were actually written to disk, not 120 -- "
+              "a per-band cap would admit all 70 + 50 and never reject any")
+
+
 def main():
     for t in (test_encode_tga_structure,
               test_encode_tga_pixel_roundtrip,
@@ -324,7 +353,8 @@ def main():
               test_convert_tree_missing_src_root_is_a_noop,
               test_convert_tree_clears_stale_mood_tgas,
               test_convert_tree_clears_stale_root_level_tgas,
-              test_convert_tree_packs_each_genre_band_gaplessly):
+              test_convert_tree_packs_each_genre_band_gaplessly,
+              test_convert_tree_caps_at_99_across_bands_not_per_band):
         try:
             t()
         except AssertionError:

@@ -25,11 +25,11 @@
     "adjectives": [
       "dim",
       "damp",
-      "narrow",
+      "stone",
       "deep",
-      "torchlit",
+      "rocky",
       "carved",
-      "winding",
+      "shadowed",
       "echoing"
     ],
     "donors": [
@@ -54,7 +54,7 @@
       "reflective",
       "cold",
       "glassy",
-      "storm-tossed"
+      "foggy"
     ],
     "donors": [
       "WATER"
@@ -76,10 +76,10 @@
     "adjectives": [
       "stormy",
       "weathered",
-      "creaking",
+      "misty",
       "foggy",
-      "open",
-      "moored",
+      "still",
+      "golden",
       "sunlit",
       "vast"
     ],
@@ -122,9 +122,9 @@
   },
   "TOWN": {
     "adjectives": [
-      "bustling",
       "quiet",
-      "narrow",
+      "misty",
+      "empty",
       "lamplit",
       "old",
       "rainy",
@@ -150,10 +150,10 @@
   "DUNGN": {
     "adjectives": [
       "stone",
-      "torchlit",
+      "dark",
       "grim",
       "vaulted",
-      "barred",
+      "carved",
       "cold",
       "ancient",
       "oppressive"
@@ -179,7 +179,7 @@
       "cracked",
       "empty",
       "hazy",
-      "scorched",
+      "dusty",
       "moonlit"
     ],
     "donors": [
@@ -204,7 +204,7 @@
       "ethereal",
       "ornate",
       "arcane",
-      "shimmering",
+      "misty",
       "otherworldly",
       "gilded",
       "starlit"
@@ -231,9 +231,9 @@
       "neon",
       "sterile",
       "industrial",
-      "backlit",
+      "glowing",
       "cavernous",
-      "chrome"
+      "dark"
     ],
     "donors": [
       "SCIFI"
@@ -297,12 +297,12 @@
   "MYSTERY": {
     "adjectives": [
       "shadowed",
-      "dimly lit",
+      "dim",
       "deserted",
-      "rain-streaked",
-      "smoky",
-      "hushed",
-      "veiled",
+      "foggy",
+      "old",
+      "empty",
+      "moonlit",
       "noir"
     ],
     "donors": [
@@ -320,11 +320,11 @@
     "adjectives": [
       "cosy",
       "victorian",
-      "wooden",
+      "old",
       "antique",
       "sunlit",
-      "cluttered",
-      "panelled",
+      "dim",
+      "empty",
       "quiet"
     ],
     "donors": [

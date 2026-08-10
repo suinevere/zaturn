@@ -246,3 +246,33 @@ def test_the_shipped_vocabulary_tags_both_nautical_periods():
     tags = vocab["NAUTICAL"]["noun_genre"]
     assert tags["sailing ship cabin"] == "FANTASY"
     assert tags["submarine interior"] == "MODERN"
+
+
+DEAD_ADJECTIVES = {
+    "wooden", "barred", "torchlit", "chrome", "panelled", "bustling",
+    "creaking", "smoky", "narrow", "winding", "rain-streaked", "cluttered",
+    "open", "dimly lit", "moored", "shimmering", "hushed", "veiled",
+    "backlit", "scorched", "storm-tossed",
+}
+
+
+def test_no_mood_ships_an_adjective_measured_dead():
+    """Each scored 0 keeps over 6+ fetches; together they burned 219 of 1271.
+
+    A stock photo is tagged with what it looks like, not what it would sound
+    or feel like. "creaking" is a sound and "hushed" is a silence; no
+    photographer labels an image either. Every noun is crossed with all of a
+    mood's adjectives, so one dead word costs that mood an eighth of its
+    whole query space.
+    """
+    repo = Path(__file__).resolve().parents[2]
+    vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")
+
+    shipping = sorted({(mood, adj) for mood, entry in vocab.items()
+                       for adj in entry["adjectives"]
+                       if adj in DEAD_ADJECTIVES})
+
+    assert shipping == [], (
+        f"measured-dead adjective(s) still shipping: {shipping}. Replace each "
+        f"with a word a photo caption would actually carry."
+    )

@@ -769,17 +769,33 @@ static int art_band_of_genre(unsigned char genre) {
 }
 ```
 
-- [ ] **Step 2: Set the band before rotating**
+- [ ] **Step 2: Set the band on BOTH art paths**
 
-At `main.cxx:154`, immediately before `display_rotate_dynamic_category(cat);`:
+There are two callbacks, and both must set the band — the rotate path alone is
+not enough, because the mood-change path reads the rotor without rotating.
+
+In `on_text_category`, immediately before `display_set_dynamic_category(cat);`:
 
 ```c
     display_set_art_band(art_band_of_genre(room_class_genre()));
 ```
 
-Setting it per rotation rather than once at load is deliberate: an unlisted
+In `on_text_rotate`, immediately before `display_rotate_dynamic_category(cat);`:
+
+```c
+    display_set_art_band(art_band_of_genre(room_class_genre()));
+```
+
+`on_text_category` is the one that matters most: it runs on every mood change
+and resolves a picture through `display_category_image`, which reads
+`g_cat_rot` directly. Banding only the rotate path would leave the main path
+drawing from whatever band was last set.
+
+Setting it per callback rather than once at load is deliberate: an unlisted
 game's genre resolves partway through play, and this picks the band up on the
-next room change without a second notification path.
+next room without a second notification path. `display_set_art_band` returns
+immediately when the band is unchanged, so the repeated calls cost nothing and
+do not disturb an in-progress rotation.
 
 - [ ] **Step 3: Set the band before the title shuffle**
 

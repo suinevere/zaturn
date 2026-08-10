@@ -467,11 +467,10 @@ git commit -m "Generate a per-category genre band table in place of the flat art
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `saturn/tests/test_display.c`'s sibling for the classifier if one
-exists; otherwise add to `saturn/tests/test_display.c` is wrong — instead
-create the assertion inside the existing classifier host test. If no classifier
-host test exists, add this to `saturn/tests/test_display.c` is still wrong;
-create `saturn/tests/test_room_genre.c`:
+`saturn/tests/` carries no classifier host test today, so create a new one at
+`saturn/tests/test_room_genre.c`. It is a standalone program with its own
+`main`, matching the build-line-in-a-header-comment convention every other
+`saturn/tests/*.c` file uses:
 
 ```c
 /* Build:
@@ -585,6 +584,18 @@ static void test_band_confines_selection(void) {
 
 This is the assertion the whole design exists for: a modern game must never
 resolve a slot inside the neutral band's index range.
+
+`test_display.c` runs its tests by calling each one explicitly from `main`
+(see the call list ending at `test_old_blobs_get_no_dim();`). Register the new
+test there too, beside `test_rotate_dynamic_category();`:
+
+```c
+    test_band_confines_selection();
+```
+
+A test defined but never called is a test that asserts nothing. Verify it
+actually runs by confirming the failure in Step 2 comes from this test, not
+merely from a compile error elsewhere.
 
 - [ ] **Step 2: Run it to verify it fails**
 

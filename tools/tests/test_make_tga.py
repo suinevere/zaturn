@@ -134,7 +134,7 @@ def test_convert_tree_skips_offsize_but_continues():
         make_png(src / "WILDER" / "CLIFF.PNG")
         counts = make_tga.convert_tree(src, dst)
 
-        check(counts == {"WILDER": 1}, "only the correctly-sized image converted")
+        check(counts == {"WILDER": [1, 0, 0, 0]}, "only the correctly-sized image converted")
         check((dst / "WILDER" / "01.TGA").exists(), "the surviving image claims 01.TGA")
         check(not (dst / "WILDER" / "02.TGA").exists(), "a skipped image leaves no gap")
 
@@ -169,11 +169,11 @@ def test_convert_tree_warns_past_the_per_mood_cap():
             return counts, buf.getvalue()
 
     counts99, out99 = run_with(99)
-    check(counts99 == {"WILDER": 99}, "exactly 99 images all convert")
+    check(counts99 == {"WILDER": [99, 0, 0, 0]}, "exactly 99 images all convert")
     check("ignoring" not in out99, "no warning at exactly 99 images")
 
     counts100, out100 = run_with(100)
-    check(counts100 == {"WILDER": 99}, "the 100th image is not counted")
+    check(counts100 == {"WILDER": [99, 0, 0, 0]}, "the 100th image is not counted")
     check("ignoring" in out100, "warning fires past 99 images in one mood")
 
 
@@ -203,7 +203,7 @@ def test_convert_tree_walks_mood_folders_and_root():
         make_png(src / "SUINE.PNG")
         counts = make_tga.convert_tree(src, dst)
 
-        check(counts == {"WILDER": 2, "TOWN": 1}, "every mood folder is walked")
+        check(counts == {"WILDER": [2, 0, 0, 0], "TOWN": [1, 0, 0, 0]}, "every mood folder is walked")
         check((dst / "WILDER" / "01.TGA").exists(), "first WILDER source claims 01.TGA")
         check((dst / "WILDER" / "02.TGA").exists(), "second WILDER source claims 02.TGA")
         check((dst / "TOWN" / "01.TGA").exists(), "TOWN gets its own 01.TGA")
@@ -232,7 +232,7 @@ def test_convert_tree_skips_unknown_mood_folder():
         make_png(src / "SPOOKY" / "SPOOKY1.PNG")
         counts = make_tga.convert_tree(src, dst)
 
-        check(counts == {"WILDER": 1}, "the typo'd mood is skipped, not converted")
+        check(counts == {"WILDER": [1, 0, 0, 0]}, "the typo'd mood is skipped, not converted")
         check(not (dst / "SPOOKY").exists(), "no output folder for an unknown mood")
 
 
@@ -261,7 +261,7 @@ def test_convert_tree_clears_stale_mood_tgas():
         (src / "WILDER" / "WILDER3.PNG").unlink()
         counts = make_tga.convert_tree(src, dst)
 
-        check(counts == {"WILDER": 1}, "only the remaining source converts")
+        check(counts == {"WILDER": [1, 0, 0, 0]}, "only the remaining source converts")
         check(not (dst / "WILDER" / "02.TGA").exists(), "a stale TGA from the first run is removed")
         check(not (dst / "WILDER" / "03.TGA").exists(), "a stale TGA from the first run is removed")
 
@@ -281,6 +281,35 @@ def test_convert_tree_clears_stale_root_level_tgas():
         check(not (dst / "SUINE.TGA").exists(), "a renamed or deleted source leaves no orphan TGA")
 
 
+def test_convert_tree_packs_each_genre_band_gaplessly():
+    print("test_convert_tree_packs_each_genre_band_gaplessly")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        src, dst = root / "png", root / "TGA"
+        plan = {"NAUTICAL": {"boat": 3, "sailing ship cabin": 2,
+                             "submarine interior": 1}}
+        for noun, count in plan["NAUTICAL"].items():
+            d = src / "NAUTICAL" / "EXTRA" / noun
+            d.mkdir(parents=True)
+            for i in range(count):
+                Image.new("RGB", (320, 224), (9 * i, 40, 80)).save(
+                    d / f"{noun.replace(' ', '')}{i}.png", "PNG")
+
+        counts = make_tga.convert_tree(src, dst, genre_of=lambda m, n: {
+            "sailing ship cabin": "FANTASY",
+            "submarine interior": "MODERN"}.get(n))
+
+        check(counts["NAUTICAL"] == [3, 2, 0, 1],
+              "three neutral, two fantasy, none scifi, one modern")
+        made = sorted(p.name for p in (dst / "NAUTICAL").glob("*.TGA"))
+        check(made == ["01.TGA", "02.TGA", "03.TGA", "04.TGA", "05.TGA",
+                       "06.TGA"],
+              "six files, gapless across the packed bands")
+
+        first = (dst / "NAUTICAL" / "01.TGA").read_bytes()
+        check(len(first) > 0, "neutral band occupies the lowest indices")
+
+
 def main():
     for t in (test_encode_tga_structure,
               test_encode_tga_pixel_roundtrip,
@@ -294,7 +323,8 @@ def main():
               test_convert_tree_skips_unreadable_source,
               test_convert_tree_missing_src_root_is_a_noop,
               test_convert_tree_clears_stale_mood_tgas,
-              test_convert_tree_clears_stale_root_level_tgas):
+              test_convert_tree_clears_stale_root_level_tgas,
+              test_convert_tree_packs_each_genre_band_gaplessly):
         try:
             t()
         except AssertionError:

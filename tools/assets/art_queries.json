@@ -89,21 +89,34 @@
     "extra_nouns": [
       "quarterdeck",
       "rigging",
-      "dockside"
+      "dockside",
+      "sailing ship cabin",
+      "sailing ship deck",
+      "tall ship deck",
+      "wooden ship hull",
+      "galleon interior",
+      "submarine interior",
+      "submarine control room",
+      "cargo ship deck",
+      "steel ship hull"
     ],
-    "exclude_nouns": [],
+    "exclude_nouns": [
+      "cabin",
+      "deck",
+      "hull"
+    ],
     "target": 99
   },
   "TOWN": {
     "adjectives": [
-      "cobbled",
       "bustling",
       "quiet",
-      "medieval",
       "narrow",
       "lamplit",
       "old",
-      "rainy"
+      "rainy",
+      "sunlit",
+      "foggy"
     ],
     "donors": [
       "TOWN"
@@ -111,7 +124,12 @@
     "extra_nouns": [
       "marketplace",
       "town square",
-      "alleyway"
+      "alleyway",
+      "medieval village",
+      "cobbled street",
+      "medieval market square",
+      "modern office building",
+      "city street"
     ],
     "exclude_nouns": [],
     "target": 99

@@ -158,3 +158,60 @@ def test_scifi_never_searches_a_noun_another_mood_also_owns():
         f"the photographic sense. Add them to SCIFI's exclude_nouns and, if "
         f"the room still needs coverage, add a qualified extra_noun."
     )
+
+
+PERIOD_ADJECTIVES = {"medieval", "cobbled", "victorian", "ancient"}
+MODERN_ONLY_NOUNS = {"office", "submarine", "server hall"}
+
+
+def test_no_phrase_pairs_a_period_adjective_with_a_modern_only_noun():
+    """"medieval office" photographs as nothing and scored 1/22.
+
+    The cross product is total, so a mood cannot hold both a pre-modern
+    adjective and a noun that only exists after it. Period belongs in the
+    noun, where it can be qualified, not in the adjective slot the whole
+    mood shares.
+    """
+    from art_nouns import nouns_by_mood
+
+    repo = Path(__file__).resolve().parents[2]
+    vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")
+    src = (repo / "saturn" / "src" / "classify" / "room_class_data.c").read_text()
+
+    plan = art_queries.build(vocab, nouns_by_mood(src))
+    clashes = sorted({
+        q.phrase for queries in plan.values() for q in queries
+        if q.adjective in PERIOD_ADJECTIVES and q.noun in MODERN_ONLY_NOUNS
+    })
+
+    assert clashes == [], (
+        f"period-contradictory phrase(s) {clashes}; drop the adjective from "
+        f"that mood or exclude the noun and add a qualified extra_noun"
+    )
+
+
+WORLD_AMBIGUOUS = {"NAUTICAL": {"cabin", "deck", "hull"}}
+
+
+def test_a_mood_never_searches_a_noun_the_wider_world_reads_differently():
+    """A cabin is a log cabin and a deck is a patio before either is a ship's.
+
+    Distinct from the shared-noun guard above: no *mood* owns the rival
+    reading, so scanning the classifier's table cannot find these. They are
+    hand-listed from measured keep rates -- bare "cabin" scored 3/15 in
+    NAUTICAL, bare "deck" 0/10 -- and must be reached qualified or not at all.
+    """
+    from art_nouns import nouns_by_mood
+
+    repo = Path(__file__).resolve().parents[2]
+    vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")
+    src = (repo / "saturn" / "src" / "classify" / "room_class_data.c").read_text()
+
+    plan = art_queries.build(vocab, nouns_by_mood(src))
+    for mood, bare in WORLD_AMBIGUOUS.items():
+        offenders = sorted({q.noun for q in plan[mood] if q.noun in bare})
+        assert offenders == [], (
+            f"{mood} searches bare {offenders}; the everyday sense of those "
+            f"words is not this mood. Exclude them and add a qualified "
+            f"extra_noun such as \"sailing ship cabin\"."
+        )

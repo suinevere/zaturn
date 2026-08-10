@@ -454,3 +454,18 @@ def test_mood_page_only_figures_are_in_the_tab_order(tmp_path):
         for control in controls:
             assert 'tabindex="-1"' in control, \
                 "every control inside a figure must be out of the tab order"
+
+
+def test_groups_sort_when_pixabay_int_ids_and_unsplash_str_ids_mix(tmp_path):
+    recs = [record(100, donor="DOCK", noun="pier",
+                   status=art_status.ACCEPTED),
+            record("kAeovMEDpcE", donor="DOCK", noun="pier",
+                   status=art_status.ACCEPTED),
+            record(9, donor="DOCK", noun="pier",
+                   status=art_status.ACCEPTED)]
+    by_id = {str(r["id"]): r for r in recs}
+
+    groups = art_server.groups_for(by_id, "HORROR", "accepted")
+
+    assert [r["id"] for r in groups[0]["records"]] == \
+        [9, 100, "kAeovMEDpcE"]

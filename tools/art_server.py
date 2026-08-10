@@ -108,7 +108,7 @@ def groups_for(records, mood, status):
         group = [r for r in mine
                  if r["donor"] == donor and r["noun"] == noun]
         shown = sorted((r for r in group if r["status"] in wanted),
-                       key=lambda r: r["id"])
+                       key=lambda r: (isinstance(r["id"], str), r["id"]))
         out.append({
             "donor": donor, "noun": noun, "records": shown,
             "accepted": sum(1 for r in group

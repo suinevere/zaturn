@@ -474,9 +474,11 @@ git commit -m "Generate a per-category genre band table in place of the flat art
 
 ```c
 /* Build:
-     gcc -O2 -I saturn/src -o /tmp/trg saturn/tests/test_room_genre.c \
-         saturn/src/classify/room_class.c saturn/src/classify/room_class_data.c \
-         && /tmp/trg */
+     gcc -O2 -I saturn/src -I saturn/src/sound -o /tmp/trg.exe \
+         saturn/tests/test_room_genre.c saturn/src/classify/room_class.c \
+         saturn/src/classify/room_class_data.c && /tmp/trg.exe
+   The -I saturn/src/sound is needed because room_class.h includes "music.h"
+   unqualified. */
 #include "../src/classify/room_class.h"
 #include <assert.h>
 #include <stdio.h>

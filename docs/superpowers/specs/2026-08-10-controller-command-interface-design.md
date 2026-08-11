@@ -278,10 +278,15 @@ story's remaining verbs follow behind, trie-ranked, on later pages. `look` also
 sits in the commands module; that is a deliberate shortcut for the most-used
 command, not a duplicate to remove.
 
-Noun candidates come from the object tree first — the room's
-children, the contents of open containers, carried items — with on-screen
-vocabulary filling in prose-only scenery and Infocom's shared global objects,
-which rooms reference by property rather than own.
+Noun candidates are decided by the object tree and worded by the vocabulary. The
+tree says what is *present* — the room's children, the contents of open
+containers, carried items — and those objects' words are matched from the
+trie's on-screen vocabulary, or from the dictionary directly on Hard where no
+trie exists. `room_model` deliberately does not decode object short names:
+the only Z-string decoder in the tree (`typeahead_extract.c`'s `decode_at`)
+reads a story pointer that the trie builder sets, and Hard never runs that
+builder. On-screen vocabulary also fills in prose-only scenery and Infocom's
+shared global objects, which rooms reference by property rather than own.
 
 ### Commands
 

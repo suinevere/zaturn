@@ -180,6 +180,35 @@ int main(void) {
     assert(strcmp(p.line, "take lamp") == 0);
     assert(p.overlay == 0);
 
+    cp_reset(&p);
+    assert(p.slot == CP_SLOT_VERB);
+    cp_overlay_open(&p);
+    assert(cp_overlay_takes_noun(&p) == 0);
+    cp_pick(&p, "lamp", 0);
+    assert(p.line_len == 0);
+    assert(p.slot == CP_SLOT_VERB);
+    assert(p.overlay == 0);
+
+    cp_reset(&p);
+    cp_pick(&p, "take", 0);
+    assert(p.slot == CP_SLOT_NOUN);
+    cp_overlay_open(&p);
+    assert(cp_overlay_takes_noun(&p) == 1);
+    cp_pick(&p, "lamp", 0);
+    assert(strcmp(p.line, "take lamp") == 0);
+    assert(p.slot == CP_SLOT_DONE);
+    assert(p.overlay == 0);
+
+    cp_reset(&p);
+    cp_pick(&p, "take", 0);
+    assert(p.slot == CP_SLOT_NOUN);
+    cp_overlay_open(&p);
+    assert(cp_overlay_takes_noun(&p) == 1);
+    cp_pick(&p, 0, 0);
+    assert(p.overlay == 0);
+    assert(strcmp(p.line, "take") == 0);
+    assert(p.slot == CP_SLOT_NOUN);
+
     printf("test_command_panel ok\n");
     return 0;
 }

@@ -69,18 +69,23 @@ void cp_move(CommandPanel *p, int d, int count) {
  |   slot. wants_prep is consulted only when leaving the noun slot: set, the
  |   preposition slot opens; clear, the command is complete. A pick made from the
  |   travel module completes immediately, since a direction is a whole command.
- |   Marks `submitted` when the command is complete.
+ |   Marks `submitted` when the command is complete. While the overlay is up,
+ |   this is also its sole close path: a pick that cannot land -- the panel is
+ |   waiting for a verb, or `word` is empty -- closes the overlay instead of
+ |   being silently dropped, so Accept can never leave it stuck open.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: p -- panel state; word -- the word picked; wants_prep -- 1 when the
- |   story's grammar says this verb takes a preposition
+ | Params: p -- panel state; word -- the word picked, may be null or empty when
+ |   the overlay had nothing to offer; wants_prep -- 1 when the story's grammar
+ |   says this verb takes a preposition
  | Returns: N/A
  ----------------------*/
 void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
     int i = 0;
-    if (p->overlay && !cp_overlay_takes_noun(p)) { cp_overlay_close(p); return; }
-    if (word == 0 || word[0] == '\0') return;
+    int empty = (word == 0 || word[0] == '\0');
+    if (p->overlay && (!cp_overlay_takes_noun(p) || empty)) { cp_overlay_close(p); return; }
+    if (empty) return;
     if (p->line_len > 0 && p->line_len < CP_LINE_MAX - 1) p->line[p->line_len++] = ' ';
     while (word[i] && p->line_len < CP_LINE_MAX - 1) p->line[p->line_len++] = word[i++];
     p->line[p->line_len] = '\0';

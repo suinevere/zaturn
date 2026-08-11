@@ -934,12 +934,13 @@ static void cv_cmd_accept(CommandPanel &p) {
 /*----------------------
  | cv_overlay_accept
  | Description: Accept from the inventory overlay: resolves the selected
- |   carried object's parser word and hands it to cp_pick, which itself
- |   decides whether the pick lands (waiting for a noun) or is dropped as a
- |   view-only close (waiting for a verb) -- see cp_pick's overlay guard. No
- |   word resolves for a cursor past the carried count or an object with no
- |   detectable synonym property; cp_pick is still called so the guard's
- |   view-only close still fires.
+ |   carried object's parser word and hands it to cp_pick, which owns every
+ |   outcome -- the pick lands (waiting for a noun, a word resolved), or the
+ |   overlay closes unchanged (waiting for a verb; or waiting for a noun but
+ |   nothing carried at the cursor, or the object has no detectable synonym
+ |   property, in which case `word` is empty). Always calls cp_pick, never
+ |   branching on cp_overlay_takes_noun itself, so Accept can never leave the
+ |   overlay stuck open with no word to offer and no close to fall back on.
  | Author: suinevere
  | Dependencies: room_model.h, command_panel.h, typeahead.h
  | Globals: N/A

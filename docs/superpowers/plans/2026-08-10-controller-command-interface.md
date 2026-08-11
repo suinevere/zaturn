@@ -2504,6 +2504,131 @@ git commit -m "Open the carried set as an overlay that fills a noun slot and vie
 
 ---
 
+### Task 10: Dictionary enumeration and Hard ordering
+
+Added after Task 7 surfaced that the noun column has no source on Hard, where
+no trie is built. Without this the column is permanently blank at that setting.
+
+**Files:**
+- Modify: `saturn/src/engine/room_model.h`, `saturn/src/engine/room_model.c`
+- Modify: `saturn/tests/test_room_model.c`
+- Modify: `saturn/src/video/command_view.cxx`
+
+**Interfaces:**
+- Consumes: Task 2's dictionary walk (`dict_first`, `dict_entry_len`, `dict_count`, `decode_word`, the `FL_*` flag bits).
+- Produces: `int room_model_dict_count(void)` and `int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out)`.
+
+- [ ] **Step 1: Write the failing test**
+
+In `saturn/tests/test_room_model.c`, before the junk-header block:
+
+```c
+    room_model_bind(g_story, g_len);
+    {
+        int n = room_model_dict_count();
+        char w[8];
+        unsigned char fl;
+        int found_lamp = 0, found_open = 0, i;
+        assert(n == 697);
+        for (i = 0; i < n; i++) {
+            assert(room_model_dict_word(i, w, (int) sizeof w, &fl) == 1);
+            if (strcmp(w, "lamp") == 0 && (fl & 0x80) != 0) found_lamp = 1;
+            if (strcmp(w, "open") == 0 && (fl & 0x40) != 0) found_open = 1;
+        }
+        assert(found_lamp == 1);
+        assert(found_open == 1);
+        assert(room_model_dict_word(-1, w, (int) sizeof w, &fl) == 0);
+        assert(room_model_dict_word(n, w, (int) sizeof w, &fl) == 0);
+    }
+```
+
+Add `#include <string.h>` to the test if it is not already present.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+```bash
+gcc -std=c11 -Wall -Wextra -o /tmp/trm.exe saturn/tests/test_room_model.c saturn/src/engine/room_model.c && /tmp/trm.exe
+```
+
+Expected: FAIL — implicit declaration of `room_model_dict_count`.
+
+- [ ] **Step 3: Declare the enumerator**
+
+In `saturn/src/engine/room_model.h`, before the closing `extern "C"`:
+
+```c
+/*----------------------
+ | room_model_dict_count / room_model_dict_word
+ | Description: Enumerate the story's own dictionary. count is how many entries
+ |   it holds; word copies entry `index`'s text (six characters at most, which
+ |   is all a v3 entry distinguishes) and its part-of-speech flag byte. This is
+ |   the vocabulary source on Hard, where no typeahead trie is built at all and
+ |   the panel would otherwise have no words to offer.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story, g_dict, g_available
+ | Params: index -- entry index; out -- receives the text; max -- its capacity;
+ |   flags_out -- receives the flag byte, may be null
+ | Returns: count returns the entry count (0 when unavailable); word returns 1
+ |   on success, 0 when unavailable or the index is out of range
+ ----------------------*/
+int room_model_dict_count(void);
+int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out);
+```
+
+- [ ] **Step 4: Implement**
+
+Append to `saturn/src/engine/room_model.c`, with full header blocks on both definitions:
+
+```c
+int room_model_dict_count(void) {
+    if (!g_available) return 0;
+    return (int) dict_count();
+}
+
+int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out) {
+    unsigned int off;
+    char w[8];
+    int i;
+    if (max > 0) out[0] = '\0';
+    if (!g_available || out == 0 || max <= 0) return 0;
+    if (index < 0 || index >= (int) dict_count()) return 0;
+    off = dict_first() + (unsigned int) index * dict_entry_len();
+    decode_word(off, w);
+    for (i = 0; i < max - 1 && w[i]; i++) out[i] = w[i];
+    out[i] = '\0';
+    if (flags_out != 0) *flags_out = g_story[off + 4];
+    return 1;
+}
+```
+
+- [ ] **Step 5: Run the test to verify it passes**
+
+```bash
+gcc -std=c11 -Wall -Wextra -o /tmp/trm.exe saturn/tests/test_room_model.c saturn/src/engine/room_model.c && /tmp/trm.exe
+```
+
+Expected: PASS — `test_room_model ok`.
+
+- [ ] **Step 6: Source Hard's words from the enumerator**
+
+In `saturn/src/video/command_view.cxx`, where candidates are gathered:
+
+- **Verbs, every difficulty:** `CV_VERB_CORE` entries that pass `room_model_has_word` lead the list, in the order they are declared. Only what follows them changes with difficulty — trie-ranked on Easy and Medium, dictionary order on Hard. Do not sort the core alphabetically at any setting.
+- **Nouns on Hard** (`root == nullptr`): walk `room_model_dict_count()` / `room_model_dict_word()`, keep entries whose flag byte has `0x80` (noun) set, and prefer those naming objects the room model reports present before the rest of the dictionary.
+- Truncate every candidate to six characters, as elsewhere.
+
+- [ ] **Step 7: Syntax-check and commit**
+
+```bash
+sh saturn/syntax-check.sh src/video/command_view.cxx
+git add saturn/src/engine/room_model.h saturn/src/engine/room_model.c \
+        saturn/tests/test_room_model.c saturn/src/video/command_view.cxx
+git commit -m "Enumerate the story dictionary so the panel still offers words with no trie built."
+```
+
+---
+
 ## Notes for the implementer
 
 **Why `room_model` refuses rather than guesses.** The direction-property convention is ZILCH's, not the Z-machine specification's. An Inform-compiled v3 story has no direction properties at all, so `room_model_bind` returns 0 and everything downstream takes the degraded path: verbs filter against the trie, nouns come from on-screen vocabulary, and the rose renders every direction lowercase and fully pressable. That path is also what online play uses, since `online.cxx` frees the story bytes after building its trie and the game state lives on the server. Never let an undecodable story hide a direction — a hidden exit is an unwinnable game.

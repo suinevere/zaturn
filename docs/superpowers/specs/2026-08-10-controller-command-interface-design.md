@@ -391,13 +391,30 @@ setting.
 
 | setting | words | rose |
 |---|---|---|
-| Easy | walkthrough's next verb and noun float to the first cells | walkthrough's next move marked |
+| Easy | walkthrough's next verb and noun float to the first cells | as decoded |
 | Medium | ranked by grammar, room contents and on-screen boost | as decoded |
-| Hard | flat alphabetical | flat lowercase, no state |
+| Hard | curated core verbs first, then the story's own vocabulary enumerated from the dictionary | flat lowercase, no state |
 
-Hard builds no trie, so its flat ordering is what the panel produces naturally
-rather than a special case — but the exit shading is suppressed deliberately,
-because decoded exits are precisely the guidance Hard exists to withhold.
+Hard's exit shading is suppressed deliberately, because decoded exits are
+precisely the guidance Hard exists to withhold.
+
+Hard is not "the panel, degraded". It builds no trie, so it has no ranking
+signal at all — but a panel whose first cells are alphabetical accidents is
+worse to use than one led by the verbs any player reaches for, and that
+ordering reveals nothing about *this* room. So the curated core leads at every
+difficulty; only the boosts below it change.
+
+Nouns on Hard come from a dictionary enumerator rather than the trie. The
+trie is the vocabulary source everywhere else, and its absence would otherwise
+leave the noun column permanently blank — which reads as "this room is empty"
+rather than "this mode lists no nouns", the worst of both. `room_model` already
+walks the dictionary for `room_model_has_word`; enumeration is the same walk
+without the early return.
+
+The Easy rose carries no walkthrough marker. Easy still floats the solution
+overlay's verbs and nouns to the first cells, which needs no new export; a
+compass marker would have required a new accessor out of the typeahead and a
+fourth state on an already dense 13-column figure.
 
 ## Options and persistence
 

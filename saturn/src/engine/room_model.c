@@ -34,6 +34,13 @@ static int g_prop[RM_DIR_N];
 static int g_available;
 
 /*----------------------
+ | g_model
+ | Description: The snapshot the last refresh produced.
+ | Author: suinevere
+ ----------------------*/
+static RoomModel g_model;
+
+/*----------------------
  | rd16
  | Description: Reads a big-endian 16-bit word out of the bound image.
  | Author: suinevere
@@ -251,3 +258,122 @@ int room_model_has_word(const char *text) {
     }
     return 0;
 }
+
+/*----------------------
+ | obj_entry
+ | Description: A v3 object's 9-byte table entry (four attribute bytes, then
+ |   parent, sibling and child, then the two-byte property-table address).
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_obj
+ | Params: id -- object number, 1-based
+ | Returns: the entry's byte offset
+ ----------------------*/
+static unsigned int obj_entry(unsigned short id) {
+    return g_obj + 62u + ((unsigned int) id - 1u) * 9u;
+}
+
+/*----------------------
+ | obj_valid
+ | Description: Whether an object number's whole 9-byte table entry lies inside
+ |   the image. Every walk of the object tree follows numbers read out of the
+ |   story, so none of them can be trusted to name a real object.
+ | Author: suinevere
+ | Dependencies: obj_entry
+ | Globals: g_available, g_len
+ | Params: id -- object number, 1-based
+ | Returns: 1 when the entry is readable, 0 otherwise
+ ----------------------*/
+static int obj_valid(unsigned short id) {
+    if (!g_available || id == 0) return 0;
+    return obj_entry(id) + 9u <= g_len;
+}
+
+/*----------------------
+ | obj_props
+ | Description: The address of an object's first property -- past the short
+ |   name, whose length in words is the property table's first byte.
+ | Author: suinevere
+ | Dependencies: rd16, obj_valid, obj_entry
+ | Globals: g_story, g_len
+ | Params: id -- object number, 1-based
+ | Returns: the property list's byte offset, or 0 when unreadable
+ ----------------------*/
+static unsigned int obj_props(unsigned short id) {
+    unsigned int t;
+    if (!obj_valid(id)) return 0u;
+    t = rd16(obj_entry(id) + 7u);
+    if (t == 0u || t + 1u >= g_len) return 0u;
+    return t + 1u + 2u * g_story[t];
+}
+
+/*----------------------
+ | dir_of_prop
+ | Description: Which direction index a property number belongs to, or -1 when
+ |   it is not a direction property in this story.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_prop
+ | Params: prop -- property number
+ | Returns: the RM_* index, or -1
+ ----------------------*/
+static int dir_of_prop(int prop) {
+    int i;
+    for (i = 0; i < RM_DIR_N; i++) if (g_prop[i] == prop) return i;
+    return -1;
+}
+
+/*----------------------
+ | room_model_refresh_room
+ | Description: Rebuilds the snapshot for a given room object -- the entry the
+ |   host tests drive, and what room_model_refresh calls once it has read the
+ |   room out of global 0.
+ | Author: suinevere
+ | Dependencies: obj_entry, obj_props, dir_of_prop
+ | Globals: g_story, g_len, g_available, g_model
+ | Params: room -- the room object number
+ | Returns: N/A
+ ----------------------*/
+void room_model_refresh_room(unsigned short room) {
+    unsigned int a;
+    int i;
+
+    for (i = 0; i < RM_DIR_N; i++) { g_model.exits[i] = RM_EXIT_NONE; g_model.dest[i] = 0; }
+    g_model.nhere = 0;
+    g_model.ncarried = 0;
+    g_model.room = room;
+    if (!g_available || room == 0) return;
+    if (obj_entry(room) + 9u > g_len) return;
+
+    a = obj_props(room);
+    if (a == 0u) return;
+    while (a < g_len && g_story[a] != 0) {
+        int size = (int) g_story[a];
+        int prop = size & 31;
+        int plen = (size >> 5) + 1;
+        int dir  = dir_of_prop(prop);
+        if (dir >= 0) {
+            if (plen == 1) {
+                g_model.exits[dir] = RM_EXIT_OPEN;
+                g_model.dest[dir]  = g_story[a + 1u];
+            } else if (plen == 2) {
+                g_model.exits[dir] = RM_EXIT_BLOCKED;
+            } else {
+                g_model.exits[dir] = RM_EXIT_MAYBE;
+            }
+        }
+        a += 1u + (unsigned int) plen;
+    }
+}
+
+/*----------------------
+ | room_model_get
+ | Description: The current snapshot. Valid but empty before the first refresh
+ |   and whenever the model is unavailable.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_model
+ | Params: N/A
+ | Returns: the snapshot, never NULL
+ ----------------------*/
+const RoomModel *room_model_get(void) { return &g_model; }

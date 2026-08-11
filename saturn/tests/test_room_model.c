@@ -3,14 +3,17 @@
  | Description: Host test for the room model's static decode against the shipped
  |   Zork I image. Covers the direction-word to property-number map, the
  |   contiguous-run sanity gate that rejects a non-ZILCH story, the
- |   dictionary lookup the verb filter depends on, and two malformed-header
+ |   dictionary lookup the verb filter depends on, two malformed-header
  |   cases: an all-zero image (fails on the null pointer checks before the
  |   dictionary is ever touched) and a header with plausible in-range
  |   dict/obj/glob pointers but a dictionary separator-count byte of 0xFF
  |   (fails only on the g_dict + g_story[g_dict] + 4 > len guard -- without
  |   that guard, dict_entry_len/dict_count/dict_first would derive their
- |   values from bytes far past the end of the buffer). Reads saturn/zork1.dat
- |   directly; no SRL or Saturn code is involved.
+ |   values from bytes far past the end of the buffer) -- and the exit walk
+ |   for object 81, "North of House": north, east, west, southeast and
+ |   southwest are one-byte unconditional exits, south is the two-byte form
+ |   that only prints the boarded-windows refusal, and the rest are absent.
+ |   Reads saturn/zork1.dat directly; no SRL or Saturn code is involved.
  | Author: suinevere
  | Dependencies: ../src/engine/room_model.h and room_model.c, assert.h, stdio.h,
  |   stdlib.h, saturn/zork1.dat
@@ -61,6 +64,23 @@ int main(void) {
     assert(room_model_has_word("open")    == 1);
     assert(room_model_has_word("mailbox") == 1);
     assert(room_model_has_word("photosynthesis") == 0);
+
+    room_model_bind(g_story, g_len);
+    room_model_refresh_room(81);
+    {
+        const RoomModel *m = room_model_get();
+        assert(m->room == 81);
+        assert(m->exits[RM_N]  == RM_EXIT_OPEN && m->dest[RM_N]  == 75);
+        assert(m->exits[RM_E]  == RM_EXIT_OPEN && m->dest[RM_E]  == 79);
+        assert(m->exits[RM_W]  == RM_EXIT_OPEN && m->dest[RM_W]  == 180);
+        assert(m->exits[RM_SE] == RM_EXIT_OPEN && m->dest[RM_SE] == 79);
+        assert(m->exits[RM_SW] == RM_EXIT_OPEN && m->dest[RM_SW] == 180);
+        assert(m->exits[RM_S]  == RM_EXIT_BLOCKED);
+        assert(m->exits[RM_NE] == RM_EXIT_NONE);
+        assert(m->exits[RM_NW] == RM_EXIT_NONE);
+        assert(m->exits[RM_UP] == RM_EXIT_NONE);
+        assert(m->exits[RM_IN] == RM_EXIT_NONE);
+    }
 
     unsigned char junk[64];
     for (int i = 0; i < 64; i++) junk[i] = 0;

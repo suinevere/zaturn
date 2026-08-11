@@ -126,6 +126,31 @@ const char *room_model_dir_word(int dir);
  ----------------------*/
 int room_model_has_word(const char *text);
 
+/*----------------------
+ | room_model_refresh_room
+ | Description: Rebuilds the snapshot for a given room object -- the entry the
+ |   host tests drive, and what room_model_refresh calls once it has read the
+ |   room out of global 0.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_model
+ | Params: room -- the room object number
+ | Returns: N/A
+ ----------------------*/
+void room_model_refresh_room(unsigned short room);
+
+/*----------------------
+ | room_model_get
+ | Description: The current snapshot. Valid but empty before the first refresh
+ |   and whenever the model is unavailable.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_model
+ | Params: N/A
+ | Returns: the snapshot, never NULL
+ ----------------------*/
+const RoomModel *room_model_get(void);
+
 #ifdef __cplusplus
 }
 #endif

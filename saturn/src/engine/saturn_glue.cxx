@@ -12,8 +12,10 @@
  |   intercepts the reboot/quit commands before they reach the interpreter.
  | Author: suinevere
  | Dependencies: saturn_glue.h, console.h + console_view.h (screen, on-screen
- |   keyboard, typeahead_edit), keyboard.h (KeyboardState), saturn_keyboard.h
- |   (key events), input.h (g_pad, pad repeat/scroll, history), typeahead.h +
+ |   keyboard, typeahead_edit), command_view.h (command-panel render/edit),
+ |   room_model.h (the room snapshot the panel reads), keyboard.h
+ |   (KeyboardState), saturn_keyboard.h (key events), input.h (g_pad, pad
+ |   repeat/scroll, history, mode_toggle_fired), typeahead.h +
  |   typeahead_extract.h + typeahead_solution.h (the trie), menu.h + menu_pages.h
  |   (mid-game menus and save dialogs), save_ui.h (device/slot pickers),
  |   saturn_backup.h (backup reads/writes), soft_reset.h (reboot/quit handling),
@@ -32,9 +34,11 @@
 extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 
 #include "console_view.h"
+#include "command_view.h"
 #include "input.h"
 #include "menu.h"
 #include "menu_pages.h"
+#include "room_model.h"
 #include "save_ui.h"
 #include "soft_reset.h"
 extern "C" {
@@ -143,9 +147,14 @@ extern "C" void saturn_typeahead_release(void) {
  |   trie does. If even the root node cannot be allocated the trie stays null and
  |   the prompt behaves as it does on Hard; g_ta_story is still recorded, but the
  |   null root fails the cache test above, so the next prompt tries again.
+ |   Binds the room model to the same story on every rebuild, unconditionally --
+ |   deliberately outside the difficulty-gated trie-build branch, so Hard (which
+ |   builds no trie) still gets a working room model; the panel has nothing to do
+ |   with typeahead and must not go dark at the one difficulty a player picked to
+ |   keep it useful.
  | Author: suinevere
  | Dependencies: saturn_glue.h (saturn_story_data), typeahead.h,
- |   typeahead_extract.h, typeahead_solution.h
+ |   typeahead_extract.h, typeahead_solution.h, room_model.h
  | Globals: g_typeahead_root, g_ta_story, g_ta_diff, g_difficulty
  | Params: N/A
  | Returns: N/A
@@ -163,6 +172,7 @@ static void ensure_typeahead() {
         typeahead_add_abbreviations(g_typeahead_root);
     }
     typeahead_set_easy(g_difficulty == DIFF_EASY, have_solution);
+    if (story != nullptr && len > 0) room_model_bind(story, len);
     g_ta_story = story;
     g_ta_diff = g_difficulty;
 }
@@ -285,25 +295,32 @@ static void run_room_transition(void) {
  |   g_restore_* before the very readline that submits its "restore"). A queued
  |   one-shot autocommand (the "restore" that applies a pre-picked save) is
  |   returned immediately. Otherwise it rebuilds the typeahead, marks on-screen
- |   words, keeps the keyboard picker position across prompts, and positions the
- |   view at the TOP of the turn's output so a long response reads from its start.
+ |   words, refreshes the room model from the current room (once per prompt,
+ |   not per frame -- it walks the object tree), keeps the keyboard picker
+ |   position across prompts, and positions the view at the TOP of the turn's
+ |   output so a long response reads from its start.
  |   The frame loop runs the soft-reset chord, the F10/F11/F12 menu shortcuts
  |   (Sound only when there is audio to configure; F10's Options menu can
  |   itself report a Save Game/Load Game pick, submitted the same way as
  |   below, and holds the music paused mid-track while it is open),
  |   the F2/F5 save and F3/F6/F9 restore keys (which submit the
- |   game's own command so the blob hooks do the work), and the shared
- |   typeahead editor, then services audio. On
+ |   game's own command so the blob hooks do the work), a toggle-button tap
+ |   (gamepad only -- a real keyboard in hand keeps its own prompt untouched)
+ |   that swaps g_cmd_mode between the command panel and the on-screen
+ |   keyboard, and then whichever of the two editors g_cmd_mode selects --
+ |   command_edit or the shared typeahead editor -- each writing its result
+ |   into the same KeyboardState, so both leave through the one submit path.
+ |   Finally it services audio. On
  |   submit it strips the autocomplete-accept trailing space, echoes the command,
  |   and intercepts reboot/quit (a declined confirm is not passed to the game)
  |   before handing the line back with the fgets-style trailing '\n'.
  | Author: suinevere
- | Dependencies: console.h, console_view.h, keyboard.h, saturn_keyboard.h,
- |   input.h, menu.h, menu_pages.h, soft_reset.h, sound.h, music.h, typeahead.h,
- |   SRL
+ | Dependencies: console.h, console_view.h, command_view.h, room_model.h,
+ |   keyboard.h, saturn_keyboard.h, input.h, menu.h, menu_pages.h, soft_reset.h,
+ |   sound.h, music.h, typeahead.h, SRL
  | Globals: g_save_device, g_save_slot, g_last_device, g_last_slot,
- |   g_restore_device, g_restore_slot, g_autocmd, g_kbd_visible, g_scroll,
- |   g_output_start, g_pad, g_typeahead_root
+ |   g_restore_device, g_restore_slot, g_autocmd, g_kbd_visible, g_cmd_mode,
+ |   g_scroll, g_output_start, g_pad, g_typeahead_root
  | Params: buf -- receives the entered line + '\n'; maxlen -- capacity of buf
  | Returns: N/A
  ----------------------*/
@@ -334,10 +351,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
     run_room_transition();
     ensure_typeahead();
     typeahead_scan_screen(g_typeahead_root);
+    room_model_refresh();
 
     static KeyboardState k;
+    static CommandPanel cpanel;
     static int kbd_inited = 0;
-    if (!kbd_inited) { keyboard_reset(&k); kbd_inited = 1; }
+    if (!kbd_inited) { keyboard_reset(&k); cp_reset(&cpanel); kbd_inited = 1; }
     k.input_len = 0;
     k.input[0] = '\0';
     k.cursor = 0;
@@ -423,12 +442,22 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             continue;
         }
 
-        DictionaryWord* selected; int cw_len;
-        typeahead_edit(k, g_typeahead_root, sug_index, sug_last, ke, pad, selected, cw_len);
+        if (g_kbd_visible && mode_toggle_fired())
+            g_cmd_mode = (g_cmd_mode == IFACE_PANEL) ? IFACE_KEYBOARD : IFACE_PANEL;
 
-        pad_scroll_update();
-        render_console();
-        render_keyboard(k, selected, cw_len);
+        if (g_kbd_visible && g_cmd_mode == IFACE_PANEL) {
+            CommandWords cw;
+            command_edit(k, cpanel, *room_model_get(), g_typeahead_root, ke, cw);
+            pad_scroll_update();
+            render_console();
+            render_command_panel(cpanel, *room_model_get(), cw);
+        } else {
+            DictionaryWord* selected; int cw_len;
+            typeahead_edit(k, g_typeahead_root, sug_index, sug_last, ke, pad, selected, cw_len);
+            pad_scroll_update();
+            render_console();
+            render_keyboard(k, selected, cw_len);
+        }
         SRL::Core::Synchronize();
         sound_service();
         music_tick();

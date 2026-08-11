@@ -164,6 +164,20 @@ const char *slot_name(int slot);
 bool caps_combo_fired(void);
 
 /*----------------------
+ | mode_toggle_fired
+ | Description: Reports a tap of the toggle button -- pressed and released with
+ |   no direction or shoulder held in between. Y and Z do nothing on their own
+ |   today, they only shift the chord slots, so a tap is free to claim; a press
+ |   that fires a chord is marked spent and never reports.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad, g_toggle_btn
+ | Params: N/A
+ | Returns: true on the frame a clean tap completes
+ ----------------------*/
+bool mode_toggle_fired(void);
+
+/*----------------------
  | chord_tick
  | Description: Advances the per-slot edge/hold-repeat state for every shift-
  |   chord slot; must be called once per input frame before chord_fired.

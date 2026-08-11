@@ -2,13 +2,14 @@
  | app_state.h
  | Description: The cross-cutting runtime globals shared across the interpreter's
  |   modules -- persisted game options (difficulty, audio levels/mix, display
- |   palette, online dial number), save/restore session state (pre-picked and
- |   last-used slots, the queued auto-command), the soft-reset jump target, the
- |   story file in play, and the console scroll position. Housing g_scroll here
- |   (rather than in the input or console_view module) avoids a mutual
- |   input<->console_view header cycle: input writes it, console_view reads it,
- |   and this header is neutral C-safe ground both can include. Declarations
- |   only -- definitions live in app_state.cxx.
+ |   palette, online dial number, the command-panel/keyboard interface
+ |   preference and its toggle-button binding), save/restore session state
+ |   (pre-picked and last-used slots, the queued auto-command), the soft-reset
+ |   jump target, the story file in play, and the console scroll position.
+ |   Housing g_scroll here (rather than in the input or console_view module)
+ |   avoids a mutual input<->console_view header cycle: input writes it,
+ |   console_view reads it, and this header is neutral C-safe ground both can
+ |   include. Declarations only -- definitions live in app_state.cxx.
  | Author: suinevere
  | Dependencies: display.h
  ----------------------*/
@@ -50,6 +51,21 @@ extern int g_verbosity;
 // Set by main() when a game starts, so the first prompt hands g_verbosity to the
 // parser before anything else reaches it; cleared as it is consumed.
 extern int g_verb_pending;
+
+/* Which input interface a gamepad gets (IFACE_KEYBOARD / IFACE_PANEL). */
+enum { IFACE_KEYBOARD = 0, IFACE_PANEL = 1 };
+
+// Interface a gamepad starts a game in; persisted in MOJOOPTS and set on the
+// Options > Gameplay page. Defaults to IFACE_PANEL.
+extern int g_cmd_iface;
+
+// Interface in use right now, seeded from g_cmd_iface when a game starts and
+// flipped by the toggle button. Not persisted -- a tap is for this session.
+extern int g_cmd_mode;
+
+// Which shift button carries the interface toggle: 0 = Z, 1 = Y. Persisted in
+// MOJOOPTS and set on the Options > Controller > Configure page.
+extern int g_toggle_btn;
 
 // Set by main() when a game starts: the routine that reveals the game's opening
 // frame. The screen is held black from the loading screen right through to it,

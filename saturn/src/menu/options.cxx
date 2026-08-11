@@ -181,20 +181,26 @@ void display_cycle_row(DisplayCycleRow which, int dir) {
  |   CA_N chord-slot bytes, each byte accepted only if within range, applied
  |   only when the sentinel matches (an older/absent blob keeps the compiled
  |   default mapping); a sound block, sentinel 1 followed by [mix][track]; a
- |   gameplay block, sentinel 5 followed by one VERB_* verbosity byte, skipped
- |   when absent so an older blob leaves the compiled default standing;
- |   and finally a display block handed to display_decode() with whatever
- |   bytes remain in the 64-byte buffer rather than a fixed width, so the
- |   older 4-byte form still parses even when a long stored dial number
- |   leaves too little room for the name-bearing current form. buf is
- |   zero-filled up front, so bytes past whatever was actually written read as
- |   an absent block. display_decode() resolves an image reference against the
- |   compiled-in category tables rather than a runtime scan, so this carries no
- |   ordering requirement against disc access.
+ |   gameplay block -- sentinel 5 followed by one VERB_* verbosity byte (the
+ |   original form), or sentinel 7 followed by the verbosity byte plus a packed
+ |   byte (bit 0 = g_cmd_iface, bit 1 = g_toggle_btn), the form that also carries
+ |   the command-panel preference and its toggle-button binding. Either sentinel
+ |   is accepted so a blob written by an older build still restores its
+ |   verbosity rather than being silently reset; when the block is absent
+ |   entirely every gameplay field keeps its compiled default; and finally a
+ |   display block handed to display_decode() with whatever bytes remain in the
+ |   64-byte buffer rather than a fixed width, so the older 4-byte form still
+ |   parses even when a long stored dial number leaves too little room for the
+ |   name-bearing current form. buf is zero-filled up front, so bytes past
+ |   whatever was actually written read as an absent block. display_decode()
+ |   resolves an image reference against the compiled-in category tables rather
+ |   than a runtime scan, so this carries no ordering requirement against disc
+ |   access.
  | Author: suinevere
  | Dependencies: saturn_backup.h, display.h, input.h, music.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,
- |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_display
+ |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_cmd_iface,
+ |   g_toggle_btn, g_display
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -227,17 +233,26 @@ void options_load(void) {
         if (buf[s + 2] >= MUSIC_TRACK_MIN && buf[s + 2] <= MUSIC_TRACK_MAX) g_sel_track = buf[s + 2];
     }
     /* The gameplay block sits between the sound block and the display one because
-       the display block is the variable-width tail. Sentinel 5 rather than 3: this
-       byte is where a blob written before the block existed has its display
-       sentinel, and those run 1..4 and 6, so 5 -- never a display sentinel -- is
-       the one value that cannot be mistaken for one. When it is absent the
-       display block starts here instead and g_verbosity keeps its compiled
-       default -- which is how an old save comes back verbose rather than
-       silently brief. */
+       the display block is the variable-width tail. Sentinel 5 (v1, verbosity
+       only) and sentinel 7 (v2, verbosity plus a packed command-interface byte)
+       rather than 3 or 6: this byte is where a blob written before the block
+       existed has its display sentinel, and those run 1..4 and 6, so 5 and 7 --
+       neither ever a display sentinel -- are the two values that cannot be
+       mistaken for one. A v1 blob (sentinel 5) is still accepted so an older
+       build's save is not silently reset; it just leaves g_cmd_iface/g_toggle_btn
+       at their compiled defaults, same as it always left them unset. When the
+       block is absent entirely the display block starts here instead and every
+       gameplay field keeps its compiled default -- which is how an old save
+       comes back verbose rather than silently brief. */
     int gp = s + 3, dsp = gp;
     if (gp + 1 < (int) sizeof(buf) && buf[gp] == 5) {
         if (buf[gp + 1] <= VERB_VERBOSE) g_verbosity = buf[gp + 1];
         dsp = gp + 2;
+    } else if (gp + 2 < (int) sizeof(buf) && buf[gp] == 7) {
+        if (buf[gp + 1] <= VERB_VERBOSE) g_verbosity = buf[gp + 1];
+        g_cmd_iface  = buf[gp + 2] & 1;
+        g_toggle_btn = (buf[gp + 2] >> 1) & 1;
+        dsp = gp + 3;
     }
     if (dsp + 4 <= (int) sizeof(buf)) {
         display_decode(buf + dsp, (int) sizeof(buf) - dsp, &g_display);
@@ -250,14 +265,16 @@ void options_load(void) {
  |   layout options_load reads: difficulty byte; NUL-terminated dial number;
  |   music and pcm level bytes; controller-mapping sentinel byte (2) followed
  |   by the face-button and chord-slot bytes; sound-block sentinel byte (1)
- |   followed by mix mode and selected track; then the display block from
- |   display_encode(), appended only if it fits the remaining space in the
- |   62-byte payload. Writes the assembled buffer to backup RAM under the
- |   "MOJOOPTS" filename.
+ |   followed by mix mode and selected track; gameplay-block sentinel byte (7)
+ |   followed by the verbosity byte and a packed byte (bit 0 = g_cmd_iface, bit
+ |   1 = g_toggle_btn); then the display block from display_encode(), appended
+ |   only if it fits the remaining space in the 62-byte payload. Writes the
+ |   assembled buffer to backup RAM under the "MOJOOPTS" filename.
  | Author: suinevere
  | Dependencies: saturn_backup.h, display.h, input.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,
- |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_display
+ |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_cmd_iface,
+ |   g_toggle_btn, g_display
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -274,8 +291,9 @@ void options_save(void) {
     buf[n++] = 1;                                 // sound-block sentinel
     buf[n++] = (uint8_t) g_mix_mode;              // 0..3
     buf[n++] = (uint8_t) g_sel_track;             // 2..32
-    buf[n++] = 5;                                 // gameplay-block sentinel
+    buf[n++] = 7;                                 // gameplay-block sentinel, v2
     buf[n++] = (uint8_t) g_verbosity;             // VERB_*
+    buf[n++] = (uint8_t) ((g_cmd_iface & 1) | ((g_toggle_btn & 1) << 1));
     if (n + DISP_BLOB_BYTES <= 62) n += display_encode(&g_display, buf + n);
     saturn_bup_write(SATURN_BUP_CONSOLE, "MOJOOPTS", "options", buf, (uint32_t) n);
 }

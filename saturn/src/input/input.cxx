@@ -183,6 +183,33 @@ bool caps_combo_fired(void) {
 }
 
 /*----------------------
+ | mode_toggle_fired
+ | Description: Reports a tap of the toggle button -- pressed and released with
+ |   no direction or shoulder held in between. Y and Z do nothing on their own
+ |   today, they only shift the chord slots, so a tap is free to claim; a press
+ |   that fires a chord is marked spent and never reports.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad, g_toggle_btn
+ | Params: N/A
+ | Returns: true on the frame a clean tap completes
+ ----------------------*/
+bool mode_toggle_fired(void) {
+    static bool was = false;
+    static bool spent = false;
+    Button b = (g_toggle_btn == 1) ? Button::Y : Button::Z;
+    bool now = g_pad->IsHeld(b);
+    bool other = g_pad->IsHeld(Button::Up) || g_pad->IsHeld(Button::Down) ||
+                 g_pad->IsHeld(Button::Left) || g_pad->IsHeld(Button::Right) ||
+                 g_pad->IsHeld(Button::L) || g_pad->IsHeld(Button::R);
+    bool fired = false;
+    if (now && other) spent = true;
+    if (was && !now) { fired = !spent; spent = false; }
+    was = now;
+    return fired;
+}
+
+/*----------------------
  | ChordRep / g_chordrep
  | Description: Per-slot edge + hold-repeat state (held direction, countdown
  |   timer, and whether it fired this frame), ticked once per input frame by

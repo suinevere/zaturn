@@ -29,6 +29,18 @@ int g_difficulty = DIFF_EASY;
  ----------------------*/
 int g_verbosity = VERB_VERBOSE;
 int g_verb_pending = 0;
+
+/*----------------------
+ | g_cmd_iface / g_cmd_mode / g_toggle_btn
+ | Description: The command-panel preference (persisted, applied at game start),
+ |   the live interface a gamepad is using right now (session-only, flipped by a
+ |   toggle-button tap), and which shift button carries that toggle (persisted).
+ | Author: suinevere
+ ----------------------*/
+int g_cmd_iface  = IFACE_PANEL;
+int g_cmd_mode   = IFACE_PANEL;
+int g_toggle_btn = 0;
+
 void (*g_intro_reveal)(void) = 0;
 
 /*----------------------

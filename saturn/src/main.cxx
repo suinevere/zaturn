@@ -341,7 +341,7 @@ static unsigned int boot_entropy(void) {
  | Globals: g_display, g_pad, g_title_jmp, g_title_jmp_armed, g_z3_dir_valid,
  |   g_menu_backing_depth, g_music_level, g_pcm_level, g_mix_mode, g_sel_track,
  |   g_story_filename, g_restore_device, g_restore_slot, g_autocmd,
- |   g_output_start, g_in_game
+ |   g_output_start, g_in_game, g_cmd_mode, g_cmd_iface
  | Params: N/A
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
@@ -557,6 +557,7 @@ int main(void) {
     loading_screen_tick();
     mojo_boot(story, len, seed);
     g_in_game = true;
+    g_cmd_mode = g_cmd_iface;
 
     {
         char blb[16]; int i = 0;

@@ -291,6 +291,24 @@ static void test_five_is_not_a_display_sentinel(void) {
     assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 0);
 }
 
+/* MOJOOPTS' gameplay block grew a second byte and took a new sentinel to say so.
+   Seven has to be as safe as five was: a blob written before the interface byte
+   existed has its display sentinel where the new gameplay sentinel now sits, so
+   seven must never be a value display_encode can write. */
+static void test_seven_is_not_a_display_sentinel(void) {
+    DisplayState d;
+    unsigned char blob[DISP_BLOB_BYTES];
+    int i;
+    display_defaults(&d);
+    for (i = 0; i < display_palette_count(); i++) {
+        d.palette = i;
+        display_encode(&d, blob);
+        assert(blob[0] != 7);
+        assert(blob[0] != 5);
+    }
+    printf("  seven is not a display sentinel: ok\n");
+}
+
 static void test_encode_decode_roundtrip(void) {
     DisplayState a, b;
     unsigned char buf[DISP_BLOB_BYTES];
@@ -1094,6 +1112,7 @@ int main(void) {
     test_cycle_palette();
     test_custom_on_dynamic_steps_forward();
     test_five_is_not_a_display_sentinel();
+    test_seven_is_not_a_display_sentinel();
     test_encode_decode_roundtrip();
     test_collisions_roundtrip();
     test_custom_state_roundtrips();

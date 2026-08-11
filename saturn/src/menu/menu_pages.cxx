@@ -21,9 +21,9 @@
  |   mapping_reset_defaults), console_view.h (note_input_device/hint/
  |   g_kbd_visible), options.h (options_save/display_apply/
  |   display_cycle_row/valid_dialnum), app_state.h (g_difficulty/g_dialnum/
- |   g_display/g_mix_mode/g_sel_track/g_music_level/g_pcm_level/g_in_game),
- |   keyboard.h, saturn_keyboard.h, soft_reset.h, display.h, sound.h, music.h,
- |   SRL
+ |   g_display/g_mix_mode/g_sel_track/g_music_level/g_pcm_level/g_in_game/
+ |   g_cmd_iface/g_toggle_btn), keyboard.h, saturn_keyboard.h, soft_reset.h,
+ |   display.h, sound.h, music.h, SRL
  ----------------------*/
 
 #include <srl.hpp>
@@ -229,21 +229,25 @@ static const char *const CHORD_LABEL[CA_N] = { "Autocomplete", "Recall", "Home/E
  | Description: Gamepad Controls page -- live remap editor (3 face-button
  |   rows + 6 shift-chord rows), the fixed L+R Caps Toggle chord
  |   (informational, not remappable), a Keyboard Caps on/off toggle moved
- |   here from the old standalone gamepad landing page, then Reset to
- |   Defaults, Ok, and Cancel. Only the face/chord rows are numbered (there
- |   are just 9 digit keys, so Caps/Reset/Ok/Cancel stay reachable only by
- |   Up/Down). Snapshots g_face_btn/g_chord_slot on entry so Cancel (or
- |   B/Backspace) can restore them verbatim; Start/Esc leave the other way,
- |   saving what is on screen exactly as the Ok row does. Keyboard Caps takes effect
+ |   here from the old standalone gamepad landing page, a Panel/Keyboard Swap
+ |   row cycling g_toggle_btn between the Z and Y shift buttons that flip the
+ |   in-game command interface, then Reset to Defaults, Ok, and Cancel. Only
+ |   the face/chord rows are numbered (there are just 9 digit keys, so
+ |   Caps/Swap/Reset/Ok/Cancel stay reachable only by Up/Down). Snapshots
+ |   g_face_btn/g_chord_slot/g_toggle_btn on entry so Cancel (or B/Backspace)
+ |   can restore them verbatim; Start/Esc leave the other way, saving what is
+ |   on screen exactly as the Ok row does. Keyboard Caps takes effect
  |   immediately and is not part of that snapshot, matching the toggles on
- |   every other page. Up/Down move the row cursor with wraparound, resolved
- |   before the digit-row jump so a same-frame digit press wins the tie
- |   against the pad -- the order the other option pages use; resolving
- |   Up/Down first would let a simultaneous press move `sel` while
- |   left/right/act stayed set from the digit, cycling whichever row the pad
- |   happened to land on instead. Left/Right cycle the selected row's
- |   assignment via face_assign/chord_assign (applying their own
- |   tie-breaking rules), flip Keyboard Caps, or activate Reset/Ok/Cancel.
+ |   every other page; the Panel/Keyboard Swap row IS snapshotted, since a
+ |   stray edit here should be as cancellable as a face/chord remap. Up/Down
+ |   move the row cursor with wraparound, resolved before the digit-row jump
+ |   so a same-frame digit press wins the tie against the pad -- the order
+ |   the other option pages use; resolving Up/Down first would let a
+ |   simultaneous press move `sel` while left/right/act stayed set from the
+ |   digit, cycling whichever row the pad happened to land on instead.
+ |   Left/Right cycle the selected row's assignment via face_assign/
+ |   chord_assign (applying their own tie-breaking rules), flip Keyboard Caps
+ |   or the Panel/Keyboard Swap, or activate Reset/Ok/Cancel.
  |   The value column is drawn at a fixed offset of x + 20 + MENU_DIGIT_COLS,
  |   reserved unconditionally so it does not shift when the player switches
  |   between gamepad and keyboard mid-page; the widest value string is
@@ -259,8 +263,9 @@ static const char *const CHORD_LABEL[CA_N] = { "Autocomplete", "Recall", "Home/E
  |   mapping_reset_defaults/face_btn_name/slot_name), keyboard.c
  |   (keyboard_get_caps/keyboard_set_caps), console_view.c
  |   (note_input_device/hint/g_kbd_visible), menu.c, menu_layout.c
- |   (MENU_DIGIT_COLS), options.c (options_save), saturn_keyboard.h
- | Globals: g_face_btn, g_chord_slot, g_kbd_visible
+ |   (MENU_DIGIT_COLS), options.c (options_save), app_state.h (g_toggle_btn),
+ |   saturn_keyboard.h
+ | Globals: g_face_btn, g_chord_slot, g_toggle_btn, g_kbd_visible
  | Params: N/A
  | Returns: true if it exited because the input device family changed
  |   (caller should redispatch to the other Controls page); false on a
@@ -272,13 +277,15 @@ static bool controls_page(void) {
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
     int s_face[FA_N], s_chord[CA_N];
+    int s_toggle = g_toggle_btn;
     for (int a = 0; a < FA_N; a++) s_face[a]  = g_face_btn[a];
     for (int a = 0; a < CA_N; a++) s_chord[a] = g_chord_slot[a];
     const int NASSIGN  = FA_N + CA_N;
     const int R_CAPS   = NASSIGN;
-    const int R_RESET  = NASSIGN + 1;
-    const int R_DONE   = NASSIGN + 2;
-    const int R_CANCEL = NASSIGN + 3;
+    const int R_TOGGLE = NASSIGN + 1;
+    const int R_RESET  = NASSIGN + 2;
+    const int R_DONE   = NASSIGN + 3;
+    const int R_CANCEL = NASSIGN + 4;
     int sel = 0;
     bool switched = false;
     for (;;) {
@@ -297,6 +304,7 @@ static bool controls_page(void) {
         if (back) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
             for (int a = 0; a < CA_N; a++) g_chord_slot[a] = s_chord[a];
+            g_toggle_btn = s_toggle;
             break;
         }
         if (done) { options_save(); break; }
@@ -307,9 +315,11 @@ static bool controls_page(void) {
         else if (sel == R_CANCEL) { if (act) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
             for (int a = 0; a < CA_N; a++) g_chord_slot[a] = s_chord[a];
+            g_toggle_btn = s_toggle;
             break; } }
         else if (sel == R_RESET) { if (act) mapping_reset_defaults(); }
         else if (sel == R_CAPS) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
+        else if (sel == R_TOGGLE) { if (left || right || act) g_toggle_btn = 1 - g_toggle_btn; }
         else if (left || right) {
             if (sel < FA_N) {
                 int n = right ? (g_face_btn[sel] + 1) % 3 : (g_face_btn[sel] + 2) % 3;
@@ -323,7 +333,7 @@ static bool controls_page(void) {
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", 36, FA_N + CA_N + 10, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", 36, FA_N + CA_N + 11, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
         int x = fx + 2, y = fy + 4;
         bool nums = !g_kbd_visible;
@@ -344,6 +354,8 @@ static bool controls_page(void) {
         text_print(vx, y++, "L+R (fixed)");
         text_print(x, y++, "%c    Keyboard Caps: %s", sel == R_CAPS ? '>' : ' ',
                            keyboard_get_caps() ? "On" : "Off");
+        text_print(x, y++, "%c    Panel/Keyboard Swap: %s", sel == R_TOGGLE ? '>' : ' ',
+                           g_toggle_btn == 1 ? "Y" : "Z");
         y++;
         text_print(x, y++, "%c    Reset to Defaults", sel == R_RESET ? '>' : ' ');
         text_print(x, y++, "%c    Ok", sel == R_DONE ? '>' : ' ');
@@ -1044,22 +1056,26 @@ void credits_page(void) {
 /*----------------------
  | gameplay_page
  | Description: Gameplay Options (full-screen box, Ok/Cancel): the Difficulty
- |   slider (Easy/Medium/Hard) and the Room text slider (Superbrief/Brief/
- |   Verbose), each with a description line, moved out of the top-level Options
- |   box so that list can stay plain dispatch rows. Left/Right adjust local
- |   copies; Ok and Start/Esc commit them to g_difficulty/g_verbosity and call
+ |   slider (Easy/Medium/Hard), the Room text slider (Superbrief/Brief/
+ |   Verbose), and the Command Interface slider (Keyboard/Command Panel), each
+ |   with a description line, moved out of the top-level Options box so that
+ |   list can stay plain dispatch rows. Left/Right adjust local copies; Ok and
+ |   Start/Esc commit them to g_difficulty/g_verbosity/g_cmd_iface and call
  |   options_save() only if something actually changed; Cancel (or B/Backspace)
- |   discards the copies, leaving both globals untouched.
+ |   discards the copies, leaving every global untouched.
  |
  |   Room text is applied by whoever is running the interpreter, not here: the
  |   parser owns that state and only takes it as a typed command, so this page
  |   just records the choice and saturn_glue.cxx hands it over on the way out.
- |   Reached only from the Options menu's Gameplay row.
+ |   Command Interface only takes effect the next time a game starts (main.cxx
+ |   seeds g_cmd_mode from it) -- a session already in progress keeps whatever
+ |   the toggle button last picked. Reached only from the Options menu's
+ |   Gameplay row.
  | Author: suinevere
  | Dependencies: options.c (options_save), console_view.c (note_input_device/
  |   hint/g_kbd_visible), input.c (pad_repeat_update), menu.c, soft_reset.h
  |   (check_soft_reset)
- | Globals: g_difficulty, g_verbosity
+ | Globals: g_difficulty, g_verbosity, g_cmd_iface
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -1073,11 +1089,15 @@ static void gameplay_page(void) {
     static const char *const VDESC[]  = { "Room names only",
                                           "Full text on first visit",
                                           "Full text every visit" };
-    enum { GR_DIFF, GR_VERB, GR_OK, GR_CANCEL };
-    const int nrows = 4;
+    static const char *const INAMES[] = { "Keyboard", "Command Panel" };
+    static const char *const IDESC[]  = { "Type words, autocomplete",
+                                          "Pick words with the pad" };
+    enum { GR_DIFF, GR_VERB, GR_IFACE, GR_OK, GR_CANCEL };
+    const int nrows = 5;
     int sel = 0;
-    int diff = g_difficulty;
-    int verb = g_verbosity;
+    int diff  = g_difficulty;
+    int verb  = g_verbosity;
+    int iface = g_cmd_iface;
     SRL::Core::Synchronize();
     bool need_fade_in = true;
     for (;;) {
@@ -1097,18 +1117,19 @@ static void gameplay_page(void) {
 
         if (cancel || (ok && sel == GR_CANCEL)) break;
         if (commit || (ok && sel == GR_OK)) {
-            if (diff != g_difficulty || verb != g_verbosity) {
-                g_difficulty = diff; g_verbosity = verb;
+            if (diff != g_difficulty || verb != g_verbosity || iface != g_cmd_iface) {
+                g_difficulty = diff; g_verbosity = verb; g_cmd_iface = iface;
                 options_save();
             }
             break;
         }
         if (sel == GR_DIFF) { if (left && diff > DIFF_EASY) diff--; if (right && diff < DIFF_HARD) diff++; }
         else if (sel == GR_VERB) { if (left && verb > VERB_SUPERBRIEF) verb--; if (right && verb < VERB_VERBOSE) verb++; }
+        else if (sel == GR_IFACE) { if (left && iface > IFACE_KEYBOARD) iface--; if (right && iface < IFACE_PANEL) iface++; }
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("GAMEPLAY", 34, 12, &fx, &fy, &fw, &fh);
+        menu_box_fit("GAMEPLAY", 34, 15, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "GAMEPLAY");
         int x = fx + 2, y = fy + 4;
         bool nums = !g_kbd_visible;
@@ -1128,9 +1149,16 @@ static void gameplay_page(void) {
                           verb > VERB_SUPERBRIEF ? "<" : " ", VNAMES[verb], verb < VERB_VERBOSE ? ">" : " ");
         text_print(x + 4, y + 1, "%s", VDESC[verb]);
         y += 3;
-        if (nums) text_print(x, y++, "%c 3) Ok", sel == GR_OK ? '>' : ' ');
+        char imark = sel == GR_IFACE ? '>' : ' ';
+        if (nums) text_print(x, y, "%c 3) Interface:  %s %s %s", imark,
+                          iface > IFACE_KEYBOARD ? "<" : " ", INAMES[iface], iface < IFACE_PANEL ? ">" : " ");
+        else      text_print(x, y, "%c    Interface:  %s %s %s", imark,
+                          iface > IFACE_KEYBOARD ? "<" : " ", INAMES[iface], iface < IFACE_PANEL ? ">" : " ");
+        text_print(x + 4, y + 1, "%s", IDESC[iface]);
+        y += 3;
+        if (nums) text_print(x, y++, "%c 4) Ok", sel == GR_OK ? '>' : ' ');
         else      text_print(x, y++, "%c    Ok", sel == GR_OK ? '>' : ' ');
-        if (nums) text_print(x, y++, "%c 4) Cancel", sel == GR_CANCEL ? '>' : ' ');
+        if (nums) text_print(x, y++, "%c 5) Cancel", sel == GR_CANCEL ? '>' : ' ');
         else      text_print(x, y++, "%c    Cancel", sel == GR_CANCEL ? '>' : ' ');
         y += 2;
         text_print(x, y++, "%s", hint(" A/C/Start=Ok  B=Cancel",

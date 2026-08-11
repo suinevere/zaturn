@@ -7,14 +7,15 @@
  |   one-frame input-editing pass with typeahead that the local prompt and the
  |   online terminal share.
  | Author: suinevere
- | Dependencies: console_view.h, app_state.h, input.h, console.c, keyboard.c,
- |   typeahead.c, SRL
+ | Dependencies: console_view.h, app_state.h, command_view.h, input.h, console.c,
+ |   keyboard.c, typeahead.c, SRL
  ----------------------*/
 
 #include <srl.hpp>
 #include "text_map.h"
 #include "console_view.h"
 #include "app_state.h"
+#include "command_view.h"
 #include "input.h"
 
 // ---- rendering -------------------------------------------------------------
@@ -49,17 +50,22 @@ bool g_kbd_visible = true;
 /*----------------------
  | console_height
  | Description: Subtracts TOP_MARGIN from SCREEN_ROWS for the available rows,
- |   then further reserves 1 input row + KB_ROWS keyboard rows + 1 hint row when
- |   the on-screen keyboard is showing, or just the 1 input row when it is hidden.
+ |   then reserves one of three ways: with a real keyboard in hand (on-screen
+ |   keyboard hidden) just the 1 input row; with a gamepad in hand and the
+ |   command panel selected, 1 input row + CV_STRIP_ROWS panel rows + 2 panel
+ |   borders; with a gamepad in hand and the on-screen keyboard selected,
+ |   1 input row + KB_ROWS keyboard rows + 1 hint row.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_kbd_visible
+ | Globals: g_kbd_visible, g_cmd_mode
  | Params: N/A
  | Returns: the number of rows the console view may draw into
  ----------------------*/
 int console_height(void) {
     int avail = SCREEN_ROWS - TOP_MARGIN;
-    return g_kbd_visible ? (avail - (1 + KB_ROWS + 1)) : (avail - 1);
+    if (!g_kbd_visible) return avail - 1;
+    if (g_cmd_mode == IFACE_PANEL) return avail - (1 + CV_STRIP_ROWS + 2);
+    return avail - (1 + KB_ROWS + 1);
 }
 
 /*----------------------

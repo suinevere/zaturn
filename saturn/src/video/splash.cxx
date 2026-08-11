@@ -108,18 +108,18 @@
 
 /*----------------------
  | splash_set_offset
- | Description: Sets VDP2 color offset A to (v,v,v) on all three channels
- |   and applies it. Offset A must already be enabled on NBG0 via
- |   UseColorOffset for this to have any visible effect.
+ | Description: One step of the logo's ramp, through the shared screen-wide fade
+ |   so the picture layer moves with it -- a bare SetColorOffsetA reaches the text
+ |   layer only, and would leave the logo stuck wherever the arm left it.
+ |   splash_show's title_bg_fade_arm is the matching engage.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: title.h
  | Globals: N/A
  | Params: v -- signed offset, -255 (black) .. 0 (unmodified)
  | Returns: N/A
  ----------------------*/
 static void splash_set_offset(int16_t v) {
-    SRL::VDP2::ColorOffset offset(v, v, v);
-    SRL::VDP2::SetColorOffsetA(offset);
+    title_bg_fade_level((int) v);
 }
 
 /*----------------------

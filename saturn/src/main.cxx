@@ -355,6 +355,14 @@ int main(void) {
     cd_capture_root();
     display_defaults(&g_display);
     options_load();
+    // The saved wallpaper dim has to reach bg_dim.c here and not wait for the
+    // first display_apply(), which does not run until the title screen has come
+    // and gone -- the splash logo and the title picture are both wallpaper, and
+    // without this they were the one part of the client that ignored the
+    // setting and lit at full brightness. The screen is held black by the arm
+    // above, so this stores the offset and writes nothing; the first ramp after
+    // it composes it in.
+    title_bg_dim_set(display_dim_offset(g_display.dim));
 
     static MultiPad pads;
     g_pad = &pads;

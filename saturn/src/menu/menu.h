@@ -162,8 +162,8 @@ bool menu_confirm(const char *line1, const char *line2);
  |   background rise together after the title has faded out. Every other
  |   menu_select call leaves g_menu_intro_fade at 0 and is unaffected. Sequence
  |   at the call site: after the title fade-out and display_apply(), call
- |   menu_intro_fade_arm() (holds the screen black -- colour offset A on
- |   NBG0+NBG3, backdrop forced dark) and set g_menu_intro_fade to the ramp
+ |   menu_intro_fade_arm() (holds the screen black through the shared screen-wide
+ |   fade, backdrop forced dark) and set g_menu_intro_fade to the ramp
  |   length; the first menu_select draws its box unseen, then ramps everything
  |   up and clears the hold. The fade covers the background picture, the solid
  |   backdrop colour, and the menu text/palette in one motion.
@@ -179,11 +179,13 @@ void menu_intro_fade_arm(void);
 /*----------------------
  | menu_fade_out / menu_fade_in
  | Description: Quick whole-screen fades for Options-menu page transitions.
- |   menu_fade_out engages colour offset A (NBG0 + NBG3) and ramps the screen
- |   -- background picture, backdrop colour, and menu text together -- from
- |   normal down to black over `frames` fields, leaving it held black.
- |   menu_fade_in ramps a held-black screen back to normal and releases the
- |   channels. Every menu_fade_out must reach a menu_fade_in (or the
+ |   menu_fade_out engages the shared screen-wide fade (title.h: text on colour
+ |   offset A, background picture on B, where the player's held wallpaper dim is
+ |   composed in) and ramps the screen -- background picture, backdrop colour,
+ |   and menu text together -- from normal down to black over `frames` fields,
+ |   leaving it held black. menu_fade_in ramps a held-black screen back to normal
+ |   -- meaning back to that held dim, not to an unmodified picture -- and
+ |   releases the channels. Every menu_fade_out must reach a menu_fade_in (or the
  |   g_menu_intro_fade one-shot) downstream, or the screen stays black -- the
  |   offset has no automatic decay. A page fades itself in after drawing its
  |   first (black) frame and fades out before returning; a parent fades out

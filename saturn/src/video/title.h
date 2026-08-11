@@ -92,25 +92,25 @@ const char *title_bg_loaded_file(void);
 /*----------------------
  | title_bg_fade_arm / title_bg_fade_in / title_bg_fade_out /
  | title_bg_fade_reset
- | Description: The title screen's fade, and the only fade in the client
- |   outside the boot splash -- menus, Display Options cycling, and every
- |   other screen change cut instantly by design. All four drive VDP2 color
- |   offset channel A, which both NBG0 (the title picture) and NBG3 (the
- |   Z-ATURN text art over it) are pointed at, so the title screen dims and
- |   brightens as one picture rather than the text popping in ahead of the
- |   image.
+ | Description: The title screen's fade. NBG3 (the Z-ATURN text art, and the
+ |   console text under a menu) rides VDP2 colour offset channel A; NBG0 (the
+ |   picture) is driven in step on channel B, the channel that composes the
+ |   player's held wallpaper dim. Two channels rather than one because a scroll
+ |   sits on only one of them, and taking the picture onto A for the length of a
+ |   fade is what used to drop the dim -- see title_bg_fade_engage.
  |     title_bg_fade_arm  -- snap to full black BEFORE title_bg_show and
  |       title_draw_art, so the title is composed unseen instead of flashing
  |       at full brightness for the frames it takes to build.
  |     title_bg_fade_in   -- ramp black -> normal over `frames` fields, then
- |       release both layers (calls title_bg_fade_reset). Pair with an arm.
+ |       release (calls title_bg_fade_reset). Pair with an arm.
  |     title_bg_fade_out  -- ramp normal -> black over `frames` fields,
  |       leaving the screen held at black with the channel still engaged.
  |       Whatever runs next must reveal the screen again (title_bg_fade_reset
  |       for an instant cut) or it stays dark -- the offset has no automatic
  |       decay.
- |     title_bg_fade_reset -- instantly restore full brightness and release
- |       both layers. Also the recovery path if a soft reset fires mid-ramp.
+ |     title_bg_fade_reset -- instantly restore full brightness (which means the
+ |       held dim, not "no offset"), release NBG3, and hand the picture back to
+ |       title_bg_dyn_fade. Also the recovery path if a soft reset fires mid-ramp.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
@@ -121,6 +121,31 @@ void title_bg_fade_arm(void);
 void title_bg_fade_in(int frames);
 void title_bg_fade_out(int frames);
 void title_bg_fade_reset(void);
+
+/*----------------------
+ | title_bg_fade_engage / title_bg_fade_level
+ | Description: The screen-wide fade's two halves, for the fades that live in
+ |   other files and run their own ramps -- the boot splash (splash.cxx), the
+ |   menu ramps (menu.cxx) and the loading screen (loading_screen.cxx). engage
+ |   claims NBG3 on channel A and declares that a screen-wide fade owns the
+ |   picture's brightness; level writes one step of that fade to both layers,
+ |   composing the held wallpaper dim into the picture's half. Every engage must
+ |   reach a title_bg_fade_reset, which is what hands the picture back to the
+ |   room transitions -- until it does, title_bg_dyn_fade records levels but
+ |   writes nothing, so a music callback or a room change cannot lift a blackout
+ |   the fade put there.
+ |
+ |   Driving a screen fade with a bare SetColorOffsetA instead leaves the picture
+ |   wherever the last ramp left it, which is how the wallpaper dim came to be
+ |   silently dropped by every menu fade.
+ | Author: suinevere
+ | Dependencies: SRL, bg_dim.h
+ | Globals: N/A
+ | Params: v -- -255 (black) to 0 (normal), clamped
+ | Returns: N/A
+ ----------------------*/
+void title_bg_fade_engage(void);
+void title_bg_fade_level(int v);
 
 /*----------------------
  | TitleFadeStep / title_bg_fade_in_ex
@@ -155,11 +180,12 @@ void title_bg_fade_in_ex(int frames, TitleFadeStep step);
  |   offset title_bg_dim_set last held (see bg_dim.h), and the colour-offset
  |   channel is released only when that composed value is neutral -- with no
  |   dim held, behaviour is unchanged from before the dim existed.
- |     Unlike the four fades above it deliberately does NOT touch NBG3: in game
- |   that layer carries the player's text, and dimming it would blink a sentence
- |   out mid-read. It therefore runs on color offset channel B rather than A --
- |   see title.cxx for why the channel split has to be done this way, and for the
- |   NBG3 clearing SRL's shared offset bitfields make necessary.
+ |     Unlike the fades above it deliberately does NOT touch NBG3: in game that
+ |   layer carries the player's text, and dimming it would blink a sentence out
+ |   mid-read. It therefore runs on colour offset channel B rather than A.
+ |     Inert while a screen-wide fade is up (between title_bg_fade_engage and
+ |   title_bg_fade_reset): the level is recorded but nothing is written, so a
+ |   room change cannot re-light a screen something else is holding black.
  |     One step per call, never a blocking ramp: the caller is the music engine's
  |   per-frame tick, and stalling the interpreter for a whole fade every time a
  |   room's mood changed is exactly what this avoids.

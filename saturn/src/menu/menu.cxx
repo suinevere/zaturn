@@ -20,6 +20,13 @@
 #include "input.h"
 #include "saturn_keyboard.h"
 #include "soft_reset.h"
+#ifndef NETBIN
+// The screen-wide fade primitives live in title.cxx, which this build links and
+// the netbin one does not. Netbin shows no wallpaper at all -- display_apply's
+// image branch is compiled out there -- so its fades drive both layers off
+// channel A directly, the way every fade did before the wallpaper dim existed.
+#include "title.h"
+#endif
 
 extern "C" {
 #include "menu_layout.h"
@@ -114,58 +121,97 @@ static unsigned short menu_intro_scale(unsigned short packed, int v) {
 }
 
 /*----------------------
- | menu_intro_level
- | Description: Sets one brightness level for the menu intro fade: colour
- |   offset A (both NBG0 and NBG3 are pointed at it) plus the software-scaled
- |   backdrop colour, so the background picture, the menu text, and the solid
- |   fill all move together. SetColorOffsetA takes a non-const reference, so the
- |   ColorOffset is a named local.
+ | menu_offset_engage / menu_offset_release
+ | Description: Claim and release the layers a menu fade drives. The shared
+ |   screen-wide fade (title.h) owns both: NBG3 on colour offset channel A, the
+ |   background picture on channel B where the player's held wallpaper dim is
+ |   composed in. Going through it rather than pointing both layers at channel A
+ |   here is what keeps a dimmed wallpaper dimmed across a menu fade -- taking the
+ |   picture onto A dropped the dim for the length of the fade and left it
+ |   dropped, so the Display page's Dimming row then appeared to do nothing until
+ |   it was stepped back to Normal.
  | Author: suinevere
- | Dependencies: SRL, display.c (display_bg_rgb)
+ | Dependencies: title.h (non-netbin), SRL
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void menu_offset_engage(void) {
+#ifdef NETBIN
+    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
+    SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
+#else
+    title_bg_fade_engage();
+#endif
+}
+
+static void menu_offset_release(void) {
+#ifdef NETBIN
+    SRL::VDP2::ColorOffset zero((int16_t) 0, (int16_t) 0, (int16_t) 0);
+    SRL::VDP2::SetColorOffsetA(zero);
+    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+    SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+#else
+    title_bg_fade_reset();
+#endif
+}
+
+/*----------------------
+ | menu_intro_level
+ | Description: Sets one brightness level for the menu intro fade: the shared
+ |   screen-wide fade (text on colour offset A, picture on B with the held
+ |   wallpaper dim composed in) plus the software-scaled backdrop colour, so the
+ |   background picture, the menu text, and the solid fill all move together.
+ |   SetColorOffsetA takes a non-const reference, so the ColorOffset is a named
+ |   local.
+ | Author: suinevere
+ | Dependencies: title.h (non-netbin), SRL, display.c (display_bg_rgb)
  | Globals: g_display
  | Params: v -- offset, -255..0
  | Returns: N/A
  ----------------------*/
 static void menu_intro_level(int v) {
+#ifdef NETBIN
     SRL::VDP2::ColorOffset off((int16_t) v, (int16_t) v, (int16_t) v);
     SRL::VDP2::SetColorOffsetA(off);
+#else
+    title_bg_fade_level(v);
+#endif
     SRL::VDP2::SetBackColor(SRL::Types::HighColor(
         menu_intro_scale(display_bg_rgb(g_display.bg), v)));
 }
 
 /*----------------------
  | menu_intro_fade_arm
- | Description: See menu.h. Engages colour offset A on NBG0 and NBG3 and forces
- |   the whole screen black, so the menu that draws next is composed unseen.
+ | Description: See menu.h. Engages the screen-wide fade and forces the whole
+ |   screen black, so the menu that draws next is composed unseen.
  |   Call AFTER display_apply() (which sets the real backdrop colour): this
  |   overrides it back to black until menu_select runs the ramp.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: title.h (non-netbin), SRL
  | Globals: g_display
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void menu_intro_fade_arm(void) {
-    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
-    SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
+    menu_offset_engage();
     menu_intro_level(-255);
 }
 
 /*----------------------
  | menu_fade_out
- | Description: See menu.h. Engages colour offset A on NBG0 and NBG3, then ramps
- |   the whole screen -- background picture, backdrop colour, and menu text
- |   together -- from normal down to black over `frames` fields, leaving it held
- |   black (channels still engaged) for whatever fades it back in.
+ | Description: See menu.h. Engages the screen-wide fade, then ramps the whole
+ |   screen -- background picture, backdrop colour, and menu text together --
+ |   from normal down to black over `frames` fields, leaving it held black
+ |   (channels still engaged) for whatever fades it back in.
  | Author: suinevere
- | Dependencies: SRL, display.c (display_bg_rgb)
+ | Dependencies: title.h (non-netbin), SRL, display.c (display_bg_rgb)
  | Globals: g_display
  | Params: frames -- ramp length in fields
  | Returns: N/A
  ----------------------*/
 void menu_fade_out(int frames) {
-    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
-    SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
+    menu_offset_engage();
     for (int i = 0; i <= frames; i++) {
         menu_intro_level(-(255 * i) / frames);
         SRL::Core::Synchronize();
@@ -175,19 +221,21 @@ void menu_fade_out(int frames) {
 /*----------------------
  | menu_fade_in / menu_fade_in_ex
  | Description: See menu.h. Ramps a held-black screen back to normal over
- |   `frames` fields, then releases both offset channels and restores the full
- |   backdrop colour. The caller must have engaged the channels and held black
- |   already (via menu_fade_out, menu_intro_fade_arm, or loading_screen_end,
- |   which deliberately leaves them engaged) and drawn its first frame, or there
- |   is nothing to reveal.
+ |   `frames` fields, then releases the offset channels and restores the full
+ |   backdrop colour. "Normal" here is the player's held wallpaper dim, not an
+ |   unmodified picture -- the release goes through title_bg_fade_reset, which is
+ |   what leaves the dim in force on the far side of the ramp. The caller must
+ |   have engaged the channels and held black already (via menu_fade_out,
+ |   menu_intro_fade_arm, or loading_screen_end, which deliberately leaves them
+ |   engaged) and drawn its first frame, or there is nothing to reveal.
  |
  |   The _ex form takes a per-frame callback handed the same 0..255 the picture is
  |   being lit by, for anything that has to rise in step with it. Deliberately not
- |   a place to dim the wallpaper as well: NBG0 is already on this ramp via colour
- |   offset A, so a step that also drove the in-game channel-B dimmer would darken
- |   it twice over.
+ |   a place to dim the wallpaper as well: the ramp already drives the picture on
+ |   channel B with the dim composed in, and title_bg_dyn_fade is inert for as
+ |   long as this fade is engaged.
  | Author: suinevere
- | Dependencies: SRL, display.c (display_bg_rgb)
+ | Dependencies: title.h (non-netbin), SRL, display.c (display_bg_rgb)
  | Globals: g_display
  | Params: frames -- ramp length in fields
  | Returns: N/A
@@ -202,8 +250,7 @@ void menu_fade_in_ex(int frames, MenuFadeStep step) {
         if (step) step(level);
         SRL::Core::Synchronize();
     }
-    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
-    SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+    menu_offset_release();
     SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
 }
 
@@ -212,8 +259,9 @@ void menu_fade_in(int frames) { menu_fade_in_ex(frames, 0); }
 /*----------------------
  | menu_fade_clear
  | Description: See menu.h. Pushes the composed frame, then instantly (no ramp)
- |   reveals a held-black screen: zeroes colour offset A, releases both channels,
- |   and restores the full backdrop colour. Used to cut straight into gameplay
+ |   reveals a held-black screen: releases the screen-wide fade (which restores
+ |   the picture to the held wallpaper dim rather than to nothing) and restores
+ |   the full backdrop colour. Used to cut straight into gameplay
  |   after the menu has faded to black and the story has loaded behind the black,
  |   and to make an error screen visible if a load fails mid-black.
  |
@@ -233,10 +281,7 @@ void menu_fade_in(int frames) { menu_fade_in_ex(frames, 0); }
  ----------------------*/
 void menu_fade_clear(void) {
     text_flush();
-    SRL::VDP2::ColorOffset zero((int16_t) 0, (int16_t) 0, (int16_t) 0);
-    SRL::VDP2::SetColorOffsetA(zero);
-    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
-    SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+    menu_offset_release();
     SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
 }
 

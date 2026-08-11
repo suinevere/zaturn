@@ -157,16 +157,17 @@ static bool loading_screen_skip_pressed(void) {
 
 /*----------------------
  | loading_screen_set_offset
- | Description: Writes one brightness offset to colour offset channel A.
+ | Description: Writes one brightness offset to both fade layers, through the
+ |   shared screen-wide fade so the wallpaper behind the boot block moves with
+ |   the text and keeps the player's held dim (see title_bg_fade_level).
  | Author: suinevere
- | Dependencies: SRL (VDP2)
+ | Dependencies: title.h
  | Globals: N/A
  | Params: v -- -255 (black) to 0 (normal)
  | Returns: N/A
  ----------------------*/
 static void loading_screen_set_offset(int v) {
-    SRL::VDP2::ColorOffset off((int16_t) v, (int16_t) v, (int16_t) v);
-    SRL::VDP2::SetColorOffsetA(off);
+    title_bg_fade_level(v);
 }
 
 /*----------------------
@@ -228,9 +229,8 @@ static bool loading_screen_wait(int frames) {
  | Globals: g_fade_in_left
  ----------------------*/
 static void loading_screen_fade_in(void) {
+    title_bg_fade_engage();
     loading_screen_set_offset(-255);
-    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
-    SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
 
     g_fade_in_left = LOADING_FADE_FRAMES;
 

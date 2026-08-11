@@ -951,33 +951,41 @@ const char *title_bg_loaded_file(void) {
 }
 
 /*----------------------
- | title_fade_set
- | Description: Writes one brightness level to VDP2 color offset channel A,
- |   the single register every title-screen fade step goes through. `v` runs
- |   -255 (black) to 0 (unmodified). SetColorOffsetA takes a non-const
- |   reference, so the ColorOffset must be a named local rather than a
- |   temporary.
- | Author: suinevere
- | Dependencies: SRL
- | Globals: N/A
- | Params: v -- signed color offset, -255..0
- | Returns: N/A
- ----------------------*/
-/*----------------------
  | g_dyn_faded
- | Description: Whether title_bg_dyn_fade currently holds NBG0 on colour offset
- |   channel B. Declared up here rather than beside its function because
- |   title_fade_engage has to clear it: the two fade systems share NBG0 and
- |   whichever engaged last owns it.
+ | Description: Whether the picture layer currently sits on colour offset
+ |   channel B. Declared up here rather than beside title_bg_apply because the
+ |   screen-wide fades above it drive that layer too.
  | Author: suinevere
  ----------------------*/
 static bool g_dyn_faded = false;
 
 /*----------------------
- | title_fade_set
- | Description: Writes one brightness offset to colour offset channel A.
+ | g_screen_fade
+ | Description: Whether a screen-wide fade (title, splash, menu, loading screen)
+ |   currently owns the picture's brightness -- true from title_bg_fade_engage
+ |   until title_bg_fade_reset. While it is set, title_bg_dyn_fade records the
+ |   level it was handed but writes nothing: a room transition's ramp, or a music
+ |   callback's brightness restore, must not lift a blackout the fade above it
+ |   put there. That is not hypothetical -- a soft reset taken mid-transition
+ |   runs title_bg_fade_arm() and then music_reset(), whose restore calls
+ |   title_bg_dyn_fade(255) and would show the outgoing room's picture at full
+ |   brightness under black text, in the window that blackout exists to cover.
  | Author: suinevere
- | Dependencies: SRL (VDP2)
+ ----------------------*/
+static bool g_screen_fade = false;
+
+static void title_bg_apply(int level);
+
+/*----------------------
+ | title_fade_set
+ | Description: Writes one brightness offset to colour offset channel A (the
+ |   text art) and drives the picture to the matching level on channel B, where
+ |   the player's held wallpaper dim is composed in. Two channels rather than one
+ |   because a layer can only sit on one of them, and the picture has to stay on
+ |   the channel that knows about the dim -- otherwise every fade would drop the
+ |   dim for its duration and pop it back at the bright end.
+ | Author: suinevere
+ | Dependencies: SRL (VDP2), bg_dim.h
  | Globals: N/A
  | Params: v -- -255 (black) to 0 (normal)
  | Returns: N/A
@@ -985,37 +993,46 @@ static bool g_dyn_faded = false;
 static void title_fade_set(int v) {
     SRL::VDP2::ColorOffset off((int16_t) v, (int16_t) v, (int16_t) v);
     SRL::VDP2::SetColorOffsetA(off);
+    title_bg_apply(255 + v);
+}
+
+void title_bg_fade_level(int v) {
+    if (v < -255) v = -255;
+    if (v > 0)    v = 0;
+    title_fade_set(v);
 }
 
 /*----------------------
- | title_fade_engage
- | Description: Points both title-screen layers -- NBG0 (the title picture)
- |   and NBG3 (the Z-ATURN text art drawn over it) -- at color offset channel
- |   A, so one SetColorOffsetA write dims the whole title screen as a unit.
- |   Sharing one channel rather than driving NBG3 from channel B is deliberate:
- |   the two always fade together and never need separate values, and the text
+ | title_fade_engage / title_bg_fade_engage
+ | Description: Points NBG3 -- the Z-ATURN text art over the title picture, and
+ |   the console text under every menu -- at colour offset channel A, and marks
+ |   the screen-wide fade as owning the picture's brightness (see g_screen_fade).
+ |
+ |   NBG0 is deliberately not taken. The picture layer stays on channel B with
+ |   title_bg_apply for the whole session, because that is the only channel that
+ |   composes the player's held wallpaper dim; title_fade_set drives it there in
+ |   step with channel A instead. The two layers still fade as a unit -- the text
  |   popping to full brightness against a still-black image is exactly the
- |   half-faded look this avoids.
+ |   half-faded look this avoids -- they just do it through one channel each.
+ |
+ |   This is also where SRL's NBG3-on-channel-B seed (srl_vdp2.hpp:334) is
+ |   cleared, since UseColorOffset registers a scroll on one channel and clears
+ |   it from the other. main() arms a fade before anything else on both the cold-
+ |   boot and the soft-reset path, so the seed is always gone before
+ |   title_bg_apply first claims channel B and can never drag the text along with
+ |   the picture.
  | Author: suinevere
  | Dependencies: SRL
- | Globals: N/A
+ | Globals: g_screen_fade
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void title_fade_engage(void) {
-    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
-    // Two fade systems share NBG0 and the last engage owns it. Claiming the layer
-    // for channel A drops title_bg_dyn_fade's claim on channel B, so its next
-    // disengage does not reach in and pull NBG0 back off A. That is not
-    // hypothetical: a soft reset taken mid-transition runs title_bg_fade_arm()
-    // (main.cxx:150) and then music_reset(), whose brightness restore calls
-    // title_bg_dyn_fade(255) -- which, still believing it held the layer, would
-    // undo the blackout for the wallpaper alone and show the previous room's
-    // picture at full brightness under black text, in the window that comment
-    // says is not meant to be seen.
-    g_dyn_faded = false;
+    g_screen_fade = true;
 }
+
+void title_bg_fade_engage(void) { title_fade_engage(); }
 
 /*----------------------
  | title_bg_fade_arm
@@ -1076,23 +1093,24 @@ void title_bg_fade_out(int frames) {
 
 /*----------------------
  | title_bg_fade_reset
- | Description: See title.h. Releases both layers from channel A, then
- |   re-applies title_bg_dyn_fade(255) so a held wallpaper dim -- dropped by
- |   title_fade_engage clearing g_dyn_faded, since a scroll uses channel A or B,
- |   not both -- reclaims channel B rather than staying dark or popping back to
- |   full brightness. A no-op when no dim is set: bg_dim_effective(255) is then 0
- |   and title_bg_dyn_fade takes its early return.
+ | Description: See title.h. Instantly restores full brightness, releases NBG3
+ |   from channel A, and hands the picture's brightness back to the room
+ |   transitions -- the end of every screen-wide fade, whoever ran it. The
+ |   title_fade_set(0) is what re-lights: it drives the picture to level 255,
+ |   which composes to the held wallpaper dim rather than to nothing, so the dim
+ |   is still in force the frame after a fade ends. NBG0 is not released here --
+ |   title_bg_apply owns that, and lets the layer go only when the composed
+ |   value is neutral.
  | Author: suinevere
  | Dependencies: SRL, bg_dim.h
- | Globals: N/A
+ | Globals: g_screen_fade
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void title_bg_fade_reset(void) {
     title_fade_set(0);
-    SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
-    title_bg_dyn_fade(255);
+    g_screen_fade = false;
 }
 
 /*----------------------
@@ -1127,38 +1145,52 @@ int title_bg_dim_get(void) { return bg_dim_get(); }
  |   clamped once, so a lightening hold still dips toward black through the ramp
  |   instead of scaling around its own resting point.
  |
- |   This cannot go through title_fade_engage: that points NBG0 AND NBG3 at
- |   channel A so the title screen dims as a unit, which in game would blink the
- |   player's text out mid-sentence. The wallpaper gets channel B on NBG0 alone,
- |   leaving channel A entirely to the screen-wide page and title fades.
+ |   This cannot go through channel A: that carries NBG3, the player's text, which
+ |   in game would blink out mid-sentence. The picture gets channel B on NBG0
+ |   alone, leaving channel A to the text and to every screen-wide fade.
  |
- |   NBG3 has to be cleared off channel B explicitly first. SRL seeds
- |   OffsetBScrolls to NBG3ON (srl_vdp2.hpp:334), and UseColorOffset re-registers
- |   BOTH masks from those bitfields on every call -- so engaging NBG0 on B without
- |   this would drag the text onto B as well and fade exactly what must stay lit.
+ |   Swallowed while a screen-wide fade is up (g_screen_fade): the level is still
+ |   recorded, so title_bg_dim_set replays at the right place afterwards, but
+ |   nothing is written -- see g_screen_fade for the blackout this protects.
  |
  |   Engage/disengage happen only at the ends of a ramp, because UseColorOffset
  |   calls slColOffsetOn(0) and re-registers; the per-frame steps in between are
  |   just SetColorOffsetB value writes. Channel B is released only when the
  |   composed value is neutral -- level 255 with no hold set -- so a held dim keeps
- |   the channel claimed at rest, byte-identical to today when no hold is set.
+ |   the channel claimed at rest.
  |
  |   Every call records `level` via bg_dim_note_level before anything else, so
  |   title_bg_dim_set can re-apply a changed hold at the level actually showing
  |   instead of assuming 255 -- see title_bg_dim_set.
- |
- |   A screen-wide fade taking NBG0 releases this claim: title_fade_engage clears
- |   g_dyn_faded, so a ramp interrupted by one (a soft reset mid-transition) does
- |   not later disengage a layer it no longer holds. Nothing restores NBG3 to
- |   channel B afterwards, which is deliberate -- SRL seeds it there and no fade
- |   in this file wants it, so the seed is cleared for the session and inert.
+ | Author: suinevere
+ | Dependencies: SRL, bg_dim.h
+ | Globals: g_dyn_faded, g_screen_fade
+ | Params: level -- 0 (black) to 255 (unmodified)
+ | Returns: N/A
+ ----------------------*/
+void title_bg_dyn_fade(int level) {
+    if (g_screen_fade) {
+        if (level < 0)   level = 0;
+        if (level > 255) level = 255;
+        bg_dim_note_level(level);
+        return;
+    }
+    title_bg_apply(level);
+}
+
+/*----------------------
+ | title_bg_apply
+ | Description: title_bg_dyn_fade's write half, with no g_screen_fade guard --
+ |   the one path that touches colour offset channel B. Called directly by
+ |   title_fade_set, which IS the screen-wide fade and so must not be swallowed
+ |   by it.
  | Author: suinevere
  | Dependencies: SRL, bg_dim.h
  | Globals: g_dyn_faded
  | Params: level -- 0 (black) to 255 (unmodified)
  | Returns: N/A
  ----------------------*/
-void title_bg_dyn_fade(int level) {
+static void title_bg_apply(int level) {
     int v;
     if (level < 0)   level = 0;
     if (level > 255) level = 255;
@@ -1177,8 +1209,6 @@ void title_bg_dyn_fade(int level) {
     }
 
     if (!g_dyn_faded) {
-        // Take NBG3 off both channels BEFORE putting NBG0 on B -- see above.
-        SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
         SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetB);
         g_dyn_faded = true;
     }

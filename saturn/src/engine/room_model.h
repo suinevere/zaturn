@@ -214,6 +214,27 @@ int room_model_object_word(unsigned short obj, char *out, int max);
 int room_model_dict_count(void);
 int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out);
 
+/*----------------------
+ | room_model_full_word
+ | Description: Recovers a fuller spelling for a six-character-truncated
+ |   dictionary word by decoding an object's own short name -- the Z-string at
+ |   that object's property table, using the full A0/A1/A2 shift alphabets,
+ |   the abbreviation table, and the 10-bit ZSCII escape -- and preferring a
+ |   token from it whose first six characters match `word`. Display only: the
+ |   parser distinguishes six characters and no more, so callers must keep
+ |   submitting `word` itself, never this function's result.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story, g_len, g_available
+ | Params: obj -- object number; word -- the dictionary word, six characters
+ |   or fewer; out -- receives the recovered spelling, or a copy of `word`
+ |   when no longer match exists or obj/word cannot be decoded; max -- out's
+ |   capacity
+ | Returns: 1 when a longer spelling was recovered, 0 otherwise (out is still
+ |   filled with a safe copy of `word`)
+ ----------------------*/
+int room_model_full_word(unsigned short obj, const char *word, char *out, int max);
+
 #ifdef __cplusplus
 }
 #endif

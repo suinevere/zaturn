@@ -27,8 +27,13 @@
  |   against the real image: the mailbox (160) and door (181) each carry a
  |   synonym property of dictionary addresses, found without hardcoding its
  |   property number, decoding to the dictionary's truncated forms ("mailbo",
- |   "door"); a room object (81) has none. Reads saturn/zork1.dat
- |   directly; no SRL or Saturn code is involved.
+ |   "door"); a room object (81) has none -- and room_model_full_word: the
+ |   mailbox's short name recovers "mailbox" from "mailbo", the door's
+ |   already-full word ("door") and a word absent from the mailbox's short
+ |   name are both left unchanged, and a hand-built image whose sole
+ |   object's short-name pointer declares a span running 180 bytes past an
+ |   address 9 bytes from the story's end is refused rather than decoded.
+ |   Reads saturn/zork1.dat directly; no SRL or Saturn code is involved.
  | Author: suinevere
  | Dependencies: ../src/engine/room_model.h and room_model.c, assert.h, stdio.h,
  |   stdlib.h, string.h, saturn/zork1.dat
@@ -265,6 +270,56 @@ int main(void) {
         assert(found_open == 1);
         assert(room_model_dict_word(-1, w, (int) sizeof w, &fl) == 0);
         assert(room_model_dict_word(n, w, (int) sizeof w, &fl) == 0);
+    }
+
+    {
+        char word[8], full[16];
+        assert(room_model_object_word(160, word, sizeof word) == 1);
+        assert(strcmp(word, "mailbo") == 0);
+        assert(room_model_full_word(160, word, full, sizeof full) == 1);
+        assert(strcmp(full, "mailbox") == 0);
+
+        assert(room_model_object_word(181, word, sizeof word) == 1);
+        assert(strcmp(word, "door") == 0);
+        assert(room_model_full_word(181, word, full, sizeof full) == 0);
+        assert(strcmp(full, "door") == 0);
+
+        assert(room_model_full_word(160, "zzzzzz", full, sizeof full) == 0);
+        assert(strcmp(full, "zzzzzz") == 0);
+    }
+
+    {
+        unsigned char img[200];
+        int i;
+        for (i = 0; i < 200; i++) img[i] = 0;
+
+        img[0x08] = 0x00; img[0x09] = 16;
+        img[0x0a] = 0x00; img[0x0b] = 64;
+        img[0x0c] = 0x00; img[0x0d] = 48;
+
+        img[16] = 0;
+        img[17] = 6;
+        img[18] = 0; img[19] = 4;
+
+        img[20] = 0x4E; img[21] = 0x97; img[22] = 0x65; img[23] = 0xA0;
+        img[24] = 0x10; img[25] = 31;
+        img[26] = 0x28; img[27] = 0xD8; img[28] = 0x64; img[29] = 0x00;
+        img[30] = 0x10; img[31] = 30;
+        img[32] = 0x71; img[33] = 0x58; img[34] = 0x64; img[35] = 0x00;
+        img[36] = 0x10; img[37] = 29;
+        img[38] = 0x62; img[39] = 0x9A; img[40] = 0x65; img[41] = 0xA0;
+        img[42] = 0x10; img[43] = 28;
+
+        img[133] = 0x00; img[134] = 190;
+        img[190] = 90;
+
+        assert(room_model_bind(img, 200) == 1);
+        assert(room_model_available() == 1);
+        {
+            char full[16];
+            assert(room_model_full_word(1, "mailbo", full, sizeof full) == 0);
+            assert(strcmp(full, "mailbo") == 0);
+        }
     }
 
     unsigned char junk[64];

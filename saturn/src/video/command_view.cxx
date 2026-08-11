@@ -726,8 +726,11 @@ static void cv_overlay_border(char *out) {
 /*----------------------
  | cv_overlay_row_text
  | Description: Builds one overlay content row: '|', the carried item at
- |   `idx`'s parser word (blank once idx runs past the carried count), padded
- |   to the box's inner width, '|'.
+ |   `idx`'s parser word -- recovered to its full spelling from the object's
+ |   own short name where a longer one exists, then still shown through the
+ |   module's six-character-wide field like every other word cell -- blank
+ |   once idx runs past the carried count, padded to the box's inner width,
+ |   '|'.
  | Author: suinevere
  | Dependencies: room_model.h
  | Globals: N/A
@@ -737,11 +740,13 @@ static void cv_overlay_border(char *out) {
  ----------------------*/
 static void cv_overlay_row_text(const RoomModel &m, int idx, char *out) {
     char word[8] = {0};
+    char full[16] = {0};
     int i;
-    if (idx >= 0 && idx < m.ncarried) room_model_object_word(m.carried[idx], word, sizeof word);
+    if (idx >= 0 && idx < m.ncarried && room_model_object_word(m.carried[idx], word, sizeof word))
+        room_model_full_word(m.carried[idx], word, full, sizeof full);
     out[0] = '|';
     out[1] = ' ';
-    for (i = 0; i < 6; i++) out[2 + i] = (word[i] != '\0') ? word[i] : ' ';
+    for (i = 0; i < 6; i++) out[2 + i] = (full[i] != '\0') ? full[i] : ' ';
     for (i = 8; i < CV_OVERLAY_W - 1; i++) out[i] = ' ';
     out[CV_OVERLAY_W - 1] = '|';
     out[CV_OVERLAY_W] = '\0';

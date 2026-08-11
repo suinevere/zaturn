@@ -29,7 +29,7 @@ static const char *RM_DIR_WORD[RM_DIR_N] = {
  ----------------------*/
 static const unsigned char *g_story;
 static unsigned int g_len;
-static unsigned int g_dict, g_obj, g_glob;
+static unsigned int g_dict, g_obj, g_glob, g_abbr;
 static int g_prop[RM_DIR_N];
 static int g_available;
 
@@ -165,6 +165,7 @@ int room_model_bind(const unsigned char *story, unsigned int len) {
     g_dict = rd16(0x08);
     g_obj  = rd16(0x0a);
     g_glob = rd16(0x0c);
+    g_abbr = rd16(0x18);
     if (g_dict == 0 || g_obj == 0 || g_glob == 0) return 0;
     if (g_dict + 4u >= len || g_obj + 64u >= len || g_glob + 2u >= len) return 0;
     if (g_dict + (unsigned int) g_story[g_dict] + 4u > len) return 0;
@@ -445,6 +446,268 @@ int room_model_object_word(unsigned short obj, char *out, int max) {
             }
         }
         a = base + (unsigned int) plen;
+    }
+    return 0;
+}
+
+/*----------------------
+ | RM_A0 / RM_A1 / RM_A2 (ZSCII alphabets)
+ | Description: The three Z-machine alphabet tables mapping z-chars 6..31 to
+ |   ASCII: lowercase, uppercase, and the punctuation/digit set. A2 index 0
+ |   (z-char 6) is the 10-bit ZSCII escape, handled inline in rm_emit_zchars.
+ | Author: suinevere
+ ----------------------*/
+static const char RM_A0[] = "abcdefghijklmnopqrstuvwxyz";
+static const char RM_A1[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static const char RM_A2[] = { 0, '\n', '0', '1', '2', '3', '4', '5', '6', '7',
+                               '8', '9', '.', ',', '!', '?', '_', '#', '\'',
+                               '"', '/', '\\', '-', ':', '(', ')' };
+
+/*----------------------
+ | RM_ZBUF_MAX / RM_ABBR_N / RM_NAME_MAX / RM_TOK_MAX / RM_TOK_LEN
+ | Description: Bounds for the short-name decode: the z-char scratch buffer
+ |   (room for 31 packed words), the abbreviation table's fixed entry count
+ |   (3 sets of 32), the decoded short-name text buffer, and the tokenizer's
+ |   maximum token count and per-token length.
+ | Author: suinevere
+ ----------------------*/
+#define RM_ZBUF_MAX  96
+#define RM_ABBR_N    96
+#define RM_NAME_MAX  64
+#define RM_TOK_MAX   12
+#define RM_TOK_LEN   16
+
+/*----------------------
+ | rm_decode_zstring (forward declaration)
+ | Description: Decodes a Z-string at byte address `addr`, appending into
+ |   buf[pos..cap) and returning the new position. Declared ahead of
+ |   rm_emit_zchars because the two recurse (an abbreviation reference decodes
+ |   another string) -- that recursion is capped at one level by always
+ |   passing allow_abbr = 0 into the nested call, so a self-referential or
+ |   cyclic abbreviation table cannot recurse further.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story, g_len
+ | Params: addr -- byte address of the string; abbr -- abbreviation table
+ |   address; allow_abbr -- whether abbreviation references expand; buf/cap --
+ |   output; pos -- start position
+ | Returns: the new buffer position
+ ----------------------*/
+static int rm_decode_zstring(unsigned int addr, unsigned int abbr, int allow_abbr,
+                              char *buf, int cap, int pos);
+
+/*----------------------
+ | rm_emit_zchars
+ | Description: Renders a run of z-chars into `buf`, tracking the shift
+ |   alphabet (A0/A1/A2), expanding abbreviation references via
+ |   rm_decode_zstring (when allowed and in range), and handling the 10-bit
+ |   ZSCII escape. Stops at the buffer cap.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story, g_len, RM_A0, RM_A1, RM_A2
+ | Params: zc/n -- the z-chars; abbr -- abbreviation table address; allow_abbr
+ |   -- whether references expand; buf/cap -- output; pos -- start position
+ | Returns: the new buffer position
+ ----------------------*/
+static int rm_emit_zchars(const unsigned char *zc, int n, unsigned int abbr,
+                           int allow_abbr, char *buf, int cap, int pos) {
+    int alpha = 0, i;
+    for (i = 0; i < n; i++) {
+        unsigned char c = zc[i];
+        if (c == 0) { if (pos < cap - 1) buf[pos++] = ' '; alpha = 0; continue; }
+        if (c <= 3) {
+            if (allow_abbr && i + 1 < n && abbr != 0u) {
+                int idx = 32 * (c - 1) + zc[i + 1];
+                if (idx >= 0 && idx < RM_ABBR_N) {
+                    unsigned int entry = abbr + 2u * (unsigned int) idx;
+                    if (entry + 1u < g_len) {
+                        unsigned int aa = rd16(entry) * 2u;
+                        if (aa + 1u < g_len)
+                            pos = rm_decode_zstring(aa, abbr, 0, buf, cap, pos);
+                    }
+                }
+            }
+            if (i + 1 < n) i++;
+            alpha = 0; continue;
+        }
+        if (c == 4) { alpha = 1; continue; }
+        if (c == 5) { alpha = 2; continue; }
+        if (alpha == 2 && c == 6) {
+            if (i + 2 < n) {
+                int zs = (zc[i + 1] << 5) | zc[i + 2];
+                i += 2;
+                if (zs >= 32 && zs < 127 && pos < cap - 1) buf[pos++] = (char) zs;
+            }
+            alpha = 0; continue;
+        }
+        {
+            char ch;
+            if (alpha == 0) ch = RM_A0[c - 6];
+            else if (alpha == 1) ch = RM_A1[c - 6];
+            else ch = RM_A2[c - 6];
+            if (pos < cap - 1) buf[pos++] = ch;
+            alpha = 0;
+        }
+    }
+    if (cap > 0) buf[pos < cap ? pos : cap - 1] = '\0';
+    return pos;
+}
+
+/*----------------------
+ | rm_decode_zstring
+ | Description: Reads the packed z-char words of a Z-string at `addr`
+ |   (stopping at the end-bit, the scratch buffer's capacity, or the image
+ |   end) and renders them via rm_emit_zchars. The other half of the
+ |   rm_decode_zstring/rm_emit_zchars recursion.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story, g_len
+ | Params: addr -- byte address of the string; abbr -- abbreviation table
+ |   address; allow_abbr -- whether references expand; buf/cap -- output;
+ |   pos -- start position
+ | Returns: the new buffer position
+ ----------------------*/
+static int rm_decode_zstring(unsigned int addr, unsigned int abbr, int allow_abbr,
+                              char *buf, int cap, int pos) {
+    unsigned char zc[RM_ZBUF_MAX];
+    int n = 0;
+    unsigned int a = addr;
+    while (n <= RM_ZBUF_MAX - 3) {
+        unsigned int w;
+        if (a + 1u >= g_len) break;
+        w = rd16(a); a += 2u;
+        zc[n++] = (unsigned char) ((w >> 10) & 0x1fu);
+        zc[n++] = (unsigned char) ((w >> 5) & 0x1fu);
+        zc[n++] = (unsigned char) (w & 0x1fu);
+        if (w & 0x8000u) break;
+    }
+    return rm_emit_zchars(zc, n, abbr, allow_abbr, buf, cap, pos);
+}
+
+/*----------------------
+ | obj_name_addr
+ | Description: The address of an object's short name -- the Z-string just
+ |   past its property table's length byte -- and its length in 2-byte words.
+ |   Refuses (returns 0) unless the whole declared span lies inside the bound
+ |   image, so a malformed or out-of-range property-table pointer is never
+ |   handed to the decoder.
+ | Author: suinevere
+ | Dependencies: rd16, obj_valid, obj_entry
+ | Globals: g_story, g_len
+ | Params: id -- object number; out_words -- receives the short name's length
+ |   in 2-byte words
+ | Returns: the short name's byte address, or 0 when unreadable
+ ----------------------*/
+static unsigned int obj_name_addr(unsigned short id, unsigned int *out_words) {
+    unsigned int t, addr, words;
+    *out_words = 0u;
+    if (!obj_valid(id)) return 0u;
+    t = rd16(obj_entry(id) + 7u);
+    if (t == 0u || t >= g_len) return 0u;
+    words = g_story[t];
+    if (words == 0u) return 0u;
+    addr = t + 1u;
+    if (addr + 2u * words > g_len) return 0u;
+    *out_words = words;
+    return addr;
+}
+
+/*----------------------
+ | obj_short_name
+ | Description: Decodes an object's short name into `out`, bounded by
+ |   obj_name_addr's span check.
+ | Author: suinevere
+ | Dependencies: obj_name_addr, rm_decode_zstring
+ | Globals: g_abbr
+ | Params: id -- object number; out -- receives the text; cap -- its capacity
+ | Returns: 1 on success, 0 when the short name cannot be read
+ ----------------------*/
+static int obj_short_name(unsigned short id, char *out, int cap) {
+    unsigned int words, addr;
+    if (cap > 0) out[0] = '\0';
+    addr = obj_name_addr(id, &words);
+    if (addr == 0u) return 0;
+    rm_decode_zstring(addr, g_abbr, 1, out, cap, 0);
+    return 1;
+}
+
+/*----------------------
+ | rm_tokenize
+ | Description: Splits a decoded short name into lowercase [a-z]+ tokens
+ |   (non-letters split tokens), filling tok[][] and returning the token
+ |   count. Capped at RM_TOK_MAX tokens of RM_TOK_LEN - 1 characters each.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: name -- the decoded short name; tok -- output token array; maxtok
+ |   -- capacity
+ | Returns: the number of tokens
+ ----------------------*/
+static int rm_tokenize(const char *name, char tok[][RM_TOK_LEN], int maxtok) {
+    int nt = 0, tp = 0;
+    const char *p;
+    for (p = name; ; p++) {
+        char c = *p;
+        if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
+        if (c >= 'a' && c <= 'z') {
+            if (tp < RM_TOK_LEN - 1) tok[nt][tp++] = c;
+        } else {
+            if (tp > 0) { tok[nt][tp] = '\0'; if (++nt >= maxtok) return nt; tp = 0; }
+            if (c == '\0') break;
+        }
+    }
+    return nt;
+}
+
+/*----------------------
+ | room_model_full_word
+ | Description: Recovers a fuller spelling for a six-character-truncated
+ |   dictionary word by decoding an object's own short name -- the Z-string at
+ |   that object's property table, using the full A0/A1/A2 shift alphabets,
+ |   the abbreviation table, and the 10-bit ZSCII escape -- and preferring a
+ |   token from it whose first six characters match `word`. Display only: the
+ |   parser distinguishes six characters and no more, so callers must keep
+ |   submitting `word` itself, never this function's result.
+ | Author: suinevere
+ | Dependencies: obj_valid, obj_short_name, rm_tokenize
+ | Globals: g_available
+ | Params: obj -- object number; word -- the dictionary word, six characters
+ |   or fewer; out -- receives the recovered spelling, or a copy of `word`
+ |   when no longer match exists or obj/word cannot be decoded; max -- out's
+ |   capacity
+ | Returns: 1 when a longer spelling was recovered, 0 otherwise (out is still
+ |   filled with a safe copy of `word`)
+ ----------------------*/
+int room_model_full_word(unsigned short obj, const char *word, char *out, int max) {
+    char name[RM_NAME_MAX];
+    char tok[RM_TOK_MAX][RM_TOK_LEN];
+    int nt, i, wl, j;
+
+    if (out != 0 && max > 0) out[0] = '\0';
+    if (word == 0 || out == 0 || max <= 0) return 0;
+
+    wl = 0;
+    while (word[wl] != '\0' && wl < 6) wl++;
+    for (j = 0; j < wl && j < max - 1; j++) out[j] = word[j];
+    out[j] = '\0';
+
+    if (wl != 6) return 0;
+    if (!g_available || !obj_valid(obj)) return 0;
+    if (!obj_short_name(obj, name, (int) sizeof name)) return 0;
+
+    nt = rm_tokenize(name, tok, RM_TOK_MAX);
+    for (i = 0; i < nt; i++) {
+        int tl = 0, k, match = 1;
+        while (tok[i][tl] != '\0') tl++;
+        if (tl <= 6) continue;
+        for (k = 0; k < 6; k++) if (tok[i][k] != word[k]) { match = 0; break; }
+        if (!match) continue;
+        {
+            int m;
+            for (m = 0; m < tl && m < max - 1; m++) out[m] = tok[i][m];
+            out[m] = '\0';
+        }
+        return 1;
     }
     return 0;
 }

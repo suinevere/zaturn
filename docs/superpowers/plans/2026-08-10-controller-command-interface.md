@@ -1028,7 +1028,9 @@ void room_model_refresh_room(unsigned short room) {
         int size = (int) g_story[a];
         int prop = size & 31;
         int plen = (size >> 5) + 1;
-        int dir  = dir_of_prop(prop);
+        int dir;
+        if (a + 1u + (unsigned int) plen > g_len) break;
+        dir = dir_of_prop(prop);
         if (dir >= 0) {
             if (plen == 1) {
                 g_model.exits[dir] = RM_EXIT_OPEN;

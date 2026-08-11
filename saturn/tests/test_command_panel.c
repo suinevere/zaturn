@@ -161,6 +161,25 @@ int main(void) {
         }
     }
 
+    /* The overlay fills a noun slot, but is a viewer only when a verb is what
+       the panel is waiting for -- picking a held object cannot start a
+       sentence. */
+    cp_reset(&p);
+    cp_overlay_open(&p);
+    assert(p.overlay == 1);
+    assert(cp_overlay_takes_noun(&p) == 0);
+    cp_overlay_close(&p);
+    assert(p.overlay == 0);
+    assert(p.line_len == 0);
+
+    cp_pick(&p, "take", 0);
+    assert(p.slot == CP_SLOT_NOUN);
+    cp_overlay_open(&p);
+    assert(cp_overlay_takes_noun(&p) == 1);
+    cp_pick(&p, "lamp", 0);
+    assert(strcmp(p.line, "take lamp") == 0);
+    assert(p.overlay == 0);
+
     printf("test_command_panel ok\n");
     return 0;
 }

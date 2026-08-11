@@ -179,6 +179,23 @@ void room_model_refresh(void);
  ----------------------*/
 unsigned short room_model_player(void);
 
+/*----------------------
+ | room_model_object_word
+ | Description: An object's first parser synonym, read straight from its own
+ |   property list rather than decoded from a short name. The synonym property
+ |   number varies by game and is detected rather than hardcoded: a property
+ |   qualifies only when every one of its 16-bit values lands exactly on a
+ |   dictionary entry boundary within range. Returns the dictionary's
+ |   truncated six-character form, not the object's full-length name.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: obj -- object number; out -- receives up to six characters plus a
+ |   NUL; max -- out's capacity
+ | Returns: 1 and fills out on success, 0 and empties out otherwise
+ ----------------------*/
+int room_model_object_word(unsigned short obj, char *out, int max);
+
 #ifdef __cplusplus
 }
 #endif

@@ -391,6 +391,65 @@ static int collect_children(unsigned short parent, unsigned short *out, int max)
 unsigned short room_model_player(void) { return g_player; }
 
 /*----------------------
+ | room_model_object_word
+ | Description: An object's first parser synonym, read straight from its own
+ |   property list rather than decoded from a short name. ZILCH stores an
+ |   object's dictionary words as a synonym property whose data is a run of
+ |   2-byte dictionary addresses; the property number varies by game, so it is
+ |   detected rather than hardcoded: a property qualifies only when every one
+ |   of its 16-bit values lands exactly on a dictionary entry boundary within
+ |   the bound dictionary's range. The first qualifying property's first word
+ |   is decoded and copied out.
+ | Author: suinevere
+ | Dependencies: obj_valid, obj_props, rd16, dict_first, dict_entry_len,
+ |   dict_count, decode_word
+ | Globals: g_story, g_len, g_available
+ | Params: obj -- object number; out -- receives up to six characters plus a
+ |   NUL; max -- out's capacity
+ | Returns: 1 and fills out on success, 0 and empties out otherwise
+ ----------------------*/
+int room_model_object_word(unsigned short obj, char *out, int max) {
+    unsigned int a, lo, hi, elen;
+    char text[8];
+
+    if (out != 0 && max > 0) out[0] = '\0';
+    if (!g_available || !obj_valid(obj)) return 0;
+
+    a = obj_props(obj);
+    if (a == 0u) return 0;
+
+    elen = dict_entry_len();
+    lo = dict_first();
+    hi = lo + dict_count() * elen;
+
+    while (a < g_len && g_story[a] != 0) {
+        int size = (int) g_story[a];
+        int plen = (size >> 5) + 1;
+        unsigned int base = a + 1u;
+        if (base + (unsigned int) plen > g_len) break;
+        if (plen >= 2 && (plen % 2) == 0) {
+            int nwords = plen / 2;
+            int ok = 1, w;
+            for (w = 0; w < nwords; w++) {
+                unsigned int v = rd16(base + (unsigned int) (w * 2));
+                if (!(v >= lo && v < hi && (v - lo) % elen == 0)) { ok = 0; break; }
+            }
+            if (ok) {
+                decode_word(rd16(base), text);
+                if (out != 0 && max > 0) {
+                    int i = 0;
+                    while (text[i] != '\0' && i < max - 1) { out[i] = text[i]; i++; }
+                    out[i] = '\0';
+                }
+                return 1;
+            }
+        }
+        a = base + (unsigned int) plen;
+    }
+    return 0;
+}
+
+/*----------------------
  | room_model_refresh
  | Description: Reads the current room out of global 0 -- which the v3
  |   specification defines as the room the status line names -- and rebuilds the

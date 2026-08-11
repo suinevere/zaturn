@@ -58,6 +58,7 @@ typedef struct {
     char line[CP_LINE_MAX];
     int  line_len;
     int  submitted;
+    int  overlay;   /* 1 while the inventory overlay is up */
 } CommandPanel;
 
 /*----------------------
@@ -125,6 +126,22 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep);
  | Returns: N/A
  ----------------------*/
 void cp_back(CommandPanel *p);
+
+/*----------------------
+ | cp_overlay_open / cp_overlay_close / cp_overlay_takes_noun
+ | Description: Raises and lowers the inventory overlay, and reports whether a
+ |   pick made from it would land somewhere -- true only while the panel is
+ |   waiting for a noun. With a verb slot active the overlay is a viewer, since
+ |   a held object cannot start a sentence.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: cp_overlay_takes_noun returns 1 when a pick would fill a slot
+ ----------------------*/
+void cp_overlay_open(CommandPanel *p);
+void cp_overlay_close(CommandPanel *p);
+int  cp_overlay_takes_noun(const CommandPanel *p);
 
 /*----------------------
  | CommandWords

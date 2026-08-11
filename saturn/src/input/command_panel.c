@@ -24,6 +24,7 @@ void cp_reset(CommandPanel *p) {
     p->line[0] = '\0';
     p->line_len = 0;
     p->submitted = 0;
+    p->overlay = 0;
 }
 
 /*----------------------
@@ -78,12 +79,13 @@ void cp_move(CommandPanel *p, int d, int count) {
  ----------------------*/
 void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
     int i = 0;
+    if (p->overlay && !cp_overlay_takes_noun(p)) { cp_overlay_close(p); return; }
     if (word == 0 || word[0] == '\0') return;
     if (p->line_len > 0 && p->line_len < CP_LINE_MAX - 1) p->line[p->line_len++] = ' ';
     while (word[i] && p->line_len < CP_LINE_MAX - 1) p->line[p->line_len++] = word[i++];
     p->line[p->line_len] = '\0';
 
-    if (p->box == CP_BOX_TRAVEL) { p->slot = CP_SLOT_DONE; p->submitted = 1; return; }
+    if (p->box == CP_BOX_TRAVEL) { p->slot = CP_SLOT_DONE; p->submitted = 1; p->overlay = 0; return; }
 
     switch (p->slot) {
         case CP_SLOT_VERB:  p->slot = CP_SLOT_NOUN; break;
@@ -94,6 +96,7 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
     }
     p->cursor = 0;
     p->page = 0;
+    p->overlay = 0;
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
 }
 
@@ -122,6 +125,26 @@ void cp_back(CommandPanel *p) {
     p->cursor = 0;
     p->page = 0;
     p->submitted = 0;
+}
+
+/*----------------------
+ | cp_overlay_open / cp_overlay_close / cp_overlay_takes_noun
+ | Description: Raises and lowers the inventory overlay, and reports whether a
+ |   pick made from it would land somewhere -- true only while the panel is
+ |   waiting for a noun. With a verb slot active the overlay is a viewer, since
+ |   a held object cannot start a sentence.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: cp_overlay_takes_noun returns 1 when a pick would fill a slot
+ ----------------------*/
+void cp_overlay_open(CommandPanel *p) { p->overlay = 1; p->cursor = 0; }
+
+void cp_overlay_close(CommandPanel *p) { p->overlay = 0; p->cursor = 0; }
+
+int cp_overlay_takes_noun(const CommandPanel *p) {
+    return p->overlay && (p->slot == CP_SLOT_NOUN || p->slot == CP_SLOT_NOUN2);
 }
 
 /*----------------------

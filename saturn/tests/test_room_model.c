@@ -17,11 +17,21 @@
  |   sole room object has a one-byte north exit property positioned so its
  |   declared data byte falls exactly one past the bound story length (a
  |   recognizable value sits there in memory but outside g_len), proving the
- |   property walk stops instead of reading it. Reads saturn/zork1.dat
+ |   property walk stops instead of reading it -- and a second hand-built
+ |   synthetic image, with a full object tree across two room objects sharing
+ |   exactly one child, proving room_model_player's intersection heuristic
+ |   actually converges: the shared child is mutated into the second room's
+ |   family between the two refresh_room calls (standing in for the story's own
+ |   object-tree edits as the player walks), and the resolved player's own
+ |   children come back as the carried set -- and room_model_object_word
+ |   against the real image: the mailbox (160) and door (181) each carry a
+ |   synonym property of dictionary addresses, found without hardcoding its
+ |   property number, decoding to the dictionary's truncated forms ("mailbo",
+ |   "door"); a room object (81) has none. Reads saturn/zork1.dat
  |   directly; no SRL or Saturn code is involved.
  | Author: suinevere
  | Dependencies: ../src/engine/room_model.h and room_model.c, assert.h, stdio.h,
- |   stdlib.h, saturn/zork1.dat
+ |   stdlib.h, string.h, saturn/zork1.dat
  | Build: gcc -std=c11 -Wall -Wextra -o /tmp/trm.exe \
  |          saturn/tests/test_room_model.c saturn/src/engine/room_model.c \
  |          && /tmp/trm.exe
@@ -30,6 +40,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static unsigned char *g_story;
 static unsigned int   g_len;
@@ -102,6 +113,27 @@ int main(void) {
         assert(saw_door == 1 && saw_box == 1);
     }
 
+    /* The mailbox and door each carry their parser words in a synonym
+       property holding dictionary addresses, detected without hardcoding its
+       property number. The dictionary's six-character truncation shows
+       through ("mailbo", not "mailbox"). */
+    {
+        char word[8];
+        assert(room_model_object_word(160, word, sizeof word) == 1);
+        assert(strcmp(word, "mailbo") == 0);
+        assert(room_model_object_word(181, word, sizeof word) == 1);
+        assert(strcmp(word, "door") == 0);
+    }
+
+    /* Object 81 is "North of House" -- a room, not a parser-nameable object,
+       so it has no synonym property to detect. */
+    {
+        char word[8];
+        word[0] = 'x';
+        assert(room_model_object_word(81, word, sizeof word) == 0);
+        assert(word[0] == '\0');
+    }
+
     /* Object 81 is "North of House" and holds nothing. */
     room_model_refresh_room(81);
     assert(room_model_get()->nhere == 0);
@@ -145,6 +177,75 @@ int main(void) {
             const RoomModel *m = room_model_get();
             assert(m->exits[RM_N] == RM_EXIT_NONE);
             assert(m->dest[RM_N] == 0);
+        }
+    }
+
+    {
+        unsigned char img[210];
+        int i;
+        for (i = 0; i < 210; i++) img[i] = 0;
+
+        img[0x08] = 0x00; img[0x09] = 16;
+        img[0x0a] = 0x00; img[0x0b] = 64;
+        img[0x0c] = 0x00; img[0x0d] = 204;
+
+        img[16] = 0;
+        img[17] = 6;
+        img[18] = 0; img[19] = 4;
+
+        img[20] = 0x4E; img[21] = 0x97; img[22] = 0x65; img[23] = 0xA0;
+        img[24] = 0x10; img[25] = 31;
+        img[26] = 0x28; img[27] = 0xD8; img[28] = 0x64; img[29] = 0x00;
+        img[30] = 0x10; img[31] = 30;
+        img[32] = 0x71; img[33] = 0x58; img[34] = 0x64; img[35] = 0x00;
+        img[36] = 0x10; img[37] = 29;
+        img[38] = 0x62; img[39] = 0x9A; img[40] = 0x65; img[41] = 0xA0;
+        img[42] = 0x10; img[43] = 28;
+
+        img[132] = 4;
+        img[158] = 3;
+        img[150] = 6;
+        img[176] = 7;
+
+        img[133] = 0; img[134] = 190;
+        img[190] = 0; img[191] = 0;
+
+        img[142] = 0; img[143] = 195;
+        img[195] = 0; img[196] = 0;
+
+        assert(room_model_bind(img, 210) == 1);
+        assert(room_model_available() == 1);
+
+        room_model_refresh_room(1);
+        {
+            const RoomModel *m = room_model_get();
+            int saw_side = 0, saw_player = 0, j;
+            assert(m->nhere == 2);
+            for (j = 0; j < m->nhere; j++) {
+                if (m->here[j] == 4) saw_side = 1;
+                if (m->here[j] == 3) saw_player = 1;
+            }
+            assert(saw_side == 1 && saw_player == 1);
+        }
+        assert(room_model_player() == 0);
+
+        img[141] = 3;
+        img[149] = 5;
+
+        room_model_refresh_room(2);
+        {
+            const RoomModel *m = room_model_get();
+            int saw_player = 0, saw_side = 0, j;
+            assert(m->nhere == 2);
+            for (j = 0; j < m->nhere; j++) {
+                if (m->here[j] == 3) saw_player = 1;
+                if (m->here[j] == 5) saw_side = 1;
+            }
+            assert(saw_player == 1 && saw_side == 1);
+            assert(room_model_player() == 3);
+            assert(m->ncarried == 2);
+            assert(m->carried[0] == 6);
+            assert(m->carried[1] == 7);
         }
     }
 

@@ -606,10 +606,97 @@ static void cv_draw_bottom_border(int focus, int y) {
 }
 
 /*----------------------
+ | CV_OVERLAY_X / CV_OVERLAY_W
+ | Description: The inventory overlay's left column and total width: 34
+ |   columns starting at column 2, drawn over the strip's seven interior rows
+ |   (the blank rows flanking the content plus the five content rows) so the
+ |   outer border and the 40-column geometry around it are undisturbed.
+ | Author: suinevere
+ ----------------------*/
+#define CV_OVERLAY_X 2
+#define CV_OVERLAY_W 34
+
+/*----------------------
+ | cv_overlay_border
+ | Description: Builds one horizontal border row of the overlay box: '+',
+ |   CV_OVERLAY_W - 2 dashes, '+'.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: out -- receives CV_OVERLAY_W characters plus a NUL
+ | Returns: N/A
+ ----------------------*/
+static void cv_overlay_border(char *out) {
+    int i;
+    out[0] = '+';
+    for (i = 1; i < CV_OVERLAY_W - 1; i++) out[i] = '-';
+    out[CV_OVERLAY_W - 1] = '+';
+    out[CV_OVERLAY_W] = '\0';
+}
+
+/*----------------------
+ | cv_overlay_row_text
+ | Description: Builds one overlay content row: '|', the carried item at
+ |   `idx`'s parser word (blank once idx runs past the carried count), padded
+ |   to the box's inner width, '|'.
+ | Author: suinevere
+ | Dependencies: room_model.h
+ | Globals: N/A
+ | Params: m -- the room snapshot; idx -- carried index, may be out of range;
+ |   out -- receives CV_OVERLAY_W characters plus a NUL
+ | Returns: N/A
+ ----------------------*/
+static void cv_overlay_row_text(const RoomModel &m, int idx, char *out) {
+    char word[8] = {0};
+    int i;
+    if (idx >= 0 && idx < m.ncarried) room_model_object_word(m.carried[idx], word, sizeof word);
+    out[0] = '|';
+    out[1] = ' ';
+    for (i = 0; i < 6; i++) out[2 + i] = (word[i] != '\0') ? word[i] : ' ';
+    for (i = 8; i < CV_OVERLAY_W - 1; i++) out[i] = ' ';
+    out[CV_OVERLAY_W - 1] = '|';
+    out[CV_OVERLAY_W] = '\0';
+}
+
+/*----------------------
+ | cv_draw_overlay
+ | Description: Draws the inventory overlay across the strip's seven interior
+ |   rows: a top border, five carried-item rows scrolled in blocks of CR_ROWS
+ |   around the cursor, and a bottom border, with the selected row in reverse
+ |   video.
+ | Author: suinevere
+ | Dependencies: room_model.h, text_map.h, command_panel.h
+ | Globals: N/A
+ | Params: p -- panel state; m -- the room snapshot; top_y -- the row the
+ |   overlay's top border is drawn on (the strip's first blank row)
+ | Returns: N/A
+ ----------------------*/
+static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y) {
+    char border[CV_OVERLAY_W + 1];
+    char row_text[CV_OVERLAY_W + 1];
+    int window, i;
+
+    cv_overlay_border(border);
+    text_print(CV_OVERLAY_X, top_y, border);
+
+    window = (p.cursor / CR_ROWS) * CR_ROWS;
+    for (i = 0; i < CR_ROWS; i++) {
+        int y = top_y + 1 + i;
+        int idx = window + i;
+        cv_overlay_row_text(m, idx, row_text);
+        if (idx == p.cursor) text_print_hl(CV_OVERLAY_X, y, row_text);
+        else                 text_print(CV_OVERLAY_X, y, row_text);
+    }
+
+    text_print(CV_OVERLAY_X, top_y + 1 + CR_ROWS, border);
+}
+
+/*----------------------
  | render_command_panel
- | Description: Draws the input line, the strip's borders and dividers, the
- |   compass rose, the word page, and the fixed command list, highlighting the
- |   focused module's selected entry and its border hint in reverse video.
+ | Description: Draws the input line, the strip's borders and dividers, and
+ |   either the inventory overlay or the compass rose/word page/command list,
+ |   highlighting the focused module's selected entry and its border hint in
+ |   reverse video.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h, console_view.h
  | Globals: g_difficulty
@@ -624,8 +711,6 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     int content0 = blank1 + 1;
     int blank2 = content0 + CR_ROWS;
     int border_bottom = blank2 + 1;
-    unsigned char flat[RM_DIR_N];
-    const unsigned char *exits;
     int row;
 
     text_clear_line(input_row);
@@ -634,26 +719,35 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     text_clear_line(border_top);
     text_print(0, border_top, CV_BORDER_TOP);
 
-    text_clear_line(blank1);
-    text_print(0, blank1, CV_BORDER_BLANK);
+    if (p.overlay) {
+        int y;
+        for (y = blank1; y <= blank2; y++) text_clear_line(y);
+        cv_draw_overlay(p, m, blank1);
+    } else {
+        unsigned char flat[RM_DIR_N];
+        const unsigned char *exits;
 
-    exits = m.exits;
-    if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
+        text_clear_line(blank1);
+        text_print(0, blank1, CV_BORDER_BLANK);
 
-    for (row = 0; row < CR_ROWS; row++) {
-        int y = content0 + row;
-        text_clear_line(y);
-        text_print(0, y, "|");
-        cv_draw_rose_row(row, exits, y);
-        text_print(14, y, "|");
-        cv_draw_word_row(row, p, w, y);
-        text_print(30, y, "|");
-        cv_draw_cmd_row(row, p, y);
-        text_print(39, y, "|");
+        exits = m.exits;
+        if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
+
+        for (row = 0; row < CR_ROWS; row++) {
+            int y = content0 + row;
+            text_clear_line(y);
+            text_print(0, y, "|");
+            cv_draw_rose_row(row, exits, y);
+            text_print(14, y, "|");
+            cv_draw_word_row(row, p, w, y);
+            text_print(30, y, "|");
+            cv_draw_cmd_row(row, p, y);
+            text_print(39, y, "|");
+        }
+
+        text_clear_line(blank2);
+        text_print(0, blank2, CV_BORDER_BLANK);
     }
-
-    text_clear_line(blank2);
-    text_print(0, blank2, CV_BORDER_BLANK);
 
     text_clear_line(border_bottom);
     cv_draw_bottom_border(p.box, border_bottom);
@@ -734,6 +828,23 @@ static void cv_cmd_dpad(CommandPanel &p) {
 }
 
 /*----------------------
+ | cv_overlay_dpad
+ | Description: Walks the inventory overlay's carried-item list: each
+ |   direction steps the cursor by one, clamped to the carried count.
+ | Author: suinevere
+ | Dependencies: input.h, command_panel.h
+ | Globals: N/A
+ | Params: p -- panel state; count -- carried item count
+ | Returns: N/A
+ ----------------------*/
+static void cv_overlay_dpad(CommandPanel &p, int count) {
+    if (pad_fired(Button::Up))    cp_move(&p, -1, count);
+    if (pad_fired(Button::Down))  cp_move(&p,  1, count);
+    if (pad_fired(Button::Left))  cp_move(&p, -1, count);
+    if (pad_fired(Button::Right)) cp_move(&p,  1, count);
+}
+
+/*----------------------
  | cv_verb_wants_prep
  | Description: Whether the sentence's verb has a TYPE_PREP transition in the
  |   trie -- the flag cp_pick needs when the noun slot closes. At the verb slot
@@ -797,16 +908,22 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w, TrieNode *roo
  | cv_cmd_accept
  | Description: Accept in the command module: overwrites the sentence in
  |   progress with the selected entry's submit word and marks it submitted --
- |   these are whole standalone commands, not sentence-slot picks.
+ |   these are whole standalone commands, not sentence-slot picks. "invent" is
+ |   the one exception: with the room model available there is a carried set
+ |   to show, so it opens the overlay instead of submitting; unavailable, it
+ |   falls through and submits "inventory" like a typed command, since there
+ |   is nothing to browse.
  | Author: suinevere
- | Dependencies: command_panel.h
+ | Dependencies: command_panel.h, room_model.h
  | Globals: N/A
  | Params: p -- panel state
  | Returns: N/A
  ----------------------*/
 static void cv_cmd_accept(CommandPanel &p) {
-    const char *cmd = CV_CMD_WORD[p.cursor];
+    const char *cmd;
     int i = 0;
+    if (p.cursor == 0 && room_model_available()) { cp_overlay_open(&p); return; }
+    cmd = CV_CMD_WORD[p.cursor];
     while (cmd[i] != '\0' && i < CP_LINE_MAX - 1) { p.line[i] = cmd[i]; i++; }
     p.line[i] = '\0';
     p.line_len = i;
@@ -815,16 +932,44 @@ static void cv_cmd_accept(CommandPanel &p) {
 }
 
 /*----------------------
- | command_edit
- | Description: One frame of command-mode input: L/R move focus, the D-pad
- |   walks the focused module or acts as the literal compass in travel, Accept
- |   picks, Back unwinds. A completed command is copied into `k` and submitted,
- |   so it leaves through the same path a typed one does. `ke` is accepted for
- |   the physical-keyboard escape hatch a later task wires in, and is not
- |   consumed here. `w` is refreshed for the current slot/page before the D-pad
- |   is read, since the word module's cursor bound depends on it.
+ | cv_overlay_accept
+ | Description: Accept from the inventory overlay: resolves the selected
+ |   carried object's parser word and hands it to cp_pick, which itself
+ |   decides whether the pick lands (waiting for a noun) or is dropped as a
+ |   view-only close (waiting for a verb) -- see cp_pick's overlay guard. No
+ |   word resolves for a cursor past the carried count or an object with no
+ |   detectable synonym property; cp_pick is still called so the guard's
+ |   view-only close still fires.
  | Author: suinevere
- | Dependencies: input.h, command_panel.h
+ | Dependencies: room_model.h, command_panel.h, typeahead.h
+ | Globals: N/A
+ | Params: p -- panel state; m -- the room snapshot; root -- typeahead trie,
+ |   may be null
+ | Returns: N/A
+ ----------------------*/
+static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *root) {
+    char word[8] = {0};
+    int has = 0;
+    if (p.cursor >= 0 && p.cursor < m.ncarried)
+        has = room_model_object_word(m.carried[p.cursor], word, sizeof word);
+    cp_pick(&p, has ? word : 0, has ? cv_verb_wants_prep(p, root, word) : 0);
+}
+
+/*----------------------
+ | command_edit
+ | Description: One frame of command-mode input. With the inventory overlay up
+ |   it takes the pad exclusively: the D-pad walks the carried list, Accept
+ |   resolves the selection through cp_pick, Back closes it unchanged --
+ |   module focus does not move, since the overlay spans all three modules.
+ |   Otherwise: L/R move focus, the D-pad walks the focused module or acts as
+ |   the literal compass in travel, Accept picks, Back unwinds. A completed
+ |   command is copied into `k` and submitted, so it leaves through the same
+ |   path a typed one does. `ke` is accepted for the physical-keyboard escape
+ |   hatch a later task wires in, and is not consumed here. `w` is refreshed
+ |   for the current slot/page before the D-pad is read, since the word
+ |   module's cursor bound depends on it.
+ | Author: suinevere
+ | Dependencies: input.h, command_panel.h, room_model.h
  | Globals: g_pad
  | Params: k -- keyboard state the command is written into; p -- panel state;
  |   m -- the room snapshot; root -- the typeahead trie for ranking, may be null;
@@ -834,20 +979,26 @@ static void cv_cmd_accept(CommandPanel &p) {
  ----------------------*/
 void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
                   TrieNode *root, SaturnKeyEvent &ke, CommandWords &w) {
-    if (pad_fired(Button::L)) cp_focus(&p, -1);
-    if (pad_fired(Button::R)) cp_focus(&p, +1);
+    if (p.overlay) {
+        cv_overlay_dpad(p, m.ncarried);
+        if (pad_fired(face_button(FA_ACCEPT))) cv_overlay_accept(p, m, root);
+        if (pad_fired(face_button(FA_BACK)))   cp_overlay_close(&p);
+    } else {
+        if (pad_fired(Button::L)) cp_focus(&p, -1);
+        if (pad_fired(Button::R)) cp_focus(&p, +1);
 
-    cv_refill_words(p, root, w);
+        cv_refill_words(p, root, w);
 
-    if      (p.box == CP_BOX_TRAVEL) cv_travel_pick(p);
-    else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, w);
-    else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p);
+        if      (p.box == CP_BOX_TRAVEL) cv_travel_pick(p);
+        else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, w);
+        else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p);
 
-    if (pad_fired(face_button(FA_ACCEPT))) {
-        if      (p.box == CP_BOX_WORD) cv_word_accept(p, w, root);
-        else if (p.box == CP_BOX_CMD)  cv_cmd_accept(p);
+        if (pad_fired(face_button(FA_ACCEPT))) {
+            if      (p.box == CP_BOX_WORD) cv_word_accept(p, w, root);
+            else if (p.box == CP_BOX_CMD)  cv_cmd_accept(p);
+        }
+        if (pad_fired(face_button(FA_BACK))) cp_back(&p);
     }
-    if (pad_fired(face_button(FA_BACK))) cp_back(&p);
 
     if (p.submitted) {
         int i;
@@ -860,6 +1011,5 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
     }
 
     cv_refill_words(p, root, w);
-    (void) m;
     (void) ke;
 }

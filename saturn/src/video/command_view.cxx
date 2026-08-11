@@ -637,20 +637,22 @@ static void cv_travel_pick(CommandPanel &p) {
 /*----------------------
  | cv_word_dpad
  | Description: Walks the word module's grid: Up/Down step by the column count
- |   (one row), Left/Right by one cell. The full ten-cell grid is navigable,
- |   including the tenth cell, which is how the "v more" marker is reached to
- |   turn the page.
+ |   (one row), Left/Right by one cell. The cursor's reachable range is
+ |   w.n + (w.more ? 1 : 0) -- exactly the filled cells, plus one more when the
+ |   "v more" marker occupies the next cell, so the cursor never lands on a
+ |   blank cell but can still reach the marker to turn the page.
  | Author: suinevere
  | Dependencies: input.h, command_panel.h
  | Globals: N/A
- | Params: p -- panel state
+ | Params: p -- panel state; w -- the word page currently drawn
  | Returns: N/A
  ----------------------*/
-static void cv_word_dpad(CommandPanel &p) {
-    if (pad_fired(Button::Up))    cp_move(&p, -CP_WORD_COLS, CP_WORD_CELLS);
-    if (pad_fired(Button::Down))  cp_move(&p,  CP_WORD_COLS, CP_WORD_CELLS);
-    if (pad_fired(Button::Left))  cp_move(&p, -1, CP_WORD_CELLS);
-    if (pad_fired(Button::Right)) cp_move(&p,  1, CP_WORD_CELLS);
+static void cv_word_dpad(CommandPanel &p, const CommandWords &w) {
+    int count = w.n + (w.more ? 1 : 0);
+    if (pad_fired(Button::Up))    cp_move(&p, -CP_WORD_COLS, count);
+    if (pad_fired(Button::Down))  cp_move(&p,  CP_WORD_COLS, count);
+    if (pad_fired(Button::Left))  cp_move(&p, -1, count);
+    if (pad_fired(Button::Right)) cp_move(&p,  1, count);
 }
 
 /*----------------------
@@ -706,9 +708,11 @@ static int cv_verb_wants_prep(const CommandPanel &p, TrieNode *root, const char 
 
 /*----------------------
  | cv_word_accept
- | Description: Accept in the word module: the tenth cell, when it reads "v
- |   more", turns the page instead of picking; otherwise the cell under the
- |   cursor is picked, with wants_prep resolved via cv_verb_wants_prep.
+ | Description: Accept in the word module: the cell one past the last filled
+ |   one, when it reads "v more" (cp_fill guarantees that cell sits at index
+ |   w.n whenever w.more is set), turns the page instead of picking; otherwise
+ |   the cell under the cursor is picked, with wants_prep resolved via
+ |   cv_verb_wants_prep.
  | Author: suinevere
  | Dependencies: command_panel.h, typeahead.h
  | Globals: N/A
@@ -717,7 +721,7 @@ static int cv_verb_wants_prep(const CommandPanel &p, TrieNode *root, const char 
  | Returns: N/A
  ----------------------*/
 static void cv_word_accept(CommandPanel &p, const CommandWords &w, TrieNode *root) {
-    if (p.cursor == CP_WORD_CELLS - 1 && w.more) {
+    if (p.cursor == w.n && w.more) {
         p.page++;
         p.cursor = 0;
         return;
@@ -756,7 +760,8 @@ static void cv_cmd_accept(CommandPanel &p) {
  |   picks, Back unwinds. A completed command is copied into `k` and submitted,
  |   so it leaves through the same path a typed one does. `ke` is accepted for
  |   the physical-keyboard escape hatch a later task wires in, and is not
- |   consumed here.
+ |   consumed here. `w` is refreshed for the current slot/page before the D-pad
+ |   is read, since the word module's cursor bound depends on it.
  | Author: suinevere
  | Dependencies: input.h, command_panel.h
  | Globals: g_pad
@@ -771,11 +776,11 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
     if (pad_fired(Button::L)) cp_focus(&p, -1);
     if (pad_fired(Button::R)) cp_focus(&p, +1);
 
-    if      (p.box == CP_BOX_TRAVEL) cv_travel_pick(p);
-    else if (p.box == CP_BOX_WORD)   cv_word_dpad(p);
-    else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p);
-
     cv_refill_words(p, root, w);
+
+    if      (p.box == CP_BOX_TRAVEL) cv_travel_pick(p);
+    else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, w);
+    else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p);
 
     if (pad_fired(face_button(FA_ACCEPT))) {
         if      (p.box == CP_BOX_WORD) cv_word_accept(p, w, root);

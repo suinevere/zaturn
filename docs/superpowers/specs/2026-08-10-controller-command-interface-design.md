@@ -187,6 +187,8 @@ One bordered strip, three modules separated by single vertical rules, exactly
 40 columns: travel 13, words 15, commands 8. The input line sits above it.
 
 ```
+...last line of room text
+
 > open _
 +-------------+---------------+--------+
 |NW ^  N  ^ NE| look   take   | invent |
@@ -205,9 +207,11 @@ keeps the strip six rows deep rather than seven.
 No module headers. The input line above carries what is being assembled, which
 is what tells the player whether the word list is verbs or nouns.
 
-The strip is six content rows between two borders, with the input line above
-it. The panel therefore costs three console rows: `console_height` returns 18
-with the panel up, against 21 with the keyboard and 26 with neither.
+The panel occupies ten rows: a blank row separating it from the game text, the
+input line, and the strip's six content rows between two borders. The blank row
+is structural, not padding — without it the last line of room text butts
+against the prompt. `console_height` therefore returns 17 with the panel up,
+against 21 with the keyboard and 26 with neither.
 
 ### Travel
 
@@ -408,7 +412,7 @@ tests beside `test_typeahead_oom.c` and `test_room_genre.c`:
   Fallback: an inverted set covering only `a-z`, `0-9` and space.
 - **Player-object identification is heuristic** and converges only after a room
   change. Carried items are absent until then; nothing else depends on it.
-- **Three console rows** are lost to the panel. If 18 proves too tight in play,
+- **Four console rows** are lost to the panel. If 17 proves too tight in play,
   the strip can drop to five content rows and hand one back: every module's
   content already fits in five, so the only loss is the shared trailing blank
   and the strip gets visually tighter.

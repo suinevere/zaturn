@@ -5,7 +5,11 @@
  |   the ink colour and its ink (value 1) to CRAM entry 2, producing reverse
  |   video. The cache hands each character one of the 32 control-code tile slots
  |   font 0 already owns, reusing a slot across frames so a steady selection
- |   costs no VRAM writes. No SRL or Saturn code is involved.
+ |   costs no VRAM writes. gi_slot_for never touches VRAM itself -- it only
+ |   marks a claimed or reassigned slot pending, and gi_pending_next is the
+ |   only way to drain that queue, which is what lets the real caller
+ |   (text_map.cxx's flush_hook) defer every tile write to the vblank flush.
+ |   No SRL or Saturn code is involved.
  | Author: suinevere
  | Dependencies: ../src/video/glyph_invert.h and glyph_invert.c, assert.h, stdio.h
  | Build: gcc -std=c11 -Wall -Wextra -o /tmp/tgi.exe \
@@ -48,6 +52,33 @@ int main(void) {
         assert(s >= 0 && is_new == 1);
     }
     assert(gi_slot_for('!', &is_new) == -1);
+
+    gi_reset();
+    gi_begin_frame();
+    int pa = gi_slot_for('A', &is_new);
+    assert(is_new == 1);
+    int pb = gi_slot_for('B', &is_new);
+    assert(is_new == 1);
+
+    int p_slot, seen_a = 0, seen_b = 0, drained = 0;
+    char p_ch;
+    while (gi_pending_next(&p_slot, &p_ch)) {
+        drained++;
+        if (p_slot == pa) { assert(p_ch == 'A'); seen_a = 1; }
+        else if (p_slot == pb) { assert(p_ch == 'B'); seen_b = 1; }
+        else assert(0);
+    }
+    assert(drained == 2 && seen_a && seen_b);
+    assert(gi_pending_next(&p_slot, &p_ch) == 0);
+
+    int pa2 = gi_slot_for('A', &is_new);
+    assert(pa2 == pa && is_new == 0);
+    assert(gi_pending_next(&p_slot, &p_ch) == 0);
+
+    gi_begin_frame();
+    int pa3 = gi_slot_for('A', &is_new);
+    assert(pa3 == pa && is_new == 0);
+    assert(gi_pending_next(&p_slot, &p_ch) == 0);
 
     printf("test_glyph_invert ok\n");
     return 0;

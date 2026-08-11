@@ -81,7 +81,10 @@ void text_print_str(int x, int y, const char *s);
  |   resolving each character to an inverted-glyph scratch slot (glyph_invert.h)
  |   and baking that slot's character code into the pattern name. A character
  |   that cannot be given a slot -- more than GI_SLOT_N distinct ones on screen
- |   at once -- is drawn normally rather than dropped.
+ |   at once -- is drawn normally rather than dropped. Touches only the shadow;
+ |   a newly claimed slot's tile write is deferred to flush_hook, which drains
+ |   glyph_invert's pending queue inside the same vblank as the map copy so the
+ |   tile never reaches VRAM mid-frame.
  | Author: suinevere
  | Dependencies: glyph_invert.h
  | Globals: g_shadow

@@ -92,19 +92,55 @@ static inline void mark_dirty(int y)
 }
 
 /*----------------------
+ | TEXT_FONT_TILES / hl_tile
+ | Description: Where font 0's tiles live, and the address of one character
+ |   code's tile within it. install_block_glyph (console_view.cxx) writes the
+ |   same region for the block cursor; the scratch slots are the low 32 codes of
+ |   that same 128-tile block.
+ | Author: suinevere
+ ----------------------*/
+#define TEXT_FONT_TILES (VDP2_VRAM_B1 + 0x18000)
+
+static volatile unsigned char *hl_tile(int code)
+{
+    return (volatile unsigned char *) (TEXT_FONT_TILES + (code + TEXT_FONT_BANK) * 0x20);
+}
+
+/*----------------------
  | flush_hook
  | Description: The OnAfterSync subscriber, separate from text_flush so what is
- |   registered is a C++ function pointer of the event's own type.
+ |   registered is a C++ function pointer of the event's own type. Drains every
+ |   scratch slot gi_slot_for marked pending this generation -- copying its
+ |   source glyph out of font 0, inverting it, and writing it back into the
+ |   slot's own tile -- before the map copy, so a highlighted cell's pattern
+ |   name never reaches VRAM ahead of the tile data it names: same tearing
+ |   hazard text_map.h's file header describes for the map itself, one level
+ |   down. text_flush() runs next, then gi_begin_frame() opens the following
+ |   generation -- only after this frame's slots are safely flushed, so a slot
+ |   still in use this frame cannot be reclaimed out from under it.
  | Author: suinevere
- | Dependencies: text_flush
+ | Dependencies: text_flush, glyph_invert.h
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void flush_hook(void)
 {
-    gi_begin_frame();
+    int gi_slot;
+    char gi_ch;
+
+    while (gi_pending_next(&gi_slot, &gi_ch))
+    {
+        unsigned char src[GI_TILE_BYTES], dst[GI_TILE_BYTES];
+        volatile unsigned char *from = hl_tile((int) (unsigned char) gi_ch);
+        volatile unsigned char *to   = hl_tile(gi_slot);
+        for (int i = 0; i < GI_TILE_BYTES; i++) src[i] = from[i];
+        gi_invert_tile(src, dst);
+        for (int i = 0; i < GI_TILE_BYTES; i++) to[i] = dst[i];
+    }
+
     text_flush();
+    gi_begin_frame();
 }
 
 /*----------------------
@@ -156,21 +192,6 @@ extern "C" void text_print_str(int x, int y, const char *s)
     }
 }
 
-/*----------------------
- | TEXT_FONT_TILES / hl_tile
- | Description: Where font 0's tiles live, and the address of one character
- |   code's tile within it. install_block_glyph (console_view.cxx) writes the
- |   same region for the block cursor; the scratch slots are the low 32 codes of
- |   that same 128-tile block.
- | Author: suinevere
- ----------------------*/
-#define TEXT_FONT_TILES (VDP2_VRAM_B1 + 0x18000)
-
-static volatile unsigned char *hl_tile(int code)
-{
-    return (volatile unsigned char *) (TEXT_FONT_TILES + (code + TEXT_FONT_BANK) * 0x20);
-}
-
 extern "C" void text_print_hl(int x, int y, const char *s)
 {
     if (y < 0 || y >= TEXT_ROWS || x >= TEXT_COLS || s == nullptr) return;
@@ -181,19 +202,8 @@ extern "C" void text_print_hl(int x, int y, const char *s)
     for (int c = x; c < TEXT_COLS && *s != '\0'; c++)
     {
         char ch = *s++;
-        int is_new = 0;
-        int slot = gi_slot_for(ch, &is_new);
+        int slot = gi_slot_for(ch, nullptr);
         int code = (slot < 0) ? (int) (unsigned char) ch : slot;
-
-        if (slot >= 0 && is_new)
-        {
-            unsigned char src[GI_TILE_BYTES], dst[GI_TILE_BYTES];
-            volatile unsigned char *from = hl_tile((int) (unsigned char) ch);
-            volatile unsigned char *to   = hl_tile(slot);
-            for (int i = 0; i < GI_TILE_BYTES; i++) src[i] = from[i];
-            gi_invert_tile(src, dst);
-            for (int i = 0; i < GI_TILE_BYTES; i++) to[i] = dst[i];
-        }
 
         uint16_t word = (uint16_t)((uint16_t) code + TEXT_FONT_BANK) | TEXT_COLOR_BANK;
         if (row[c] != word)

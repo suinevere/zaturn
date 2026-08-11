@@ -189,27 +189,27 @@ One bordered strip, three modules separated by single vertical rules, exactly
 ```
 > open _
 +-------------+---------------+--------+
-|             | look   take   |        |
-|NW   ^N^   NE| open   read   | invent |
-|   \ IN  /   | drop   close  | look   |
-|W --  +  -- E| push   pull   | save   |
-|   / OUT \   | move   attack | load   |
-|SW   vSv   SE| climb  enter  | quit   |
-|             | throw  v more |        |
+|NW ^  N  ^ NE| look   take   | invent |
+|   \ IN  /   | open   read   | look   |
+|W --  +  -- E| drop   close  | save   |
+|   / OUT \   | push   pull   | load   |
+|SW v  S  v SE| move   v more | quit   |
+|             |               |        |
 +---L/R box---+-A=pick B=bck--+-Z=kbd--+
 ```
+
+Every module is five rows of content over one blank row. Nothing is centred —
+content starts at the top row and the trailing blank is shared, which is what
+keeps the strip six rows deep rather than seven.
 
 No module headers. The input line above carries what is being assembled, which
 is what tells the player whether the word list is verbs or nouns.
 
-The panel costs three console rows: `console_height` returns 17 with the panel
-up, against 21 with the keyboard and 26 with neither.
+The strip is six content rows between two borders, with the input line above
+it. The panel therefore costs three console rows: `console_height` returns 18
+with the panel up, against 21 with the keyboard and 26 with neither.
 
 ### Travel
-
-The rose is five rows, centred in the strip's seven with a blank above and
-below — the same padding the five-entry commands module takes, so only the word
-list uses the full height.
 
 The rose draws the room rather than listing twelve buttons. A direction renders
 uppercase when decoded open, lowercase when conditional or undecodable, and
@@ -218,7 +218,6 @@ direction takes its spoke with it. North of House decodes to:
 
 ```
 +-------------+
-|             |
 |      N      |
 |      |      |
 |W --  +  -- E|
@@ -233,8 +232,8 @@ own:
 
 | direction | when available | when not |
 |---|---|---|
-| up | carets flanking N — `^N^` | bare `N` |
-| down | v's flanking S — `vSv` | bare `S` |
+| up | carets flanking N, two spaces clear — `^  N  ^` | bare `N` |
+| down | v's flanking S, two spaces clear — `v  S  v` | bare `S` |
 | in | `IN` replaces the north spoke on row 2 | spoke `\|` or blank |
 | out | `OUT` replaces the south spoke on row 4 | spoke `\|` or blank |
 
@@ -243,18 +242,20 @@ markers rather than as letters. Nothing else in the travel module is ever
 inverted — the D-pad is literal here, so there is no selection to indicate and
 the highlight is free for this.
 
-`IN`'s N sits directly beneath the compass N, and `OUT` centres on the same
-column; when a spoke's own direction is unavailable and its word is too, the
-cell is blank like any other absent direction.
+The two-space clearance puts the carets and v's at inner columns 3 and 9,
+directly above and below the diagonal spokes, so the rose reads as one figure
+rather than a letter with decorations. `IN`'s N sits beneath the compass N and
+`OUT` centres on the same column; when a spoke's own direction is unavailable
+and its word is too, the cell is blank like any other absent direction.
 
 Blank never means unpressable. The D-pad is literal while travel holds focus,
 every direction remains submittable, and a wrong guess costs one turn.
 
 ### Words
 
-One module, two 6-character columns, filled row-major by descending likelihood
-across all fourteen cells. `v more` claims the fourteenth cell only when a
-further candidate exists and is absent otherwise.
+One module, two 6-character columns over five rows, filled row-major by
+descending likelihood across all ten cells. `v more` claims the tenth cell only
+when a further candidate exists and is absent otherwise.
 
 The module switches word class as the sentence fills: verbs, then nouns, then
 a preposition **only when the story's own grammar says that verb takes one**,
@@ -281,7 +282,7 @@ which rooms reference by property rather than own.
 
 ### Commands
 
-Five fixed entries, vertically centred in the seven rows. Each routes to a
+Five fixed entries, one per content row. Each routes to a
 mechanism that already exists: `invent` opens the inventory overlay, `look`,
 `save`, `load` and `quit` submit through `submit_command` exactly as the F-keys
 do, inheriting the device/slot pickers and `confirm_return_to_title`.
@@ -392,9 +393,9 @@ tests beside `test_typeahead_oom.c` and `test_room_genre.c`:
   a word the story does not define.
 - **Panel assembly** — drive the state machine and assert the string it writes:
   a two-slot command, a command whose grammar opens a preposition slot, Back
-  unwinding a slot, and paging past the fourteenth candidate.
-- **Fill order** — thirteen candidates fill all cells with no `v more`;
-  fourteen or more put `v more` in the last cell.
+  unwinding a slot, and paging past the tenth candidate.
+- **Fill order** — nine candidates fill all cells with no `v more`; ten or more
+  put `v more` in the last cell.
 - **Inverted tiles** — assert the pixel transform on a known tile pattern. The
   VRAM write itself is not host-testable and is verified on hardware.
 
@@ -407,7 +408,7 @@ tests beside `test_typeahead_oom.c` and `test_room_genre.c`:
   Fallback: an inverted set covering only `a-z`, `0-9` and space.
 - **Player-object identification is heuristic** and converges only after a room
   change. Carried items are absent until then; nothing else depends on it.
-- **Three console rows** are lost to the panel. If 17 proves too tight in play,
-  the strip can drop to five content rows and hand two back: the rose and the
-  commands module already fit in five, so only the word list would shrink —
-  from fourteen visible words to ten, paging sooner.
+- **Three console rows** are lost to the panel. If 18 proves too tight in play,
+  the strip can drop to five content rows and hand one back: every module's
+  content already fits in five, so the only loss is the shared trailing blank
+  and the strip gets visually tighter.

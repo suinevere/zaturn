@@ -12,8 +12,13 @@
  |   values from bytes far past the end of the buffer) -- and the exit walk
  |   for object 81, "North of House": north, east, west, southeast and
  |   southwest are one-byte unconditional exits, south is the two-byte form
- |   that only prints the boarded-windows refusal, and the rest are absent.
- |   Reads saturn/zork1.dat directly; no SRL or Saturn code is involved.
+ |   that only prints the boarded-windows refusal, and the rest are absent --
+ |   and a hand-built minimal story, valid enough to pass room_model_bind, whose
+ |   sole room object has a one-byte north exit property positioned so its
+ |   declared data byte falls exactly one past the bound story length (a
+ |   recognizable value sits there in memory but outside g_len), proving the
+ |   property walk stops instead of reading it. Reads saturn/zork1.dat
+ |   directly; no SRL or Saturn code is involved.
  | Author: suinevere
  | Dependencies: ../src/engine/room_model.h and room_model.c, assert.h, stdio.h,
  |   stdlib.h, saturn/zork1.dat
@@ -80,6 +85,44 @@ int main(void) {
         assert(m->exits[RM_NW] == RM_EXIT_NONE);
         assert(m->exits[RM_UP] == RM_EXIT_NONE);
         assert(m->exits[RM_IN] == RM_EXIT_NONE);
+    }
+
+    {
+        unsigned char img[160];
+        int i;
+        for (i = 0; i < 160; i++) img[i] = 0;
+
+        img[0x08] = 0x00; img[0x09] = 16;
+        img[0x0a] = 0x00; img[0x0b] = 64;
+        img[0x0c] = 0x00; img[0x0d] = 48;
+
+        img[16] = 0;
+        img[17] = 6;
+        img[18] = 0; img[19] = 4;
+
+        img[20] = 0x4E; img[21] = 0x97; img[22] = 0x65; img[23] = 0xA0;
+        img[24] = 0x10; img[25] = 31;
+        img[26] = 0x28; img[27] = 0xD8; img[28] = 0x64; img[29] = 0x00;
+        img[30] = 0x10; img[31] = 30;
+        img[32] = 0x71; img[33] = 0x58; img[34] = 0x64; img[35] = 0x00;
+        img[36] = 0x10; img[37] = 29;
+        img[38] = 0x62; img[39] = 0x9A; img[40] = 0x65; img[41] = 0xA0;
+        img[42] = 0x10; img[43] = 28;
+
+        img[133] = 0x00; img[134] = 140;
+
+        img[140] = 0;
+        img[141] = 31;
+        img[142] = 99;
+
+        assert(room_model_bind(img, 142) == 1);
+        assert(room_model_available() == 1);
+        room_model_refresh_room(1);
+        {
+            const RoomModel *m = room_model_get();
+            assert(m->exits[RM_N] == RM_EXIT_NONE);
+            assert(m->dest[RM_N] == 0);
+        }
     }
 
     unsigned char junk[64];

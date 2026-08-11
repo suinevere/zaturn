@@ -187,10 +187,9 @@ One bordered strip, three modules separated by single vertical rules, exactly
 40 columns: travel 13, words 15, commands 8. The input line sits above it.
 
 ```
-...last line of room text
-
 > open _
 +-------------+---------------+--------+
+|             |               |        |
 |NW ^  N  ^ NE| look   take   | invent |
 |   \ IN  /   | open   read   | look   |
 |W --  +  -- E| drop   close  | save   |
@@ -200,18 +199,17 @@ One bordered strip, three modules separated by single vertical rules, exactly
 +---L/R box---+-A=pick B=bck--+-Z=kbd--+
 ```
 
-Every module is five rows of content over one blank row. Nothing is centred —
-content starts at the top row and the trailing blank is shared, which is what
-keeps the strip six rows deep rather than seven.
+The strip is seven rows: a blank under the top border, five rows of content,
+and a blank above the bottom border. Both blanks span all three modules, so
+every module's content occupies the same five rows and nothing needs centring
+logic.
 
 No module headers. The input line above carries what is being assembled, which
 is what tells the player whether the word list is verbs or nouns.
 
-The panel occupies ten rows: a blank row separating it from the game text, the
-input line, and the strip's six content rows between two borders. The blank row
-is structural, not padding — without it the last line of room text butts
-against the prompt. `console_height` therefore returns 17 with the panel up,
-against 21 with the keyboard and 26 with neither.
+The panel occupies ten rows: the input line, then the strip's two borders and
+seven rows between them. `console_height` therefore returns 17 with the panel
+up, against 21 with the keyboard and 26 with neither.
 
 ### Travel
 
@@ -222,6 +220,7 @@ direction takes its spoke with it. North of House decodes to:
 
 ```
 +-------------+
+|             |
 |      N      |
 |      |      |
 |W --  +  -- E|
@@ -413,6 +412,6 @@ tests beside `test_typeahead_oom.c` and `test_room_genre.c`:
 - **Player-object identification is heuristic** and converges only after a room
   change. Carried items are absent until then; nothing else depends on it.
 - **Four console rows** are lost to the panel. If 17 proves too tight in play,
-  the strip can drop to five content rows and hand one back: every module's
-  content already fits in five, so the only loss is the shared trailing blank
-  and the strip gets visually tighter.
+  the strip can drop to five content rows and hand two back: every module's
+  content already fits in five, so the only loss is the two blanks and the
+  strip gets visually tighter.

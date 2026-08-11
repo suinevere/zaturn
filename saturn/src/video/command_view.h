@@ -1,0 +1,63 @@
+/*----------------------
+ | command_view.h
+ | Description: The command panel's rendering and its pad-driven editor -- the
+ |   command-mode counterparts of render_keyboard and typeahead_edit. Draws the
+ |   three-module strip below the input line, and turns pad input into panel
+ |   picks that end up in the same KeyboardState the on-screen keyboard fills.
+ | Author: suinevere
+ | Dependencies: command_panel.h, room_model.h, keyboard.h, typeahead.h, SRL
+ ----------------------*/
+#ifndef COMMAND_VIEW_H
+#define COMMAND_VIEW_H
+
+#include "command_panel.h"
+#include "keyboard.h"
+#include "room_model.h"
+#include "saturn_keyboard.h"
+#include "typeahead.h"
+
+/*----------------------
+ | CV_TRAVEL_X / CV_WORD_X / CV_CMD_X / CV_STRIP_ROWS
+ | Description: The inner starting column of each module and the strip's content
+ |   height. The strip is 1 + 13 + 1 + 15 + 1 + 8 + 1 = 40 columns, and seven
+ |   rows: a blank under the top border, five of content, a blank above the
+ |   bottom one.
+ | Author: suinevere
+ ----------------------*/
+#define CV_TRAVEL_X    1
+#define CV_WORD_X     15
+#define CV_CMD_X      31
+#define CV_STRIP_ROWS  7
+
+/*----------------------
+ | render_command_panel
+ | Description: Draws the input line, the strip's borders and dividers, the
+ |   compass rose, the word page, and the fixed command list, highlighting the
+ |   focused module's selected entry and its border hint in reverse video.
+ | Author: suinevere
+ | Dependencies: command_rose.h, text_map.h, console_view.h
+ | Globals: N/A
+ | Params: p -- panel state; m -- the room snapshot; w -- the current word page
+ | Returns: N/A
+ ----------------------*/
+void render_command_panel(const CommandPanel &p, const RoomModel &m, const CommandWords &w);
+
+/*----------------------
+ | command_edit
+ | Description: One frame of command-mode input: L/R move focus, the D-pad walks
+ |   the focused module or acts as the literal compass in travel, Accept picks,
+ |   Back unwinds. A completed command is copied into `k` and submitted, so it
+ |   leaves through the same path a typed one does.
+ | Author: suinevere
+ | Dependencies: input.h, command_panel.h
+ | Globals: g_pad
+ | Params: k -- keyboard state the command is written into; p -- panel state;
+ |   m -- the room snapshot; root -- the typeahead trie for ranking, may be null;
+ |   ke -- the decoded key event, consumed as handled; w -- (out) the word page
+ |   the renderer should draw
+ | Returns: N/A
+ ----------------------*/
+void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
+                  TrieNode *root, SaturnKeyEvent &ke, CommandWords &w);
+
+#endif /* COMMAND_VIEW_H */

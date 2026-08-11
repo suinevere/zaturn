@@ -2629,6 +2629,52 @@ git commit -m "Enumerate the story dictionary so the panel still offers words wi
 
 ---
 
+### Task 11: Full-length word recovery for display
+
+Added after Task 9 surfaced that object synonyms are the dictionary's truncated
+six-character forms, so the panel displays `mailbo` where a player expects
+`mailbox`.
+
+**Files:**
+- Modify: `saturn/src/engine/room_model.h`, `saturn/src/engine/room_model.c`
+- Modify: `saturn/tests/test_room_model.c`
+- Modify: `saturn/src/video/command_view.cxx`
+
+**The precedent to follow, not reinvent.** `typeahead_extract.c` already solves
+this for the trie — see its "full-word recovery" pass, which replaces a
+six-character dictionary form with a longer object-name token sharing the same
+first six characters. Read that code before writing any of this. The reason it
+cannot simply be called is the one recorded in the spec: its decoder reads a
+file-static story pointer that the trie builder sets, and Hard never builds a
+trie. The *approach* transfers; the code does not.
+
+**What this task adds:** a decode of object short names in `room_model`,
+used only to find a longer spelling for a truncated dictionary word. The
+submitted word must remain the dictionary form — the parser distinguishes six
+characters and nothing more, so the recovered spelling is for display only.
+
+- Decode an object's short name (the text at its property table, whose length
+  in 2-byte words is that table's first byte). This needs the A0/A1/A2 shift
+  alphabets, the abbreviation table at header offset 0x18, and the 10-bit ZSCII
+  escape — all of which `typeahead_extract.c`'s decoder already handles.
+- For a truncated word, prefer a token from the object's short name whose first
+  six characters match it. `mailbo` + short name "small mailbox" -> `mailbox`.
+- Where no longer form exists, keep the six-character word unchanged.
+- Six characters remains the display column width, so a recovered word longer
+  than six is still truncated when drawn — the recovery matters for the ones
+  that fit, and for a later widening of the column if that ever happens.
+
+**Bounds:** every address here is derived from story bytes. This module has
+produced three out-of-bounds findings already; bound the short-name read
+against `g_len` before decoding, and cap the decode at its output buffer.
+
+**Tests:** assert against the real `saturn/zork1.dat` that object 160's word
+recovers to `mailbox` from `mailbo`, and that an object whose short name offers
+no longer match keeps its dictionary form. Assert a malformed short-name
+pointer is refused rather than decoded.
+
+---
+
 ## Notes for the implementer
 
 **Why `room_model` refuses rather than guesses.** The direction-property convention is ZILCH's, not the Z-machine specification's. An Inform-compiled v3 story has no direction properties at all, so `room_model_bind` returns 0 and everything downstream takes the degraded path: verbs filter against the trie, nouns come from on-screen vocabulary, and the rose renders every direction lowercase and fully pressable. That path is also what online play uses, since `online.cxx` frees the story bytes after building its trie and the game state lives on the server. Never let an undecodable story hide a direction — a hidden exit is an unwinnable game.

@@ -76,6 +76,21 @@ void text_map_init(void);
 void text_print_str(int x, int y, const char *s);
 
 /*----------------------
+ | text_print_hl
+ | Description: Writes one unformatted string at (x, y) in reverse video, by
+ |   resolving each character to an inverted-glyph scratch slot (glyph_invert.h)
+ |   and baking that slot's character code into the pattern name. A character
+ |   that cannot be given a slot -- more than GI_SLOT_N distinct ones on screen
+ |   at once -- is drawn normally rather than dropped.
+ | Author: suinevere
+ | Dependencies: glyph_invert.h
+ | Globals: g_shadow
+ | Params: x, y -- cell position; s -- the string
+ | Returns: N/A
+ ----------------------*/
+void text_print_hl(int x, int y, const char *s);
+
+/*----------------------
  | text_clear_line
  | Description: Blanks TEXT_CLEAR_COLS cells of one row in the shadow.
  | Author: suinevere

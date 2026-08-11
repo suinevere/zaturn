@@ -8,6 +8,7 @@
 
 #include <srl.hpp>
 #include "text_map.h"
+#include "glyph_invert.h"
 
 /*----------------------
  | TEXT_VRAM_MAP
@@ -102,6 +103,7 @@ static inline void mark_dirty(int y)
  ----------------------*/
 static void flush_hook(void)
 {
+    gi_begin_frame();
     text_flush();
 }
 
@@ -146,6 +148,54 @@ extern "C" void text_print_str(int x, int y, const char *s)
     {
         uint16_t word = (uint16_t)((uint16_t)(uint8_t)(*s++) + TEXT_FONT_BANK) | TEXT_COLOR_BANK;
 
+        if (row[c] != word)
+        {
+            row[c] = word;
+            mark_dirty(y);
+        }
+    }
+}
+
+/*----------------------
+ | TEXT_FONT_TILES / hl_tile
+ | Description: Where font 0's tiles live, and the address of one character
+ |   code's tile within it. install_block_glyph (console_view.cxx) writes the
+ |   same region for the block cursor; the scratch slots are the low 32 codes of
+ |   that same 128-tile block.
+ | Author: suinevere
+ ----------------------*/
+#define TEXT_FONT_TILES (VDP2_VRAM_B1 + 0x18000)
+
+static volatile unsigned char *hl_tile(int code)
+{
+    return (volatile unsigned char *) (TEXT_FONT_TILES + (code + TEXT_FONT_BANK) * 0x20);
+}
+
+extern "C" void text_print_hl(int x, int y, const char *s)
+{
+    if (y < 0 || y >= TEXT_ROWS || x >= TEXT_COLS || s == nullptr) return;
+    if (x < 0) x = 0;
+
+    uint16_t *row = g_shadow[y];
+
+    for (int c = x; c < TEXT_COLS && *s != '\0'; c++)
+    {
+        char ch = *s++;
+        int is_new = 0;
+        int slot = gi_slot_for(ch, &is_new);
+        int code = (slot < 0) ? (int) (unsigned char) ch : slot;
+
+        if (slot >= 0 && is_new)
+        {
+            unsigned char src[GI_TILE_BYTES], dst[GI_TILE_BYTES];
+            volatile unsigned char *from = hl_tile((int) (unsigned char) ch);
+            volatile unsigned char *to   = hl_tile(slot);
+            for (int i = 0; i < GI_TILE_BYTES; i++) src[i] = from[i];
+            gi_invert_tile(src, dst);
+            for (int i = 0; i < GI_TILE_BYTES; i++) to[i] = dst[i];
+        }
+
+        uint16_t word = (uint16_t)((uint16_t) code + TEXT_FONT_BANK) | TEXT_COLOR_BANK;
         if (row[c] != word)
         {
             row[c] = word;

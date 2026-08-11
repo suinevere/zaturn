@@ -296,29 +296,41 @@ static void run_room_transition(void) {
  |   one-shot autocommand (the "restore" that applies a pre-picked save) is
  |   returned immediately. Otherwise it rebuilds the typeahead, marks on-screen
  |   words, refreshes the room model from the current room (once per prompt,
- |   not per frame -- it walks the object tree), keeps the keyboard picker
- |   position across prompts, and positions the view at the TOP of the turn's
- |   output so a long response reads from its start.
+ |   not per frame -- it walks the object tree), resets the command panel
+ |   (cp_reset) every turn alongside k's own per-turn clear -- command_edit
+ |   only resets it on its own completed submit, so a turn that ends any other
+ |   way (a menu's Save Game row, a quick-save/restore key, toggling to the
+ |   keyboard mid-build) would otherwise leave a half-built sentence to prefix
+ |   the next turn's pick -- keeps the keyboard picker position across
+ |   prompts, and positions the view at the TOP of the turn's output so a long
+ |   response reads from its start.
  |   The frame loop runs the soft-reset chord, the F10/F11/F12 menu shortcuts
  |   (Sound only when there is audio to configure; F10's Options menu can
  |   itself report a Save Game/Load Game pick, submitted the same way as
- |   below, and holds the music paused mid-track while it is open; each of
- |   these three calls mode_toggle_reset() the instant its blocking UI
- |   returns, since the toggle button could have been pressed and released
- |   entirely while that menu owned the screen -- without the reset the next
+ |   below, and holds the music paused mid-track while it is open), the
+ |   F2/F5 save and F3/F6/F9 restore keys (which submit the game's own
+ |   command so the blob hooks do the work), a toggle-button tap (gamepad
+ |   only -- a real keyboard in hand keeps its own prompt untouched) that
+ |   swaps g_cmd_mode between the command panel and the on-screen keyboard,
+ |   and then whichever of the two editors g_cmd_mode selects -- command_edit
+ |   or the shared typeahead editor -- each writing its result into the same
+ |   KeyboardState, so both leave through the one submit path. Finally it
+ |   services audio. On submit it strips the autocomplete-accept trailing
+ |   space, echoes the command, and intercepts reboot/quit (a declined
+ |   confirm is not passed to the game) before handing the line back with the
+ |   fgets-style trailing '\n'. Four sites in this function hand control to a
+ |   blocking UI of their own and call mode_toggle_reset() the instant it
+ |   returns -- the toggle button could have been pressed and released
+ |   entirely while that UI owned the screen, and without the reset the next
  |   frame's mode_toggle_fired would see a stale held state and swap
- |   interfaces on nothing the player did at the prompt),
- |   the F2/F5 save and F3/F6/F9 restore keys (which submit the
- |   game's own command so the blob hooks do the work), a toggle-button tap
- |   (gamepad only -- a real keyboard in hand keeps its own prompt untouched)
- |   that swaps g_cmd_mode between the command panel and the on-screen
- |   keyboard, and then whichever of the two editors g_cmd_mode selects --
- |   command_edit or the shared typeahead editor -- each writing its result
- |   into the same KeyboardState, so both leave through the one submit path.
- |   Finally it services audio. On
- |   submit it strips the autocomplete-accept trailing space, echoes the command,
- |   and intercepts reboot/quit (a declined confirm is not passed to the game)
- |   before handing the line back with the fgets-style trailing '\n'.
+ |   interfaces on nothing the player did at the prompt: the F10/START/Esc
+ |   Options menu (int om = options_menu()), the F11 keyboard-controls page,
+ |   the F12 sound-options page (inside its has-audio guard), and the reboot/
+ |   quit confirm_return_to_title() calls. The F2/F5/F3/F6/F9 save/restore
+ |   keys are NOT such a site: they only call submit_command (which does not
+ |   block) and exit the frame loop; their own device/slot picker runs later,
+ |   inside saturn_save_blob/saturn_load_blob, entirely outside this
+ |   function, where no reset placed here could reach it.
  | Author: suinevere
  | Dependencies: console.h, console_view.h, command_view.h, room_model.h,
  |   keyboard.h, saturn_keyboard.h, input.h, menu.h, menu_pages.h, soft_reset.h,
@@ -480,12 +492,14 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
       render_console();
       if (is_reboot_command(k.input)) {
           confirm_return_to_title("reboot back to the title screen?");
+          mode_toggle_reset();
           k.input_len = 0; k.input[0] = '\0'; k.cursor = 0; k.submitted = 0;
           SRL::Core::Synchronize();
           continue;
       }
       if (is_quit_command(k.input)) {
           confirm_return_to_title("quit back to the title screen?");
+          mode_toggle_reset();
           k.input_len = 0; k.input[0] = '\0'; k.cursor = 0; k.submitted = 0;
           SRL::Core::Synchronize();
           continue;

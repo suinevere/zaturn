@@ -1774,9 +1774,12 @@ Create `saturn/tests/test_command_rose.c`:
  | Author: suinevere
  | Dependencies: ../src/video/command_rose.h and command_rose.c,
  |   ../src/engine/room_model.h, assert.h, string.h, stdio.h
- | Build: gcc -std=c11 -Wall -Wextra -o /tmp/tcr.exe \
+ | Build: gcc -std=c11 -Wall -Wextra -I saturn/src/engine -o /tmp/tcr.exe \
  |          saturn/tests/test_command_rose.c saturn/src/video/command_rose.c \
  |          && /tmp/tcr.exe
+ |   The -I saturn/src/engine is needed because command_rose.c includes
+ |   "room_model.h" unqualified, which the real build resolves through
+ |   makefile:34's -I for every src subdirectory.
  ----------------------*/
 #include "../src/video/command_rose.h"
 #include "../src/engine/room_model.h"
@@ -1829,7 +1832,7 @@ int main(void) {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-gcc -std=c11 -Wall -Wextra -o /tmp/tcr.exe \
+gcc -std=c11 -Wall -Wextra -I saturn/src/engine -o /tmp/tcr.exe \
   saturn/tests/test_command_rose.c saturn/src/video/command_rose.c && /tmp/tcr.exe
 ```
 
@@ -1976,7 +1979,7 @@ void cr_row(const unsigned char *exits, int row, char *out) {
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-gcc -std=c11 -Wall -Wextra -o /tmp/tcr.exe \
+gcc -std=c11 -Wall -Wextra -I saturn/src/engine -o /tmp/tcr.exe \
   saturn/tests/test_command_rose.c saturn/src/video/command_rose.c && /tmp/tcr.exe
 ```
 
@@ -2325,7 +2328,7 @@ On the Options > Gameplay page in `saturn/src/menu/options.cxx`, add a row cycli
 gcc -std=c11 -Wall -Wextra -o /tmp/tgi.exe saturn/tests/test_glyph_invert.c saturn/src/video/glyph_invert.c && /tmp/tgi.exe
 gcc -std=c11 -Wall -Wextra -o /tmp/trm.exe saturn/tests/test_room_model.c saturn/src/engine/room_model.c && /tmp/trm.exe
 gcc -std=c11 -Wall -Wextra -o /tmp/tcp.exe saturn/tests/test_command_panel.c saturn/src/input/command_panel.c && /tmp/tcp.exe
-gcc -std=c11 -Wall -Wextra -o /tmp/tcr.exe saturn/tests/test_command_rose.c saturn/src/video/command_rose.c && /tmp/tcr.exe
+gcc -std=c11 -Wall -Wextra -I saturn/src/engine -o /tmp/tcr.exe saturn/tests/test_command_rose.c saturn/src/video/command_rose.c && /tmp/tcr.exe
 ```
 
 Then `test_display.c` using its own header build line. Expected: all print `ok`.

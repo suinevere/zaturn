@@ -320,29 +320,50 @@ reassignable there like every other action.
 
 ## Rendering: reverse video
 
-Selection and focus are carried by inverted glyphs. This cannot be done with a
-palette bank: NBG3 is 4bpp and VDP2 treats *pixel value* 0 as transparent
-whatever bank the cell selects, which is why `menu.cxx` needs a VDP2 window
-just to get an opaque menu interior. Glyph tiles are ink at pixel value 1 on a
-value-0 background, so no bank fills that background.
+Selection and focus are carried by inverted glyphs.
 
-It can be done with inverted tiles, and this program already writes font tiles
-at runtime — `install_block_glyph` fills the DEL tile with `0xFF` to make the
-block cursor. Generalising it: at init, read the 95 printable tiles, map pixel
-value `0 -> 1` and `1 -> 2`, and write the result into a second font bank.
-A cell printed against that bank is a solid block of ink colour with the letter
-punched out in CRAM entry 2.
+Neither the hardware nor the palette can do this per cell. A pattern name
+carries palette bits and H/V flip, but no invert bit. And colour-0 transparency
+is a per-layer setting (`slScrTransparent`), not per-cell — turning it off to
+make pixel value 0 paint would make *every* console cell opaque and hide the
+room art behind the text. `menu.cxx` needing a VDP2 window just to get an
+opaque menu interior is the same constraint seen from the other side.
+
+So inversion has to be a tile write, and the only real question is where those
+tiles live. They live in tiles the program already owns.
+
+`TEXT_FONT_BANK` is 640, so font 0 spans tiles 640..767 — the full 128-code
+ASCII range — and `install_block_glyph` already writes into the top of it
+(`0x7f + 640`) to make the block cursor. Character codes **0x00..0x1F are
+control codes this program never prints**, which leaves 32 tiles already
+allocated to font 0 and guaranteed inert.
+
+Inverted glyphs are generated on demand into those slots: read the wanted
+character's tile, map pixel value `0 -> 1` and `1 -> 2`, write it to a scratch
+slot, and point the cell at that slot's character code. The result is a solid
+block of ink colour with the letter punched out in CRAM entry 2.
 
 This needs:
 
-- ~3 KB of VDP2 VRAM for the inverted bank.
-- CRAM entry 2 set to the backdrop colour, written alongside entries 1 and 15
-  in `text_set_color` so a palette change keeps the two in step.
-- `text_print_hl` in `text_map`, which is `text_print` with the alternate bank
-  offset baked into the pattern name.
+- **No new VRAM.** The 32 control-code tiles are already font 0's.
+- A `char -> slot` cache with a generation stamp. A selection that persists
+  across frames writes nothing; a changed one writes a few 32-byte tiles. The
+  writes go in the existing `OnAfterSync` callback, immediately before the
+  shadow flush, so they land in vblank beside the map copy.
+- CRAM entry 2 set to a fixed dark colour, written alongside entries 1 and 15
+  in `text_set_color` so a palette change keeps them in step. Leaving the
+  letter pixels transparent instead would show the room picture through the
+  letter, which is unreadable over art.
+- `text_print_hl` in `text_map`, which resolves each character to its scratch
+  slot and bakes that code into the pattern name.
 
-Applied to: the selected entry in the focused module, and the focused module's
-bottom-border hint, so which module holds the D-pad is never ambiguous.
+Demand fits the 32 slots with room to spare: a selected word cell is at most 6
+distinct characters, a border hint about 10, and the compass markers 2 — about
+18 worst case. Overflow degrades to drawing that cell uninverted rather than
+failing.
+
+Applied to: the selected entry in the focused module, the focused module's
+bottom-border hint, and the compass's `^`/`v` up-down markers.
 
 ## Degradation
 
@@ -399,16 +420,22 @@ tests beside `test_typeahead_oom.c` and `test_room_genre.c`:
   unwinding a slot, and paging past the tenth candidate.
 - **Fill order** — nine candidates fill all cells with no `v more`; ten or more
   put `v more` in the last cell.
-- **Inverted tiles** — assert the pixel transform on a known tile pattern. The
-  VRAM write itself is not host-testable and is verified on hardware.
+- **Inverted tiles** — assert the pixel transform (`0 -> 1`, `1 -> 2`) on a
+  known tile pattern.
+- **Slot cache** — a repeated character reuses its slot without a rewrite; a
+  changed selection releases slots it no longer needs; a nineteenth distinct
+  character still allocates and a thirty-third degrades to uninverted. The VRAM
+  write itself is not host-testable and is verified on hardware.
 
 ## Risks
 
-- **The second font bank's VRAM may not be free.** SRL's font banks sit 128
-  tiles apart (`SetFont(n)` -> `128 * (5 - n)`), so bank 1 at offset 512 looks
-  unclaimed, but this is inferred from the encoding rather than confirmed
-  against what else lives in `VDP2_VRAM_B1`. Confirm before the plan commits.
-  Fallback: an inverted set covering only `a-z`, `0-9` and space.
+- **The scratch slots assume nothing prints a control code.** `text_print_str`
+  writes the raw byte plus the font bank with no filtering
+  (`text_map.cxx:147`), so a string carrying 0x01..0x1F would land on a slot
+  and draw a stale inverted glyph. Nothing passes one today, but story output
+  reaches the console through `saturn_writestr` and is only as clean as the
+  game's ZSCII. Confirm, and if it is not guaranteed, filter in
+  `text_print_str` rather than trusting callers.
 - **Player-object identification is heuristic** and converges only after a room
   change. Carried items are absent until then; nothing else depends on it.
 - **Four console rows** are lost to the panel. If 17 proves too tight in play,

@@ -145,6 +145,7 @@ int room_model_bind(const unsigned char *story, unsigned int len) {
     g_glob = rd16(0x0c);
     if (g_dict == 0 || g_obj == 0 || g_glob == 0) return 0;
     if (g_dict + 4u >= len || g_obj + 64u >= len || g_glob + 2u >= len) return 0;
+    if (g_dict + (unsigned int) g_story[g_dict] + 4u > len) return 0;
 
     for (i = 0; i <= PROP_MAX; i++) seen[i] = 0;
 

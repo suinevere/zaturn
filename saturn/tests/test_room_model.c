@@ -2,8 +2,14 @@
  | test_room_model.c
  | Description: Host test for the room model's static decode against the shipped
  |   Zork I image. Covers the direction-word to property-number map, the
- |   contiguous-run sanity gate that rejects a non-ZILCH story, and the
- |   dictionary lookup the verb filter depends on. Reads saturn/zork1.dat
+ |   contiguous-run sanity gate that rejects a non-ZILCH story, the
+ |   dictionary lookup the verb filter depends on, and two malformed-header
+ |   cases: an all-zero image (fails on the null pointer checks before the
+ |   dictionary is ever touched) and a header with plausible in-range
+ |   dict/obj/glob pointers but a dictionary separator-count byte of 0xFF
+ |   (fails only on the g_dict + g_story[g_dict] + 4 > len guard -- without
+ |   that guard, dict_entry_len/dict_count/dict_first would derive their
+ |   values from bytes far past the end of the buffer). Reads saturn/zork1.dat
  |   directly; no SRL or Saturn code is involved.
  | Author: suinevere
  | Dependencies: ../src/engine/room_model.h and room_model.c, assert.h, stdio.h,

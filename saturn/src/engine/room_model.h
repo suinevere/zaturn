@@ -91,16 +91,25 @@ int room_model_bind(const unsigned char *story, unsigned int len);
 int room_model_available(void);
 
 /*----------------------
- | room_model_dir_prop / room_model_dir_word
- | Description: The property number recovered for a direction (0 when the story
- |   has no such direction), and that direction's canonical word.
+ | room_model_dir_prop
+ | Description: The property number recovered for a direction.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_prop
  | Params: dir -- one of the RM_* direction indices
- | Returns: the property number, or the word
+ | Returns: the property number, or 0 when dir is out of range or unresolved
  ----------------------*/
 int room_model_dir_prop(int dir);
+
+/*----------------------
+ | room_model_dir_word
+ | Description: A direction's canonical word.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: dir -- one of the RM_* direction indices
+ | Returns: the word, or "" when dir is out of range
+ ----------------------*/
 const char *room_model_dir_word(int dir);
 
 /*----------------------

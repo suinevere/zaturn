@@ -777,6 +777,7 @@ int room_model_bind(const unsigned char *story, unsigned int len) {
     g_glob = rd16(0x0c);
     if (g_dict == 0 || g_obj == 0 || g_glob == 0) return 0;
     if (g_dict + 4u >= len || g_obj + 64u >= len || g_glob + 2u >= len) return 0;
+    if (g_dict + (unsigned int) g_story[g_dict] + 4u > len) return 0;
 
     for (i = 0; i <= PROP_MAX; i++) seen[i] = 0;
 
@@ -969,8 +970,28 @@ static RoomModel g_model;
 static unsigned int obj_entry(unsigned short id) {
     return g_obj + 62u + ((unsigned int) id - 1u) * 9u;
 }
+
+/*----------------------
+ | obj_valid
+ | Description: Whether an object number's whole 9-byte table entry lies inside
+ |   the image. Every walk of the object tree follows numbers read out of the
+ |   story, so none of them can be trusted to name a real object.
+ | Author: suinevere
+ | Dependencies: obj_entry
+ | Globals: g_available, g_len
+ | Params: id -- object number, 1-based
+ | Returns: 1 when the entry is readable, 0 otherwise
+ ----------------------*/
+static int obj_valid(unsigned short id) {
+    if (!g_available || id == 0) return 0;
+    return obj_entry(id) + 9u <= g_len;
+}
+
 static unsigned int obj_props(unsigned short id) {
-    unsigned int t = rd16(obj_entry(id) + 7u);
+    unsigned int t;
+    if (!obj_valid(id)) return 0u;
+    t = rd16(obj_entry(id) + 7u);
+    if (t == 0u || t + 1u >= g_len) return 0u;
     return t + 1u + 2u * g_story[t];
 }
 
@@ -1002,6 +1023,7 @@ void room_model_refresh_room(unsigned short room) {
     if (obj_entry(room) + 9u > g_len) return;
 
     a = obj_props(room);
+    if (a == 0u) return;
     while (a < g_len && g_story[a] != 0) {
         int size = (int) g_story[a];
         int prop = size & 31;
@@ -1163,9 +1185,11 @@ static int g_prev_n;
  | Returns: the related object number, or 0
  ----------------------*/
 static unsigned short obj_child(unsigned short id) {
+    if (!obj_valid(id)) return 0;
     return (unsigned short) g_story[obj_entry(id) + 6u];
 }
 static unsigned short obj_sibling(unsigned short id) {
+    if (!obj_valid(id)) return 0;
     return (unsigned short) g_story[obj_entry(id) + 5u];
 }
 

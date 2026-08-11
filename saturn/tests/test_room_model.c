@@ -62,11 +62,18 @@ int main(void) {
     assert(room_model_has_word("mailbox") == 1);
     assert(room_model_has_word("photosynthesis") == 0);
 
-    /* A story whose header points nowhere sane must report unavailable rather
-       than decode garbage. */
     unsigned char junk[64];
     for (int i = 0; i < 64; i++) junk[i] = 0;
     assert(room_model_bind(junk, sizeof junk) == 0);
+    assert(room_model_available() == 0);
+
+    unsigned char bad_dict[128];
+    for (int i = 0; i < 128; i++) bad_dict[i] = 0;
+    bad_dict[0x08] = 0; bad_dict[0x09] = 20;
+    bad_dict[0x0a] = 0; bad_dict[0x0b] = 30;
+    bad_dict[0x0c] = 0; bad_dict[0x0d] = 100;
+    bad_dict[20] = 0xFF;
+    assert(room_model_bind(bad_dict, sizeof bad_dict) == 0);
     assert(room_model_available() == 0);
 
     printf("test_room_model ok\n");

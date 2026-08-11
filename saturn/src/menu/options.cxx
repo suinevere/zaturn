@@ -236,9 +236,10 @@ void options_load(void) {
        the display block is the variable-width tail. Sentinel 5 (v1, verbosity
        only) and sentinel 7 (v2, verbosity plus a packed command-interface byte)
        rather than 3 or 6: this byte is where a blob written before the block
-       existed has its display sentinel, and those run 1..4 and 6, so 5 and 7 --
-       neither ever a display sentinel -- are the two values that cannot be
-       mistaken for one. A v1 blob (sentinel 5) is still accepted so an older
+       existed has its display sentinel, and those run 1..4, 6 and 8, so 5 and
+       7 -- neither ever a display sentinel, and both off-limits to the next one
+       for that reason -- are the values that cannot be mistaken for one. A v1
+       blob (sentinel 5) is still accepted so an older
        build's save is not silently reset; it just leaves g_cmd_iface/g_toggle_btn
        at their compiled defaults, same as it always left them unset. When the
        block is absent entirely the display block starts here instead and every

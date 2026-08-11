@@ -319,7 +319,7 @@ static void test_encode_decode_roundtrip(void) {
 
     n = display_encode(&a, buf);
     assert(n == DISP_BLOB_BYTES);
-    assert(buf[0] == 6);            /* current sentinel: + dim (was 4 before Task 6) */
+    assert(buf[0] == 8);            /* current sentinel: renumbered dim row */
 
     assert(display_decode(buf, n, &b) == 1);
     assert(b.palette == a.palette && b.bg == a.bg && b.text == a.text);
@@ -988,7 +988,7 @@ static void test_sentinel_2_decode(void) {
     assert(d.bg    == DISP_BG_BLACK);
     assert(d.text  == DISP_TEXT_WHITE);
     assert(d.image == slot);
-    assert(d.dim   == DISP_DIM_NORMAL);
+    assert(d.dim   == DISP_DIM_DEFAULT);
 }
 
 static void test_sparse_slot_space(void) {
@@ -1022,34 +1022,79 @@ static void test_dim_table_and_blob(void) {
     unsigned char buf[DISP_BLOB_BYTES];
     int i;
 
-    assert(DISP_DIM_N == 7);
+    assert(DISP_DIM_N == 5);
+
+    /* Darkest first, so left steps darker and right steps brighter, and the
+       unmodified stop is the last one rather than the middle. A row that ran the
+       other way is exactly the bug this ordering fixes. */
+    assert(display_dim_offset(0) == -128);
+    assert(display_dim_offset(1) ==  -96);
+    assert(display_dim_offset(2) ==  -64);
+    assert(display_dim_offset(3) ==  -32);
     assert(display_dim_offset(DISP_DIM_NORMAL) == 0);
-    assert(display_dim_offset(0) ==  64);
-    assert(display_dim_offset(1) ==  32);
-    assert(display_dim_offset(3) == -32);
-    assert(display_dim_offset(6) == -128);
+    assert(DISP_DIM_NORMAL == DISP_DIM_N - 1);
+    for (i = 1; i < DISP_DIM_N; i++)
+        assert(display_dim_offset(i) > display_dim_offset(i - 1));
+
+    /* Nothing lightens any more: a wallpaper brighter than its own palette
+       washes out under text instead of sitting behind it. */
+    for (i = 0; i < DISP_DIM_N; i++) assert(display_dim_offset(i) <= 0);
+
     for (i = 0; i < DISP_DIM_N; i++) assert(display_dim_name(i)[0] != '\0');
     assert(display_dim_offset(-1) == 0);
     assert(display_dim_offset(DISP_DIM_N) == 0);
 
+    /* A fresh install starts two stops down, not at Normal. */
     display_defaults(&d);
-    assert(d.dim == DISP_DIM_NORMAL);
+    assert(d.dim == DISP_DIM_DEFAULT);
+    assert(display_dim_offset(d.dim) == -64);
 
-    d.dim = 6;
+    d.dim = 1;
     assert(display_encode(&d, buf) == DISP_BLOB_BYTES);
-    /* Sentinel is 6, not 5: byte 5 at this position in the save is reserved for
-       options.cxx's gameplay-block marker (see test_five_is_not_a_display_sentinel
-       above), and 5 here would have collided with it. See DISP_BLOB_BYTES's
-       comment in display.h. */
-    assert(buf[0] == 6);
-    assert(buf[4] == 6);
+    /* Sentinel is 8, not 5 or 7: both of those at this position in the save are
+       reserved for options.cxx's gameplay-block marker (see
+       test_five_is_not_a_display_sentinel above), and either here would have
+       collided with it. See DISP_BLOB_BYTES's comment in display.h. */
+    assert(buf[0] == 8);
+    assert(buf[4] == 1);
     assert(display_decode(buf, DISP_BLOB_BYTES, &r) == 1);
-    assert(r.dim == 6);
+    assert(r.dim == 1);
 
     /* An out-of-range dim is defaulted, not trusted. */
     buf[4] = 99;
     assert(display_decode(buf, DISP_BLOB_BYTES, &r) == 0);
-    assert(r.dim == DISP_DIM_NORMAL);
+    assert(r.dim == DISP_DIM_DEFAULT);
+}
+
+static void test_v6_dim_is_remapped(void) {
+    /* Sentinel 6 stored an index into the old seven-stop, brightest-first row
+       {+64,+32,0,-32,-64,-96,-128}. The row is now five stops darkest first, so
+       a stored index read verbatim would land somewhere else entirely -- the old
+       brightest stop (0) is the new darkest. display_decode matches by offset
+       value instead; the two lightening stops are gone and fall to Normal. */
+    static const short old_offset[7] = { 64, 32, 0, -32, -64, -96, -128 };
+    DisplayState d;
+    unsigned char buf[DISP_BLOB_BYTES];
+    int i;
+
+    for (i = 0; i < DISP_BLOB_BYTES; i++) buf[i] = 0;
+    buf[0] = 6;
+    buf[1] = DISP_PAL_PRESET0;
+    buf[2] = DISP_BG_BLACK;
+    buf[3] = DISP_TEXT_WHITE;
+
+    for (i = 0; i < 7; i++) {
+        buf[4] = (unsigned char) i;
+        assert(display_decode(buf, DISP_BLOB_BYTES, &d) == 1);
+        assert(d.dim >= 0 && d.dim < DISP_DIM_N);
+        if (old_offset[i] >= 0) assert(d.dim == DISP_DIM_NORMAL);
+        else                    assert(display_dim_offset(d.dim) == old_offset[i]);
+    }
+
+    /* Out of the old row's range too, not just the new one's. */
+    buf[4] = 7;
+    assert(display_decode(buf, DISP_BLOB_BYTES, &d) == 0);
+    assert(d.dim == DISP_DIM_DEFAULT);
 }
 
 static void test_cycle_dim(void) {
@@ -1057,14 +1102,25 @@ static void test_cycle_dim(void) {
     int i;
 
     display_defaults(&d);
-    assert(d.dim == DISP_DIM_NORMAL);
+    assert(d.dim == DISP_DIM_DEFAULT);
+
+    /* Right (+1) brightens, left (-1) darkens -- the direction the row is
+       ordered for. */
+    display_cycle_dim(&d, 1);
+    assert(display_dim_offset(d.dim) > display_dim_offset(DISP_DIM_DEFAULT));
+    display_cycle_dim(&d, -1);
+    assert(d.dim == DISP_DIM_DEFAULT);
+    display_cycle_dim(&d, -1);
+    assert(display_dim_offset(d.dim) < display_dim_offset(DISP_DIM_DEFAULT));
+    display_cycle_dim(&d, 1);
+    assert(d.dim == DISP_DIM_DEFAULT);
 
     /* Steps through every stop and wraps back to where it started. */
     for (i = 0; i < DISP_DIM_N; i++) {
         display_cycle_dim(&d, 1);
         assert(d.dim >= 0 && d.dim < DISP_DIM_N);
     }
-    assert(d.dim == DISP_DIM_NORMAL);
+    assert(d.dim == DISP_DIM_DEFAULT);
 
     /* Wraps at the low end too. */
     d.dim = 0;
@@ -1085,7 +1141,7 @@ static void test_old_blobs_get_no_dim(void) {
     old[2] = DISP_BG_BLACK;
     old[3] = DISP_TEXT_WHITE;
 
-    /* A sentinel-4 blob is 17 bytes where a sentinel-6 blob is DISP_BLOB_BYTES
+    /* A sentinel-4 blob is 17 bytes where a current blob is DISP_BLOB_BYTES
        (18). The old branch must keep measuring against the OLD size, or growing
        DISP_BLOB_BYTES silently rejects every save file already on a memory
        card. */
@@ -1093,11 +1149,11 @@ static void test_old_blobs_get_no_dim(void) {
     assert(d.palette == DISP_PAL_PRESET0);
     assert(d.bg   == DISP_BG_BLACK);
     assert(d.text == DISP_TEXT_WHITE);
-    assert(d.dim  == DISP_DIM_NORMAL);
+    assert(d.dim  == DISP_DIM_DEFAULT);
 
     old[0] = 1;
     display_decode(old, 4, &d);
-    assert(d.dim == DISP_DIM_NORMAL);
+    assert(d.dim == DISP_DIM_DEFAULT);
 }
 
 int main(void) {
@@ -1140,6 +1196,7 @@ int main(void) {
     test_sentinel_2_decode();
     test_sparse_slot_space();
     test_dim_table_and_blob();
+    test_v6_dim_is_remapped();
     test_cycle_dim();
     test_old_blobs_get_no_dim();
     printf("test_display: OK\n");

@@ -103,16 +103,24 @@ typedef struct {
 } DisplayState;
 
 /*----------------------
- | DISP_DIM_N / DISP_DIM_NORMAL
- | Description: The wallpaper-dim row's length and its neutral stop. Discrete
- |   steps rather than a continuous slider: the picture is 8bpp, so a large
- |   offset clips distinct palette entries onto one value and posterises, and
- |   a stop the player can name is easier to return to than a position on a
- |   bar.
+ | DISP_DIM_N / DISP_DIM_NORMAL / DISP_DIM_DEFAULT
+ | Description: The wallpaper-dim row's length, its unmodified stop, and the
+ |   stop a fresh install starts on. Discrete steps rather than a continuous
+ |   slider: the picture is 8bpp, so a large offset clips distinct palette
+ |   entries onto one value and posterises, and a stop the player can name is
+ |   easier to return to than a position on a bar.
+ |
+ |   The row runs darkest first, so pressing left steps darker and right steps
+ |   brighter -- the direction a brightness control is expected to move. That
+ |   makes DISP_DIM_NORMAL the last index rather than the middle one: unmodified
+ |   is the brightest the row offers, and every other stop darkens. The default
+ |   is two stops down from it, which is where the wallpaper stops competing
+ |   with the text over it.
  | Author: suinevere
  ----------------------*/
-#define DISP_DIM_N      7
-#define DISP_DIM_NORMAL 2
+#define DISP_DIM_N       5
+#define DISP_DIM_NORMAL  4
+#define DISP_DIM_DEFAULT 2
 
 /*----------------------
  | display_dim_offset / display_dim_name / display_cycle_dim
@@ -333,34 +341,44 @@ void display_cycle_palette(DisplayState *d, int dir);
 
 /*----------------------
  | DISP_BLOB_BYTES
- | Description: The save-block size and layout: [sentinel=6][palette][bg][text]
+ | Description: The save-block size and layout: [sentinel=8][palette][bg][text]
  |   [dim][image name, NUL-padded]. bg is always a color, stored independently of
  |   any image because it is what shows through the menu frames and survives
  |   switching the picture off. palette holds 0xFE for Dynamic, which stores no
  |   name at all because its picture is a consequence of where the player is
  |   standing rather than a setting. dim is the wallpaper-offset row index (see
- |   DISP_DIM_N); sentinels 1-4 predate it and always decode to DISP_DIM_NORMAL.
+ |   DISP_DIM_N); sentinels 1-4 predate it and always decode to DISP_DIM_DEFAULT.
  |
- |   The sentinel is 6, not 5: options.cxx's MOJOOPTS reader (options_load)
- |   locates the gameplay block ahead of this one by testing whether that
- |   position's byte equals 5, and 5 was picked there specifically because no
- |   display sentinel had ever used it -- see options.cxx's "gameplay-block
- |   sentinel" comment and test_display.c's test_five_is_not_a_display_sentinel.
- |   Taking 5 here would make that peek ambiguous for a saved blob that has this
- |   block but no gameplay block ahead of it. 6 carries no such meaning anywhere
- |   else in the save format.
+ |   The sentinel moved from 6 to 8 because the dim row was renumbered: 6 stored
+ |   an index into a seven-stop, brightest-first row that had two lightening
+ |   stops, and 8 stores one into the five-stop, darkest-first row that replaced
+ |   it. The two blocks are the same length, so only the sentinel tells them
+ |   apart -- a 6 read as an 8 would land two stops away from where the player
+ |   left it, brightest reading as darkest. display_decode remaps a sentinel-6
+ |   index by offset value instead (see there).
+ |
+ |   8 and not 7, the next free number, for the same reason it was never 5:
+ |   options.cxx's MOJOOPTS reader (options_load) locates the gameplay block
+ |   ahead of this one by testing that position's byte against 5 and 7, and both
+ |   were picked there specifically because no display sentinel had ever used
+ |   them -- see options.cxx's "gameplay-block sentinel" comment and
+ |   test_display.c's test_five_is_not_a_display_sentinel. Taking either here
+ |   would make that peek ambiguous for a saved blob that has this block but no
+ |   gameplay block ahead of it. 8 carries no meaning anywhere else in the save
+ |   format.
  |
  |   display_encode always writes the name field empty now (see its comment):
  |   no UI path can pin a picture to a colour preset any more, and a synthesised
  |   path is wider than the field regardless. The field stays in the layout
  |   rather than being reclaimed -- the block size is what older forms are told
- |   apart by, a shorter sentinel-6 would make an old blob and a new one
+ |   apart by, a shorter current block would make an old blob and a new one
  |   indistinguishable, and display_decode still reads a name out of it for
  |   blobs written before this change.
  |
- |   Four older forms are still read. Sentinel 4 is this same layout minus the
+ |   Five older forms are still read. Sentinel 6 is this exact layout with the
+ |   pre-renumbering dim row (see above). Sentinel 4 is that layout minus the
  |   dim byte -- its block is DISP_BLOB_BYTES_V4 (17) bytes where a sentinel-6
- |   block is DISP_BLOB_BYTES (18), so length and sentinel agree -- and,
+ |   or -8 block is DISP_BLOB_BYTES (18), so length and sentinel agree -- and,
  |   along with sentinels 2 and 3, predates Dynamic taking palette index 0, so a
  |   colour-preset index in any of them is one lower than it should be now and is
  |   shifted up on read. Sentinel 3 is the same layout as 4 without

@@ -71,17 +71,18 @@ static const char *const TEXT_NAME[DISP_TEXT_N] = {
 
 /*----------------------
  | DIM_STOPS / DIM_NAMES
- | Description: The wallpaper offsets the Display row steps through, brightest
- |   first, and their labels. Steps of 32 rather than a continuous slider: the
- |   picture is 8bpp, so a large offset clips distinct palette entries onto one
- |   value and posterises, and a stop the player can name is easier to return to
- |   than a position on a bar.
+ | Description: The wallpaper offsets the Display row steps through, darkest
+ |   first, and their labels. Darkest first so that left steps darker and right
+ |   steps brighter; the row only darkens, since a wallpaper lighter than the
+ |   picture's own palette washes out under text rather than sitting behind it.
+ |   Steps of 32 rather than a continuous slider: the picture is 8bpp, so a large
+ |   offset clips distinct palette entries onto one value and posterises, and a
+ |   stop the player can name is easier to return to than a position on a bar.
  | Author: suinevere
  ----------------------*/
-static const short DIM_STOPS[DISP_DIM_N] = { 64, 32, 0, -32, -64, -96, -128 };
+static const short DIM_STOPS[DISP_DIM_N] = { -128, -96, -64, -32, 0 };
 static const char *const DIM_NAMES[DISP_DIM_N] = {
-    "Lighter +2", "Lighter +1", "Normal", "Darker -1",
-    "Darker -2", "Darker -3", "Darker -4"
+    "Darker -4", "Darker -3", "Darker -2", "Darker -1", "Normal"
 };
 
 /*----------------------
@@ -110,6 +111,26 @@ int display_dim_offset(int index) {
 const char *display_dim_name(int index) {
     if (index < 0 || index >= DISP_DIM_N) return DIM_NAMES[DISP_DIM_NORMAL];
     return DIM_NAMES[index];
+}
+
+/*----------------------
+ | dim_index_v6
+ | Description: The current dim-row index for a dim byte stored by a sentinel-6
+ |   blob. That form indexed a seven-stop, brightest-first row -- two lightening
+ |   stops, Normal, then four darkening ones -- where the row is now five stops
+ |   darkest first. Matched by offset value so a chosen darkness survives the
+ |   renumbering; the two lightening stops have no equivalent left and land on
+ |   Normal, the nearest the row still offers.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: v6 -- the stored byte, 0..6
+ | Returns: 0..DISP_DIM_N-1, or DISP_DIM_DEFAULT if v6 is out of that range
+ ----------------------*/
+static int dim_index_v6(int v6) {
+    if (v6 < 0 || v6 > 6) return DISP_DIM_DEFAULT;
+    if (v6 <= 2)          return DISP_DIM_NORMAL;
+    return 6 - v6;
 }
 
 /*----------------------
@@ -673,14 +694,14 @@ void display_defaults(DisplayState *d) {
         d->bg      = DISP_BG_BLACK;
         d->text    = DISP_TEXT_WHITE;
         d->image   = display_dynamic_slot();
-        d->dim     = DISP_DIM_NORMAL;
+        d->dim     = DISP_DIM_DEFAULT;
     } else {
         /* No art on this disc, so Dynamic has nothing to show. */
         d->palette = DISP_PAL_PRESET0;         /* IBM PC (MDA): closest to the */
         d->bg      = PRESETS[0].bg;            /* previous hardcoded appearance */
         d->text    = PRESETS[0].text;
         d->image   = DISP_IMAGE_NONE;
-        d->dim     = DISP_DIM_NORMAL;
+        d->dim     = DISP_DIM_DEFAULT;
     }
 }
 
@@ -864,8 +885,8 @@ static int image_slot_of(const char *name) {
 
 /*----------------------
  | display_encode
- | Description: Serializes a DisplayState into a save blob (sentinel 6 -- not 5,
- |   see DISP_BLOB_BYTES in display.h): palette, background, text, and dim bytes
+ | Description: Serializes a DisplayState into a save blob (sentinel 8 -- not 5
+ |   or 7, see DISP_BLOB_BYTES in display.h): palette, background, text and dim bytes
  |   (Dynamic is marked DISP_BLOB_DYNAMIC). The name field is always written
  |   empty now -- see the comment below.
  | Author: suinevere
@@ -877,7 +898,7 @@ static int image_slot_of(const char *name) {
 int display_encode(const DisplayState *d, unsigned char *out) {
     int i;
 
-    out[0] = 6;                                /* block sentinel: + dim */
+    out[0] = 8;                                /* block sentinel: renumbered dim row */
     out[1] = (d->palette == DISP_PAL_DYNAMIC) ? DISP_BLOB_DYNAMIC
            : (unsigned char) d->palette;
     out[2] = (unsigned char) d->bg;            /* always a color now */
@@ -902,9 +923,11 @@ int display_encode(const DisplayState *d, unsigned char *out) {
  | Description: Restores a DisplayState from a save blob, defaulting first so a bad
  |   blob leaves a sane state. Handles the original slot-only form (sentinel 1,
  |   image slots refused since the picture cannot be trusted), and the named forms
- |   (sentinels 2/3/4/6): resolves the image by name, refusing one this disc lacks,
- |   and validates each field independently. Only sentinel 6 carries a dim byte;
- |   the older forms leave d->dim at the DISP_DIM_NORMAL display_defaults set.
+ |   (sentinels 2/3/4/6/7): resolves the image by name, refusing one this disc lacks,
+ |   and validates each field independently. Only sentinels 6 and 7 carry a dim
+ |   byte -- 6's indexes the pre-renumbering row and is translated by
+ |   dim_index_v6 -- and the older forms leave d->dim at the DISP_DIM_DEFAULT
+ |   display_defaults set.
  |
  |   Sentinels 1, 2 and 3 were written before Dynamic took palette index 0, so a
  |   colour-preset index stored in them is one lower than it should be now and is
@@ -944,12 +967,14 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         } else ok = 0;
         if (buf[2] < DISP_BG_COLOR_N) d->bg      = (int) buf[2];  else ok = 0;
         if (buf[3] < DISP_TEXT_N)     d->text    = (int) buf[3];  else ok = 0;
-    } else if (buf[0] == 6) {
+    } else if (buf[0] == 6 || buf[0] == 8) {
         /* Current form: sentinel 2/3/4's layout plus a dim byte ahead of the
            name, and its own length -- DISP_BLOB_BYTES, not DISP_BLOB_BYTES_V4.
            Post-Dynamic numbering throughout, like sentinel 4, so the palette
-           byte needs no shift. Sentinel is 6, not 5 -- see DISP_BLOB_BYTES in
-           display.h for why 5 is reserved for options.cxx's gameplay block. */
+           byte needs no shift. Sentinel is 8, not 5 or 7 -- see DISP_BLOB_BYTES
+           in display.h for why both are reserved for options.cxx's gameplay
+           block. 6 is the same block with the pre-renumbering dim row and
+           differs only in that byte, which dim_index_v6 translates below. */
         const char *name = (const char *) (buf + 5);
         int slot, n = 0;
 
@@ -978,7 +1003,11 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         } else ok = 0;
 
         if (buf[3] < DISP_TEXT_N) d->text = (int) buf[3];  else ok = 0;
-        if (buf[4] < DISP_DIM_N)  d->dim  = (int) buf[4];  else ok = 0;
+        if (buf[0] == 6) {
+            if (buf[4] <= 6) d->dim = dim_index_v6((int) buf[4]);  else ok = 0;
+        } else if (buf[4] < DISP_DIM_N) {
+            d->dim = (int) buf[4];
+        } else ok = 0;
 
         if (name[0]) {
             if (slot >= 0) d->image = slot;  else ok = 0;

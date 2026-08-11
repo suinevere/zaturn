@@ -91,6 +91,41 @@ int main(void) {
     cp_move(&p, 1, 0);
     assert(p.cursor == 0);
 
+    /* A travel pick submits in one step; Back afterward unwinds to an empty
+       line at the verb slot. */
+    cp_reset(&p);
+    cp_focus(&p, -1);
+    cp_pick(&p, "north", 0);
+    cp_back(&p);
+    assert(p.line_len == 0);
+    assert(p.slot == CP_SLOT_VERB);
+
+    {
+        static const char *c[32];
+        CommandWords w;
+        int i;
+        for (i = 0; i < 32; i++) c[i] = "word";
+
+        /* Nine fits with a cell to spare and shows no marker. */
+        cp_fill(c, 9, 0, &w);
+        assert(w.n == 9 && w.more == 0);
+
+        /* Ten fills every cell exactly and still shows no marker. */
+        cp_fill(c, 10, 0, &w);
+        assert(w.n == 10 && w.more == 0);
+
+        /* Eleven cannot fit, so the last cell becomes the marker. */
+        cp_fill(c, 11, 0, &w);
+        assert(w.n == 9 && w.more == 1);
+        cp_fill(c, 11, 1, &w);
+        assert(w.n == 2 && w.more == 0);
+
+        assert(cp_pages(9)  == 1);
+        assert(cp_pages(10) == 1);
+        assert(cp_pages(11) == 2);
+        assert(cp_pages(19) == 3);
+    }
+
     printf("test_command_panel ok\n");
     return 0;
 }

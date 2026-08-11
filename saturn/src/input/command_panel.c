@@ -123,3 +123,57 @@ void cp_back(CommandPanel *p) {
     p->page = 0;
     p->submitted = 0;
 }
+
+/*----------------------
+ | cp_pages
+ | Description: How many pages a candidate list occupies.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: ncand -- candidate count
+ | Returns: the page count, at least 1
+ ----------------------*/
+int cp_pages(int ncand) {
+    int stride;
+    if (ncand <= CP_WORD_CELLS) return 1;
+    stride = CP_WORD_CELLS - 1;
+    return (ncand + stride - 1) / stride;
+}
+
+/*----------------------
+ | cp_fill
+ | Description: Fills one page of the word module from an ordered candidate
+ |   list. A list that fits uses every cell; one that does not gives its last
+ |   cell to the "v more" marker and pages by CP_WORD_CELLS - 1, so no candidate
+ |   is skipped by the marker.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: cands -- ordered candidates; ncand -- how many; page -- zero-based
+ |   page; out -- receives the page
+ | Returns: N/A
+ ----------------------*/
+void cp_fill(const char *const *cands, int ncand, int page, CommandWords *out) {
+    int stride, start, room, i;
+
+    out->n = 0;
+    out->more = 0;
+    for (i = 0; i < CP_WORD_CELLS; i++) out->word[i] = 0;
+    if (cands == 0 || ncand <= 0) return;
+
+    if (ncand <= CP_WORD_CELLS) {
+        for (i = 0; i < ncand; i++) out->word[i] = cands[i];
+        out->n = ncand;
+        return;
+    }
+
+    stride = CP_WORD_CELLS - 1;
+    if (page < 0) page = 0;
+    start = page * stride;
+    if (start >= ncand) start = (cp_pages(ncand) - 1) * stride;
+
+    room = ncand - start;
+    if (room > stride) { room = stride; out->more = 1; }
+    for (i = 0; i < room; i++) out->word[i] = cands[start + i];
+    out->n = room;
+}

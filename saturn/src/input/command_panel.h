@@ -126,6 +126,44 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep);
  ----------------------*/
 void cp_back(CommandPanel *p);
 
+/*----------------------
+ | CommandWords
+ | Description: One page of the word module: the words to draw in cell order and
+ |   whether the last cell should instead read "v more".
+ | Author: suinevere
+ ----------------------*/
+typedef struct {
+    const char *word[CP_WORD_CELLS];
+    int         n;
+    int         more;
+} CommandWords;
+
+/*----------------------
+ | cp_fill
+ | Description: Fills one page of the word module from an ordered candidate
+ |   list. A list that fits uses every cell; one that does not gives its last
+ |   cell to the "v more" marker and pages by CP_WORD_CELLS - 1, so no candidate
+ |   is skipped by the marker.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: cands -- ordered candidates; ncand -- how many; page -- zero-based
+ |   page; out -- receives the page
+ | Returns: N/A
+ ----------------------*/
+void cp_fill(const char *const *cands, int ncand, int page, CommandWords *out);
+
+/*----------------------
+ | cp_pages
+ | Description: How many pages a candidate list occupies.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: ncand -- candidate count
+ | Returns: the page count, at least 1
+ ----------------------*/
+int cp_pages(int ncand);
+
 #ifdef __cplusplus
 }
 #endif

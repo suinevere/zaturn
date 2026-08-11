@@ -189,13 +189,13 @@ One bordered strip, three modules separated by single vertical rules, exactly
 ```
 > open _
 +-------------+---------------+--------+
-|NW    N    NE| open   push   |        |
-|   \  |  /   | take   read   | invent |
-|W --- + --- E| attack climb  | look   |
-|   /  |  \   | drop   throw  | save   |
-|SW    S    SE| enter  exit   | load   |
-|   up  in    | eat    drink  | quit   |
-| down  out   | turn   v more |        |
+|             | look   take   |        |
+|NW   ^N^   NE| open   read   | invent |
+|   \ IN  /   | drop   close  | look   |
+|W --  +  -- E| push   pull   | save   |
+|   / OUT \   | move   attack | load   |
+|SW   vSv   SE| climb  enter  | quit   |
+|             | throw  v more |        |
 +---L/R box---+-A=pick B=bck--+-Z=kbd--+
 ```
 
@@ -207,6 +207,10 @@ up, against 21 with the keyboard and 26 with neither.
 
 ### Travel
 
+The rose is five rows, centred in the strip's seven with a blank above and
+below — the same padding the five-entry commands module takes, so only the word
+list uses the full height.
+
 The rose draws the room rather than listing twelve buttons. A direction renders
 uppercase when decoded open, lowercase when conditional or undecodable, and
 blank when there is no exit or the exit only prints a refusal — and a blank
@@ -214,18 +218,34 @@ direction takes its spoke with it. North of House decodes to:
 
 ```
 +-------------+
+|             |
 |      N      |
 |      |      |
-|W --- + --- E|
+|W --  +  -- E|
 |   /     \   |
 |SW         SE|
-|             |
 |             |
 +---L/R box---+
 ```
 
-`up` and `down` right-align at inner column 4; `in` and `out` left-align at
-inner column 7.
+The six non-compass directions ride the rose rather than taking rows of their
+own:
+
+| direction | when available | when not |
+|---|---|---|
+| up | carets flanking N — `^N^` | bare `N` |
+| down | v's flanking S — `vSv` | bare `S` |
+| in | `IN` replaces the north spoke on row 2 | spoke `\|` or blank |
+| out | `OUT` replaces the south spoke on row 4 | spoke `\|` or blank |
+
+The flanking carets and v's draw from the inverted bank, so they read as active
+markers rather than as letters. Nothing else in the travel module is ever
+inverted — the D-pad is literal here, so there is no selection to indicate and
+the highlight is free for this.
+
+`IN`'s N sits directly beneath the compass N, and `OUT` centres on the same
+column; when a spoke's own direction is unavailable and its word is too, the
+cell is blank like any other absent direction.
 
 Blank never means unpressable. The D-pad is literal while travel holds focus,
 every direction remains submittable, and a wrong guess costs one turn.
@@ -388,5 +408,6 @@ tests beside `test_typeahead_oom.c` and `test_room_genre.c`:
 - **Player-object identification is heuristic** and converges only after a room
   change. Carried items are absent until then; nothing else depends on it.
 - **Three console rows** are lost to the panel. If 17 proves too tight in play,
-  the compass is the compressible module — its two blank rows exist only to
-  hold `up`/`down`/`in`/`out`.
+  the strip can drop to five content rows and hand two back: the rose and the
+  commands module already fit in five, so only the word list would shrink —
+  from fourteen visible words to ten, paging sooner.

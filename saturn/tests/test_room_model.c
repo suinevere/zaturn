@@ -249,6 +249,24 @@ int main(void) {
         }
     }
 
+    room_model_bind(g_story, g_len);
+    {
+        int n = room_model_dict_count();
+        char w[8];
+        unsigned char fl;
+        int found_lamp = 0, found_open = 0, i;
+        assert(n == 697);
+        for (i = 0; i < n; i++) {
+            assert(room_model_dict_word(i, w, (int) sizeof w, &fl) == 1);
+            if (strcmp(w, "lamp") == 0 && (fl & 0x80) != 0) found_lamp = 1;
+            if (strcmp(w, "open") == 0 && (fl & 0x40) != 0) found_open = 1;
+        }
+        assert(found_lamp == 1);
+        assert(found_open == 1);
+        assert(room_model_dict_word(-1, w, (int) sizeof w, &fl) == 0);
+        assert(room_model_dict_word(n, w, (int) sizeof w, &fl) == 0);
+    }
+
     unsigned char junk[64];
     for (int i = 0; i < 64; i++) junk[i] = 0;
     assert(room_model_bind(junk, sizeof junk) == 0);

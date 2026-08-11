@@ -196,6 +196,24 @@ unsigned short room_model_player(void);
  ----------------------*/
 int room_model_object_word(unsigned short obj, char *out, int max);
 
+/*----------------------
+ | room_model_dict_count / room_model_dict_word
+ | Description: Enumerate the story's own dictionary. count is how many entries
+ |   it holds; word copies entry `index`'s text (six characters at most, which
+ |   is all a v3 entry distinguishes) and its part-of-speech flag byte. This is
+ |   the vocabulary source on Hard, where no typeahead trie is built at all and
+ |   the panel would otherwise have no words to offer.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story, g_dict, g_available
+ | Params: index -- entry index; out -- receives the text; max -- its capacity;
+ |   flags_out -- receives the flag byte, may be null
+ | Returns: count returns the entry count (0 when unavailable); word returns 1
+ |   on success, 0 when unavailable or the index is out of range
+ ----------------------*/
+int room_model_dict_count(void);
+int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out);
+
 #ifdef __cplusplus
 }
 #endif

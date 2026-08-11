@@ -198,14 +198,17 @@ static void cv_sort_weight(const char **out, int *wt, int n) {
  | cv_build_verb_cands
  | Description: Sources the verb slot: the curated core filtered against the
  |   story (room_model_has_word when the model is available, else the trie),
- |   then the story's remaining verbs, trie-weight ranked.
+ |   then the story's remaining verbs, trie-weight ranked. Reports how many
+ |   leading entries are core, so cv_reorder can keep them in place at every
+ |   difficulty.
  | Author: suinevere
  | Dependencies: room_model.h, typeahead.h
  | Globals: N/A
- | Params: root -- typeahead trie, may be null; out -- receives candidates
+ | Params: root -- typeahead trie, may be null; out -- receives candidates;
+ |   core_n -- receives the count of leading core entries
  | Returns: candidate count
  ----------------------*/
-static int cv_build_verb_cands(TrieNode *root, const char **out) {
+static int cv_build_verb_cands(TrieNode *root, const char **out, int *core_n) {
     int n = 0, i;
     int have_model = room_model_available();
     const char *rest[CV_CAND_MAX];
@@ -218,6 +221,7 @@ static int cv_build_verb_cands(TrieNode *root, const char **out) {
                              : (root != 0 ? (find_exact_word(root, v) != 0) : 1);
         if (ok) n = cv_add_cand(out, n, v);
     }
+    *core_n = n;
     if (root != 0) {
         nrest = cv_collect_type(root, TYPE_VERB, rest, restwt, 0);
         cv_sort_weight(rest, restwt, nrest);
@@ -227,13 +231,90 @@ static int cv_build_verb_cands(TrieNode *root, const char **out) {
 }
 
 /*----------------------
+ | CV_DICT_FL_NOUN
+ | Description: The dictionary flag-byte bit marking a v3 entry as a parser
+ |   noun -- the filter the Hard-difficulty dictionary fallback applies, since
+ |   no trie ranking survives to distinguish word types there.
+ | Author: suinevere
+ ----------------------*/
+#define CV_DICT_FL_NOUN 0x80
+
+/*----------------------
+ | g_cv_dict_scratch
+ | Description: Owned storage for the noun candidates cv_build_dict_nouns reads
+ |   straight out of the story's dictionary -- room_model_dict_word writes into
+ |   caller-owned bytes, and cv_add_cand only ever keeps a pointer, so something
+ |   has to hold the text for the rest of the refill. Overwritten every refill,
+ |   same lifetime rule as g_cv_word_scratch.
+ | Author: suinevere
+ ----------------------*/
+static char g_cv_dict_scratch[CV_CAND_MAX][8];
+
+/*----------------------
+ | cv_present_word
+ | Description: Whether `text` names an object the room model currently reports
+ |   present, compared against each present object's own parser word.
+ | Author: suinevere
+ | Dependencies: room_model.h
+ | Globals: N/A
+ | Params: text -- the candidate word; m -- the room snapshot to check against
+ | Returns: 1 if some present object's word matches, 0 otherwise
+ ----------------------*/
+static int cv_present_word(const char *text, const RoomModel *m) {
+    int i;
+    char w[8];
+    for (i = 0; i < m->nhere; i++)
+        if (room_model_object_word(m->here[i], w, (int) sizeof w) && cv_str_eq(w, text)) return 1;
+    return 0;
+}
+
+/*----------------------
+ | cv_build_dict_nouns
+ | Description: Sources the noun slot straight from the story's own dictionary
+ |   -- the vocabulary source on Hard, where no typeahead trie is built and the
+ |   trie-based sourcing above never yields anything. Walks the dictionary
+ |   twice: entries naming a present object first, then the rest of the noun
+ |   entries, so a word for something actually in the room leads the page.
+ | Author: suinevere
+ | Dependencies: room_model.h
+ | Globals: g_cv_dict_scratch
+ | Params: out -- receives candidates; n -- current count
+ | Returns: the new count
+ ----------------------*/
+static int cv_build_dict_nouns(const char **out, int n) {
+    int cnt = room_model_dict_count();
+    const RoomModel *m = room_model_get();
+    int pass, i;
+    for (pass = 0; pass < 2 && n < CV_CAND_MAX; pass++) {
+        for (i = 0; i < cnt && n < CV_CAND_MAX; i++) {
+            char w[8];
+            unsigned char fl;
+            int here;
+            if (!room_model_dict_word(i, w, (int) sizeof w, &fl)) continue;
+            if ((fl & CV_DICT_FL_NOUN) == 0) continue;
+            here = cv_present_word(w, m);
+            if ((pass == 0) != (here != 0)) continue;
+            {
+                int j;
+                for (j = 0; j < 7 && w[j]; j++) g_cv_dict_scratch[n][j] = w[j];
+                g_cv_dict_scratch[n][j] = '\0';
+                n = cv_add_cand(out, n, g_cv_dict_scratch[n]);
+            }
+        }
+    }
+    return n;
+}
+
+/*----------------------
  | cv_build_noun_cands
  | Description: Sources a noun slot: context-linked and on-screen nouns for
  |   `prev` (the verb for CP_SLOT_NOUN, the preposition for CP_SLOT_NOUN2) via
  |   predict_candidates' own on-screen boost, then the story's remaining nouns,
- |   trie-weight ranked.
+ |   trie-weight ranked. Falls back to the dictionary enumerator when that
+ |   yields nothing -- root null or (on Hard) present but wordless either mean
+ |   there is no trie to source from.
  | Author: suinevere
- | Dependencies: typeahead.h
+ | Dependencies: typeahead.h, room_model.h
  | Globals: N/A
  | Params: root -- typeahead trie, may be null; prev -- the preceding word, may
  |   be null; out -- receives candidates
@@ -252,6 +333,7 @@ static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char 
         cv_sort_weight(rest, restwt, nrest);
         for (i = 0; i < nrest && n < CV_CAND_MAX; i++) n = cv_add_cand(out, n, rest[i]);
     }
+    if (n == 0) n = cv_build_dict_nouns(out, n);
     return n;
 }
 
@@ -321,30 +403,36 @@ static int cv_has_solution_link(DictionaryWord *prev, const char *text) {
  | cv_reorder
  | Description: Reorders a sourced candidate list to match g_difficulty --
  |   solution-overlay links first on Easy, unchanged (trie weight, already
- |   folded into the sourcing order) on Medium, flat alphabetical on Hard. Only
- |   the order changes; membership is whatever cv_build_*_cands sourced.
+ |   folded into the sourcing order) on Medium, flat alphabetical on Hard. The
+ |   leading `protect` entries -- the verb slot's curated core, in its declared
+ |   order -- are never moved by either branch, so the core leads at every
+ |   difficulty and only what ranks below it changes. Membership is whatever
+ |   cv_build_*_cands sourced; only the order changes.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_difficulty
  | Params: cand -- candidate list, reordered in place; n -- count; prev -- the
- |   preceding trie word for the Easy solution-link check, may be null
+ |   preceding trie word for the Easy solution-link check, may be null;
+ |   protect -- leading entry count to leave untouched
  | Returns: N/A
  ----------------------*/
-static void cv_reorder(const char **cand, int n, DictionaryWord *prev) {
+static void cv_reorder(const char **cand, int n, DictionaryWord *prev, int protect) {
     int i;
+    if (protect < 0) protect = 0;
+    if (protect > n) protect = n;
     if (g_difficulty == DIFF_HARD) {
-        for (i = 1; i < n; i++) {
+        for (i = protect + 1; i < n; i++) {
             const char *key = cand[i];
             int j = i - 1;
-            while (j >= 0 && cv_str_gt(cand[j], key)) { cand[j + 1] = cand[j]; j--; }
+            while (j >= protect && cv_str_gt(cand[j], key)) { cand[j + 1] = cand[j]; j--; }
             cand[j + 1] = key;
         }
     } else if (g_difficulty == DIFF_EASY) {
         const char *tmp[CV_CAND_MAX];
-        int w = 0;
-        for (i = 0; i < n; i++) tmp[i] = cand[i];
-        for (i = 0; i < n; i++) if (cv_has_solution_link(prev, tmp[i])) cand[w++] = tmp[i];
-        for (i = 0; i < n; i++) if (!cv_has_solution_link(prev, tmp[i])) cand[w++] = tmp[i];
+        int w = protect;
+        for (i = protect; i < n; i++) tmp[i] = cand[i];
+        for (i = protect; i < n; i++) if (cv_has_solution_link(prev, tmp[i])) cand[w++] = tmp[i];
+        for (i = protect; i < n; i++) if (!cv_has_solution_link(prev, tmp[i])) cand[w++] = tmp[i];
     }
 }
 
@@ -396,17 +484,18 @@ static void cv_truncate_all(const char **cand, int n) {
 static void cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &w) {
     const char *cand[CV_CAND_MAX];
     int ncand = 0;
+    int core_n = 0;
     DictionaryWord *prev = 0;
 
     if (p.slot == CP_SLOT_VERB) {
-        ncand = cv_build_verb_cands(root, cand);
+        ncand = cv_build_verb_cands(root, cand, &core_n);
     } else if (p.slot == CP_SLOT_NOUN || p.slot == CP_SLOT_NOUN2) {
         prev = cv_last_word(p, root);
         ncand = cv_build_noun_cands(root, prev, cand);
     } else if (p.slot == CP_SLOT_PREP) {
         ncand = cv_build_prep_cands(root, cand);
     }
-    cv_reorder(cand, ncand, prev);
+    cv_reorder(cand, ncand, prev, core_n);
     cv_truncate_all(cand, ncand);
     cp_fill(cand, ncand, p.page, &w);
 }

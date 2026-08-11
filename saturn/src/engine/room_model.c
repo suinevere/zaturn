@@ -541,3 +541,42 @@ void room_model_refresh_room(unsigned short room) {
  | Returns: the snapshot, never NULL
  ----------------------*/
 const RoomModel *room_model_get(void) { return &g_model; }
+
+/*----------------------
+ | room_model_dict_count
+ | Description: How many entries the story's dictionary holds.
+ | Author: suinevere
+ | Dependencies: dict_count
+ | Globals: g_available
+ | Params: N/A
+ | Returns: the entry count, or 0 when the model is unavailable
+ ----------------------*/
+int room_model_dict_count(void) {
+    if (!g_available) return 0;
+    return (int) dict_count();
+}
+
+/*----------------------
+ | room_model_dict_word
+ | Description: Copies dictionary entry `index`'s text and flag byte.
+ | Author: suinevere
+ | Dependencies: dict_count, dict_first, dict_entry_len, decode_word
+ | Globals: g_story, g_available
+ | Params: index -- entry index; out -- receives the text; max -- its
+ |   capacity; flags_out -- receives the flag byte, may be null
+ | Returns: 1 on success, 0 when unavailable or the index is out of range
+ ----------------------*/
+int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out) {
+    unsigned int off;
+    char w[8];
+    int i;
+    if (max > 0) out[0] = '\0';
+    if (!g_available || out == 0 || max <= 0) return 0;
+    if (index < 0 || index >= (int) dict_count()) return 0;
+    off = dict_first() + (unsigned int) index * dict_entry_len();
+    decode_word(off, w);
+    for (i = 0; i < max - 1 && w[i]; i++) out[i] = w[i];
+    out[i] = '\0';
+    if (flags_out != 0) *flags_out = g_story[off + 4];
+    return 1;
+}

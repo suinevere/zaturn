@@ -2615,7 +2615,14 @@ Expected: PASS — `test_room_model ok`.
 In `saturn/src/video/command_view.cxx`, where candidates are gathered:
 
 - **Verbs, every difficulty:** `CV_VERB_CORE` entries that pass `room_model_has_word` lead the list, in the order they are declared. Only what follows them changes with difficulty — trie-ranked on Easy and Medium, dictionary order on Hard. Do not sort the core alphabetically at any setting.
-- **Nouns on Hard** (`root == nullptr`): walk `room_model_dict_count()` / `room_model_dict_word()`, keep entries whose flag byte has `0x80` (noun) set, and prefer those naming objects the room model reports present before the rest of the dictionary.
+- **Nouns on Hard:** walk `room_model_dict_count()` / `room_model_dict_word()`, keep entries whose flag byte has `0x80` (noun) set, and prefer those naming objects the room model reports present before the rest of the dictionary.
+
+  **Do not test for `root == nullptr` — that check would never fire.**
+  `ensure_typeahead` allocates the root unconditionally at `saturn_glue.cxx:167`
+  and gates only the *population* on `g_difficulty != DIFF_HARD` at line 169, so
+  on Hard the root is a valid but empty node. Fall back when the trie *yields
+  nothing* (zero candidates) rather than when it is absent. That covers Hard and
+  any other empty-trie state, including a build that ran out of memory.
 - Truncate every candidate to six characters, as elsewhere.
 
 - [ ] **Step 7: Syntax-check and commit**

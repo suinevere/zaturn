@@ -51,20 +51,27 @@ bool g_kbd_visible = true;
  | console_height
  | Description: Subtracts TOP_MARGIN from SCREEN_ROWS for the available rows,
  |   then reserves one of three ways: with a real keyboard in hand (on-screen
- |   keyboard hidden) just the 1 input row; with a gamepad in hand and the
- |   command panel selected, 1 input row + CV_STRIP_ROWS panel rows + 2 panel
- |   borders; with a gamepad in hand and the on-screen keyboard selected,
- |   1 input row + KB_ROWS keyboard rows + 1 hint row.
+ |   keyboard hidden) just the 1 input row; with a gamepad in hand, a game
+ |   running, and the command panel selected, 1 input row + CV_STRIP_ROWS panel
+ |   rows + 2 panel borders; every other gamepad-in-hand case (the on-screen
+ |   keyboard explicitly selected, OR no game running at all -- the online
+ |   terminal before/without a story, and the whole netbin build, which never
+ |   assigns g_cmd_mode), 1 input row + KB_ROWS keyboard rows + 1 hint row. The
+ |   g_in_game gate matters because g_cmd_mode initializes to IFACE_PANEL and is
+ |   assigned nowhere else: without it, the panel's layout would leak into
+ |   every screen that draws through render_keyboard instead of the panel --
+ |   title-screen online terminal, netbin -- silently shrinking the console and
+ |   leaving rows unclaimed by any renderer.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_kbd_visible, g_cmd_mode
+ | Globals: g_kbd_visible, g_cmd_mode, g_in_game
  | Params: N/A
  | Returns: the number of rows the console view may draw into
  ----------------------*/
 int console_height(void) {
     int avail = SCREEN_ROWS - TOP_MARGIN;
     if (!g_kbd_visible) return avail - 1;
-    if (g_cmd_mode == IFACE_PANEL) return avail - (1 + CV_STRIP_ROWS + 2);
+    if (g_in_game && g_cmd_mode == IFACE_PANEL) return avail - (1 + CV_STRIP_ROWS + 2);
     return avail - (1 + KB_ROWS + 1);
 }
 

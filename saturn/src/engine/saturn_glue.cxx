@@ -302,7 +302,12 @@ static void run_room_transition(void) {
  |   The frame loop runs the soft-reset chord, the F10/F11/F12 menu shortcuts
  |   (Sound only when there is audio to configure; F10's Options menu can
  |   itself report a Save Game/Load Game pick, submitted the same way as
- |   below, and holds the music paused mid-track while it is open),
+ |   below, and holds the music paused mid-track while it is open; each of
+ |   these three calls mode_toggle_reset() the instant its blocking UI
+ |   returns, since the toggle button could have been pressed and released
+ |   entirely while that menu owned the screen -- without the reset the next
+ |   frame's mode_toggle_fired would see a stale held state and swap
+ |   interfaces on nothing the player did at the prompt),
  |   the F2/F5 save and F3/F6/F9 restore keys (which submit the
  |   game's own command so the blob hooks do the work), a toggle-button tap
  |   (gamepad only -- a real keyboard in hand keeps its own prompt untouched)
@@ -356,11 +361,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
     static KeyboardState k;
     static CommandPanel cpanel;
     static int kbd_inited = 0;
-    if (!kbd_inited) { keyboard_reset(&k); cp_reset(&cpanel); kbd_inited = 1; }
+    if (!kbd_inited) { keyboard_reset(&k); kbd_inited = 1; }
     k.input_len = 0;
     k.input[0] = '\0';
     k.cursor = 0;
     k.submitted = 0;
+    cp_reset(&cpanel);
     SRL::Core::Synchronize();
     int sug_index = 0;
     char sug_last[256] = "";
@@ -400,6 +406,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             int verb_was = g_verbosity;
             music_duck();
             int om = options_menu();
+            mode_toggle_reset();
             if (om != OM_SAVE && om != OM_RESTORE) music_resume();
             ensure_typeahead();
             typeahead_scan_screen(g_typeahead_root);
@@ -415,6 +422,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         }
         if (ke.kind == SATURN_KEY_F11) {
             keyboard_controls_page();
+            mode_toggle_reset();
             menu_clear();
             SRL::Core::Synchronize();
             continue;
@@ -422,6 +430,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         if (ke.kind == SATURN_KEY_F12) {
             if (music_cdda_has_audio() || sound_has_audio()) {
                 sound_options_page();
+                mode_toggle_reset();
                 menu_clear();
                 SRL::Core::Synchronize();
             }

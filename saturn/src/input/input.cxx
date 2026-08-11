@@ -183,6 +183,15 @@ bool caps_combo_fired(void) {
 }
 
 /*----------------------
+ | g_mtog_was / g_mtog_spent
+ | Description: mode_toggle_fired's held/spent latch, file-scope rather than
+ |   function-local so mode_toggle_reset can clear it from outside.
+ | Author: suinevere
+ ----------------------*/
+static bool g_mtog_was = false;
+static bool g_mtog_spent = false;
+
+/*----------------------
  | mode_toggle_fired
  | Description: Reports a tap of the toggle button -- pressed and released with
  |   no direction or shoulder held in between. Y and Z do nothing on their own
@@ -190,23 +199,39 @@ bool caps_combo_fired(void) {
  |   that fires a chord is marked spent and never reports.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_pad, g_toggle_btn
+ | Globals: g_pad, g_toggle_btn, g_mtog_was, g_mtog_spent
  | Params: N/A
  | Returns: true on the frame a clean tap completes
  ----------------------*/
 bool mode_toggle_fired(void) {
-    static bool was = false;
-    static bool spent = false;
     Button b = (g_toggle_btn == 1) ? Button::Y : Button::Z;
     bool now = g_pad->IsHeld(b);
     bool other = g_pad->IsHeld(Button::Up) || g_pad->IsHeld(Button::Down) ||
                  g_pad->IsHeld(Button::Left) || g_pad->IsHeld(Button::Right) ||
                  g_pad->IsHeld(Button::L) || g_pad->IsHeld(Button::R);
     bool fired = false;
-    if (now && other) spent = true;
-    if (was && !now) { fired = !spent; spent = false; }
-    was = now;
+    if (now && other) g_mtog_spent = true;
+    if (g_mtog_was && !now) { fired = !g_mtog_spent; g_mtog_spent = false; }
+    g_mtog_was = now;
     return fired;
+}
+
+/*----------------------
+ | mode_toggle_reset
+ | Description: Zeroes g_mtog_was/g_mtog_spent, discarding whatever edge
+ |   mode_toggle_fired was mid-tracking. See input.h for why this has to be a
+ |   hard discard rather than a "only count presses observed here" flag: the
+ |   press edge was legitimately observed, before the modal that is now
+ |   returning ever opened; the fix is to forget it entirely, not to gate it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_mtog_was, g_mtog_spent
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void mode_toggle_reset(void) {
+    g_mtog_was = false;
+    g_mtog_spent = false;
 }
 
 /*----------------------

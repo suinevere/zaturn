@@ -178,6 +178,24 @@ bool caps_combo_fired(void);
 bool mode_toggle_fired(void);
 
 /*----------------------
+ | mode_toggle_reset
+ | Description: Clears mode_toggle_fired's latch (the held/spent state it
+ |   tracks across calls). Call after any blocking UI (a menu, a device/slot
+ |   picker, any modal that runs its own poll loop and does not itself call
+ |   mode_toggle_fired) returns to the caller's own frame loop -- the toggle
+ |   button can be pressed and released entirely while that modal owned the
+ |   screen, and without this the next mode_toggle_fired call would see a
+ |   stale "was held" and swap interfaces on a press the player spent on
+ |   something else, or never made at all.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void mode_toggle_reset(void);
+
+/*----------------------
  | chord_tick
  | Description: Advances the per-slot edge/hold-repeat state for every shift-
  |   chord slot; must be called once per input frame before chord_fired.

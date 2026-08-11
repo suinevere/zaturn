@@ -16,6 +16,8 @@
 - **Host tests are gcc, run from the repo root**, binaries to `/tmp/<name>.exe`, following `saturn/tests/test_room_genre.c`.
 - **New `.c` files are plain C11** — they are compiled by the SH-2 C compiler and by host gcc. No C++ in a `.c` file.
 - **No comments inside functions.** Every file, function and constant gets a header block in the house format (see any file in `saturn/src/`). Tests get a file header only.
+- **Header blocks go in the `.c` as well as the `.h`** — on the definition, not only the declaration. `saturn/src/input/keyboard.c` and `saturn/src/classify/room_class.c` both carry a full block above every non-trivial definition even though their headers already document the same function. Several code blocks in the tasks below show blocks only on the static helpers; that is an omission in this plan, not the house style. Add them on the public definitions too — `Description` / `Author` / `Dependencies` / `Globals` / `Params` / `Returns`, with `N/A` where a field does not apply.
+- **Never write VDP2 VRAM outside the `OnAfterSync` flush.** `text_map` exists because VDP2 re-reads a cell's pattern name on every scanline, so a store landing while the beam is inside a row tears. That applies to font-tile writes as much as to map writes: compose in RAM, write in vblank.
 - **No dynamic allocation** in `room_model` or `command_panel`. High Work RAM is already carrying the story image plus a 115-200 KB typeahead trie; these modules use fixed arrays.
 - **Screen is 40 columns.** Module widths are travel 13, words 15, commands 8, with single `|` dividers and one border column each side: `1 + 13 + 1 + 15 + 1 + 8 + 1 = 40`.
 - **Commit after every task.** One sentence, no body, no trailers. Never mention AI, Claude, or the session.

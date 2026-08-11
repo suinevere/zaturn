@@ -151,6 +151,34 @@ void room_model_refresh_room(unsigned short room);
  ----------------------*/
 const RoomModel *room_model_get(void);
 
+/*----------------------
+ | room_model_refresh
+ | Description: Reads the current room out of global 0 -- which the v3
+ |   specification defines as the room the status line names -- and rebuilds the
+ |   snapshot for it. Call once per prompt.
+ | Author: suinevere
+ | Dependencies: room_model_refresh_room
+ | Globals: g_glob, g_model
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void room_model_refresh(void);
+
+/*----------------------
+ | room_model_player
+ | Description: The object the player inhabits, or 0 while it is still unknown.
+ |   There is no specified way to find it, so it is identified by intersecting
+ |   the child sets of two consecutive rooms -- only the player follows the
+ |   player -- which converges on the first room change. Until then carried items
+ |   are simply absent.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_player
+ | Params: N/A
+ | Returns: the object number, or 0
+ ----------------------*/
+unsigned short room_model_player(void);
+
 #ifdef __cplusplus
 }
 #endif

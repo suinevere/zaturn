@@ -41,6 +41,17 @@ static int g_available;
 static RoomModel g_model;
 
 /*----------------------
+ | g_player / g_prev_room / g_prev_kids / g_prev_n
+ | Description: The identified player object, and the previous room with its
+ |   child set, kept so a room change can be intersected.
+ | Author: suinevere
+ ----------------------*/
+static unsigned short g_player;
+static unsigned short g_prev_room;
+static unsigned short g_prev_kids[RM_HERE_MAX];
+static int g_prev_n;
+
+/*----------------------
  | rd16
  | Description: Reads a big-endian 16-bit word out of the bound image.
  | Author: suinevere
@@ -133,7 +144,8 @@ static int dir_prop_of(unsigned int off) {
  | Author: suinevere
  | Dependencies: rd16, dict_first, dict_entry_len, dict_count, dir_prop_of,
  |   decode_word
- | Globals: g_story, g_len, g_dict, g_obj, g_glob, g_prop, g_available
+ | Globals: g_story, g_len, g_dict, g_obj, g_glob, g_prop, g_available,
+ |   g_player, g_prev_room, g_prev_n
  | Params: story -- the live story image; len -- its length in bytes
  | Returns: 1 if the model is available for this story, 0 otherwise
  ----------------------*/
@@ -144,6 +156,9 @@ int room_model_bind(const unsigned char *story, unsigned int len) {
 
     g_available = 0;
     for (i = 0; i < RM_DIR_N; i++) g_prop[i] = 0;
+    g_player = 0;
+    g_prev_room = 0;
+    g_prev_n = 0;
     g_story = story; g_len = len;
     if (story == 0 || len < 64u) return 0;
 
@@ -324,13 +339,86 @@ static int dir_of_prop(int prop) {
 }
 
 /*----------------------
+ | obj_child / obj_sibling
+ | Description: An object's first child and next sibling, from bytes 6 and 5 of
+ |   its table entry.
+ | Author: suinevere
+ | Dependencies: obj_entry
+ | Globals: g_story
+ | Params: id -- object number
+ | Returns: the related object number, or 0
+ ----------------------*/
+static unsigned short obj_child(unsigned short id) {
+    if (!obj_valid(id)) return 0;
+    return (unsigned short) g_story[obj_entry(id) + 6u];
+}
+static unsigned short obj_sibling(unsigned short id) {
+    if (!obj_valid(id)) return 0;
+    return (unsigned short) g_story[obj_entry(id) + 5u];
+}
+
+/*----------------------
+ | collect_children
+ | Description: Fills `out` with an object's children, up to `max`, returning
+ |   how many were written. Bounded by max rather than by the chain so a corrupt
+ |   sibling link cannot spin.
+ | Author: suinevere
+ | Dependencies: obj_child, obj_sibling
+ | Globals: N/A
+ | Params: parent -- the object to walk; out -- destination; max -- its capacity
+ | Returns: the count written
+ ----------------------*/
+static int collect_children(unsigned short parent, unsigned short *out, int max) {
+    unsigned short c = obj_child(parent);
+    int n = 0;
+    while (c != 0 && n < max) { out[n++] = c; c = obj_sibling(c); }
+    return n;
+}
+
+/*----------------------
+ | room_model_player
+ | Description: The object the player inhabits, or 0 while it is still unknown.
+ |   There is no specified way to find it, so it is identified by intersecting
+ |   the child sets of two consecutive rooms -- only the player follows the
+ |   player -- which converges on the first room change. Until then carried items
+ |   are simply absent.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_player
+ | Params: N/A
+ | Returns: the object number, or 0
+ ----------------------*/
+unsigned short room_model_player(void) { return g_player; }
+
+/*----------------------
+ | room_model_refresh
+ | Description: Reads the current room out of global 0 -- which the v3
+ |   specification defines as the room the status line names -- and rebuilds the
+ |   snapshot for it. Call once per prompt.
+ | Author: suinevere
+ | Dependencies: room_model_refresh_room, rd16
+ | Globals: g_available, g_glob
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void room_model_refresh(void) {
+    unsigned short room;
+    if (!g_available) return;
+    room = (unsigned short) rd16(g_glob);
+    room_model_refresh_room(room);
+}
+
+/*----------------------
  | room_model_refresh_room
  | Description: Rebuilds the snapshot for a given room object -- the entry the
  |   host tests drive, and what room_model_refresh calls once it has read the
- |   room out of global 0.
+ |   room out of global 0. Also fills the room's contents, advances the player
+ |   heuristic on a room change, and fills carried items once the player is
+ |   known.
  | Author: suinevere
- | Dependencies: obj_entry, obj_props, dir_of_prop
- | Globals: g_story, g_len, g_available, g_model
+ | Dependencies: obj_entry, obj_props, dir_of_prop, collect_children
+ | Globals: g_story, g_len, g_available, g_model, g_player, g_prev_room,
+ |   g_prev_kids, g_prev_n
  | Params: room -- the room object number
  | Returns: N/A
  ----------------------*/
@@ -365,6 +453,22 @@ void room_model_refresh_room(unsigned short room) {
         }
         a += 1u + (unsigned int) plen;
     }
+
+    g_model.nhere = collect_children(room, g_model.here, RM_HERE_MAX);
+
+    if (g_player == 0 && g_prev_room != 0 && g_prev_room != room) {
+        int j, k, cand = 0, ncand = 0;
+        for (j = 0; j < g_prev_n; j++)
+            for (k = 0; k < g_model.nhere; k++)
+                if (g_prev_kids[j] == g_model.here[k]) { cand = g_prev_kids[j]; ncand++; }
+        if (ncand == 1) g_player = (unsigned short) cand;
+    }
+    g_prev_room = room;
+    g_prev_n = g_model.nhere;
+    for (i = 0; i < g_model.nhere; i++) g_prev_kids[i] = g_model.here[i];
+
+    if (g_player != 0)
+        g_model.ncarried = collect_children(g_player, g_model.carried, RM_CARRIED_MAX);
 }
 
 /*----------------------

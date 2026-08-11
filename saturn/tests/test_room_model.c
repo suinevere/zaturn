@@ -87,6 +87,29 @@ int main(void) {
         assert(m->exits[RM_IN] == RM_EXIT_NONE);
     }
 
+    /* Object 180 is "West of House". Its children are the door (181) and the
+       mailbox (160), read straight from the object tree -- so they are known to
+       be here without a word of text having been printed. */
+    room_model_refresh_room(180);
+    {
+        const RoomModel *m = room_model_get();
+        int saw_door = 0, saw_box = 0, i;
+        assert(m->nhere == 2);
+        for (i = 0; i < m->nhere; i++) {
+            if (m->here[i] == 181) saw_door = 1;
+            if (m->here[i] == 160) saw_box  = 1;
+        }
+        assert(saw_door == 1 && saw_box == 1);
+    }
+
+    /* Object 81 is "North of House" and holds nothing. */
+    room_model_refresh_room(81);
+    assert(room_model_get()->nhere == 0);
+
+    /* The player is unknown until a room change lets the model intersect two
+       rooms' child sets; nothing above depended on knowing it. */
+    assert(room_model_player() == 0);
+
     {
         unsigned char img[160];
         int i;

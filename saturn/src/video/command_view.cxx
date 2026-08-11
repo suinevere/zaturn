@@ -41,15 +41,15 @@ static const char *CV_BORDER_TOP   = "+-------------+---------------+--------+";
 static const char *CV_BORDER_BLANK = "|             |               |        |";
 
 /*----------------------
- | CV_HINT_TRAVEL / CV_HINT_WORD / CV_HINT_CMD
- | Description: The bottom border's three module hints, each exactly its
- |   module's inner width (13 / 15 / 8) so they slot straight into the border
- |   between the corner '+' marks.
+ | CV_HINT_TRAVEL
+ | Description: The travel module's bottom-border hint, exactly its inner
+ |   width (13) so it slots straight into the border between the corner '+'
+ |   marks. L and R are fixed bindings for module focus (command_edit reads
+ |   Button::L/Button::R directly, never through face_button/g_face_btn), so
+ |   unlike the other two hints this one is never stale and stays a literal.
  | Author: suinevere
  ----------------------*/
 static const char *CV_HINT_TRAVEL = "---L/R box---";
-static const char *CV_HINT_WORD   = "-A=pick B=bck--";
-static const char *CV_HINT_CMD    = "-Z=kbd--";
 
 /*----------------------
  | CV_CMD_ROW
@@ -522,25 +522,86 @@ static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
 }
 
 /*----------------------
+ | cv_word_hint
+ | Description: Builds the word module's bottom-border hint from the live
+ |   Accept/Back face-button mapping, so the letters shown always match the
+ |   buttons that actually pick and back up -- command_edit fires both through
+ |   face_button(FA_ACCEPT)/face_button(FA_BACK), which the player can remap on
+ |   the Controls page. Fixed at the module's 15-character inner width:
+ |   face_btn_name always returns a single character ("A", "B", or "C"), so
+ |   substituting it in place of the old "A"/"B" literals never changes the
+ |   count.
+ | Author: suinevere
+ | Dependencies: input.h (face_btn_name)
+ | Globals: g_face_btn
+ | Params: out -- receives the 15-character hint plus a NUL (16 bytes)
+ | Returns: N/A
+ ----------------------*/
+static void cv_word_hint(char *out) {
+    const char *accept = face_btn_name(FA_ACCEPT);
+    const char *back   = face_btn_name(FA_BACK);
+    int i = 0;
+    out[i++] = '-';
+    out[i++] = accept[0];
+    out[i++] = '=';
+    out[i++] = 'p'; out[i++] = 'i'; out[i++] = 'c'; out[i++] = 'k';
+    out[i++] = ' ';
+    out[i++] = back[0];
+    out[i++] = '=';
+    out[i++] = 'b'; out[i++] = 'c'; out[i++] = 'k';
+    out[i++] = '-'; out[i++] = '-';
+    out[i] = '\0';
+}
+
+/*----------------------
+ | cv_cmd_hint
+ | Description: Builds the command module's bottom-border hint from the live
+ |   toggle-button binding, so the letter shown always matches the shift
+ |   button that actually swaps the panel back to the on-screen keyboard.
+ |   Fixed at the module's 8-character inner width.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_toggle_btn
+ | Params: out -- receives the 8-character hint plus a NUL (9 bytes)
+ | Returns: N/A
+ ----------------------*/
+static void cv_cmd_hint(char *out) {
+    int i = 0;
+    out[i++] = '-';
+    out[i++] = (g_toggle_btn == 1) ? 'Y' : 'Z';
+    out[i++] = '=';
+    out[i++] = 'k'; out[i++] = 'b'; out[i++] = 'd';
+    out[i++] = '-'; out[i++] = '-';
+    out[i] = '\0';
+}
+
+/*----------------------
  | cv_draw_bottom_border
  | Description: Draws the bottom border's three corner-to-corner segments,
- |   printing the focused module's hint in reverse video.
+ |   printing the focused module's hint in reverse video. The word and command
+ |   hints are rebuilt every call from the live face-button/toggle-button
+ |   bindings (cv_word_hint/cv_cmd_hint); the travel hint is a fixed literal,
+ |   since L/R module focus is not remappable.
  | Author: suinevere
- | Dependencies: command_panel.h, text_map.h
- | Globals: N/A
+ | Dependencies: command_panel.h, text_map.h, input.h, app_state.h
+ | Globals: g_face_btn, g_toggle_btn
  | Params: focus -- p.box; y -- text row
  | Returns: N/A
  ----------------------*/
 static void cv_draw_bottom_border(int focus, int y) {
+    char word_hint[16];
+    char cmd_hint[9];
+    cv_word_hint(word_hint);
+    cv_cmd_hint(cmd_hint);
     text_print(0, y, "+");
     if (focus == CP_BOX_TRAVEL) text_print_hl(CV_TRAVEL_X, y, CV_HINT_TRAVEL);
     else                        text_print(CV_TRAVEL_X, y, CV_HINT_TRAVEL);
     text_print(14, y, "+");
-    if (focus == CP_BOX_WORD) text_print_hl(CV_WORD_X, y, CV_HINT_WORD);
-    else                      text_print(CV_WORD_X, y, CV_HINT_WORD);
+    if (focus == CP_BOX_WORD) text_print_hl(CV_WORD_X, y, word_hint);
+    else                      text_print(CV_WORD_X, y, word_hint);
     text_print(30, y, "+");
-    if (focus == CP_BOX_CMD) text_print_hl(CV_CMD_X, y, CV_HINT_CMD);
-    else                     text_print(CV_CMD_X, y, CV_HINT_CMD);
+    if (focus == CP_BOX_CMD) text_print_hl(CV_CMD_X, y, cmd_hint);
+    else                     text_print(CV_CMD_X, y, cmd_hint);
     text_print(39, y, "+");
 }
 

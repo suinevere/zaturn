@@ -1,0 +1,68 @@
+/*----------------------
+ | test_room_model.c
+ | Description: Host test for the room model's static decode against the shipped
+ |   Zork I image. Covers the direction-word to property-number map, the
+ |   contiguous-run sanity gate that rejects a non-ZILCH story, and the
+ |   dictionary lookup the verb filter depends on. Reads saturn/zork1.dat
+ |   directly; no SRL or Saturn code is involved.
+ | Author: suinevere
+ | Dependencies: ../src/engine/room_model.h and room_model.c, assert.h, stdio.h,
+ |   stdlib.h, saturn/zork1.dat
+ | Build: gcc -std=c11 -Wall -Wextra -o /tmp/trm.exe \
+ |          saturn/tests/test_room_model.c saturn/src/engine/room_model.c \
+ |          && /tmp/trm.exe
+ ----------------------*/
+#include "../src/engine/room_model.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+static unsigned char *g_story;
+static unsigned int   g_len;
+
+static void load_story(void) {
+    FILE *f = fopen("saturn/zork1.dat", "rb");
+    assert(f != NULL);
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    g_story = (unsigned char *) malloc((size_t) n);
+    assert(g_story != NULL);
+    assert(fread(g_story, 1, (size_t) n, f) == (size_t) n);
+    fclose(f);
+    g_len = (unsigned int) n;
+}
+
+int main(void) {
+    load_story();
+
+    assert(room_model_bind(g_story, g_len) == 1);
+    assert(room_model_available() == 1);
+
+    assert(room_model_dir_prop(RM_N)    == 31);
+    assert(room_model_dir_prop(RM_E)    == 30);
+    assert(room_model_dir_prop(RM_W)    == 29);
+    assert(room_model_dir_prop(RM_S)    == 28);
+    assert(room_model_dir_prop(RM_NE)   == 27);
+    assert(room_model_dir_prop(RM_NW)   == 26);
+    assert(room_model_dir_prop(RM_SE)   == 25);
+    assert(room_model_dir_prop(RM_SW)   == 24);
+    assert(room_model_dir_prop(RM_UP)   == 23);
+    assert(room_model_dir_prop(RM_DOWN) == 22);
+    assert(room_model_dir_prop(RM_IN)   == 21);
+    assert(room_model_dir_prop(RM_OUT)  == 20);
+
+    assert(room_model_has_word("open")    == 1);
+    assert(room_model_has_word("mailbox") == 1);
+    assert(room_model_has_word("photosynthesis") == 0);
+
+    /* A story whose header points nowhere sane must report unavailable rather
+       than decode garbage. */
+    unsigned char junk[64];
+    for (int i = 0; i < 64; i++) junk[i] = 0;
+    assert(room_model_bind(junk, sizeof junk) == 0);
+    assert(room_model_available() == 0);
+
+    printf("test_room_model ok\n");
+    return 0;
+}

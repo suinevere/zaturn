@@ -1,8 +1,8 @@
 /*----------------------
  | command_panel.h
  | Description: The command panel's state: which of the three modules has focus,
- |   which sentence slot is being filled, where the cursor sits, which page of
- |   the word list is showing, and the command assembled so far. Pure logic --
+ |   which sentence slot is being filled, where the cursor sits, how far the
+ |   word list is scrolled, and the command assembled so far. Pure logic --
  |   no rendering, no device polling, and no opinion about where candidate words
  |   come from; the caller supplies them already ordered. Implemented in
  |   command_panel.c.
@@ -54,7 +54,7 @@ typedef struct {
     int  box;
     int  slot;
     int  cursor;
-    int  page;
+    int  top;       /* first candidate row showing in the word module */
     char line[CP_LINE_MAX];
     int  line_len;
     int  submitted;
@@ -64,7 +64,7 @@ typedef struct {
 /*----------------------
  | cp_reset
  | Description: Clears the assembled command and returns focus to the word
- |   module at the verb slot, page zero.
+ |   module at the verb slot, scrolled to the top of the list.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -76,7 +76,7 @@ void cp_reset(CommandPanel *p);
 /*----------------------
  | cp_focus
  | Description: Moves focus one module left (-1) or right (+1), clamped at the
- |   ends rather than wrapping, and resets the cursor and page for the module
+ |   ends rather than wrapping, and resets the cursor and scroll for the module
  |   arrived at.
  | Author: suinevere
  | Dependencies: N/A
@@ -145,41 +145,77 @@ int  cp_overlay_takes_noun(const CommandPanel *p);
 
 /*----------------------
  | CommandWords
- | Description: One page of the word module: the words to draw in cell order and
- |   whether the last cell should instead read "v more".
+ | Description: The word module's visible window: the words to draw in cell
+ |   order, how many cells are filled, which candidate row sits at the top, and
+ |   how many rows the whole list occupies. Every cell holds a real word -- the
+ |   list scrolls a row at a time against the bottom edge rather than spending a
+ |   cell on a "more" marker, so the module offers ten choices and not nine.
  | Author: suinevere
  ----------------------*/
 typedef struct {
     const char *word[CP_WORD_CELLS];
     int         n;
-    int         more;
+    int         top;
+    int         rows;
 } CommandWords;
 
 /*----------------------
  | cp_fill
- | Description: Fills one page of the word module from an ordered candidate
- |   list. A list that fits uses every cell; one that does not gives its last
- |   cell to the "v more" marker and pages by CP_WORD_CELLS - 1, so no candidate
- |   is skipped by the marker.
+ | Description: Fills the word module's window from an ordered candidate list,
+ |   starting at candidate row `top`, which is clamped so the window never hangs
+ |   past the end of the list.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: cands -- ordered candidates; ncand -- how many; page -- zero-based
- |   page; out -- receives the page
+ | Params: cands -- ordered candidates; ncand -- how many; top -- first
+ |   candidate row to show; out -- receives the window
  | Returns: N/A
  ----------------------*/
-void cp_fill(const char *const *cands, int ncand, int page, CommandWords *out);
+void cp_fill(const char *const *cands, int ncand, int top, CommandWords *out);
 
 /*----------------------
- | cp_pages
- | Description: How many pages a candidate list occupies.
+ | cp_word_rows
+ | Description: How many candidate rows a list occupies.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: ncand -- candidate count
- | Returns: the page count, at least 1
+ | Returns: the row count, 0 for an empty list
  ----------------------*/
-int cp_pages(int ncand);
+int cp_word_rows(int ncand);
+
+/*----------------------
+ | cp_word_move
+ | Description: Steps the word module's cursor one cell, spreadsheet fashion:
+ |   left and right stay on their row instead of running on into the next one,
+ |   and up and down at the window's edge scroll the list by a row rather than
+ |   stopping. A horizontal press with nowhere to go reports which edge it hit,
+ |   which is what lets the caller carry focus into the module beside it. The
+ |   cursor never lands on an empty cell.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; dx, dy -- -1, 0 or +1; ncand -- the whole candidate
+ |   count, not just the visible part
+ | Returns: 0 when the cursor stayed in the module, -1 when it stepped off the
+ |   left edge, +1 when it stepped off the right
+ ----------------------*/
+int cp_word_move(CommandPanel *p, int dx, int dy, int ncand);
+
+/*----------------------
+ | cp_word_enter
+ | Description: Places the cursor when focus arrives in the word module: on the
+ |   window row asked for, in the column nearest the edge it came through, backed
+ |   off to a filled cell. The scroll position is left where the module last had
+ |   it, so leaving and returning does not lose the player's place in a long list.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; row -- window row to aim for; from_right -- 1 when
+ |   focus arrived from the module to the right; ncand -- candidate count
+ | Returns: N/A
+ ----------------------*/
+void cp_word_enter(CommandPanel *p, int row, int from_right, int ncand);
 
 #ifdef __cplusplus
 }

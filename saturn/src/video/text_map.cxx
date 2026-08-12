@@ -249,9 +249,46 @@ extern "C" void text_on_flush(void (*fn)(void))
     g_on_flush = fn;
 }
 
+/*----------------------
+ | install_backslash_glyph
+ | Description: Replaces the tile at 0x5C with a horizontal mirror of the one at
+ |   0x2F, so a backslash draws as a backslash. The font VDP2::Initialize uploads
+ |   is the SGL one, whose 0x5C is the yen sign it inherits from the Japanese
+ |   character set -- printing '\' rendered a currency symbol, which the compass
+ |   rose's northwest and southeast spokes made impossible to miss. Mirroring the
+ |   font's own forward slash rather than drawing a bitmap here is what keeps the
+ |   two strokes the same weight, height and position in the cell.
+ |
+ |   4bpp, two pixels per byte, so a mirrored row is the four bytes reversed with
+ |   the nibbles swapped inside each. Nothing in this program wants a yen sign,
+ |   and the tile is patched once at init rather than per draw.
+ | Author: suinevere
+ | Dependencies: SRL (font already uploaded by Core::Initialize)
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void install_backslash_glyph(void)
+{
+    volatile unsigned char *fwd = hl_tile('/');
+    volatile unsigned char *back = hl_tile('\\');
+    for (int r = 0; r < 8; r++)
+    {
+        unsigned char src[4];
+        for (int i = 0; i < 4; i++) src[i] = fwd[r * 4 + i];
+        for (int i = 0; i < 4; i++)
+        {
+            unsigned char b = src[3 - i];
+            back[r * 4 + i] = (unsigned char) ((b << 4) | (b >> 4));
+        }
+    }
+}
+
 extern "C" void text_map_init(void)
 {
     if (g_registered) return;
+
+    install_backslash_glyph();
 
     for (int y = 0; y < TEXT_ROWS; y++)
         for (int x = 0; x < TEXT_COLS; x++) g_shadow[y][x] = TEXT_BLANK;

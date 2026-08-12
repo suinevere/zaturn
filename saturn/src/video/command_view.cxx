@@ -2,11 +2,19 @@
  | command_view.cxx
  | Description: Implements the command panel's rendering and its pad-driven
  |   editor. render_command_panel draws the input line and the three-module
- |   strip (compass rose, word page, fixed commands), highlighting the focused
+ |   strip (compass rose, word list, fixed commands), highlighting the focused
  |   module's selection and border hint in reverse video. command_edit reads the
  |   pad, drives the CommandPanel state machine, sources and orders each word
  |   slot's candidates, and on a completed sentence hands it to the same
  |   KeyboardState the on-screen keyboard fills.
+ |
+ |   The three modules are one grid as far as the D-pad is concerned: each has
+ |   its own cursor, and a press that runs off a module's edge carries focus into
+ |   the module beside it at the row it left from. CV_LIST_ROW0 is the single
+ |   place that maps between a list row and a rose row, in both directions.
+ |   The two pure-logic halves of that -- the rose's grid in command_rose.c and
+ |   the word window's in command_panel.c -- are host-tested; what lives here is
+ |   the wiring between them, which needs SRL and cannot be.
  | Author: suinevere
  | Dependencies: command_view.h, command_rose.h, text_map.h, console_view.h,
  |   app_state.h, input.h, SRL
@@ -31,34 +39,62 @@
 static const int CV_TOP_MARGIN = 1;
 
 /*----------------------
- | CV_BORDER_TOP / CV_BORDER_BLANK
- | Description: The strip's top border and its blank content rows, verbatim
- |   from the design -- both exactly 40 columns with the dividers already in
- |   place at columns 0, 14, 30 and 39.
+ | CV_BORDER_TOP
+ | Description: The strip's top border, verbatim from the design -- exactly 40
+ |   columns with the dividers already in place at columns 0, 14, 30 and 39.
  | Author: suinevere
  ----------------------*/
-static const char *CV_BORDER_TOP   = "+-------------+---------------+--------+";
-static const char *CV_BORDER_BLANK = "|             |               |        |";
+static const char *CV_BORDER_TOP = "+-------------+---------------+--------+";
 
 /*----------------------
- | CV_HINT_TRAVEL
- | Description: The travel module's bottom-border hint, exactly its inner
- |   width (13) so it slots straight into the border between the corner '+'
- |   marks. L and R are fixed bindings for module focus (command_edit reads
- |   Button::L/Button::R directly, never through face_button/g_face_btn), so
- |   unlike the other two hints this one is never stale and stays a literal.
+ | CV_LIST_ROW0
+ | Description: The strip content row the word and command lists start on. The
+ |   rose is seven rows tall and they are five, so they sit one row in, centred
+ |   between its up/in and down/out corners. Every mapping between a list row and
+ |   a rose row goes through this, in both directions -- it is what makes focus
+ |   crossing sideways arrive at the same height it left.
  | Author: suinevere
  ----------------------*/
-static const char *CV_HINT_TRAVEL = "---L/R box---";
+#define CV_LIST_ROW0 1
 
 /*----------------------
- | CV_CMD_ROW
- | Description: The fixed command module's entries, in display order. Every one
- |   routes to a mechanism that already exists, so none of them needs a new path
- |   to the interpreter.
+ | cv_travel_hint
+ | Description: Builds the travel module's bottom-border hint at exactly its
+ |   inner width (13), so it slots straight into the border between the corner
+ |   '+' marks. Says what Accept does rather than only what L and R do, because
+ |   the D-pad no longer travels: it moves a cursor over the rose, and the button
+ |   that goes is the remappable one -- hence built from the live binding like
+ |   the word module's, rather than staying the literal it used to be.
+ |   face_btn_name always returns a single character, so the width is fixed.
+ | Author: suinevere
+ | Dependencies: input.h (face_btn_name)
+ | Globals: g_face_btn
+ | Params: out -- receives the 13-character hint plus a NUL (14 bytes)
+ | Returns: N/A
+ ----------------------*/
+static void cv_travel_hint(char *out) {
+    const char *accept = face_btn_name(FA_ACCEPT);
+    int i = 0;
+    out[i++] = '-';
+    out[i++] = accept[0];
+    out[i++] = '=';
+    out[i++] = 'g'; out[i++] = 'o';
+    out[i++] = ' ';
+    out[i++] = 'L'; out[i++] = '/'; out[i++] = 'R';
+    out[i++] = '=';
+    out[i++] = 'b'; out[i++] = 'o'; out[i++] = 'x';
+    out[i] = '\0';
+}
+
+/*----------------------
+ | CV_CMD_N / CV_CMD_ROW
+ | Description: The fixed command module's entries, in display order, and how
+ |   many. Every one routes to a mechanism that already exists, so none of them
+ |   needs a new path to the interpreter.
  | Author: suinevere
  ----------------------*/
-static const char *CV_CMD_ROW[5] = { "invent", "look", "save", "load", "quit" };
+#define CV_CMD_N 5
+static const char *CV_CMD_ROW[CV_CMD_N] = { "invent", "look", "save", "load", "quit" };
 
 /*----------------------
  | CV_CMD_WORD
@@ -67,7 +103,7 @@ static const char *CV_CMD_ROW[5] = { "invent", "look", "save", "load", "quit" };
  |   submits "inventory" like a typed command, per the brief.
  | Author: suinevere
  ----------------------*/
-static const char *CV_CMD_WORD[5] = { "inventory", "look", "save", "load", "quit" };
+static const char *CV_CMD_WORD[CV_CMD_N] = { "inventory", "look", "save", "load", "quit" };
 
 /*----------------------
  | CV_VERB_CORE
@@ -473,15 +509,16 @@ static void cv_truncate_all(const char **cand, int n) {
 /*----------------------
  | cv_refill_words
  | Description: Sources and orders the current slot's candidates, truncates
- |   each to six characters, and fills the page the renderer should draw.
+ |   each to six characters, and fills the window the renderer should draw.
  | Author: suinevere
  | Dependencies: command_panel.h, typeahead.h
  | Globals: N/A
  | Params: p -- panel state; root -- typeahead trie, may be null; w -- receives
- |   the page
- | Returns: N/A
+ |   the window
+ | Returns: the whole candidate count, which the cursor's scrolling needs and
+ |   the window itself does not carry
  ----------------------*/
-static void cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &w) {
+static int cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &w) {
     const char *cand[CV_CAND_MAX];
     int ncand = 0;
     int core_n = 0;
@@ -497,7 +534,46 @@ static void cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords 
     }
     cv_reorder(cand, ncand, prev, core_n);
     cv_truncate_all(cand, ncand);
-    cp_fill(cand, ncand, p.page, &w);
+    cp_fill(cand, ncand, p.top, &w);
+    return ncand;
+}
+
+/*----------------------
+ | cv_submit_form
+ | Description: The spelling a picked word should be sent to the parser as. A v3
+ |   dictionary entry stops at six characters, so a word module cell reads
+ |   "mailbo" where the object is a mailbox; the parser truncates its own input
+ |   to six characters too, so handing it the recovered full spelling resolves to
+ |   exactly the same entry while leaving "> open mailbox" in the transcript
+ |   instead of "> open mailbo". The spelling is recovered from the short name of
+ |   whichever object in the room -- present or carried -- answers to the picked
+ |   word; a word that names no object here has nothing to recover from and is
+ |   sent as it stands.
+ | Author: suinevere
+ | Dependencies: room_model.h
+ | Globals: N/A
+ | Params: word -- the picked cell's text; m -- the room snapshot; out -- receives
+ |   the spelling to submit; max -- out's capacity
+ | Returns: N/A
+ ----------------------*/
+static void cv_submit_form(const char *word, const RoomModel &m, char *out, int max) {
+    int list, i;
+    out[0] = '\0';
+    if (word == 0 || max <= 0) return;
+    for (i = 0; word[i] != '\0' && i < max - 1; i++) out[i] = word[i];
+    out[i] = '\0';
+
+    for (list = 0; list < 2; list++) {
+        const unsigned short *objs = list ? m.carried : m.here;
+        int n = list ? m.ncarried : m.nhere;
+        for (i = 0; i < n; i++) {
+            char w[8];
+            if (!room_model_object_word(objs[i], w, (int) sizeof w)) continue;
+            if (!cv_str_eq(w, word)) continue;
+            room_model_full_word(objs[i], word, out, max);
+            return;
+        }
+    }
 }
 
 // ---- rendering ---------------------------------------------------------------
@@ -522,25 +598,36 @@ static void cv_flatten_hard(const unsigned char *exits, unsigned char *out) {
 
 /*----------------------
  | cv_draw_rose_row
- | Description: Composes and prints one rose row, then overprints the up/down
- |   markers (row 0's carets, row 4's v's) in reverse video -- the only
- |   inversion the travel module ever carries, since the D-pad is literal there.
+ | Description: Composes and prints one rose row, then overprints the selected
+ |   direction's label in reverse video when the travel module holds focus and
+ |   that label sits on this row. The label text comes back out of the composed
+ |   row rather than being rebuilt, so the highlight always carries the same
+ |   case the rose drew -- uppercase for an open exit, lowercase for a
+ |   conditional one.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h
  | Globals: N/A
- | Params: row -- 0..CR_ROWS-1; exits -- the exits to draw; y -- text row
+ | Params: row -- 0..CR_ROWS-1; exits -- the exits to draw; y -- text row;
+ |   sel -- the selected RM_* direction, or -1 when travel is not focused
  | Returns: N/A
  ----------------------*/
-static void cv_draw_rose_row(int row, const unsigned char *exits, int y) {
+static void cv_draw_rose_row(int row, const unsigned char *exits, int y, int sel) {
     char buf[CR_COLS + 1];
+    int srow, scol, slen;
     cr_row(exits, row, buf);
     text_print(CV_TRAVEL_X, y, buf);
-    if (row == 0) {
-        if (buf[CR_UP_L] == '^') text_print_hl(CV_TRAVEL_X + CR_UP_L, y, "^");
-        if (buf[CR_UP_R] == '^') text_print_hl(CV_TRAVEL_X + CR_UP_R, y, "^");
-    } else if (row == CR_ROWS - 1) {
-        if (buf[CR_UP_L] == 'v') text_print_hl(CV_TRAVEL_X + CR_UP_L, y, "v");
-        if (buf[CR_UP_R] == 'v') text_print_hl(CV_TRAVEL_X + CR_UP_R, y, "v");
+    if (sel < 0 || !cr_dir_cell(sel, &srow, &scol, &slen) || srow != row) return;
+    /* A direction this room does not offer draws blank, and a blank highlight is
+       a floating black box: the cursor is placed on an available direction by
+       everything that moves it, and this is the backstop for the frame between a
+       room change and the next placement. */
+    if (buf[scol] == ' ') return;
+    {
+        char label[5];
+        int i;
+        for (i = 0; i < slen && i < (int) sizeof label - 1; i++) label[i] = buf[scol + i];
+        label[i] = '\0';
+        text_print_hl(CV_TRAVEL_X + scol, y, label);
     }
 }
 
@@ -565,14 +652,15 @@ static void cv_pad_field(const char *text, char *field) {
 /*----------------------
  | cv_draw_word_row
  | Description: Draws one word-module content row: two seven-column fields
- |   (one-column left margin already accounted for by CV_WORD_X), the last cell
- |   of the grid showing "v more" instead of a word when a further page exists.
- |   The focused module's selected cell prints in reverse video.
+ |   (one-column left margin already accounted for by CV_WORD_X). Every cell
+ |   holds a candidate -- the list scrolls a row at a time against the bottom
+ |   edge rather than spending a cell on a marker. The focused module's selected
+ |   cell prints in reverse video.
  | Author: suinevere
  | Dependencies: command_panel.h, text_map.h
  | Globals: N/A
- | Params: row -- 0..CR_ROWS-1; p -- panel state; w -- the word page; y -- text
- |   row
+ | Params: row -- 0..CP_WORD_ROWS-1; p -- panel state; w -- the word window;
+ |   y -- text row
  | Returns: N/A
  ----------------------*/
 static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords &w, int y) {
@@ -581,13 +669,10 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
         int idx = row * CP_WORD_COLS + col;
         int x = CV_WORD_X + 1 + col * 7;
         char field[8];
-        const char *text = 0;
-        int has = 0;
-        if (idx == CP_WORD_CELLS - 1 && w.more) { text = "v more"; has = 1; }
-        else if (idx < w.n && w.word[idx] != 0) { text = w.word[idx]; has = 1; }
+        const char *text = (idx < w.n) ? w.word[idx] : 0;
         cv_pad_field(text, field);
-        if (has && p.box == CP_BOX_WORD && p.cursor == idx) text_print_hl(x, y, field);
-        else                                                text_print(x, y, field);
+        if (text != 0 && p.box == CP_BOX_WORD && p.cursor == idx) text_print_hl(x, y, field);
+        else                                                      text_print(x, y, field);
     }
 }
 
@@ -599,7 +684,7 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
  | Author: suinevere
  | Dependencies: command_panel.h, text_map.h
  | Globals: N/A
- | Params: row -- 0..CR_ROWS-1; p -- panel state; y -- text row
+ | Params: row -- 0..CP_WORD_ROWS-1; p -- panel state; y -- text row
  | Returns: N/A
  ----------------------*/
 static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
@@ -667,10 +752,9 @@ static void cv_cmd_hint(char *out) {
 /*----------------------
  | cv_draw_bottom_border
  | Description: Draws the bottom border's three corner-to-corner segments,
- |   printing the focused module's hint in reverse video. The word and command
- |   hints are rebuilt every call from the live face-button/toggle-button
- |   bindings (cv_word_hint/cv_cmd_hint); the travel hint is a fixed literal,
- |   since L/R module focus is not remappable.
+ |   printing the focused module's hint in reverse video. All three are rebuilt
+ |   every call from the live face-button and toggle-button bindings, so a hint
+ |   can never name a button the Controls page has since remapped.
  | Author: suinevere
  | Dependencies: command_panel.h, text_map.h, input.h, app_state.h
  | Globals: g_face_btn, g_toggle_btn
@@ -678,13 +762,15 @@ static void cv_cmd_hint(char *out) {
  | Returns: N/A
  ----------------------*/
 static void cv_draw_bottom_border(int focus, int y) {
+    char travel_hint[14];
     char word_hint[16];
     char cmd_hint[9];
+    cv_travel_hint(travel_hint);
     cv_word_hint(word_hint);
     cv_cmd_hint(cmd_hint);
     text_print(0, y, "+");
-    if (focus == CP_BOX_TRAVEL) text_print_hl(CV_TRAVEL_X, y, CV_HINT_TRAVEL);
-    else                        text_print(CV_TRAVEL_X, y, CV_HINT_TRAVEL);
+    if (focus == CP_BOX_TRAVEL) text_print_hl(CV_TRAVEL_X, y, travel_hint);
+    else                        text_print(CV_TRAVEL_X, y, travel_hint);
     text_print(14, y, "+");
     if (focus == CP_BOX_WORD) text_print_hl(CV_WORD_X, y, word_hint);
     else                      text_print(CV_WORD_X, y, word_hint);
@@ -757,16 +843,28 @@ static void cv_overlay_row_text(const RoomModel &m, int idx, char *out) {
 }
 
 /*----------------------
+ | CV_OVERLAY_ROWS
+ | Description: How many carried items the overlay lists at once: the strip's
+ |   content height less its own two border rows. Derived rather than written as
+ |   5, because it is the strip that bounds it -- the rose's own row count grew
+ |   from five to seven when up, down, in and out moved into its corners, and an
+ |   overlay still sized off that would have drawn two rows past the strip and
+ |   through the bottom border.
+ | Author: suinevere
+ ----------------------*/
+#define CV_OVERLAY_ROWS (CV_STRIP_ROWS - 2)
+
+/*----------------------
  | cv_draw_overlay
- | Description: Draws the inventory overlay across the strip's seven interior
- |   rows: a top border, five carried-item rows scrolled in blocks of CR_ROWS
+ | Description: Draws the inventory overlay across the strip's seven content
+ |   rows: a top border, CV_OVERLAY_ROWS carried-item rows scrolled in blocks
  |   around the cursor, and a bottom border, with the selected row in reverse
  |   video.
  | Author: suinevere
  | Dependencies: room_model.h, text_map.h, command_panel.h
  | Globals: N/A
  | Params: p -- panel state; m -- the room snapshot; top_y -- the row the
- |   overlay's top border is drawn on (the strip's first blank row)
+ |   overlay's top border is drawn on (the strip's first content row)
  | Returns: N/A
  ----------------------*/
 static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y) {
@@ -777,8 +875,8 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
     cv_overlay_border(border);
     text_print(CV_OVERLAY_X, top_y, border);
 
-    window = (p.cursor / CR_ROWS) * CR_ROWS;
-    for (i = 0; i < CR_ROWS; i++) {
+    window = (p.cursor / CV_OVERLAY_ROWS) * CV_OVERLAY_ROWS;
+    for (i = 0; i < CV_OVERLAY_ROWS; i++) {
         int y = top_y + 1 + i;
         int idx = window + i;
         cv_overlay_row_text(m, idx, row_text);
@@ -786,7 +884,7 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
         else                 text_print(CV_OVERLAY_X, y, row_text);
     }
 
-    text_print(CV_OVERLAY_X, top_y + 1 + CR_ROWS, border);
+    text_print(CV_OVERLAY_X, top_y + 1 + CV_OVERLAY_ROWS, border);
 }
 
 /*----------------------
@@ -805,10 +903,8 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     int base = CV_TOP_MARGIN + console_height();
     int input_row = base;
     int border_top = input_row + 1;
-    int blank1 = border_top + 1;
-    int content0 = blank1 + 1;
-    int blank2 = content0 + CR_ROWS;
-    int border_bottom = blank2 + 1;
+    int content0 = border_top + 1;
+    int border_bottom = content0 + CR_ROWS;
     int row;
 
     text_clear_line(input_row);
@@ -819,32 +915,35 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
 
     if (p.overlay) {
         int y;
-        for (y = blank1; y <= blank2; y++) text_clear_line(y);
-        cv_draw_overlay(p, m, blank1);
+        for (y = content0; y < border_bottom; y++) text_clear_line(y);
+        cv_draw_overlay(p, m, content0);
     } else {
         unsigned char flat[RM_DIR_N];
         const unsigned char *exits;
-
-        text_clear_line(blank1);
-        text_print(0, blank1, CV_BORDER_BLANK);
+        int sel = (p.box == CP_BOX_TRAVEL) ? p.cursor : -1;
 
         exits = m.exits;
         if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
 
+        /* The rose owns all seven rows; the word and command modules take the
+           five between its corner rows, which is what leaves their lists
+           vertically centred against it. */
         for (row = 0; row < CR_ROWS; row++) {
             int y = content0 + row;
+            int inner = row - CV_LIST_ROW0;
             text_clear_line(y);
             text_print(0, y, "|");
-            cv_draw_rose_row(row, exits, y);
+            cv_draw_rose_row(row, exits, y, sel);
             text_print(14, y, "|");
-            cv_draw_word_row(row, p, w, y);
-            text_print(30, y, "|");
-            cv_draw_cmd_row(row, p, y);
+            if (inner >= 0 && inner < CP_WORD_ROWS) {
+                cv_draw_word_row(inner, p, w, y);
+                text_print(30, y, "|");
+                cv_draw_cmd_row(inner, p, y);
+            } else {
+                text_print(30, y, "|");
+            }
             text_print(39, y, "|");
         }
-
-        text_clear_line(blank2);
-        text_print(0, blank2, CV_BORDER_BLANK);
     }
 
     text_clear_line(border_bottom);
@@ -854,75 +953,96 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
 // ---- pad-driven editing ------------------------------------------------------
 
 /*----------------------
- | cv_travel_pick
- | Description: Reads the D-pad as the literal compass: a lone direction picks
- |   its cardinal, and two adjacent directions firing together (one edging this
- |   frame, the other already held) pick the diagonal between them.
+ | cv_enter_travel
+ | Description: Carries focus into the travel module at the height it arrived
+ |   at, refusing when the room offers no direction to sit on -- a rose with
+ |   nothing in it is not somewhere the cursor can be, and focus stays where it
+ |   was rather than vanishing into an empty box.
  | Author: suinevere
- | Dependencies: input.h, room_model.h, command_panel.h
- | Globals: g_pad
- | Params: p -- panel state
+ | Dependencies: command_rose.h, command_panel.h
+ | Globals: N/A
+ | Params: p -- panel state; exits -- the exits as drawn; want_row -- the strip
+ |   content row to aim for
+ | Returns: 1 when focus moved, 0 when the module was refused
+ ----------------------*/
+static int cv_enter_travel(CommandPanel &p, const unsigned char *exits, int want_row) {
+    int dir = cr_enter(exits, want_row, 1);
+    if (dir < 0) return 0;
+    p.box = CP_BOX_TRAVEL;
+    p.cursor = dir;
+    return 1;
+}
+
+/*----------------------
+ | cv_travel_dpad
+ | Description: Walks the rose's grid. The D-pad is a cursor here, not a literal
+ |   compass -- Accept is what travels -- so every direction the room offers is
+ |   reachable by pressing toward it, including the four corners, and stepping
+ |   off the right edge carries focus into the word module at the same height.
+ |   The left edge is the strip's own, so a press against it does nothing.
+ | Author: suinevere
+ | Dependencies: input.h, command_rose.h, command_panel.h
+ | Globals: N/A
+ | Params: p -- panel state; exits -- the exits as drawn; ncand -- the word
+ |   module's candidate count, for placing the cursor if focus crosses
  | Returns: N/A
  ----------------------*/
-static void cv_travel_pick(CommandPanel &p) {
-    bool f_up    = pad_fired(Button::Up);
-    bool f_down  = pad_fired(Button::Down);
-    bool f_left  = pad_fired(Button::Left);
-    bool f_right = pad_fired(Button::Right);
-    int dir = -1;
+static void cv_travel_dpad(CommandPanel &p, const unsigned char *exits, int ncand) {
+    int dx = (pad_fired(Button::Right) ? 1 : 0) - (pad_fired(Button::Left) ? 1 : 0);
+    int dy = (pad_fired(Button::Down)  ? 1 : 0) - (pad_fired(Button::Up)   ? 1 : 0);
+    int dir = p.cursor, edge;
 
-    if      (f_up    && g_pad->IsHeld(Button::Right)) dir = RM_NE;
-    else if (f_right && g_pad->IsHeld(Button::Up))     dir = RM_NE;
-    else if (f_up    && g_pad->IsHeld(Button::Left))   dir = RM_NW;
-    else if (f_left  && g_pad->IsHeld(Button::Up))     dir = RM_NW;
-    else if (f_down  && g_pad->IsHeld(Button::Right))  dir = RM_SE;
-    else if (f_right && g_pad->IsHeld(Button::Down))   dir = RM_SE;
-    else if (f_down  && g_pad->IsHeld(Button::Left))   dir = RM_SW;
-    else if (f_left  && g_pad->IsHeld(Button::Down))   dir = RM_SW;
-    else if (f_up)    dir = RM_N;
-    else if (f_down)  dir = RM_S;
-    else if (f_left)  dir = RM_W;
-    else if (f_right) dir = RM_E;
+    if (dx == 0 && dy == 0) return;
+    if (cr_dir_row(dir) < 0) { cv_enter_travel(p, exits, CV_LIST_ROW0); return; }
 
-    if (dir >= 0) cp_pick(&p, room_model_dir_word(dir), 0);
+    edge = cr_move(exits, dir, dx, dy, &dir);
+    p.cursor = dir;
+    if (edge > 0) cp_word_enter(&p, cr_dir_row(dir) - CV_LIST_ROW0, 0, ncand);
 }
 
 /*----------------------
  | cv_word_dpad
- | Description: Walks the word module's grid: Up/Down step by the column count
- |   (one row), Left/Right by one cell. The cursor's reachable range is
- |   w.n + (w.more ? 1 : 0) -- exactly the filled cells, plus one more when the
- |   "v more" marker occupies the next cell, so the cursor never lands on a
- |   blank cell but can still reach the marker to turn the page.
+ | Description: Walks the word module's grid and carries focus out of either
+ |   side of it: left into the travel module, right into the command list, both
+ |   at the row the cursor left from. Up and down against the window's edge
+ |   scroll the candidate list a row rather than stopping, which is what replaced
+ |   the page-turning marker that used to occupy a cell.
  | Author: suinevere
  | Dependencies: input.h, command_panel.h
  | Globals: N/A
- | Params: p -- panel state; w -- the word page currently drawn
+ | Params: p -- panel state; exits -- the exits as drawn, for the travel module
+ |   it may hand focus to; ncand -- the whole candidate count
  | Returns: N/A
  ----------------------*/
-static void cv_word_dpad(CommandPanel &p, const CommandWords &w) {
-    int count = w.n + (w.more ? 1 : 0);
-    if (pad_fired(Button::Up))    cp_move(&p, -CP_WORD_COLS, count);
-    if (pad_fired(Button::Down))  cp_move(&p,  CP_WORD_COLS, count);
-    if (pad_fired(Button::Left))  cp_move(&p, -1, count);
-    if (pad_fired(Button::Right)) cp_move(&p,  1, count);
+static void cv_word_dpad(CommandPanel &p, const unsigned char *exits, int ncand) {
+    int dx = (pad_fired(Button::Right) ? 1 : 0) - (pad_fired(Button::Left) ? 1 : 0);
+    int dy = (pad_fired(Button::Down)  ? 1 : 0) - (pad_fired(Button::Up)   ? 1 : 0);
+    int row = p.cursor / CP_WORD_COLS;
+    int edge;
+
+    if (dx == 0 && dy == 0) return;
+    edge = cp_word_move(&p, dx, dy, ncand);
+    if (edge < 0)      cv_enter_travel(p, exits, row + CV_LIST_ROW0);
+    else if (edge > 0) { p.box = CP_BOX_CMD; p.cursor = row; }
 }
 
 /*----------------------
  | cv_cmd_dpad
- | Description: Walks the command module's single column of five entries: each
- |   direction steps the cursor by one.
+ | Description: Walks the command module's single column of five entries, and
+ |   carries focus back into the word module on a press against its left edge.
+ |   It is the rightmost module, so a press against that side does nothing.
  | Author: suinevere
  | Dependencies: input.h, command_panel.h
  | Globals: N/A
- | Params: p -- panel state
+ | Params: p -- panel state; ncand -- the word module's candidate count, for
+ |   placing the cursor if focus crosses
  | Returns: N/A
  ----------------------*/
-static void cv_cmd_dpad(CommandPanel &p) {
-    if (pad_fired(Button::Up))    cp_move(&p, -1, 5);
-    if (pad_fired(Button::Down))  cp_move(&p,  1, 5);
-    if (pad_fired(Button::Left))  cp_move(&p, -1, 5);
-    if (pad_fired(Button::Right)) cp_move(&p,  1, 5);
+static void cv_cmd_dpad(CommandPanel &p, int ncand) {
+    int row = p.cursor;
+    if (pad_fired(Button::Up))   cp_move(&p, -1, CV_CMD_N);
+    if (pad_fired(Button::Down)) cp_move(&p,  1, CV_CMD_N);
+    if (pad_fired(Button::Left)) cp_word_enter(&p, row, 1, ncand);
 }
 
 /*----------------------
@@ -978,28 +1098,27 @@ static int cv_verb_wants_prep(const CommandPanel &p, TrieNode *root, const char 
 
 /*----------------------
  | cv_word_accept
- | Description: Accept in the word module: the cell one past the last filled
- |   one, when it reads "v more" (cp_fill guarantees that cell sits at index
- |   w.n whenever w.more is set), turns the page instead of picking; otherwise
- |   the cell under the cursor is picked, with wants_prep resolved via
- |   cv_verb_wants_prep.
+ | Description: Accept in the word module: the cell under the cursor is picked,
+ |   with wants_prep resolved via cv_verb_wants_prep. What reaches the command is
+ |   cv_submit_form's spelling, not the cell's -- the cell shows the six
+ |   characters a v3 dictionary entry holds and the sentence should read in full.
+ |   The grammar lookup still uses the cell's own text, since that is the form the
+ |   trie is keyed by.
  | Author: suinevere
- | Dependencies: command_panel.h, typeahead.h
+ | Dependencies: command_panel.h, typeahead.h, room_model.h
  | Globals: N/A
- | Params: p -- panel state; w -- the word page currently drawn; root --
- |   typeahead trie, may be null
+ | Params: p -- panel state; w -- the word window currently drawn; m -- the room
+ |   snapshot; root -- typeahead trie, may be null
  | Returns: N/A
  ----------------------*/
-static void cv_word_accept(CommandPanel &p, const CommandWords &w, TrieNode *root) {
-    if (p.cursor == w.n && w.more) {
-        p.page++;
-        p.cursor = 0;
-        return;
-    }
-    if (p.cursor < w.n && w.word[p.cursor] != 0) {
-        int wants_prep = cv_verb_wants_prep(p, root, w.word[p.cursor]);
-        cp_pick(&p, w.word[p.cursor], wants_prep);
-    }
+static void cv_word_accept(CommandPanel &p, const CommandWords &w,
+                           const RoomModel &m, TrieNode *root) {
+    char submit[CP_WORD_MAX + 24];
+    int wants_prep;
+    if (p.cursor < 0 || p.cursor >= w.n || w.word[p.cursor] == 0) return;
+    wants_prep = cv_verb_wants_prep(p, root, w.word[p.cursor]);
+    cv_submit_form(w.word[p.cursor], m, submit, (int) sizeof submit);
+    cp_pick(&p, submit, wants_prep);
 }
 
 /*----------------------
@@ -1048,10 +1167,15 @@ static void cv_cmd_accept(CommandPanel &p) {
  ----------------------*/
 static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *root) {
     char word[8] = {0};
+    char submit[32] = {0};
     int has = 0;
     if (p.cursor >= 0 && p.cursor < m.ncarried)
         has = room_model_object_word(m.carried[p.cursor], word, sizeof word);
-    cp_pick(&p, has ? word : 0, has ? cv_verb_wants_prep(p, root, word) : 0);
+    /* The full spelling, same as the word module submits -- the object is
+       already in hand here, so it is read straight off rather than searched
+       for. */
+    if (has) room_model_full_word(m.carried[p.cursor], word, submit, (int) sizeof submit);
+    cp_pick(&p, has ? submit : 0, has ? cv_verb_wants_prep(p, root, word) : 0);
 }
 
 /*----------------------
@@ -1060,13 +1184,27 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  |   it takes the pad exclusively: the D-pad walks the carried list, Accept
  |   resolves the selection through cp_pick, Back closes it unchanged --
  |   module focus does not move, since the overlay spans all three modules.
- |   Otherwise: L/R move focus, the D-pad walks the focused module or acts as
- |   the literal compass in travel, Accept picks, Back unwinds. A completed
- |   command is copied into `k` and submitted, so it leaves through the same
- |   path a typed one does. `ke` is accepted for the physical-keyboard escape
- |   hatch a later task wires in, and is not consumed here. `w` is refreshed
- |   for the current slot/page before the D-pad is read, since the word
- |   module's cursor bound depends on it.
+ |
+ |   Otherwise the three modules are walked as one grid: the D-pad moves within
+ |   the focused module and carries focus into the next one when it runs off an
+ |   edge, at the row it left from, so reaching the command list from the rose is
+ |   the same gesture as reaching the next word. L and R still jump modules
+ |   outright. Accept picks, Back unwinds.
+ |
+ |   Travel is a cursor like the other two rather than a literal compass: with
+ |   twelve directions on a five-by-three grid the D-pad cannot both select and
+ |   travel, and the diagonals used to need two buttons held at once to reach.
+ |   Accept is what travels now.
+ |
+ |   Focus is refused entry to a rose with no exits at all rather than left
+ |   sitting on nothing, which is why every arrival there goes through
+ |   cv_enter_travel and puts the box back when it returns 0.
+ |
+ |   A completed command is copied into `k` and submitted, so it leaves through
+ |   the same path a typed one does. `ke` is accepted for the physical-keyboard
+ |   escape hatch a later task wires in, and is not consumed here. `w` is
+ |   refreshed for the current slot and scroll before the D-pad is read, since
+ |   the word module's cursor bound depends on it.
  | Author: suinevere
  | Dependencies: input.h, command_panel.h, room_model.h
  | Globals: g_pad
@@ -1083,20 +1221,51 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
         if (pad_fired(face_button(FA_ACCEPT))) cv_overlay_accept(p, m, root);
         if (pad_fired(face_button(FA_BACK)))   cp_overlay_close(&p);
     } else {
+        unsigned char flat[RM_DIR_N];
+        const unsigned char *exits = m.exits;
+        int ncand;
+        int was = p.box, was_cursor = p.cursor, was_top = p.top;
+
+        /* The rose is drawn flattened on Hard, and the cursor must walk what is
+           drawn -- stepping onto a direction the player cannot see would give
+           the difficulty away. */
+        if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
+
         if (pad_fired(Button::L)) cp_focus(&p, -1);
         if (pad_fired(Button::R)) cp_focus(&p, +1);
+        /* A rose with no exits at all is not somewhere the cursor can sit, so
+           the jump is put back rather than half-taken. */
+        if (p.box == CP_BOX_TRAVEL && was != CP_BOX_TRAVEL &&
+            !cv_enter_travel(p, exits, CV_LIST_ROW0)) {
+            p.box = was; p.cursor = was_cursor; p.top = was_top;
+        }
 
-        cv_refill_words(p, root, w);
+        ncand = cv_refill_words(p, root, w);
 
-        if      (p.box == CP_BOX_TRAVEL) cv_travel_pick(p);
-        else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, w);
-        else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p);
+        if      (p.box == CP_BOX_TRAVEL) cv_travel_dpad(p, exits, ncand);
+        else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, exits, ncand);
+        else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p, ncand);
 
         if (pad_fired(face_button(FA_ACCEPT))) {
-            if      (p.box == CP_BOX_WORD) cv_word_accept(p, w, root);
+            if (p.box == CP_BOX_TRAVEL) {
+                int d = p.cursor;
+                if (d >= 0 && d < RM_DIR_N &&
+                    (exits[d] == RM_EXIT_OPEN || exits[d] == RM_EXIT_MAYBE))
+                    cp_pick(&p, room_model_dir_word(d), 0);
+            }
+            else if (p.box == CP_BOX_WORD) cv_word_accept(p, w, m, root);
             else if (p.box == CP_BOX_CMD)  cv_cmd_accept(p);
         }
-        if (pad_fired(face_button(FA_BACK))) cp_back(&p);
+        if (pad_fired(face_button(FA_BACK))) {
+            int before = p.box, before_cursor = p.cursor;
+            cp_back(&p);
+            /* Back out of an empty word module lands in travel, which has to be
+               placed on a real direction like any other arrival there. */
+            if (p.box == CP_BOX_TRAVEL && before != CP_BOX_TRAVEL &&
+                !cv_enter_travel(p, exits, CV_LIST_ROW0)) {
+                p.box = before; p.cursor = before_cursor;
+            }
+        }
     }
 
     if (p.submitted) {

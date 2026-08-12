@@ -220,9 +220,11 @@ int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out
  |   dictionary word by decoding an object's own short name -- the Z-string at
  |   that object's property table, using the full A0/A1/A2 shift alphabets,
  |   the abbreviation table, and the 10-bit ZSCII escape -- and preferring a
- |   token from it whose first six characters match `word`. Display only: the
- |   parser distinguishes six characters and no more, so callers must keep
- |   submitting `word` itself, never this function's result.
+ |   token from it whose first six characters match `word`. Safe to submit as
+ |   well as to display: the parser truncates its own input to six characters
+ |   before looking it up, and the recovered spelling starts with the same six,
+ |   so it resolves to the same dictionary entry while leaving "> open mailbox"
+ |   in the transcript rather than "> open mailbo".
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_story, g_len, g_available

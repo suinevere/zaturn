@@ -1,6 +1,6 @@
 /*----------------------
  | command_rose.c
- | Description: The rose composition described in command_rose.h.
+ | Description: The rose composition and cursor grid described in command_rose.h.
  | Author: suinevere
  | Dependencies: command_rose.h, room_model.h
  ----------------------*/
@@ -8,29 +8,87 @@
 #include "room_model.h"
 
 /*----------------------
+ | CrCell / CR_CELL
+ | Description: Every direction's place in both geometries at once: its logical
+ |   grid cell and the drawn row, column and width of its label. One table
+ |   rather than two so a layout change cannot move the label without moving the
+ |   cursor target with it. Order is the RM_* enum's, so CR_CELL[dir] indexes
+ |   directly.
+ | Author: suinevere
+ ----------------------*/
+typedef struct {
+    signed char grow, gcol;   /* logical grid cell */
+    signed char row, col;     /* drawn row and first column */
+    signed char len;          /* label width */
+} CrCell;
+
+static const CrCell CR_CELL[RM_DIR_N] = {
+    { 1, 1, 1,  6, 1 },   /* RM_N    */
+    { 2, 2, 3, 10, 1 },   /* RM_E    */
+    { 2, 0, 3,  2, 1 },   /* RM_W    */
+    { 3, 1, 5,  6, 1 },   /* RM_S    */
+    { 1, 2, 1,  9, 2 },   /* RM_NE   */
+    { 1, 0, 1,  2, 2 },   /* RM_NW   */
+    { 3, 2, 5,  9, 2 },   /* RM_SE   */
+    { 3, 0, 5,  2, 2 },   /* RM_SW   */
+    { 0, 0, 0,  0, 2 },   /* RM_UP   */
+    { 4, 0, 6,  0, 4 },   /* RM_DOWN */
+    { 0, 2, 0, 11, 2 },   /* RM_IN   */
+    { 4, 2, 6, 10, 3 }    /* RM_OUT  */
+};
+
+/*----------------------
+ | CR_LABEL
+ | Description: The lowercase text of each direction's label, in RM_* order.
+ |   Lowercase is the stored form because `put` uppercases an open exit and
+ |   leaves a conditional one alone.
+ | Author: suinevere
+ ----------------------*/
+static const char *const CR_LABEL[RM_DIR_N] = {
+    "n", "e", "w", "s", "ne", "nw", "se", "sw", "up", "down", "in", "out"
+};
+
+/*----------------------
  | shown / put
  | Description: Whether a direction should appear at all (open or conditional),
- |   and writing a label into the row at a column, uppercased when the exit is
- |   decoded open and left lowercase when it is only possible.
+ |   and writing a direction's label at its own drawn position, uppercased when
+ |   the exit is decoded open and left lowercase when it is only possible.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: N/A
- | Params: st -- an RM_EXIT_* state; out -- the row; col -- inner column;
- |   text -- the label
+ | Globals: CR_CELL, CR_LABEL
+ | Params: st -- an RM_EXIT_* state; out -- the row; dir -- an RM_* index;
+ |   exits -- the exit states
  | Returns: shown returns 1 when the direction appears
  ----------------------*/
 static int shown(unsigned char st) {
     return st == RM_EXIT_OPEN || st == RM_EXIT_MAYBE;
 }
 
-static void put(char *out, int col, const char *text, unsigned char st) {
+static void put(char *out, int dir, const unsigned char *exits) {
+    const char *text = CR_LABEL[dir];
+    int col = CR_CELL[dir].col;
     int i;
-    if (!shown(st)) return;
+    if (!shown(exits[dir])) return;
     for (i = 0; text[i] && col + i < CR_COLS; i++) {
         char c = text[i];
-        if (st == RM_EXIT_OPEN && c >= 'a' && c <= 'z') c = (char) (c - 'a' + 'A');
+        if (exits[dir] == RM_EXIT_OPEN && c >= 'a' && c <= 'z') c = (char) (c - 'a' + 'A');
         out[col + i] = c;
     }
+}
+
+/*----------------------
+ | spoke
+ | Description: Draws one direction's spoke character when that direction is
+ |   available. Separate from `put` because a spoke is a fixed glyph at a fixed
+ |   cell rather than a label, and because the corner directions have none.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: out -- the row; col -- inner column; c -- the glyph; st -- the state
+ | Returns: N/A
+ ----------------------*/
+static void spoke(char *out, int col, char c, unsigned char st) {
+    if (shown(st)) out[col] = c;
 }
 
 void cr_row(const unsigned char *exits, int row, char *out) {
@@ -40,37 +98,172 @@ void cr_row(const unsigned char *exits, int row, char *out) {
 
     switch (row) {
         case 0:
-            put(out, 0,  "nw", exits[RM_NW]);
-            put(out, 11, "ne", exits[RM_NE]);
-            put(out, 6,  "n",  exits[RM_N]);
-            if (shown(exits[RM_UP])) { out[CR_UP_L] = '^'; out[CR_UP_R] = '^'; }
+            put(out, RM_UP, exits);
+            put(out, RM_IN, exits);
             break;
         case 1:
-            if (shown(exits[RM_NW])) out[3] = '\\';
-            if (shown(exits[RM_NE])) out[9] = '/';
-            if (shown(exits[RM_IN]))      put(out, 5, "in", exits[RM_IN]);
-            else if (shown(exits[RM_N]))  out[6] = '|';
+            put(out, RM_NW, exits);
+            put(out, RM_N,  exits);
+            put(out, RM_NE, exits);
             break;
         case 2:
-            put(out, 0,  "w", exits[RM_W]);
-            put(out, 12, "e", exits[RM_E]);
-            if (shown(exits[RM_W])) { out[2] = '-'; out[3] = '-'; }
-            if (shown(exits[RM_E])) { out[9] = '-'; out[10] = '-'; }
-            out[6] = '+';
+            spoke(out, 4, '\\', exits[RM_NW]);
+            spoke(out, 6, '|',  exits[RM_N]);
+            spoke(out, 8, '/',  exits[RM_NE]);
             break;
         case 3:
-            if (shown(exits[RM_SW])) out[3] = '/';
-            if (shown(exits[RM_SE])) out[9] = '\\';
-            if (shown(exits[RM_OUT]))     put(out, 5, "out", exits[RM_OUT]);
-            else if (shown(exits[RM_S]))  out[6] = '|';
+            put(out, RM_W, exits);
+            put(out, RM_E, exits);
+            spoke(out, 4, '-', exits[RM_W]);
+            spoke(out, 8, '-', exits[RM_E]);
+            out[6] = '+';
             break;
         case 4:
-            put(out, 0,  "sw", exits[RM_SW]);
-            put(out, 11, "se", exits[RM_SE]);
-            put(out, 6,  "s",  exits[RM_S]);
-            if (shown(exits[RM_DOWN])) { out[CR_UP_L] = 'v'; out[CR_UP_R] = 'v'; }
+            spoke(out, 4, '/',  exits[RM_SW]);
+            spoke(out, 6, '|',  exits[RM_S]);
+            spoke(out, 8, '\\', exits[RM_SE]);
+            break;
+        case 5:
+            put(out, RM_SW, exits);
+            put(out, RM_S,  exits);
+            put(out, RM_SE, exits);
+            break;
+        case 6:
+            put(out, RM_DOWN, exits);
+            put(out, RM_OUT,  exits);
             break;
         default:
             break;
     }
+}
+
+int cr_grid_dir(int grow, int gcol) {
+    int d;
+    if (grow < 0 || grow >= CR_GRID_ROWS || gcol < 0 || gcol >= CR_GRID_COLS) return -1;
+    for (d = 0; d < RM_DIR_N; d++)
+        if (CR_CELL[d].grow == grow && CR_CELL[d].gcol == gcol) return d;
+    return -1;
+}
+
+int cr_dir_cell(int dir, int *row, int *col, int *len) {
+    if (dir < 0 || dir >= RM_DIR_N) return 0;
+    if (row) *row = CR_CELL[dir].row;
+    if (col) *col = CR_CELL[dir].col;
+    if (len) *len = CR_CELL[dir].len;
+    return 1;
+}
+
+int cr_dir_row(int dir) {
+    if (dir < 0 || dir >= RM_DIR_N) return -1;
+    return CR_CELL[dir].row;
+}
+
+/*----------------------
+ | CR_GRID_ROW_Y
+ | Description: The drawn row each logical grid row sits on -- the spoke rows
+ |   between them carry no labels and so no cursor targets.
+ | Author: suinevere
+ ----------------------*/
+static const signed char CR_GRID_ROW_Y[CR_GRID_ROWS] = { 0, 1, 3, 5, 6 };
+
+/*----------------------
+ | cr_row_pick
+ | Description: One row of the search cr_enter runs: the first available
+ |   direction on grid row `r`, taken from the edge focus arrived through.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: exits -- the exit states; r -- grid row; from_right -- 1 to prefer
+ |   the right-hand column
+ | Returns: an RM_* index, or -1
+ ----------------------*/
+static int cr_row_pick(const unsigned char *exits, int r, int from_right) {
+    int c;
+    for (c = 0; c < CR_GRID_COLS; c++) {
+        int col = from_right ? (CR_GRID_COLS - 1 - c) : c;
+        int d = cr_grid_dir(r, col);
+        if (d >= 0 && shown(exits[d])) return d;
+    }
+    return -1;
+}
+
+/*----------------------
+ | cr_row_nearest
+ | Description: The available direction on grid row `r` closest to column
+ |   `prefer`. What makes a vertical press useful in the centre column, where
+ |   the top and bottom rows have no cell of their own: pressing up from north
+ |   should reach up, not stop dead against the gap directly above it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: exits -- the exit states; r -- grid row; prefer -- the column to
+ |   start from
+ | Returns: an RM_* index, or -1 when the row offers nothing
+ ----------------------*/
+static int cr_row_nearest(const unsigned char *exits, int r, int prefer) {
+    int step, s, c, d;
+    for (step = 0; step < CR_GRID_COLS; step++) {
+        for (s = 0; s < 2; s++) {
+            c = prefer + (s ? step : -step);
+            d = cr_grid_dir(r, c);
+            if (d >= 0 && shown(exits[d])) return d;
+            if (step == 0) break;
+        }
+    }
+    return -1;
+}
+
+int cr_enter(const unsigned char *exits, int want_row, int from_right) {
+    int want = 0, r, spread, d;
+
+    for (r = 1; r < CR_GRID_ROWS; r++) {
+        int dh = CR_GRID_ROW_Y[r]    - want_row;
+        int db = CR_GRID_ROW_Y[want] - want_row;
+        if (dh < 0) dh = -dh;
+        if (db < 0) db = -db;
+        if (dh < db) want = r;
+    }
+
+    for (spread = 0; spread < CR_GRID_ROWS; spread++) {
+        d = cr_row_pick(exits, want - spread, from_right);
+        if (d >= 0) return d;
+        if (spread == 0) continue;
+        d = cr_row_pick(exits, want + spread, from_right);
+        if (d >= 0) return d;
+    }
+    return -1;
+}
+
+int cr_move(const unsigned char *exits, int dir, int dx, int dy, int *out) {
+    int r, c;
+
+    if (out) *out = dir;
+    if (dir < 0 || dir >= RM_DIR_N) return 0;
+    r = CR_CELL[dir].grow;
+    c = CR_CELL[dir].gcol;
+
+    if (dx != 0) {
+        for (c += dx; c >= 0 && c < CR_GRID_COLS; c += dx) {
+            int d = cr_grid_dir(r, c);
+            if (d >= 0 && shown(exits[d])) { if (out) *out = d; return 0; }
+        }
+        return (dx > 0) ? 1 : -1;
+    }
+
+    if (dy != 0) {
+        int rr, d;
+        /* Straight down the column first: north to south is one press, even
+           though the row between them has no centre cell. Only when the whole
+           column is empty that way does the press spill sideways -- which is
+           what carries north up to the corner where up lives. */
+        for (rr = r + dy; rr >= 0 && rr < CR_GRID_ROWS; rr += dy) {
+            d = cr_grid_dir(rr, c);
+            if (d >= 0 && shown(exits[d])) { if (out) *out = d; return 0; }
+        }
+        for (rr = r + dy; rr >= 0 && rr < CR_GRID_ROWS; rr += dy) {
+            d = cr_row_nearest(exits, rr, c);
+            if (d >= 0) { if (out) *out = d; return 0; }
+        }
+    }
+    return 0;
 }

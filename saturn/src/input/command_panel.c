@@ -9,7 +9,7 @@
 /*----------------------
  | cp_reset
  | Description: Clears the assembled command and returns focus to the word
- |   module at the verb slot, page zero.
+ |   module at the verb slot, scrolled to the top of the list.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -20,7 +20,7 @@ void cp_reset(CommandPanel *p) {
     p->box = CP_BOX_WORD;
     p->slot = CP_SLOT_VERB;
     p->cursor = 0;
-    p->page = 0;
+    p->top = 0;
     p->line[0] = '\0';
     p->line_len = 0;
     p->submitted = 0;
@@ -30,7 +30,7 @@ void cp_reset(CommandPanel *p) {
 /*----------------------
  | cp_focus
  | Description: Moves focus one module left (-1) or right (+1), clamped at the
- |   ends rather than wrapping, and resets the cursor and page for the module
+ |   ends rather than wrapping, and resets the cursor and scroll for the module
  |   arrived at.
  | Author: suinevere
  | Dependencies: N/A
@@ -42,7 +42,7 @@ void cp_focus(CommandPanel *p, int dir) {
     int b = p->box + dir;
     if (b < 0) b = 0;
     if (b >= CP_BOX_N) b = CP_BOX_N - 1;
-    if (b != p->box) { p->box = b; p->cursor = 0; p->page = 0; }
+    if (b != p->box) { p->box = b; p->cursor = 0; p->top = 0; }
 }
 
 /*----------------------
@@ -100,7 +100,7 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
         default: break;
     }
     p->cursor = 0;
-    p->page = 0;
+    p->top = 0;
     p->overlay = 0;
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
 }
@@ -128,7 +128,7 @@ void cp_back(CommandPanel *p) {
     if (p->slot > CP_SLOT_VERB) p->slot--;
     if (p->slot > CP_SLOT_NOUN && p->line_len == 0) p->slot = CP_SLOT_VERB;
     p->cursor = 0;
-    p->page = 0;
+    p->top = 0;
     p->submitted = 0;
 }
 
@@ -153,55 +153,130 @@ int cp_overlay_takes_noun(const CommandPanel *p) {
 }
 
 /*----------------------
- | cp_pages
- | Description: How many pages a candidate list occupies.
+ | cp_word_rows
+ | Description: How many candidate rows a list occupies.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: ncand -- candidate count
- | Returns: the page count, at least 1
+ | Returns: the row count, 0 for an empty list
  ----------------------*/
-int cp_pages(int ncand) {
-    int stride;
-    if (ncand <= CP_WORD_CELLS) return 1;
-    stride = CP_WORD_CELLS - 1;
-    return (ncand + stride - 1) / stride;
+int cp_word_rows(int ncand) {
+    if (ncand <= 0) return 0;
+    return (ncand + CP_WORD_COLS - 1) / CP_WORD_COLS;
+}
+
+/*----------------------
+ | cp_top_max
+ | Description: The furthest the window can scroll before it hangs past the end
+ |   of the list.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: ncand -- candidate count
+ | Returns: the largest valid `top`, never negative
+ ----------------------*/
+static int cp_top_max(int ncand) {
+    int rows = cp_word_rows(ncand);
+    return (rows > CP_WORD_ROWS) ? (rows - CP_WORD_ROWS) : 0;
+}
+
+/*----------------------
+ | cp_clamp_cursor
+ | Description: Backs the cursor off any cell the list does not reach, so it
+ |   always sits on a word. Called after anything that can shorten the window --
+ |   a scroll onto a part-filled last row, or a refill with fewer candidates.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; ncand -- candidate count
+ | Returns: N/A
+ ----------------------*/
+static void cp_clamp_cursor(CommandPanel *p, int ncand) {
+    int filled = ncand - p->top * CP_WORD_COLS;
+    if (filled > CP_WORD_CELLS) filled = CP_WORD_CELLS;
+    if (filled <= 0) { p->cursor = 0; return; }
+    if (p->cursor >= filled) p->cursor = filled - 1;
+    if (p->cursor < 0) p->cursor = 0;
 }
 
 /*----------------------
  | cp_fill
- | Description: Fills one page of the word module from an ordered candidate
- |   list. A list that fits uses every cell; one that does not gives its last
- |   cell to the "v more" marker and pages by CP_WORD_CELLS - 1, so no candidate
- |   is skipped by the marker.
+ | Description: Fills the word module's window from an ordered candidate list,
+ |   starting at candidate row `top`, which is clamped so the window never hangs
+ |   past the end of the list.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: cands -- ordered candidates; ncand -- how many; page -- zero-based
- |   page; out -- receives the page
+ | Params: cands -- ordered candidates; ncand -- how many; top -- first
+ |   candidate row to show; out -- receives the window
  | Returns: N/A
  ----------------------*/
-void cp_fill(const char *const *cands, int ncand, int page, CommandWords *out) {
-    int stride, start, room, i;
+void cp_fill(const char *const *cands, int ncand, int top, CommandWords *out) {
+    int start, room, i;
 
     out->n = 0;
-    out->more = 0;
+    out->top = 0;
+    out->rows = 0;
     for (i = 0; i < CP_WORD_CELLS; i++) out->word[i] = 0;
     if (cands == 0 || ncand <= 0) return;
 
-    if (ncand <= CP_WORD_CELLS) {
-        for (i = 0; i < ncand; i++) out->word[i] = cands[i];
-        out->n = ncand;
-        return;
-    }
+    if (top < 0) top = 0;
+    if (top > cp_top_max(ncand)) top = cp_top_max(ncand);
 
-    stride = CP_WORD_CELLS - 1;
-    if (page < 0) page = 0;
-    start = page * stride;
-    if (start >= ncand) start = (cp_pages(ncand) - 1) * stride;
-
+    start = top * CP_WORD_COLS;
     room = ncand - start;
-    if (room > stride) { room = stride; out->more = 1; }
+    if (room > CP_WORD_CELLS) room = CP_WORD_CELLS;
     for (i = 0; i < room; i++) out->word[i] = cands[start + i];
     out->n = room;
+    out->top = top;
+    out->rows = cp_word_rows(ncand);
+}
+
+int cp_word_move(CommandPanel *p, int dx, int dy, int ncand) {
+    int row = p->cursor / CP_WORD_COLS;
+    int col = p->cursor % CP_WORD_COLS;
+    int vis;
+
+    if (p->top < 0) p->top = 0;
+    if (p->top > cp_top_max(ncand)) p->top = cp_top_max(ncand);
+
+    if (dx != 0) {
+        int nc = col + dx;
+        if (nc < 0) return -1;
+        if (nc >= CP_WORD_COLS) return 1;
+        /* An empty cell to the right is the module's edge as far as the cursor
+           is concerned -- a short last row must not trap it. */
+        if ((p->top + row) * CP_WORD_COLS + nc >= ncand) return 1;
+        p->cursor = row * CP_WORD_COLS + nc;
+        return 0;
+    }
+
+    if (dy != 0) {
+        int nr = row + dy;
+        vis = cp_word_rows(ncand) - p->top;
+        if (vis > CP_WORD_ROWS) vis = CP_WORD_ROWS;
+        if (nr < 0) {
+            if (p->top > 0) p->top--;
+        } else if (nr >= vis) {
+            if (p->top < cp_top_max(ncand)) p->top++;
+        } else {
+            p->cursor = nr * CP_WORD_COLS + col;
+        }
+        cp_clamp_cursor(p, ncand);
+    }
+    return 0;
+}
+
+void cp_word_enter(CommandPanel *p, int row, int from_right, int ncand) {
+    int vis;
+    p->box = CP_BOX_WORD;
+    if (p->top < 0) p->top = 0;
+    if (p->top > cp_top_max(ncand)) p->top = cp_top_max(ncand);
+    vis = cp_word_rows(ncand) - p->top;
+    if (vis > CP_WORD_ROWS) vis = CP_WORD_ROWS;
+    if (row < 0) row = 0;
+    if (vis > 0 && row >= vis) row = vis - 1;
+    p->cursor = row * CP_WORD_COLS + (from_right ? CP_WORD_COLS - 1 : 0);
+    cp_clamp_cursor(p, ncand);
 }

@@ -19,9 +19,11 @@
 /*----------------------
  | CV_TRAVEL_X / CV_WORD_X / CV_CMD_X / CV_STRIP_ROWS
  | Description: The inner starting column of each module and the strip's content
- |   height. The strip is 1 + 13 + 1 + 15 + 1 + 8 + 1 = 40 columns, and seven
- |   rows: a blank under the top border, five of content, a blank above the
- |   bottom one.
+ |   height. The strip is 1 + 13 + 1 + 15 + 1 + 8 + 1 = 40 columns and seven
+ |   rows, all seven of them content: the compass rose is that tall, and the word
+ |   and command lists are five rows sitting one row in from either end of it.
+ |   The two blank rows that used to pad a five-row rose out to the strip's
+ |   height are gone, so the panel's overall height is unchanged.
  | Author: suinevere
  ----------------------*/
 #define CV_TRAVEL_X    1
@@ -44,16 +46,18 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
 
 /*----------------------
  | command_edit
- | Description: One frame of command-mode input: L/R move focus, the D-pad walks
- |   the focused module or acts as the literal compass in travel, Accept picks,
- |   Back unwinds. A completed command is copied into `k` and submitted, so it
- |   leaves through the same path a typed one does.
+ | Description: One frame of command-mode input. The D-pad walks the focused
+ |   module and crosses into the next one when it runs off an edge, so the three
+ |   modules read as one grid rather than three boxes with a separate control for
+ |   moving between them; L and R still jump modules outright. Accept picks, Back
+ |   unwinds. A completed command is copied into `k` and submitted, so it leaves
+ |   through the same path a typed one does.
  | Author: suinevere
  | Dependencies: input.h, command_panel.h
  | Globals: g_pad
  | Params: k -- keyboard state the command is written into; p -- panel state;
  |   m -- the room snapshot; root -- the typeahead trie for ranking, may be null;
- |   ke -- the decoded key event, consumed as handled; w -- (out) the word page
+ |   ke -- the decoded key event, consumed as handled; w -- (out) the word window
  |   the renderer should draw
  | Returns: N/A
  ----------------------*/

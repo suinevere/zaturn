@@ -113,52 +113,115 @@ int main(void) {
             c[i] = names[i];
         }
 
-        /* Nine fits with a cell to spare and shows no marker; cells hold the
-           candidates in order and the spare cell is null. */
+        /* Nine fits with a cell to spare; cells hold the candidates in order
+           and the spare cell is null. Every cell carries a word now -- none is
+           given up to a paging marker. */
         cp_fill(c, 9, 0, &w);
-        assert(w.n == 9 && w.more == 0);
+        assert(w.n == 9 && w.top == 0 && w.rows == 5);
         for (j = 0; j < 9; j++) assert(strcmp(w.word[j], c[j]) == 0);
         assert(w.word[9] == 0);
 
-        /* Ten fills every cell exactly, in order, and still shows no marker. */
+        /* Ten fills every cell exactly, in order. */
         cp_fill(c, 10, 0, &w);
-        assert(w.n == 10 && w.more == 0);
+        assert(w.n == 10 && w.rows == 5);
         for (j = 0; j < 10; j++) assert(strcmp(w.word[j], c[j]) == 0);
 
-        /* Eleven cannot fit, so the last cell becomes the marker; page 0
-           carries candidates 0..8 in order and page 1 carries 9..10, with
-           the cells past n left null. */
+        /* Eleven needs a sixth row, which the window reaches by scrolling one
+           row rather than turning a page: the second row of the scrolled window
+           is the first list row repeated one place up. */
         cp_fill(c, 11, 0, &w);
-        assert(w.n == 9 && w.more == 1);
-        for (j = 0; j < 9; j++) assert(strcmp(w.word[j], c[j]) == 0);
-        assert(w.word[9] == 0);
+        assert(w.n == 10 && w.top == 0 && w.rows == 6);
+        for (j = 0; j < 10; j++) assert(strcmp(w.word[j], c[j]) == 0);
         cp_fill(c, 11, 1, &w);
-        assert(w.n == 2 && w.more == 0);
-        assert(strcmp(w.word[0], c[9]) == 0);
-        assert(strcmp(w.word[1], c[10]) == 0);
-        for (j = 2; j < CP_WORD_CELLS; j++) assert(w.word[j] == 0);
+        assert(w.n == 9 && w.top == 1 && w.rows == 6);
+        for (j = 0; j < 9; j++) assert(strcmp(w.word[j], c[2 + j]) == 0);
+        assert(w.word[9] == 0);
 
-        assert(cp_pages(9)  == 1);
-        assert(cp_pages(10) == 1);
-        assert(cp_pages(11) == 2);
-        assert(cp_pages(19) == 3);
+        assert(cp_word_rows(0)  == 0);
+        assert(cp_word_rows(9)  == 5);
+        assert(cp_word_rows(10) == 5);
+        assert(cp_word_rows(11) == 6);
+        assert(cp_word_rows(19) == 10);
 
-        /* Walking every page of nineteen candidates concatenates back to
-           candidates 0..18 in order, with no gaps and no repeats, and each
-           page leaves its unused cells null. */
+        /* A scroll past the end is pulled back so the window always sits on
+           real candidates. */
+        cp_fill(c, 19, 99, &w);
+        assert(w.top == 5 && w.n == 9);
+        assert(strcmp(w.word[0], c[10]) == 0);
+        cp_fill(c, 9, 3, &w);
+        assert(w.top == 0);
+
+        /* Every candidate is reachable by scrolling a row at a time, in order,
+           with nothing skipped between one window and the next. */
         {
-            int idx = 0;
-            int pg, pages = cp_pages(19);
-            for (pg = 0; pg < pages; pg++) {
-                cp_fill(c, 19, pg, &w);
-                for (j = 0; j < w.n; j++) {
-                    assert(strcmp(w.word[j], c[idx]) == 0);
-                    idx++;
-                }
+            int top, seen[19], k;
+            for (k = 0; k < 19; k++) seen[k] = 0;
+            for (top = 0; top <= cp_word_rows(19) - 1; top++) {
+                cp_fill(c, 19, top, &w);
+                for (j = 0; j < w.n; j++) seen[w.top * CP_WORD_COLS + j] = 1;
                 for (j = w.n; j < CP_WORD_CELLS; j++) assert(w.word[j] == 0);
             }
-            assert(idx == 19);
+            for (k = 0; k < 19; k++) assert(seen[k]);
         }
+    }
+
+    /* Spreadsheet movement: left and right stay on their row and report the
+       edge instead of running into the next one, up and down scroll against the
+       window's edge, and the cursor never lands on an empty cell. */
+    {
+        static const char *c[19];
+        static char names[19][4];
+        int i;
+        for (i = 0; i < 19; i++) {
+            names[i][0] = (char)('a' + i); names[i][1] = '\0';
+            c[i] = names[i];
+        }
+        (void) c;
+
+        cp_reset(&p);
+        p.cursor = 0;
+        p.top = 0;
+
+        /* Right from column 0 lands on column 1 of the same row; right again
+           reports the edge without moving. */
+        assert(cp_word_move(&p, 1, 0, 19) == 0 && p.cursor == 1);
+        assert(cp_word_move(&p, 1, 0, 19) == 1 && p.cursor == 1);
+        /* Left from column 0 reports the other edge -- it does not wrap up to
+           the end of the row above. */
+        assert(cp_word_move(&p, -1, 0, 19) == 0 && p.cursor == 0);
+        assert(cp_word_move(&p, -1, 0, 19) == -1 && p.cursor == 0);
+
+        /* Down through the window, then one more press scrolls a row instead of
+           stopping, leaving the cursor on the bottom row. */
+        for (i = 0; i < CP_WORD_ROWS - 1; i++) assert(cp_word_move(&p, 0, 1, 19) == 0);
+        assert(p.cursor == (CP_WORD_ROWS - 1) * CP_WORD_COLS && p.top == 0);
+        assert(cp_word_move(&p, 0, 1, 19) == 0);
+        assert(p.top == 1 && p.cursor == (CP_WORD_ROWS - 1) * CP_WORD_COLS);
+
+        /* It stops at the bottom of the list rather than scrolling into blanks. */
+        for (i = 0; i < 20; i++) cp_word_move(&p, 0, 1, 19);
+        assert(p.top == cp_word_rows(19) - CP_WORD_ROWS);
+        /* Nineteen is odd, so the last row has one cell; the cursor cannot sit
+           on the empty one beside it. */
+        assert(cp_word_move(&p, 1, 0, 19) == 1);
+
+        /* And back up to the top the same way. */
+        for (i = 0; i < 20; i++) cp_word_move(&p, 0, -1, 19);
+        assert(p.top == 0 && p.cursor / CP_WORD_COLS == 0);
+
+        /* Arriving from either side lands on the row asked for, in the column
+           nearest the edge it came through. */
+        cp_word_enter(&p, 2, 0, 19);
+        assert(p.box == CP_BOX_WORD && p.cursor == 2 * CP_WORD_COLS);
+        cp_word_enter(&p, 2, 1, 19);
+        assert(p.cursor == 2 * CP_WORD_COLS + 1);
+        cp_word_enter(&p, 99, 1, 19);
+        assert(p.cursor / CP_WORD_COLS == CP_WORD_ROWS - 1);
+
+        /* An empty list leaves the cursor at rest rather than out of range. */
+        cp_word_enter(&p, 3, 1, 0);
+        assert(p.cursor == 0);
+        assert(cp_word_move(&p, 0, 1, 0) == 0 && p.cursor == 0 && p.top == 0);
     }
 
     /* The overlay fills a noun slot, but is a viewer only when a verb is what

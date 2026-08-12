@@ -1022,32 +1022,37 @@ static void test_dim_table_and_blob(void) {
     unsigned char buf[DISP_BLOB_BYTES];
     int i;
 
-    assert(DISP_DIM_N == 5);
+    assert(DISP_DIM_N == 7);
 
-    /* Darkest first, so left steps darker and right steps brighter, and the
-       unmodified stop is the last one rather than the middle. A row that ran the
-       other way is exactly the bug this ordering fixes. */
-    assert(display_dim_offset(0) == -128);
-    assert(display_dim_offset(1) ==  -96);
-    assert(display_dim_offset(2) ==  -64);
-    assert(display_dim_offset(3) ==  -32);
-    assert(display_dim_offset(DISP_DIM_NORMAL) == 0);
-    assert(DISP_DIM_NORMAL == DISP_DIM_N - 1);
+    /* Darkest first, so left steps darker and right steps brighter. A row that
+       ran the other way is exactly the bug this ordering fixes. */
     for (i = 1; i < DISP_DIM_N; i++)
-        assert(display_dim_offset(i) > display_dim_offset(i - 1));
+        assert(display_dim_offset(i) == display_dim_offset(i - 1) + 32);
 
-    /* Nothing lightens any more: a wallpaper brighter than its own palette
-       washes out under text instead of sitting behind it. */
-    for (i = 0; i < DISP_DIM_N; i++) assert(display_dim_offset(i) <= 0);
+    /* The labels are steps away from the DEFAULT stop, not from the hardware's
+       zero: the default reads "0" and unmodified reads "+2". Pin the arithmetic
+       tying the two arrays together, since nothing else can. */
+    assert(display_dim_offset(DISP_DIM_DEFAULT) == -64);
+    assert(display_dim_offset(DISP_DIM_NORMAL)  ==   0);
+    assert(strcmp(display_dim_name(DISP_DIM_DEFAULT), "0")  == 0);
+    assert(strcmp(display_dim_name(DISP_DIM_NORMAL),  "+2") == 0);
+    assert(strcmp(display_dim_name(0),               "-3") == 0);
+    assert(strcmp(display_dim_name(DISP_DIM_N - 1),  "+3") == 0);
+    for (i = 0; i < DISP_DIM_N; i++)
+        assert(display_dim_offset(i) == 32 * (i - DISP_DIM_NORMAL));
 
     for (i = 0; i < DISP_DIM_N; i++) assert(display_dim_name(i)[0] != '\0');
     assert(display_dim_offset(-1) == 0);
     assert(display_dim_offset(DISP_DIM_N) == 0);
+    /* An out-of-range label falls back to the default's, matching what
+       display_decode does with an out-of-range byte. */
+    assert(strcmp(display_dim_name(-1), display_dim_name(DISP_DIM_DEFAULT)) == 0);
 
-    /* A fresh install starts two stops down, not at Normal. */
+    /* A fresh install starts on "0" -- which is a dim, not unmodified. */
     display_defaults(&d);
     assert(d.dim == DISP_DIM_DEFAULT);
     assert(display_dim_offset(d.dim) == -64);
+    assert(d.dim != DISP_DIM_NORMAL);
 
     d.dim = 1;
     assert(display_encode(&d, buf) == DISP_BLOB_BYTES);
@@ -1067,11 +1072,11 @@ static void test_dim_table_and_blob(void) {
 }
 
 static void test_v6_dim_is_remapped(void) {
-    /* Sentinel 6 stored an index into the old seven-stop, brightest-first row
-       {+64,+32,0,-32,-64,-96,-128}. The row is now five stops darkest first, so
-       a stored index read verbatim would land somewhere else entirely -- the old
-       brightest stop (0) is the new darkest. display_decode matches by offset
-       value instead; the two lightening stops are gone and fall to Normal. */
+    /* Sentinel 6 stored an index into the old brightest-first row
+       {+64,+32,0,-32,-64,-96,-128}. The row now runs darkest first, so a stored
+       index read verbatim would land somewhere else entirely -- the old
+       brightest stop (0) is close to the new darkest. display_decode matches by
+       offset value instead; only +64 has no equivalent left. */
     static const short old_offset[7] = { 64, 32, 0, -32, -64, -96, -128 };
     DisplayState d;
     unsigned char buf[DISP_BLOB_BYTES];
@@ -1087,8 +1092,10 @@ static void test_v6_dim_is_remapped(void) {
         buf[4] = (unsigned char) i;
         assert(display_decode(buf, DISP_BLOB_BYTES, &d) == 1);
         assert(d.dim >= 0 && d.dim < DISP_DIM_N);
-        if (old_offset[i] >= 0) assert(d.dim == DISP_DIM_NORMAL);
-        else                    assert(display_dim_offset(d.dim) == old_offset[i]);
+        if (old_offset[i] > display_dim_offset(DISP_DIM_N - 1))
+            assert(d.dim == DISP_DIM_N - 1);        /* +64: off the top of the row */
+        else
+            assert(display_dim_offset(d.dim) == old_offset[i]);
     }
 
     /* Out of the old row's range too, not just the new one's. */
@@ -1115,19 +1122,27 @@ static void test_cycle_dim(void) {
     display_cycle_dim(&d, 1);
     assert(d.dim == DISP_DIM_DEFAULT);
 
-    /* Steps through every stop and wraps back to where it started. */
-    for (i = 0; i < DISP_DIM_N; i++) {
+    /* Stops at the bright end instead of wrapping to the dark one -- this row is
+       a slider, not a carousel, unlike every other row on the page. */
+    for (i = 0; i < DISP_DIM_N * 2; i++) {
         display_cycle_dim(&d, 1);
         assert(d.dim >= 0 && d.dim < DISP_DIM_N);
     }
-    assert(d.dim == DISP_DIM_DEFAULT);
-
-    /* Wraps at the low end too. */
-    d.dim = 0;
-    display_cycle_dim(&d, -1);
     assert(d.dim == DISP_DIM_N - 1);
     display_cycle_dim(&d, 1);
+    assert(d.dim == DISP_DIM_N - 1);
+
+    /* And at the dark end. */
+    for (i = 0; i < DISP_DIM_N * 2; i++) display_cycle_dim(&d, -1);
     assert(d.dim == 0);
+    display_cycle_dim(&d, -1);
+    assert(d.dim == 0);
+
+    /* Every stop is still reachable from either end. */
+    for (i = 0; i < DISP_DIM_N; i++) {
+        assert(d.dim == i);
+        display_cycle_dim(&d, 1);
+    }
 }
 
 static void test_old_blobs_get_no_dim(void) {

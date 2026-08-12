@@ -104,30 +104,37 @@ typedef struct {
 
 /*----------------------
  | DISP_DIM_N / DISP_DIM_NORMAL / DISP_DIM_DEFAULT
- | Description: The wallpaper-dim row's length, its unmodified stop, and the
- |   stop a fresh install starts on. Discrete steps rather than a continuous
- |   slider: the picture is 8bpp, so a large offset clips distinct palette
- |   entries onto one value and posterises, and a stop the player can name is
- |   easier to return to than a position on a bar.
+ | Description: The wallpaper-dim row's length, the stop that leaves the picture
+ |   unmodified, and the stop a fresh install starts on. Discrete steps rather
+ |   than a continuous slider: the picture is 8bpp, so a large offset clips
+ |   distinct palette entries onto one value and posterises, and a stop the
+ |   player can name is easier to return to than a position on a bar.
  |
  |   The row runs darkest first, so pressing left steps darker and right steps
- |   brighter -- the direction a brightness control is expected to move. That
- |   makes DISP_DIM_NORMAL the last index rather than the middle one: unmodified
- |   is the brightest the row offers, and every other stop darkens. The default
- |   is two stops down from it, which is where the wallpaper stops competing
- |   with the text over it.
+ |   brighter -- the direction a brightness control is expected to move -- and it
+ |   stops at both ends rather than wrapping, since a control that jumps from
+ |   darkest to brightest on one press too many is not a slider.
+ |
+ |   Its labels are relative to the default, not to the hardware: the default
+ |   reads "0" and the stops either side run -3..+3. Unmodified is "+2", two
+ |   stops up, because the default IS a dim -- the shipped wallpaper competes
+ |   with the text over it at full brightness, so "no adjustment" is the setting
+ |   a player should have to ask for rather than the one they start on.
+ |   DISP_DIM_NORMAL therefore sits near the top of the row, not at its end;
+ |   "+3" is the one stop that lightens past the picture's own palette.
  | Author: suinevere
  ----------------------*/
-#define DISP_DIM_N       5
-#define DISP_DIM_NORMAL  4
-#define DISP_DIM_DEFAULT 2
+#define DISP_DIM_N       7
+#define DISP_DIM_NORMAL  5
+#define DISP_DIM_DEFAULT 3
 
 /*----------------------
  | display_dim_offset / display_dim_name / display_cycle_dim
  | Description: dim_offset is the signed VDP2 colour offset a dim-row index
- |   holds (0 outside 0..DISP_DIM_N-1); dim_name is that index's label
- |   ("Normal" for the fallback too, out of range or not); cycle_dim steps
- |   d->dim one stop in `dir`, wrapping.
+ |   holds (0 outside 0..DISP_DIM_N-1); dim_name is that index's label (the
+ |   default stop's label for an out-of-range index, matching what
+ |   display_decode defaults a bad byte to); cycle_dim steps d->dim one stop in
+ |   `dir`, clamping at both ends rather than wrapping the way the colour rows do.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A

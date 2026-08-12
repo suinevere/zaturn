@@ -674,8 +674,12 @@ void sound_options_page(void) {
 
 /*----------------------
  | display_options_page
- | Description: Display Options (full-screen, Ok/Cancel). Unlike Sound
- |   Options every row is always present -- there is no hardware dependency.
+ | Description: Display Options (full-screen, Ok/Cancel). The row list is rebuilt
+ |   every frame because Dimming appears only under the Dynamic palette -- it
+ |   offsets the wallpaper picture, and a colour preset has none -- and the
+ |   Palette row that decides that sits directly above it, so the list can change
+ |   under the cursor. The frame is sized for the full list either way, and `sel`
+ |   is clamped after each rebuild.
  |   Left/Right applies each cycler row live (via display_cycle_row) so the
  |   result is visible behind the menu immediately; Cancel (or B/Backspace)
  |   restores the g_display snapshot taken on entry and re-applies it with
@@ -723,8 +727,8 @@ void sound_options_page(void) {
 static void display_options_page(void) {
     MenuBacking backing;
     enum { DR_PALETTE, DR_BG, DR_TEXT, DR_DIM, DR_OK, DR_CANCEL };
-    static const int rows[] = { DR_PALETTE, DR_BG, DR_TEXT, DR_DIM, DR_OK, DR_CANCEL };
-    const int nrows = (int)(sizeof(rows) / sizeof(rows[0]));
+    int rows[6];
+    int nrows = 0;
 
     int sel = 0;
     display_pin_dynamic_slot(display_image_slot(title_bg_loaded_file()));
@@ -733,6 +737,21 @@ static void display_options_page(void) {
     SRL::Core::Synchronize();
     bool need_fade_in = true;
     for (;;) {
+        // Rebuilt every frame because the Palette row above can remove a row
+        // below it mid-page. Dimming only appears under Dynamic: it offsets the
+        // wallpaper picture, and a colour preset carries none -- the row would
+        // sit there moving a number with nothing on screen to answer it. The
+        // stored value is left alone while hidden, so switching back to Dynamic
+        // brings the player's setting back rather than a reset one.
+        nrows = 0;
+        rows[nrows++] = DR_PALETTE;
+        rows[nrows++] = DR_BG;
+        rows[nrows++] = DR_TEXT;
+        if (g_display.palette == DISP_PAL_DYNAMIC) rows[nrows++] = DR_DIM;
+        rows[nrows++] = DR_OK;
+        rows[nrows++] = DR_CANCEL;
+        if (sel >= nrows) sel = nrows - 1;
+
         check_soft_reset();
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
@@ -765,7 +784,12 @@ static void display_options_page(void) {
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("DISPLAY", 36, nrows + 5, &fx, &fy, &fw, &fh);
+        // Sized for the full row list, not the current one: the Dimming row
+        // comes and goes with the Palette row directly above it, and a frame
+        // that resized under the cursor while cycling Palette would read as the
+        // page redrawing itself rather than as one row appearing.
+        menu_box_fit("DISPLAY", 36, (int)(sizeof(rows) / sizeof(rows[0])) + 5,
+                     &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "DISPLAY");
         int x = fx + 2, y = fy + 4;
         bool nums = !g_kbd_visible;

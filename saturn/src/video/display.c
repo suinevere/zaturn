@@ -73,16 +73,21 @@ static const char *const TEXT_NAME[DISP_TEXT_N] = {
  | DIM_STOPS / DIM_NAMES
  | Description: The wallpaper offsets the Display row steps through, darkest
  |   first, and their labels. Darkest first so that left steps darker and right
- |   steps brighter; the row only darkens, since a wallpaper lighter than the
- |   picture's own palette washes out under text rather than sitting behind it.
- |   Steps of 32 rather than a continuous slider: the picture is 8bpp, so a large
- |   offset clips distinct palette entries onto one value and posterises, and a
- |   stop the player can name is easier to return to than a position on a bar.
+ |   steps brighter. Steps of 32 rather than a continuous slider: the picture is
+ |   8bpp, so a large offset clips distinct palette entries onto one value and
+ |   posterises, and a stop the player can name is easier to return to than a
+ |   position on a bar.
+ |
+ |   The labels are the offset expressed in steps away from the DEFAULT stop, so
+ |   the row a player sees is centred on where they started rather than on the
+ |   hardware's zero -- offset = 32 * (label - 2), which puts unmodified at "+2"
+ |   (DISP_DIM_NORMAL) and the shipped default at "0". Keep the two arrays in
+ |   step with that arithmetic; test_display.c checks it.
  | Author: suinevere
  ----------------------*/
-static const short DIM_STOPS[DISP_DIM_N] = { -128, -96, -64, -32, 0 };
+static const short DIM_STOPS[DISP_DIM_N] = { -160, -128, -96, -64, -32, 0, 32 };
 static const char *const DIM_NAMES[DISP_DIM_N] = {
-    "Darker -4", "Darker -3", "Darker -2", "Darker -1", "Normal"
+    "-3", "-2", "-1", "0", "+1", "+2", "+3"
 };
 
 /*----------------------
@@ -109,18 +114,18 @@ int display_dim_offset(int index) {
  | Returns: the label, or Normal's label if index is out of range
  ----------------------*/
 const char *display_dim_name(int index) {
-    if (index < 0 || index >= DISP_DIM_N) return DIM_NAMES[DISP_DIM_NORMAL];
+    if (index < 0 || index >= DISP_DIM_N) return DIM_NAMES[DISP_DIM_DEFAULT];
     return DIM_NAMES[index];
 }
 
 /*----------------------
  | dim_index_v6
  | Description: The current dim-row index for a dim byte stored by a sentinel-6
- |   blob. That form indexed a seven-stop, brightest-first row -- two lightening
- |   stops, Normal, then four darkening ones -- where the row is now five stops
- |   darkest first. Matched by offset value so a chosen darkness survives the
- |   renumbering; the two lightening stops have no equivalent left and land on
- |   Normal, the nearest the row still offers.
+ |   blob. That form indexed a brightest-first row running +64 down to -128; the
+ |   row now runs darkest-first from -160 up to +32. Both step by 32, so
+ |   reversing the index is an exact match by offset value and a chosen darkness
+ |   survives the renumbering. Only the old +64 stop has no equivalent left, and
+ |   it lands on +32, the brightest the row still offers.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -128,9 +133,10 @@ const char *display_dim_name(int index) {
  | Returns: 0..DISP_DIM_N-1, or DISP_DIM_DEFAULT if v6 is out of that range
  ----------------------*/
 static int dim_index_v6(int v6) {
+    int i;
     if (v6 < 0 || v6 > 6) return DISP_DIM_DEFAULT;
-    if (v6 <= 2)          return DISP_DIM_NORMAL;
-    return 6 - v6;
+    i = 7 - v6;                                 /* both rows step by 32 */
+    return (i > DISP_DIM_N - 1) ? DISP_DIM_N - 1 : i;
 }
 
 /*----------------------
@@ -751,7 +757,9 @@ static int step(int value, int dir, int count) {
 
 /*----------------------
  | display_cycle_dim
- | Description: See display.h.
+ | Description: See display.h. Clamps where every other row wraps: this one is a
+ |   brightness slider with a dark end and a bright end, and a press past either
+ |   that jumped to the far side would be read as the control malfunctioning.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -759,7 +767,10 @@ static int step(int value, int dir, int count) {
  | Returns: N/A
  ----------------------*/
 void display_cycle_dim(DisplayState *d, int dir) {
-    d->dim = step(d->dim, dir, DISP_DIM_N);
+    int v = d->dim + dir;
+    if (v < 0)             v = 0;
+    if (v > DISP_DIM_N - 1) v = DISP_DIM_N - 1;
+    d->dim = v;
 }
 
 /*----------------------

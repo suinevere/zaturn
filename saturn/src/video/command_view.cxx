@@ -640,13 +640,18 @@ static void cv_draw_rose_row(int row, const unsigned char *exits, int y, int sel
  | Dependencies: N/A
  | Globals: N/A
  | Params: text -- the word, may be null; field -- receives 8 bytes (7 + NUL)
- | Returns: N/A
+ | Returns: how many of the seven columns the word itself occupies, which is
+ |   what a highlight covers -- the padding is spacing, not part of the word
  ----------------------*/
-static void cv_pad_field(const char *text, char *field) {
+static int cv_pad_field(const char *text, char *field) {
     int i = 0;
     if (text != 0) for (; text[i] != '\0' && i < 6; i++) field[i] = text[i];
-    for (; i < 7; i++) field[i] = ' ';
-    field[7] = '\0';
+    {
+        int used = i;
+        for (; i < 7; i++) field[i] = ' ';
+        field[7] = '\0';
+        return used;
+    }
 }
 
 /*----------------------
@@ -654,8 +659,14 @@ static void cv_pad_field(const char *text, char *field) {
  | Description: Draws one word-module content row: two seven-column fields
  |   (one-column left margin already accounted for by CV_WORD_X). Every cell
  |   holds a candidate -- the list scrolls a row at a time against the bottom
- |   edge rather than spending a cell on a marker. The focused module's selected
- |   cell prints in reverse video.
+ |   edge rather than spending a cell on a marker.
+ |
+ |   The selected cell is drawn plain and then has its letters alone overprinted
+ |   in reverse video. Inverting the whole seven-column field put a black bar
+ |   several characters wider than the word inside it, which read as the cursor
+ |   covering the empty cell beside the word rather than the word; the padding is
+ |   there to erase the previous frame, not to be part of the selection. Matches
+ |   the rose, where the highlight is the direction's label and nothing else.
  | Author: suinevere
  | Dependencies: command_panel.h, text_map.h
  | Globals: N/A
@@ -670,9 +681,12 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
         int x = CV_WORD_X + 1 + col * 7;
         char field[8];
         const char *text = (idx < w.n) ? w.word[idx] : 0;
-        cv_pad_field(text, field);
-        if (text != 0 && p.box == CP_BOX_WORD && p.cursor == idx) text_print_hl(x, y, field);
-        else                                                      text_print(x, y, field);
+        int used = cv_pad_field(text, field);
+        text_print(x, y, field);
+        if (used > 0 && p.box == CP_BOX_WORD && p.cursor == idx) {
+            field[used] = '\0';
+            text_print_hl(x, y, field);
+        }
     }
 }
 

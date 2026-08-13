@@ -3,7 +3,7 @@
  | Description: Implements the command panel's rendering and its pad-driven
  |   editor. render_command_panel draws the input line and the three-module
  |   strip (compass rose, word list, fixed commands), highlighting the focused
- |   module's selection and border rule in reverse video. command_edit reads the
+ |   module's selected entry in reverse video. command_edit reads the
  |   pad, drives the CommandPanel state machine, sources and orders each word
  |   slot's candidates, and hands the sentence to the same KeyboardState the
  |   on-screen keyboard fills -- either when the grammar slot chain completes on
@@ -40,12 +40,16 @@
 static const int CV_TOP_MARGIN = 1;
 
 /*----------------------
- | CV_BORDER_TOP
- | Description: The strip's top border, verbatim from the design -- exactly 40
- |   columns with the dividers already in place at columns 0, 14, 30 and 39.
+ | CV_BORDER
+ | Description: The strip's horizontal border, verbatim from the design --
+ |   exactly 40 columns with the dividers already in place at columns 0, 14, 30
+ |   and 39. Both rows print it. The bottom row used to be built segment by
+ |   segment instead, carrying each module's control hints and a reverse-video
+ |   mark on the focused one; it carries neither now, so the two rows are the
+ |   same string and the focused module is shown only by its selected entry.
  | Author: suinevere
  ----------------------*/
-static const char *CV_BORDER_TOP = "+-------------+---------------+--------+";
+static const char *CV_BORDER = "+-------------+---------------+--------+";
 
 /*----------------------
  | CV_LIST_ROW0
@@ -57,21 +61,6 @@ static const char *CV_BORDER_TOP = "+-------------+---------------+--------+";
  | Author: suinevere
  ----------------------*/
 #define CV_LIST_ROW0 1
-
-/*----------------------
- | CV_TRAVEL_RULE / CV_WORD_RULE / CV_CMD_RULE
- | Description: The bottom border's three segments, each a plain rule at its
- |   module's inner width (13, 15 and 8) so the three plus the four '+' corners
- |   come to the same 40 columns as CV_BORDER_TOP. The border used to spell out
- |   each module's controls, rebuilt every frame from the live bindings; the
- |   Controls page carries that now, and the widths were too tight to name every
- |   button anyway -- Accept never fitted. Focus is still shown here, by drawing
- |   the focused module's rule in reverse video rather than by what it says.
- | Author: suinevere
- ----------------------*/
-static const char *CV_TRAVEL_RULE = "-------------";
-static const char *CV_WORD_RULE   = "---------------";
-static const char *CV_CMD_RULE    = "--------";
 
 /*----------------------
  | CV_CMD_N / CV_CMD_ROW
@@ -701,31 +690,6 @@ static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
 }
 
 /*----------------------
- | cv_draw_bottom_border
- | Description: Draws the bottom border's three corner-to-corner segments as
- |   plain rules, the focused module's in reverse video. Nothing here reads the
- |   button mapping any more, so unlike the top border it still cannot be one
- |   string: the highlight has to break at the module boundaries.
- | Author: suinevere
- | Dependencies: command_panel.h, text_map.h
- | Globals: N/A
- | Params: focus -- p.box; y -- text row
- | Returns: N/A
- ----------------------*/
-static void cv_draw_bottom_border(int focus, int y) {
-    text_print(0, y, "+");
-    if (focus == CP_BOX_TRAVEL) text_print_hl(CV_TRAVEL_X, y, CV_TRAVEL_RULE);
-    else                        text_print(CV_TRAVEL_X, y, CV_TRAVEL_RULE);
-    text_print(14, y, "+");
-    if (focus == CP_BOX_WORD) text_print_hl(CV_WORD_X, y, CV_WORD_RULE);
-    else                      text_print(CV_WORD_X, y, CV_WORD_RULE);
-    text_print(30, y, "+");
-    if (focus == CP_BOX_CMD) text_print_hl(CV_CMD_X, y, CV_CMD_RULE);
-    else                     text_print(CV_CMD_X, y, CV_CMD_RULE);
-    text_print(39, y, "+");
-}
-
-/*----------------------
  | CV_OVERLAY_X / CV_OVERLAY_W
  | Description: The inventory overlay's left column and total width: 34
  |   columns starting at column 2, drawn over the strip's seven interior rows
@@ -836,8 +800,9 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
  | render_command_panel
  | Description: Draws the input line, the strip's borders and dividers, and
  |   either the inventory overlay or the compass rose/word page/command list,
- |   highlighting the focused module's selected entry and its border rule in
- |   reverse video.
+ |   highlighting the focused module's selected entry in reverse video. The
+ |   borders carry no highlight and no control hints -- both rows are the one
+ |   CV_BORDER string.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h, console_view.h
  | Globals: g_difficulty
@@ -856,7 +821,7 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     text_print(0, input_row, "> %s", p.line);
 
     text_clear_line(border_top);
-    text_print(0, border_top, CV_BORDER_TOP);
+    text_print(0, border_top, CV_BORDER);
 
     if (p.overlay) {
         int y;
@@ -892,7 +857,7 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     }
 
     text_clear_line(border_bottom);
-    cv_draw_bottom_border(p.box, border_bottom);
+    text_print(0, border_bottom, CV_BORDER);
 }
 
 // ---- pad-driven editing ------------------------------------------------------

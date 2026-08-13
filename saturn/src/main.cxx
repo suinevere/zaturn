@@ -346,7 +346,12 @@ static unsigned int boot_entropy(void) {
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
 int main(void) {
-    SRL::Core::Initialize(HighColor::Colors::Black);
+    // 320x224, not SRL's default: every layer this client paints is 224 lines
+    // tall -- 28 text rows of 8, and the wallpaper TGAs are 320x224 -- while the
+    // default is 320x240 on NTSC and 320x256 on PAL. The surplus 16 (or 32) lines
+    // were painted by nothing and showed the back-plane colour as a band under
+    // everything, invisible only for as long as that colour stayed black.
+    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
     text_map_init();       // before anything prints: draws land in the shadow and
                            // reach VRAM on the vblank the next Synchronize waits for
     title_bg_fade_arm();   // hold black over the pre-splash CD work below; the

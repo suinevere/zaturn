@@ -512,16 +512,20 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
         // What the last command printed leads the object slot, at any prefix and
         // in either mode: the player is answering the sentence the game just put
         // on screen. Easy still narrows everything else to the winning path.
+        // g_fresh is in print order, so a later index is a more recent mention --
+        // rank on that, not base weight, so "you see a house ... and a mailbox"
+        // offers the mailbox (named last) ahead of the house.
         for (int i = 0; i < g_nfresh; i++)
             if (plen == 0 || strncmp(g_fresh[i]->text, prefix, plen) == 0)
-                n = cand_add(cand, wt, n, g_fresh[i], FRESH_TIER + g_fresh[i]->base_weight);
+                n = cand_add(cand, wt, n, g_fresh[i], FRESH_TIER + i);
         // At an empty object slot, surface the rest of the on-screen nouns in the
-        // context tier so a thing still visible leads a grammar-listed unseen one.
+        // context tier so a thing still visible leads a grammar-listed unseen one,
+        // by the same print-position order (g_hot holds the older text first, so
+        // its later indices are the more recent lines too).
         if (plen == 0 && !easy_here) {
             for (int i = 0; i < g_nhot; i++)
                 if (g_hot[i]->type == TYPE_NOUN)
-                    n = cand_add(cand, wt, n, g_hot[i],
-                                 10000 + g_hot[i]->base_weight + word_hot(g_hot[i]));
+                    n = cand_add(cand, wt, n, g_hot[i], 10000 + SCREEN_BONUS + i);
         }
     }
 

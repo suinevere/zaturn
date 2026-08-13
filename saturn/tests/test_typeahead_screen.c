@@ -65,6 +65,15 @@ int main(void) {
     assert(rlamp > rl && rh > rlamp);
     assert(rank(root, take, "", "ladder") == 0);
 
+    /* Print position, not base weight, orders the fresh nouns: a thing named
+       later in the same output leads one named earlier, even when the earlier
+       one carries the heavier base weight. Here house (45) is printed before
+       boat (30); boat still leads, because it is the more recent mention. */
+    typeahead_set_screen_recent(root, "", "A white house looms. A small boat drifts past.");
+    assert(rank(root, take, "", "boat") == 1);
+    assert(rank(root, take, "", "house") == 2);
+    typeahead_set_screen_recent(root, OLDER, RECENT);   /* restore the main scene */
+
     /* A typed prefix reaches it: the grammar filter must not drop a noun the
        game just put in front of the player, verb link or no. */
     assert(rank(root, take, "l", "leaflet") == 1);

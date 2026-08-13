@@ -133,6 +133,45 @@ void image_window_off(void) {
     slScrWindowModeNbg0(0);
 }
 
+/*----------------------
+ | SGL_TVMD_SHADOW / VDP2_TVMD_BDCLMD
+ | Description: SGL's shadow copy of the VDP2 TVMD register, and the border
+ |   colour mode bit inside it (0 = black border, 1 = back-screen colour).
+ |
+ |   SGL owns TVMD and rewrites it from this shadow, so the hardware register at
+ |   0x25f80000 cannot be poked directly -- the write is undone. slTVOn/slTVOff
+ |   disassemble to a read-modify-write of `@(192, gbr)`, which puts the shadow
+ |   at GBR + 0xC0; SGL sets GBR to 0x060ffc00 (workarea.c's MasterStack), so
+ |   TVMD's shadow is 0x060ffcc0 and the block from there mirrors the VDP2
+ |   register offsets one for one. Five SGL functions confirm that layout, each
+ |   landing exactly on its register: slScrCycleSet 0x060ffcd0 (CYCA0L 0x010),
+ |   slScrScaleNbg0/1 0x060ffd38/0x060ffd48 (ZMXIN0 0x078 / ZMXIN1 0x088),
+ |   slScrWindowMode 0x060ffd90 (WCTLA 0x0D0 -- the one menu.c already relies
+ |   on), slColorCalcOn 0x060ffdac (CCCTL 0x0EC), slPriority 0x060ffdb8
+ |   (PRINA 0x0F8).
+ |
+ |   SGL exposes no wrapper for this bit, which is why it is reached by address.
+ |   Nothing else writes the shadow after boot -- slTVOn and slTVOff touch only
+ |   bit 15 (DISP), and preserve the rest -- so clearing it once holds.
+ | Author: suinevere
+ ----------------------*/
+#define SGL_TVMD_SHADOW    ((volatile uint16_t *) 0x060ffcc0)
+#define VDP2_TVMD_BDCLMD   0x0100
+
+/*----------------------
+ | border_use_black
+ | Description: See console_view.h. Clears BDCLMD in SGL's TVMD shadow, which
+ |   SGL flushes to the hardware register at the next vblank.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void border_use_black(void) {
+    *SGL_TVMD_SHADOW = (uint16_t) (*SGL_TVMD_SHADOW & ~VDP2_TVMD_BDCLMD);
+}
+
 int console_height(void) {
     int avail = SCREEN_ROWS - TOP_MARGIN;
     if (!g_kbd_visible) return avail - 1;

@@ -63,6 +63,22 @@ void image_window_on(void);
 void image_window_off(void);
 
 /*----------------------
+ | border_use_black
+ | Description: Makes the display border draw black instead of the back-screen
+ |   colour. The border is the raster outside the active display -- the columns
+ |   either side of the 320 the layers cover, and the lines below the 224 they
+ |   are tall -- and by default VDP2 fills it with the back screen, which is the
+ |   same register the player's background colour and every menu box's backing
+ |   read from. Call once, after Core::Initialize.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void border_use_black(void);
+
+/*----------------------
  | console_height
  | Description: How many console text rows are currently available for
  |   scrollback, given whether the on-screen keyboard is showing (it reserves its

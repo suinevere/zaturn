@@ -234,6 +234,7 @@ int main(void) {
     // 8 lines and nothing paints below it. The netbin shows no wallpaper at all,
     // so here the surplus lines were pure back-plane.
     SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
+    border_use_black();
     text_map_init();
 
     static MultiPad pads;

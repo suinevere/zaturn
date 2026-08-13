@@ -352,6 +352,10 @@ int main(void) {
     // were painted by nothing and showed the back-plane colour as a band under
     // everything, invisible only for as long as that colour stayed black.
     SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
+    // Black in the raster around that 320x224, rather than the back-screen colour
+    // VDP2 puts there by default -- which is the player's background colour, and
+    // framed the picture with it.
+    border_use_black();
     text_map_init();       // before anything prints: draws land in the shadow and
                            // reach VRAM on the vblank the next Synchronize waits for
     title_bg_fade_arm();   // hold black over the pre-splash CD work below; the

@@ -84,10 +84,16 @@ not remove it — `cv_in_cmd_module` filters the trie tail too.
   equally, not introduced here.
 - **No on-screen hint names A=send.** All three module borders were full and are
   now deliberately empty; the Controls page is the only place it is written down.
-- **`test_netbin_lift.py` fails on `controls_page`** — and did before this
-  session started. `netbin_pages.cxx` has its own reduced copy that never gained
-  the Panel/Keyboard Swap row, and the two have now diverged much further.
-  Either re-lift it or drop `controls_page` from that test's pairs.
+- **The netbin Controls page now configures an interface netbin does not have.**
+  `test_netbin_lift.py` had been failing on `controls_page` since before this
+  session — `netbin_pages.cxx` kept a reduced copy that never gained the
+  Panel/Keyboard Swap row. It was fixed by re-lifting verbatim, which is what
+  the test demands, but the cost is that netbin's page now opens on the Panel
+  view (`g_cmd_iface` defaults to `IFACE_PANEL`) and lists Type Word, Cycle
+  Module and a Panel/Keyboard Swap for a build with no command panel in it. The
+  alternative, if that reads badly on screen, is to drop `controls_page` from
+  that test's pairs and let netbin keep a deliberately reduced page — but then
+  nothing guards the other three lifted bodies from drifting the same way.
 - The four owner decisions in [[command-panel-and-dim-handoff]] are untouched.
 
 ## Verification state

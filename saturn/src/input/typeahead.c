@@ -411,7 +411,9 @@ static int prev_links_to(DictionaryWord* prev, DictionaryWord* target, int* sol)
  |   links leading even over on-screen words), surfaces on-screen nouns at an empty
  |   object slot, then adds trie completions under the prefix. In Normal mode a
  |   grammar filter drops invalid shapes (verb after verb, noun after noun, verb +
- |   non-object noun) unless the pair is a solution link. Finally the exact typed
+ |   non-object noun) unless the pair is a solution link or the noun is on screen
+ |   -- a story links its verbs to object classes, not to every object, so most
+ |   concrete nouns have no verb link and would otherwise never be suggested. Finally the exact typed
  |   word leads its own completions, and the top `max` are selection-sorted by
  |   descending weight.
  | Author: suinevere
@@ -501,7 +503,8 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
                 WordType pt = prev_word->type, ct = cand[i]->type;
                 if      (pt == TYPE_VERB && ct == TYPE_VERB) drop = 1;
                 else if (pt == TYPE_NOUN && ct == TYPE_NOUN) drop = 1;
-                else if (pt == TYPE_VERB && ct == TYPE_NOUN && !has) drop = 1;
+                else if (pt == TYPE_VERB && ct == TYPE_NOUN && !has && !word_hot(cand[i]))
+                    drop = 1;
             }
             if (!drop) { cand[w2] = cand[i]; wt[w2] = wt[i]; w2++; }
         }

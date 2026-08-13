@@ -272,6 +272,32 @@ int main(void) {
     assert(strcmp(p.line, "take") == 0);
     assert(p.slot == CP_SLOT_NOUN);
 
+    /* cp_submit sends a line the grammar chain has not finished with. */
+    cp_reset(&p);
+    cp_pick(&p, "read", 0);
+    assert(p.slot == CP_SLOT_NOUN);
+    assert(p.submitted == 0);
+    cp_submit(&p);
+    assert(p.submitted == 1);
+    assert(p.slot == CP_SLOT_DONE);
+    assert(strcmp(p.line, "read") == 0);
+
+    /* An empty line is not a command, so the button does nothing on one. */
+    cp_reset(&p);
+    cp_submit(&p);
+    assert(p.submitted == 0);
+    assert(p.slot == CP_SLOT_VERB);
+    assert(p.line_len == 0);
+
+    /* Backing up after a send takes the submit back with the word. */
+    cp_reset(&p);
+    cp_pick(&p, "read", 0);
+    cp_submit(&p);
+    assert(p.submitted == 1);
+    cp_back(&p);
+    assert(p.submitted == 0);
+    assert(p.line_len == 0);
+
     printf("test_command_panel ok\n");
     return 0;
 }

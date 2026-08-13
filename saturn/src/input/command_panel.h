@@ -115,6 +115,20 @@ void cp_move(CommandPanel *p, int d, int count);
 void cp_pick(CommandPanel *p, const char *word, int wants_prep);
 
 /*----------------------
+ | cp_submit
+ | Description: Marks the command submitted as it stands, however far short of
+ |   the grammar slot chain it stops -- the player's explicit send, alongside the
+ |   automatic one cp_pick performs when the chain completes. A no-op on an empty
+ |   line; the caller guards the overlay case.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: N/A
+ ----------------------*/
+void cp_submit(CommandPanel *p);
+
+/*----------------------
  | cp_back
  | Description: Removes the last word from the command and steps the slot back
  |   one. From an empty command at the verb slot, moves focus to the travel

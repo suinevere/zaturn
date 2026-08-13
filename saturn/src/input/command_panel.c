@@ -72,7 +72,7 @@ void cp_move(CommandPanel *p, int d, int count) {
  |   Marks `submitted` when the command is complete. While the overlay is up,
  |   this is also its sole close path: a pick that cannot land -- the panel is
  |   waiting for a verb, or `word` is empty -- closes the overlay instead of
- |   being silently dropped, so Accept can never leave it stuck open.
+ |   being silently dropped, so the picking button can never leave it stuck open.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -103,6 +103,26 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
     p->top = 0;
     p->overlay = 0;
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
+}
+
+/*----------------------
+ | cp_submit
+ | Description: Sends the command as it stands, however far short of the grammar
+ |   slot chain it stops -- the player's explicit "that will do", alongside the
+ |   automatic submit cp_pick performs when the chain runs out on its own. Does
+ |   nothing on an empty line, so the button cannot post a blank command, and
+ |   nothing while the overlay is up: that is the caller's guard, since only the
+ |   caller knows a picker is open over the line.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: N/A
+ ----------------------*/
+void cp_submit(CommandPanel *p) {
+    if (p->line_len == 0) return;
+    p->slot = CP_SLOT_DONE;
+    p->submitted = 1;
 }
 
 /*----------------------

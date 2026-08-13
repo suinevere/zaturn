@@ -5,8 +5,9 @@
  |   strip (compass rose, word list, fixed commands), highlighting the focused
  |   module's selection and border hint in reverse video. command_edit reads the
  |   pad, drives the CommandPanel state machine, sources and orders each word
- |   slot's candidates, and on a completed sentence hands it to the same
- |   KeyboardState the on-screen keyboard fills.
+ |   slot's candidates, and hands the sentence to the same KeyboardState the
+ |   on-screen keyboard fills -- either when the grammar slot chain completes on
+ |   its own or when Accept sends what is there early.
  |
  |   The three modules are one grid as far as the D-pad is concerned: each has
  |   its own cursor, and a press that runs off a module's edge carries focus into
@@ -61,11 +62,14 @@ static const char *CV_BORDER_TOP = "+-------------+---------------+--------+";
  | cv_travel_hint
  | Description: Builds the travel module's bottom-border hint at exactly its
  |   inner width (13), so it slots straight into the border between the corner
- |   '+' marks. Says what Accept does rather than only what L and R do, because
- |   the D-pad no longer travels: it moves a cursor over the rose, and the button
- |   that goes is the remappable one -- hence built from the live binding like
- |   the word module's, rather than staying the literal it used to be.
- |   face_btn_name always returns a single character, so the width is fixed.
+ |   '+' marks. Says what Type Word does rather than only what L and R do,
+ |   because the D-pad no longer travels: it moves a cursor over the rose, and
+ |   the button that goes is the remappable one -- hence built from the live
+ |   binding like the word module's, rather than staying the literal it used to
+ |   be. Type Word and not Accept because a direction is picked like any other
+ |   word; that the pick is also a whole command, and so leaves immediately, is
+ |   cp_pick's doing and not a second button. face_btn_name always returns a
+ |   single character, so the width is fixed.
  | Author: suinevere
  | Dependencies: input.h (face_btn_name)
  | Globals: g_face_btn
@@ -73,10 +77,10 @@ static const char *CV_BORDER_TOP = "+-------------+---------------+--------+";
  | Returns: N/A
  ----------------------*/
 static void cv_travel_hint(char *out) {
-    const char *accept = face_btn_name(FA_ACCEPT);
+    const char *type = face_btn_name(FA_TYPE);
     int i = 0;
     out[i++] = '-';
-    out[i++] = accept[0];
+    out[i++] = type[0];
     out[i++] = '=';
     out[i++] = 'g'; out[i++] = 'o';
     out[i++] = ' ';
@@ -716,13 +720,14 @@ static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
 /*----------------------
  | cv_word_hint
  | Description: Builds the word module's bottom-border hint from the live
- |   Accept/Back face-button mapping, so the letters shown always match the
+ |   Type Word/Back face-button mapping, so the letters shown always match the
  |   buttons that actually pick and back up -- command_edit fires both through
- |   face_button(FA_ACCEPT)/face_button(FA_BACK), which the player can remap on
+ |   face_button(FA_TYPE)/face_button(FA_BACK), which the player can remap on
  |   the Controls page. Fixed at the module's 15-character inner width:
- |   face_btn_name always returns a single character ("A", "B", or "C"), so
- |   substituting it in place of the old "A"/"B" literals never changes the
- |   count.
+ |   face_btn_name always returns a single character, so substituting it in
+ |   place of the old "A"/"B" literals never changes the count. Accept, which
+ |   sends the line early, is the one binding with no room left to name here --
+ |   all three module borders (13, 15 and 8 columns) are already full.
  | Author: suinevere
  | Dependencies: input.h (face_btn_name)
  | Globals: g_face_btn
@@ -730,11 +735,11 @@ static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
  | Returns: N/A
  ----------------------*/
 static void cv_word_hint(char *out) {
-    const char *accept = face_btn_name(FA_ACCEPT);
-    const char *back   = face_btn_name(FA_BACK);
+    const char *type = face_btn_name(FA_TYPE);
+    const char *back = face_btn_name(FA_BACK);
     int i = 0;
     out[i++] = '-';
-    out[i++] = accept[0];
+    out[i++] = type[0];
     out[i++] = '=';
     out[i++] = 'p'; out[i++] = 'i'; out[i++] = 'c'; out[i++] = 'k';
     out[i++] = ' ';
@@ -994,7 +999,7 @@ static int cv_enter_travel(CommandPanel &p, const unsigned char *exits, int want
 /*----------------------
  | cv_travel_dpad
  | Description: Walks the rose's grid. The D-pad is a cursor here, not a literal
- |   compass -- Accept is what travels -- so every direction the room offers is
+ |   compass -- Type Word is what travels -- so every direction the room offers is
  |   reachable by pressing toward it, including the four corners, and stepping
  |   off the right edge carries focus into the word module at the same height.
  |   The left edge is the strip's own, so a press against it does nothing.
@@ -1127,7 +1132,7 @@ static int cv_verb_wants_prep(const CommandPanel &p, TrieNode *root, const char 
 
 /*----------------------
  | cv_word_accept
- | Description: Accept in the word module: the cell under the cursor is picked,
+ | Description: Type Word in the word module: the cell under the cursor is picked,
  |   with wants_prep resolved via cv_verb_wants_prep. What reaches the command is
  |   cv_submit_form's spelling, not the cell's -- the cell shows the six
  |   characters a v3 dictionary entry holds and the sentence should read in full.
@@ -1152,7 +1157,7 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
 
 /*----------------------
  | cv_cmd_accept
- | Description: Accept in the command module: overwrites the sentence in
+ | Description: Type Word in the command module: overwrites the sentence in
  |   progress with the selected entry's submit word and marks it submitted --
  |   these are whole standalone commands, not sentence-slot picks. "invent" is
  |   the one exception: with the room model available there is a carried set
@@ -1179,13 +1184,13 @@ static void cv_cmd_accept(CommandPanel &p) {
 
 /*----------------------
  | cv_overlay_accept
- | Description: Accept from the inventory overlay: resolves the selected
+ | Description: Type Word from the inventory overlay: resolves the selected
  |   carried object's parser word and hands it to cp_pick, which owns every
  |   outcome -- the pick lands (waiting for a noun, a word resolved), or the
  |   overlay closes unchanged (waiting for a verb; or waiting for a noun but
  |   nothing carried at the cursor, or the object has no detectable synonym
  |   property, in which case `word` is empty). Always calls cp_pick, never
- |   branching on cp_overlay_takes_noun itself, so Accept can never leave the
+ |   branching on cp_overlay_takes_noun itself, so Type Word can never leave the
  |   overlay stuck open with no word to offer and no close to fall back on.
  | Author: suinevere
  | Dependencies: room_model.h, command_panel.h, typeahead.h
@@ -1210,7 +1215,7 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
 /*----------------------
  | command_edit
  | Description: One frame of command-mode input. With the inventory overlay up
- |   it takes the pad exclusively: the D-pad walks the carried list, Accept
+ |   it takes the pad exclusively: the D-pad walks the carried list, Type Word
  |   resolves the selection through cp_pick, Back closes it unchanged --
  |   module focus does not move, since the overlay spans all three modules.
  |
@@ -1218,12 +1223,12 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  |   the focused module and carries focus into the next one when it runs off an
  |   edge, at the row it left from, so reaching the command list from the rose is
  |   the same gesture as reaching the next word. L and R still jump modules
- |   outright. Accept picks, Back unwinds.
+ |   outright. Type Word picks, Accept sends the line as it stands, Back unwinds.
  |
  |   Travel is a cursor like the other two rather than a literal compass: with
  |   twelve directions on a five-by-three grid the D-pad cannot both select and
  |   travel, and the diagonals used to need two buttons held at once to reach.
- |   Accept is what travels now.
+ |   Type Word is what travels now.
  |
  |   Focus is refused entry to a rose with no exits at all rather than left
  |   sitting on nothing, which is why every arrival there goes through
@@ -1261,8 +1266,8 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
 
     if (p.overlay) {
         cv_overlay_dpad(p, m.ncarried);
-        if (pad_fired(face_button(FA_ACCEPT))) cv_overlay_accept(p, m, root);
-        if (pad_fired(face_button(FA_BACK)))   cp_overlay_close(&p);
+        if (pad_fired(face_button(FA_TYPE))) cv_overlay_accept(p, m, root);
+        if (pad_fired(face_button(FA_BACK))) cp_overlay_close(&p);
     } else {
         unsigned char flat[RM_DIR_N];
         const unsigned char *exits = m.exits;
@@ -1291,7 +1296,7 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
         else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, exits, ncand);
         else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p, ncand);
 
-        if (pad_fired(face_button(FA_ACCEPT))) {
+        if (pad_fired(face_button(FA_TYPE))) {
             if (p.box == CP_BOX_TRAVEL) {
                 int d = p.cursor;
                 if (d >= 0 && d < RM_DIR_N &&
@@ -1301,6 +1306,7 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
             else if (p.box == CP_BOX_WORD) cv_word_accept(p, w, m, root);
             else if (p.box == CP_BOX_CMD)  cv_cmd_accept(p);
         }
+        if (pad_fired(face_button(FA_ACCEPT))) cp_submit(&p);
         if (pad_fired(face_button(FA_BACK))) {
             int before = p.box, before_cursor = p.cursor;
             cp_back(&p);

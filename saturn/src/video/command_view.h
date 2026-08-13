@@ -35,7 +35,7 @@
  | render_command_panel
  | Description: Draws the input line, the strip's borders and dividers, the
  |   compass rose, the word page, and the fixed command list, highlighting the
- |   focused module's selected entry and its border hint in reverse video.
+ |   focused module's selected entry and its border rule in reverse video.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h, console_view.h
  | Globals: N/A

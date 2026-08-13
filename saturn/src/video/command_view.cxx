@@ -3,7 +3,7 @@
  | Description: Implements the command panel's rendering and its pad-driven
  |   editor. render_command_panel draws the input line and the three-module
  |   strip (compass rose, word list, fixed commands), highlighting the focused
- |   module's selection and border hint in reverse video. command_edit reads the
+ |   module's selection and border rule in reverse video. command_edit reads the
  |   pad, drives the CommandPanel state machine, sources and orders each word
  |   slot's candidates, and hands the sentence to the same KeyboardState the
  |   on-screen keyboard fills -- either when the grammar slot chain completes on
@@ -59,36 +59,19 @@ static const char *CV_BORDER_TOP = "+-------------+---------------+--------+";
 #define CV_LIST_ROW0 1
 
 /*----------------------
- | cv_travel_hint
- | Description: Builds the travel module's bottom-border hint at exactly its
- |   inner width (13), so it slots straight into the border between the corner
- |   '+' marks. Says what Type Word does rather than only what L and R do,
- |   because the D-pad no longer travels: it moves a cursor over the rose, and
- |   the button that goes is the remappable one -- hence built from the live
- |   binding like the word module's, rather than staying the literal it used to
- |   be. Type Word and not Accept because a direction is picked like any other
- |   word; that the pick is also a whole command, and so leaves immediately, is
- |   cp_pick's doing and not a second button. face_btn_name always returns a
- |   single character, so the width is fixed.
+ | CV_TRAVEL_RULE / CV_WORD_RULE / CV_CMD_RULE
+ | Description: The bottom border's three segments, each a plain rule at its
+ |   module's inner width (13, 15 and 8) so the three plus the four '+' corners
+ |   come to the same 40 columns as CV_BORDER_TOP. The border used to spell out
+ |   each module's controls, rebuilt every frame from the live bindings; the
+ |   Controls page carries that now, and the widths were too tight to name every
+ |   button anyway -- Accept never fitted. Focus is still shown here, by drawing
+ |   the focused module's rule in reverse video rather than by what it says.
  | Author: suinevere
- | Dependencies: input.h (face_btn_name)
- | Globals: g_face_btn
- | Params: out -- receives the 13-character hint plus a NUL (14 bytes)
- | Returns: N/A
  ----------------------*/
-static void cv_travel_hint(char *out) {
-    const char *type = face_btn_name(FA_TYPE);
-    int i = 0;
-    out[i++] = '-';
-    out[i++] = type[0];
-    out[i++] = '=';
-    out[i++] = 'g'; out[i++] = 'o';
-    out[i++] = ' ';
-    out[i++] = 'L'; out[i++] = '/'; out[i++] = 'R';
-    out[i++] = '=';
-    out[i++] = 'b'; out[i++] = 'o'; out[i++] = 'x';
-    out[i] = '\0';
-}
+static const char *CV_TRAVEL_RULE = "-------------";
+static const char *CV_WORD_RULE   = "---------------";
+static const char *CV_CMD_RULE    = "--------";
 
 /*----------------------
  | CV_CMD_N / CV_CMD_ROW
@@ -718,88 +701,27 @@ static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
 }
 
 /*----------------------
- | cv_word_hint
- | Description: Builds the word module's bottom-border hint from the live
- |   Type Word/Back face-button mapping, so the letters shown always match the
- |   buttons that actually pick and back up -- command_edit fires both through
- |   face_button(FA_TYPE)/face_button(FA_BACK), which the player can remap on
- |   the Controls page. Fixed at the module's 15-character inner width:
- |   face_btn_name always returns a single character, so substituting it in
- |   place of the old "A"/"B" literals never changes the count. Accept, which
- |   sends the line early, is the one binding with no room left to name here --
- |   all three module borders (13, 15 and 8 columns) are already full.
- | Author: suinevere
- | Dependencies: input.h (face_btn_name)
- | Globals: g_face_btn
- | Params: out -- receives the 15-character hint plus a NUL (16 bytes)
- | Returns: N/A
- ----------------------*/
-static void cv_word_hint(char *out) {
-    const char *type = face_btn_name(FA_TYPE);
-    const char *back = face_btn_name(FA_BACK);
-    int i = 0;
-    out[i++] = '-';
-    out[i++] = type[0];
-    out[i++] = '=';
-    out[i++] = 'p'; out[i++] = 'i'; out[i++] = 'c'; out[i++] = 'k';
-    out[i++] = ' ';
-    out[i++] = back[0];
-    out[i++] = '=';
-    out[i++] = 'b'; out[i++] = 'c'; out[i++] = 'k';
-    out[i++] = '-'; out[i++] = '-';
-    out[i] = '\0';
-}
-
-/*----------------------
- | cv_cmd_hint
- | Description: Builds the command module's bottom-border hint from the live
- |   toggle-button binding, so the letter shown always matches the shift
- |   button that actually swaps the panel back to the on-screen keyboard.
- |   Fixed at the module's 8-character inner width.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_toggle_btn
- | Params: out -- receives the 8-character hint plus a NUL (9 bytes)
- | Returns: N/A
- ----------------------*/
-static void cv_cmd_hint(char *out) {
-    int i = 0;
-    out[i++] = '-';
-    out[i++] = (g_toggle_btn == 1) ? 'Y' : 'Z';
-    out[i++] = '=';
-    out[i++] = 'k'; out[i++] = 'b'; out[i++] = 'd';
-    out[i++] = '-'; out[i++] = '-';
-    out[i] = '\0';
-}
-
-/*----------------------
  | cv_draw_bottom_border
- | Description: Draws the bottom border's three corner-to-corner segments,
- |   printing the focused module's hint in reverse video. All three are rebuilt
- |   every call from the live face-button and toggle-button bindings, so a hint
- |   can never name a button the Controls page has since remapped.
+ | Description: Draws the bottom border's three corner-to-corner segments as
+ |   plain rules, the focused module's in reverse video. Nothing here reads the
+ |   button mapping any more, so unlike the top border it still cannot be one
+ |   string: the highlight has to break at the module boundaries.
  | Author: suinevere
- | Dependencies: command_panel.h, text_map.h, input.h, app_state.h
- | Globals: g_face_btn, g_toggle_btn
+ | Dependencies: command_panel.h, text_map.h
+ | Globals: N/A
  | Params: focus -- p.box; y -- text row
  | Returns: N/A
  ----------------------*/
 static void cv_draw_bottom_border(int focus, int y) {
-    char travel_hint[14];
-    char word_hint[16];
-    char cmd_hint[9];
-    cv_travel_hint(travel_hint);
-    cv_word_hint(word_hint);
-    cv_cmd_hint(cmd_hint);
     text_print(0, y, "+");
-    if (focus == CP_BOX_TRAVEL) text_print_hl(CV_TRAVEL_X, y, travel_hint);
-    else                        text_print(CV_TRAVEL_X, y, travel_hint);
+    if (focus == CP_BOX_TRAVEL) text_print_hl(CV_TRAVEL_X, y, CV_TRAVEL_RULE);
+    else                        text_print(CV_TRAVEL_X, y, CV_TRAVEL_RULE);
     text_print(14, y, "+");
-    if (focus == CP_BOX_WORD) text_print_hl(CV_WORD_X, y, word_hint);
-    else                      text_print(CV_WORD_X, y, word_hint);
+    if (focus == CP_BOX_WORD) text_print_hl(CV_WORD_X, y, CV_WORD_RULE);
+    else                      text_print(CV_WORD_X, y, CV_WORD_RULE);
     text_print(30, y, "+");
-    if (focus == CP_BOX_CMD) text_print_hl(CV_CMD_X, y, cmd_hint);
-    else                     text_print(CV_CMD_X, y, cmd_hint);
+    if (focus == CP_BOX_CMD) text_print_hl(CV_CMD_X, y, CV_CMD_RULE);
+    else                     text_print(CV_CMD_X, y, CV_CMD_RULE);
     text_print(39, y, "+");
 }
 
@@ -914,7 +836,7 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
  | render_command_panel
  | Description: Draws the input line, the strip's borders and dividers, and
  |   either the inventory overlay or the compass rose/word page/command list,
- |   highlighting the focused module's selected entry and its border hint in
+ |   highlighting the focused module's selected entry and its border rule in
  |   reverse video.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h, console_view.h

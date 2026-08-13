@@ -239,6 +239,18 @@ static const char *const PANEL_FACE_LABEL[FA_N] = { "Accept", "Backspace/Cancel"
                                                     "Type Word", "Space" };
 
 /*----------------------
+ | INAMES / IDESC
+ | Description: The Interface row's value names and description lines, indexed by
+ |   IFACE_KEYBOARD/IFACE_PANEL. Word for word what the Gameplay page showed
+ |   before the row moved here; file scope rather than function-local because the
+ |   row now heads a page that is drawn from tables either side of it.
+ | Author: suinevere
+ ----------------------*/
+static const char *const INAMES[] = { "Keyboard", "Command Panel" };
+static const char *const IDESC[]  = { "Type words, autocomplete",
+                                      "Pick words with the pad" };
+
+/*----------------------
  | CtlRow / CTL_PANEL / CTL_KBD / CTL_PANEL_N / CTL_KBD_N / CTL_ASSIGN_MAX
  | Description: The remappable rows each Controls view lists, in the order they
  |   are drawn. Both tables index the one shared g_face_btn/g_chord_slot mapping --
@@ -256,7 +268,7 @@ static const char *const PANEL_FACE_LABEL[FA_N] = { "Accept", "Backspace/Cancel"
  |
  |   CTL_ASSIGN_MAX is the longer of the two lists, used to reserve the rows the
  |   block occupies so the box and everything below it hold still when the player
- |   flips Input Method.
+ |   flips the Interface row.
  | Author: suinevere
  ----------------------*/
 enum { CK_FACE, CK_CHORD };
@@ -291,18 +303,19 @@ static const CtlRow CTL_KBD[] = {
 
 /*----------------------
  | CtlView / ctl_view
- | Description: The Controls page's row geometry for whichever Input Method is
- |   currently selected: which table the assignable rows come from, how many there
+ | Description: The Controls page's row geometry for whichever interface the
+ |   Interface row currently names: which table the assignable rows come from, how many there
  |   are, and the `sel` index of every row below them (all offset by one for the
- |   Input Method row at index 0). Derived rather than stored because the page
+ |   Interface row at index 0). Derived rather than stored because the page
  |   calls it twice per frame -- once before reading input and again after, so the
- |   frame that flips Input Method already draws the list it flipped to instead of
+ |   frame that flips the Interface row already draws the list it flipped to
+ |   instead of
  |   showing the old one for a frame.
  | Author: suinevere
  | Dependencies: app_state.h (g_cmd_iface, IFACE_PANEL)
  | Globals: g_cmd_iface
  | Params: N/A
- | Returns: the row geometry for the selected Input Method
+ | Returns: the row geometry for the named interface
  ----------------------*/
 struct CtlView {
     const CtlRow *rows;
@@ -326,9 +339,10 @@ static CtlView ctl_view(void) {
 
 /*----------------------
  | controls_page
- | Description: Gamepad Controls page. The top row is Input Method, cycling
- |   g_cmd_iface between Panel and Keyboard, and everything under it is that
- |   interface's own configuration: the Command Panel lists Accept, Backspace/
+ | Description: Gamepad Controls page. The top row is the Interface slider,
+ |   moved here verbatim from the Gameplay page -- same wording, same clamped
+ |   Left/Right, same description line under it -- and everything below it is
+ |   that interface's own configuration: the Command Panel lists Accept, Backspace/
  |   Cancel, Type Word, Recall, Page Up/Down, Home/End and Line Up/Down, then a
  |   fixed Cycle Module (L/R) and the fixed L+R Caps Toggle; the Keyboard lists
  |   all four face actions and all six chords, then the Caps Toggle alone. Below
@@ -338,21 +352,28 @@ static CtlView ctl_view(void) {
  |   Cancel.
  |
  |   The two views are filters over the one g_face_btn/g_chord_slot mapping, not
- |   separate tables -- see CTL_PANEL/CTL_KBD for what that costs. Input Method is
- |   the same persisted setting the Gameplay page's Interface row edits, so the
- |   two always agree; it is deliberately NOT touched by Reset to Defaults, which
- |   restores bindings and has no business throwing the player out of the view
- |   they are reading.
+ |   separate tables -- see CTL_PANEL/CTL_KBD for what that costs. Interface is
+ |   g_cmd_iface, the persisted preference main.cxx seeds g_cmd_mode from at game
+ |   start, and this page is now its only editor; a session already in progress
+ |   keeps whatever the toggle button last picked, exactly as it did while the
+ |   row lived on the Gameplay page. It is deliberately NOT touched by Reset to
+ |   Defaults, which restores bindings and has no business throwing the player
+ |   out of the view they are reading.
+ |
+ |   Content starts one row higher than the other option pages, at fy + 3 rather
+ |   than fy + 4, so the Interface row plus its description line finish where a
+ |   single row would have and the swapped block below opens on the same line it
+ |   did when the head row was one line tall.
  |
  |   Only the assignable rows are numbered -- the keyboard view's ten use every
- |   digit key there is, so Input Method, Caps, Swap, Reset, Ok and Cancel stay
+ |   digit key there is, so Interface, Caps, Swap, Reset, Ok and Cancel stay
  |   reachable only by Up/Down. menu_digit_row therefore indexes the assignable
- |   list and its result is offset past the Input Method row rather than used as
+ |   list and its result is offset past the Interface row rather than used as
  |   `sel` directly. Snapshots g_face_btn/g_chord_slot/g_toggle_btn/g_cmd_iface on
  |   entry so Cancel (or B/Backspace) can restore them verbatim; Start/Esc leave
  |   the other way, saving what is on screen exactly as the Ok row does. Keyboard
  |   Caps takes effect immediately and is not part of that snapshot, matching the
- |   toggles on every other page; Panel/Keyboard Swap and Input Method ARE
+ |   toggles on every other page; Panel/Keyboard Swap and Interface ARE
  |   snapshotted, since a stray edit to either should be as cancellable as a
  |   face/chord remap. Up/Down move the row cursor with wraparound, resolved
  |   before the digit-row jump so a same-frame digit press wins the tie against
@@ -360,10 +381,10 @@ static CtlView ctl_view(void) {
  |   would let a simultaneous press move `sel` while left/right/act stayed set
  |   from the digit, cycling whichever row the pad happened to land on instead.
  |   Left/Right cycle the selected row's assignment via face_assign/chord_assign
- |   (applying their own tie-breaking rules), flip Input Method, Keyboard Caps or
+ |   (applying their own tie-breaking rules), move Interface, flip Keyboard Caps or
  |   the Panel/Keyboard Swap, or activate Reset/Ok/Cancel.
  |
- |   Only the Input Method row can change the row count, and it sits at index 0,
+ |   Only the Interface row can change the row count, and it sits at index 0,
  |   so `sel` is always 0 at the moment the count changes and never needs
  |   clamping. The swapped block is drawn to the reserved CTL_BLOCK_ROWS height
  |   for the same reason the value column is reserved: nothing below it may move
@@ -439,8 +460,10 @@ static bool controls_page(void) {
         else if (sel == v.r_reset) { if (act) mapping_reset_defaults(); }
         else if (sel == v.r_caps) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
         else if (sel == v.r_toggle) { if (left || right || act) g_toggle_btn = 1 - g_toggle_btn; }
-        else if (sel == R_IFACE) { if (left || right || act)
-            g_cmd_iface = (g_cmd_iface == IFACE_PANEL) ? IFACE_KEYBOARD : IFACE_PANEL; }
+        else if (sel == R_IFACE) {
+            if (left  && g_cmd_iface > IFACE_KEYBOARD) g_cmd_iface--;
+            if (right && g_cmd_iface < IFACE_PANEL)    g_cmd_iface++;
+        }
         else if (left || right) {
             const CtlRow &r = v.rows[sel - 1];
             if (r.kind == CK_FACE) {
@@ -459,12 +482,17 @@ static bool controls_page(void) {
         int fx, fy, fw, fh;
         menu_box_fit("CONTROLS", 36, CTL_BLOCK_ROWS + 11, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
-        int x = fx + 2, y = fy + 4;
+        /* One row higher than every other page's content start, so the Interface
+           row and its description line together end where a single row would
+           have: the swapped block below opens on the same line either way. */
+        int x = fx + 2, y = fy + 3;
         bool nums = !g_kbd_visible;
         const int vx = x + 20 + MENU_DIGIT_COLS;
         const int lx = x + 2 + MENU_DIGIT_COLS;
-        text_print(x, y, "%c    Input Method", sel == R_IFACE ? '>' : ' ');
-        text_print(vx, y++, "%s", v.panel ? "Panel" : "Keyboard");
+        text_print(x, y++, "%c    Interface:  %s %s %s", sel == R_IFACE ? '>' : ' ',
+                           g_cmd_iface > IFACE_KEYBOARD ? "<" : " ", INAMES[g_cmd_iface],
+                           g_cmd_iface < IFACE_PANEL ? ">" : " ");
+        text_print(x + 4, y++, "%s", IDESC[g_cmd_iface]);
         y++;
         const int block_y = y;
         for (int i = 0; i < v.nassign; i++) {
@@ -1213,26 +1241,28 @@ void credits_page(void) {
 /*----------------------
  | gameplay_page
  | Description: Gameplay Options (full-screen box, Ok/Cancel): the Difficulty
- |   slider (Easy/Medium/Hard), the Room text slider (Superbrief/Brief/
- |   Verbose), and the Command Interface slider (Keyboard/Command Panel), each
- |   with a description line, moved out of the top-level Options box so that
- |   list can stay plain dispatch rows. Left/Right adjust local copies; Ok and
- |   Start/Esc commit them to g_difficulty/g_verbosity/g_cmd_iface and call
+ |   slider (Easy/Medium/Hard) and the Room text slider (Superbrief/Brief/
+ |   Verbose), each with a description line, moved out of the top-level Options
+ |   box so that list can stay plain dispatch rows. Left/Right adjust local
+ |   copies; Ok and Start/Esc commit them to g_difficulty/g_verbosity and call
  |   options_save() only if something actually changed; Cancel (or B/Backspace)
  |   discards the copies, leaving every global untouched.
+ |
+ |   The Interface slider used to sit under these two and now heads the Controls
+ |   page instead, where the rows below it are the bindings for whichever
+ |   interface it names -- the setting and the configuration it governs read
+ |   better together than apart. It kept its wording and its behaviour verbatim
+ |   in the move; only its home changed.
  |
  |   Room text is applied by whoever is running the interpreter, not here: the
  |   parser owns that state and only takes it as a typed command, so this page
  |   just records the choice and saturn_glue.cxx hands it over on the way out.
- |   Command Interface only takes effect the next time a game starts (main.cxx
- |   seeds g_cmd_mode from it) -- a session already in progress keeps whatever
- |   the toggle button last picked. Reached only from the Options menu's
- |   Gameplay row.
+ |   Reached only from the Options menu's Gameplay row.
  | Author: suinevere
  | Dependencies: options.c (options_save), console_view.c (note_input_device/
  |   hint/g_kbd_visible), input.c (pad_repeat_update), menu.c, soft_reset.h
  |   (check_soft_reset)
- | Globals: g_difficulty, g_verbosity, g_cmd_iface
+ | Globals: g_difficulty, g_verbosity
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -1246,15 +1276,11 @@ static void gameplay_page(void) {
     static const char *const VDESC[]  = { "Room names only",
                                           "Full text on first visit",
                                           "Full text every visit" };
-    static const char *const INAMES[] = { "Keyboard", "Command Panel" };
-    static const char *const IDESC[]  = { "Type words, autocomplete",
-                                          "Pick words with the pad" };
-    enum { GR_DIFF, GR_VERB, GR_IFACE, GR_OK, GR_CANCEL };
-    const int nrows = 5;
+    enum { GR_DIFF, GR_VERB, GR_OK, GR_CANCEL };
+    const int nrows = 4;
     int sel = 0;
     int diff  = g_difficulty;
     int verb  = g_verbosity;
-    int iface = g_cmd_iface;
     SRL::Core::Synchronize();
     bool need_fade_in = true;
     for (;;) {
@@ -1274,19 +1300,18 @@ static void gameplay_page(void) {
 
         if (cancel || (ok && sel == GR_CANCEL)) break;
         if (commit || (ok && sel == GR_OK)) {
-            if (diff != g_difficulty || verb != g_verbosity || iface != g_cmd_iface) {
-                g_difficulty = diff; g_verbosity = verb; g_cmd_iface = iface;
+            if (diff != g_difficulty || verb != g_verbosity) {
+                g_difficulty = diff; g_verbosity = verb;
                 options_save();
             }
             break;
         }
         if (sel == GR_DIFF) { if (left && diff > DIFF_EASY) diff--; if (right && diff < DIFF_HARD) diff++; }
         else if (sel == GR_VERB) { if (left && verb > VERB_SUPERBRIEF) verb--; if (right && verb < VERB_VERBOSE) verb++; }
-        else if (sel == GR_IFACE) { if (left && iface > IFACE_KEYBOARD) iface--; if (right && iface < IFACE_PANEL) iface++; }
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("GAMEPLAY", 34, 15, &fx, &fy, &fw, &fh);
+        menu_box_fit("GAMEPLAY", 34, 12, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "GAMEPLAY");
         int x = fx + 2, y = fy + 4;
         bool nums = !g_kbd_visible;
@@ -1306,16 +1331,9 @@ static void gameplay_page(void) {
                           verb > VERB_SUPERBRIEF ? "<" : " ", VNAMES[verb], verb < VERB_VERBOSE ? ">" : " ");
         text_print(x + 4, y + 1, "%s", VDESC[verb]);
         y += 3;
-        char imark = sel == GR_IFACE ? '>' : ' ';
-        if (nums) text_print(x, y, "%c 3) Interface:  %s %s %s", imark,
-                          iface > IFACE_KEYBOARD ? "<" : " ", INAMES[iface], iface < IFACE_PANEL ? ">" : " ");
-        else      text_print(x, y, "%c    Interface:  %s %s %s", imark,
-                          iface > IFACE_KEYBOARD ? "<" : " ", INAMES[iface], iface < IFACE_PANEL ? ">" : " ");
-        text_print(x + 4, y + 1, "%s", IDESC[iface]);
-        y += 3;
-        if (nums) text_print(x, y++, "%c 4) Ok", sel == GR_OK ? '>' : ' ');
+        if (nums) text_print(x, y++, "%c 3) Ok", sel == GR_OK ? '>' : ' ');
         else      text_print(x, y++, "%c    Ok", sel == GR_OK ? '>' : ' ');
-        if (nums) text_print(x, y++, "%c 5) Cancel", sel == GR_CANCEL ? '>' : ' ');
+        if (nums) text_print(x, y++, "%c 4) Cancel", sel == GR_CANCEL ? '>' : ' ');
         else      text_print(x, y++, "%c    Cancel", sel == GR_CANCEL ? '>' : ' ');
         y += 2;
         text_print(x, y++, "%s", hint(" A/C/Start=Ok  B=Cancel",

@@ -288,47 +288,21 @@ void menu_fade_clear(void) {
 // ---- opaque backing for menus over an image --------------------------------
 
 /*----------------------
- | WIN_W0_* / WIN_NBG0_MENU
- | Description: The VDP2 window-0 WCTL byte that suppresses the image behind a
- |   menu box. NBG3 (text) treats palette entry 0 as transparent, so a menu frame
- |   over an image would show the picture through its interior; a window switches
- |   NBG0 (the image) off inside the menu rectangle so the back-plane colour shows
- |   there while text still draws over it, leaving the picture untouched outside.
- |   SGL exposes no constants, so the encoding was read from the library:
- |   slScrWindowMode(scrn, mode) stores `mode` at 0x060ffd90 + scrn into SGL's
- |   WCTLA..WCTLD shadow (flushed at vblank), so `mode` is the raw per-screen WCTL
- |   byte. ENABLE = bit 1 (window 0 applies here), INSIDE/OUTSIDE = bit 0 (which
- |   side of the rect is the window). WIN_NBG0_MENU is the combined value; if the
- |   image ever hides everywhere except the box, swap INSIDE for OUTSIDE.
- | Author: suinevere
- ----------------------*/
-#define WIN_W0_ENABLE  0x02
-#define WIN_W0_INSIDE  0x00
-#define WIN_W0_OUTSIDE 0x01
-#define WIN_NBG0_MENU  (WIN_W0_ENABLE | WIN_W0_INSIDE)
-
-/*----------------------
  | menu_window_rect
- | Description: Points VDP2 window 0 at a character-cell box, converting cell
- |   coordinates to pixels (cells are 8x8, the display is 320x224) and clamping
- |   to the screen. Called on every menu_frame draw rather than once on open,
- |   so a nested page's box takes over the window while it is up and the outer
- |   page's box is restored the moment it redraws.
+ | Description: Aims the image-suppressing window at a menu box. Called on every
+ |   menu_frame draw rather than once on open, so a nested page's box takes over
+ |   the window while it is up and the outer page's box is restored the moment it
+ |   redraws. The window itself lives in console_view.c, shared with the in-game
+ |   interface strip, which blacks its own rectangle the same way.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: console_view.h (image_window_box)
  | Globals: N/A
  | Params: x0, y0 -- top-left corner in text cells; w, h -- box width/height in
  |   cells
  | Returns: N/A
  ----------------------*/
 static void menu_window_rect(int x0, int y0, int w, int h) {
-    int x1 = x0 * 8,             y1 = y0 * 8;
-    int x2 = (x0 + w) * 8 - 1,   y2 = (y0 + h) * 8 - 1;
-    if (x2 > 319) x2 = 319;
-    if (y2 > 223) y2 = 223;
-    if (x1 < 0)   x1 = 0;
-    if (y1 < 0)   y1 = 0;
-    slScrWindow0((uint16_t) x1, (uint16_t) y1, (uint16_t) x2, (uint16_t) y2);
+    image_window_box(x0, y0, w, h);
 }
 
 /*----------------------
@@ -348,16 +322,13 @@ int g_menu_backing_depth = 0;
  |   (e.g. Options opening Display) does not disturb the outer page's
  |   windowing when it opens.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: console_view.h (image_window_on)
  | Globals: g_menu_backing_depth
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 MenuBacking::MenuBacking() {
-    if (g_menu_backing_depth++ == 0) {
-        text_on_flush(nullptr);
-        slScrWindowModeNbg0(WIN_NBG0_MENU);
-    }
+    if (g_menu_backing_depth++ == 0) image_window_on();
 }
 
 /*----------------------
@@ -370,13 +341,13 @@ MenuBacking::MenuBacking() {
  |   the box's rectangle while its text was still lit, so a main-menu pick showed
  |   the picture through the box for the whole of the outgoing fade.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: console_view.h (image_window_off)
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void menu_backing_window_off(void) {
-    slScrWindowModeNbg0(0);
+    image_window_off();
 }
 
 /*----------------------

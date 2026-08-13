@@ -817,6 +817,12 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     int border_bottom = content0 + CR_ROWS;
     int row;
 
+    /* Black behind the whole strip, the way a menu box is black: NBG3 leaves
+       palette entry 0 transparent, so over a wallpaper the rose and the lists
+       would otherwise be read against the picture. */
+    image_window_box(0, input_row, 40, border_bottom - input_row + 1);
+    image_window_on();
+
     text_clear_line(input_row);
     text_print(0, input_row, "> %s", p.line);
 

@@ -68,6 +68,71 @@ bool g_kbd_visible = true;
  | Params: N/A
  | Returns: the number of rows the console view may draw into
  ----------------------*/
+/*----------------------
+ | WIN_W0_* / WIN_NBG0_SUPPRESS
+ | Description: The VDP2 window-0 WCTL byte that suppresses the image behind a
+ |   box. SGL exposes no constants, so the encoding was read from the library:
+ |   slScrWindowMode(scrn, mode) stores `mode` at 0x060ffd90 + scrn into SGL's
+ |   WCTLA..WCTLD shadow (flushed at vblank), so `mode` is the raw per-screen WCTL
+ |   byte. ENABLE = bit 1 (window 0 applies here), INSIDE/OUTSIDE = bit 0 (which
+ |   side of the rect is the window). WIN_NBG0_SUPPRESS is the combined value; if
+ |   the image ever hides everywhere except the box, swap INSIDE for OUTSIDE.
+ | Author: suinevere
+ ----------------------*/
+#define WIN_W0_ENABLE       0x02
+#define WIN_W0_INSIDE       0x00
+#define WIN_W0_OUTSIDE      0x01
+#define WIN_NBG0_SUPPRESS   (WIN_W0_ENABLE | WIN_W0_INSIDE)
+
+/*----------------------
+ | image_window_box
+ | Description: See console_view.h. Converts text cells to pixels (cells are 8x8,
+ |   the display is 320x224) and clamps to the screen.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: x0, y0 -- top-left corner in text cells; w, h -- size in cells
+ | Returns: N/A
+ ----------------------*/
+void image_window_box(int x0, int y0, int w, int h) {
+    int x1 = x0 * 8,             y1 = y0 * 8;
+    int x2 = (x0 + w) * 8 - 1,   y2 = (y0 + h) * 8 - 1;
+    if (x2 > 319) x2 = 319;
+    if (y2 > 223) y2 = 223;
+    if (x1 < 0)   x1 = 0;
+    if (y1 < 0)   y1 = 0;
+    slScrWindow0((uint16_t) x1, (uint16_t) y1, (uint16_t) x2, (uint16_t) y2);
+}
+
+/*----------------------
+ | image_window_on
+ | Description: See console_view.h. Cancels any window-off still owed to the next
+ |   text flush before switching on, so a caller that arms the window every frame
+ |   cannot be switched back off underneath itself by a menu that has just closed.
+ | Author: suinevere
+ | Dependencies: SRL, text_map.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void image_window_on(void) {
+    text_on_flush(nullptr);
+    slScrWindowModeNbg0(WIN_NBG0_SUPPRESS);
+}
+
+/*----------------------
+ | image_window_off
+ | Description: See console_view.h.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void image_window_off(void) {
+    slScrWindowModeNbg0(0);
+}
+
 int console_height(void) {
     int avail = SCREEN_ROWS - TOP_MARGIN;
     if (!g_kbd_visible) return avail - 1;
@@ -453,6 +518,15 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
     bool block_on = ((blink++ / CURSOR_BLINK_FRAMES) & 1) != 0;
 
     int base = TOP_MARGIN + console_height();
+    /* Black behind the on-screen keyboard, matching the command panel and the
+       menu boxes. Only in game and only while the grid is up: on the title
+       screen's online terminal there is no wallpaper to punch through, and with
+       a real keyboard in hand there is no interface here to back -- just the
+       input line, which reads fine over a picture like the console above it. */
+    if (g_in_game) {
+        if (g_kbd_visible) { image_window_box(0, base, 40, KB_ROWS + 2); image_window_on(); }
+        else               image_window_off();
+    }
     if (!g_kbd_visible) {
         int row = base - 1;
         text_clear_line(base);

@@ -369,26 +369,34 @@ static int cv_build_dict_nouns(const char **out, int n) {
 
 /*----------------------
  | cv_build_noun_cands
- | Description: Sources a noun slot: context-linked and on-screen nouns for
- |   `prev` (the verb for CP_SLOT_NOUN, the preposition for CP_SLOT_NOUN2) via
- |   predict_candidates' own on-screen boost, then the story's remaining nouns,
- |   trie-weight ranked. Falls back to the dictionary enumerator when that
- |   yields nothing -- root null or (on Hard) present but wordless either mean
- |   there is no trie to source from.
+ | Description: Sources a noun slot exactly as the on-screen keyboard's typeahead
+ |   does: predict_candidates ranks the head -- the nouns the last command printed
+ |   first, then on-screen and grammar/solution links -- and that order is what the
+ |   picker shows, so the two input methods agree. The story's remaining nouns are
+ |   appended after it for paging. `ranked` reports the predicted head count so
+ |   cv_reorder leaves it untouched; without that the Easy pass would hoist the
+ |   verb's winning-path objects over the leaflet the game just described, which is
+ |   the bug that made the picker and the keyboard disagree. Falls back to the
+ |   dictionary enumerator when the trie yields nothing -- root null or (on Hard)
+ |   present but wordless -- and that fallback is meant to be reordered.
  | Author: suinevere
  | Dependencies: typeahead.h, room_model.h
  | Globals: N/A
  | Params: root -- typeahead trie, may be null; prev -- the preceding word, may
- |   be null; out -- receives candidates
+ |   be null; out -- receives candidates; ranked -- receives the predicted head
+ |   count cv_reorder must protect
  | Returns: candidate count
  ----------------------*/
-static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char **out) {
+static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char **out,
+                               int *ranked) {
     int n = 0, i;
+    *ranked = 0;
     if (root != 0) {
         DictionaryWord *hot[CV_PRED_MAX];
         int nh = predict_candidates(root, prev, "", hot, CV_PRED_MAX, 0);
         int nrest;
         for (i = 0; i < nh; i++) n = cv_add_cand(out, n, hot[i]->text);
+        *ranked = n;
         nrest = cv_collect_type(root, TYPE_NOUN, g_cv_rest, g_cv_restwt, 0);
         cv_sort_weight(g_cv_rest, g_cv_restwt, nrest);
         for (i = 0; i < nrest && n < CV_CAND_MAX; i++) n = cv_add_cand(out, n, g_cv_rest[i]);
@@ -462,10 +470,11 @@ static int cv_has_solution_link(DictionaryWord *prev, const char *text) {
  | Description: Reorders a sourced candidate list to match g_difficulty --
  |   solution-overlay links first on Easy, unchanged (trie weight, already
  |   folded into the sourcing order) on Medium, flat alphabetical on Hard. The
- |   leading `protect` entries -- the verb slot's curated core, in its declared
- |   order -- are never moved by either branch, so the core leads at every
- |   difficulty and only what ranks below it changes. Membership is whatever
- |   cv_build_*_cands sourced; only the order changes.
+ |   leading `protect` entries -- the verb slot's curated core or the noun slot's
+ |   already-ranked predicted head, each in its own order -- are never moved by
+ |   either branch, so that head leads at every difficulty and only what ranks
+ |   below it changes. Membership is whatever cv_build_*_cands sourced; only the
+ |   order changes.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_difficulty
@@ -588,7 +597,7 @@ static int cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &
             g_cv_ncand = cv_build_verb_cands(root, g_cv_cand, &core_n);
         } else if (p.slot == CP_SLOT_NOUN || p.slot == CP_SLOT_NOUN2) {
             prev = cv_last_word(p, root);
-            g_cv_ncand = cv_build_noun_cands(root, prev, g_cv_cand);
+            g_cv_ncand = cv_build_noun_cands(root, prev, g_cv_cand, &core_n);
         } else if (p.slot == CP_SLOT_PREP) {
             g_cv_ncand = cv_build_prep_cands(root, g_cv_cand);
         }

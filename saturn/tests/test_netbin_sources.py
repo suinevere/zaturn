@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assert the makefile's NETBIN source list is exactly the spec's 19 objects,
+"""Assert the makefile's NETBIN source list is exactly the spec's 20 objects,
 that the NETBIN block assigns SOURCES with a plain `=` (not `+=`, which would
 silently merge in the CD build's find-globbed objects and defeat the object
 scan below), and that the CD build's own find-based SOURCES lines
@@ -25,6 +25,7 @@ EXPECTED = {
     "src/video/console.c",
     "src/video/display.c",
     "src/video/text_map.cxx",
+    "src/video/glyph_invert.c",
     "src/menu/menu.cxx",
     "src/menu/menu_layout.c",
     "src/menu/options.cxx",

@@ -472,14 +472,16 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
                 n = cand_add(cand, wt, n, tw, (l->solution ? 20000 : 10000) + w);
             }
         }
-        // At an empty object slot, surface on-screen nouns in the context tier so a
-        // thing the game just described leads over a grammar-listed unseen object.
-        if (plen == 0 && !easy_here) {
-            for (int i = 0; i < g_nhot; i++)
-                if (g_hot[i]->type == TYPE_NOUN)
-                    n = cand_add(cand, wt, n, g_hot[i],
-                                 10000 + g_hot[i]->base_weight + word_hot(g_hot[i]));
-        }
+        // Surface the on-screen nouns in the context tier, so a thing the game just
+        // described leads over a grammar-listed unseen object. This runs in Easy
+        // too: Easy narrows the *hints* to the winning path, but an object in front
+        // of the player has to stay typeable -- it just ranks under the solution
+        // words, which come in at 20000.
+        for (int i = 0; i < g_nhot; i++)
+            if (g_hot[i]->type == TYPE_NOUN
+                && (plen == 0 || strncmp(g_hot[i]->text, prefix, plen) == 0))
+                n = cand_add(cand, wt, n, g_hot[i],
+                             10000 + g_hot[i]->base_weight + word_hot(g_hot[i]));
     }
 
     // 2. Trie completions under the prefix (only when something is typed).

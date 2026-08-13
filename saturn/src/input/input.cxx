@@ -26,16 +26,21 @@ MultiPad *g_pad = nullptr;
  | Author: suinevere
  ----------------------*/
 int g_face_btn[FA_N]   = { 0, 1, 2, 3 };
-int g_chord_slot[CA_N] = { SL_LR, SL_ZUD, SL_YLRd, SL_YUD, SL_ZLRt, SL_YLRt };
+int g_chord_slot[CA_N] = { SL_LR, SL_XUD, SL_YLRd, SL_ZUD, SL_ZLRt, SL_YUD };
 
 /*----------------------
  | FACE_DEFAULT / CHORD_DEFAULT
  | Description: The factory mappings, copied back over g_face_btn/g_chord_slot by
- |   mapping_reset_defaults.
+ |   mapping_reset_defaults. The chord defaults are the Command Panel's layout --
+ |   recall on X+Up/Dn, line on Z+Up/Dn, page on Y+Up/Dn, home/end on Y+Left/Right
+ |   -- because the panel is the interface a pad starts a game in. Autocomplete and
+ |   Cursor Move keep L/R and Z+L/R: neither row shows in the panel view (the panel
+ |   has no completion list, and its D-pad moves the rose cursor with no shift), so
+ |   they take the two slots the panel layout leaves free.
  | Author: suinevere
  ----------------------*/
 static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2, 3 };
-static const int CHORD_DEFAULT[CA_N] = { SL_LR, SL_ZUD, SL_YLRd, SL_YUD, SL_ZLRt, SL_YLRt };
+static const int CHORD_DEFAULT[CA_N] = { SL_LR, SL_XUD, SL_YLRd, SL_ZUD, SL_ZLRt, SL_YUD };
 
 /*----------------------
  | SCROLL_PAGE / SCROLL_ALL
@@ -128,13 +133,13 @@ const char *face_btn_name(int action) {
  ----------------------*/
 const char *slot_name(int slot) {
     static const char *N[SL_N] = { "L/R", "Z+Up/Dn", "Z+L/R", "Z+Left/Right",
-                                   "Y+Up/Dn", "Y+Left/Right", "Y+L/R" };
+                                   "Y+Up/Dn", "Y+Left/Right", "Y+L/R", "X+Up/Dn" };
     return N[slot];
 }
 
 /*----------------------
  | slot_raw
- | Description: Reads g_pad directly for the four modifier/direction pairs (Z, Y,
+ | Description: Reads g_pad directly for the modifier/direction pairs (Z, Y, X,
  |   L/R, D-pad) and switches on `slot` to return its raw held direction this
  |   frame. Trigger slots (the "t" suffix) return 0 when both L+R are held, since
  |   that combo is reserved for the caps toggle; the plain L/R slot returns 0
@@ -148,6 +153,7 @@ const char *slot_name(int slot) {
  ----------------------*/
 static int slot_raw(int slot) {
     bool z = g_pad->IsHeld(Button::Z), y = g_pad->IsHeld(Button::Y);
+    bool x = g_pad->IsHeld(Button::X);
     bool l = g_pad->IsHeld(Button::L), r = g_pad->IsHeld(Button::R);
     bool up = g_pad->IsHeld(Button::Up),   dn = g_pad->IsHeld(Button::Down);
     bool lt = g_pad->IsHeld(Button::Left), rt = g_pad->IsHeld(Button::Right);
@@ -159,6 +165,7 @@ static int slot_raw(int slot) {
         case SL_YUD:  if (!y) return 0;                 return up ? -1 : dn ? 1 : 0;
         case SL_YLRd: if (!y) return 0;                 return lt ? -1 : rt ? 1 : 0;
         case SL_YLRt: if (!y || (l && r)) return 0;     return l ? -1 : r ? 1 : 0;
+        case SL_XUD:  if (!x) return 0;                 return up ? -1 : dn ? 1 : 0;
     }
     return 0;
 }
@@ -470,8 +477,8 @@ void face_assign(int a, int b) {
 /*----------------------
  | chord_assign
  | Description: Scans the other chord actions for one that currently holds slot
- |   `s`; if found, gives it `a`'s previous slot (the swap; the free spare slot
- |   has no owner, so this is skipped and `a` simply moves), then sets `a` to `s`.
+ |   `s`; if found, gives it `a`'s previous slot (the swap; a free spare slot has
+ |   no owner, so this is skipped and `a` simply moves), then sets `a` to `s`.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_chord_slot

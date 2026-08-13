@@ -1229,13 +1229,18 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  |   sitting on nothing, which is why every arrival there goes through
  |   cv_enter_travel and puts the box back when it returns 0.
  |
+ |   The fixed L+R caps toggle is read here too, ahead of the overlay branch so
+ |   it works from anywhere in the panel, matching typeahead_edit's placement of
+ |   the same call on the keyboard side.
+ |
  |   A completed command is copied into `k` and submitted, so it leaves through
  |   the same path a typed one does. `ke` is accepted for the physical-keyboard
  |   escape hatch a later task wires in, and is not consumed here. `w` is
  |   refreshed for the current slot and scroll before the D-pad is read, since
  |   the word module's cursor bound depends on it.
  | Author: suinevere
- | Dependencies: input.h, command_panel.h, room_model.h
+ | Dependencies: input.h (pad_fired/face_button/caps_combo_fired), keyboard.h
+ |   (keyboard_get_caps/keyboard_set_caps), command_panel.h, room_model.h
  | Globals: g_pad
  | Params: k -- keyboard state the command is written into; p -- panel state;
  |   m -- the room snapshot; root -- the typeahead trie for ranking, may be null;
@@ -1245,6 +1250,15 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  ----------------------*/
 void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
                   TrieNode *root, SaturnKeyEvent &ke, CommandWords &w) {
+    /* L+R is the caps toggle in both interfaces, so the panel has to stop
+       reading the two triggers as module jumps while they are held together --
+       otherwise the combo also cycles focus, and because cp_focus clamps rather
+       than wraps the L and R of one press do not cancel out at the ends: from
+       the leftmost module the pair lands one to the right with the cursor
+       reset. Same rule slot_raw applies to SL_LR, for the same reason. */
+    bool lr_both = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R);
+    if (caps_combo_fired()) keyboard_set_caps(!keyboard_get_caps());
+
     if (p.overlay) {
         cv_overlay_dpad(p, m.ncarried);
         if (pad_fired(face_button(FA_ACCEPT))) cv_overlay_accept(p, m, root);
@@ -1260,8 +1274,10 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
            the difficulty away. */
         if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
 
-        if (pad_fired(Button::L)) cp_focus(&p, -1);
-        if (pad_fired(Button::R)) cp_focus(&p, +1);
+        if (!lr_both) {
+            if (pad_fired(Button::L)) cp_focus(&p, -1);
+            if (pad_fired(Button::R)) cp_focus(&p, +1);
+        }
         /* A rose with no exits at all is not somewhere the cursor can sit, so
            the jump is put back rather than half-taken. */
         if (p.box == CP_BOX_TRAVEL && was != CP_BOX_TRAVEL &&

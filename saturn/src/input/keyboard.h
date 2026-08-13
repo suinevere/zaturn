@@ -57,6 +57,15 @@ extern const char KB_LAYOUT_UPPER[KB_ROWS][KB_COLS + 1];
  ----------------------*/
 void keyboard_reset(KeyboardState *k);
 void keyboard_move(KeyboardState *k, int dcol, int drow);
+
+/*----------------------
+ | keyboard_load_line
+ | Description: Replaces the line with `text`, caret at its end. The command
+ |   panel's counterpart to cp_load_line, so a command half-built in one
+ |   interface survives the swap to the other.
+ | Author: suinevere
+ ----------------------*/
+void keyboard_load_line(KeyboardState *k, const char *text);
 /*----------------------
  | caret + query (keyboard_caret_* / delete_forward / current_char / char_at)
  | Description: caret_left/right/home/end move the text caret within the line;

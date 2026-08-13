@@ -99,6 +99,28 @@ void keyboard_reset(KeyboardState *k) {
 }
 
 /*----------------------
+ | keyboard_load_line
+ | Description: Replaces the line with `text` and puts the caret at its end, so
+ |   the player carries on typing where the other interface left off. Truncates
+ |   at KB_INPUT_MAX, which equals CP_LINE_MAX, so nothing the command panel can
+ |   hold is ever cut; a null or empty `text` clears the line.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the keyboard/input-line state to fill; text -- the command to
+ |   load, may be null or empty
+ | Returns: N/A
+ ----------------------*/
+void keyboard_load_line(KeyboardState *k, const char *text) {
+    int i = 0;
+    while (text != 0 && text[i] != '\0' && i < KB_INPUT_MAX - 1) { k->input[i] = text[i]; i++; }
+    k->input[i] = '\0';
+    k->input_len = i;
+    k->cursor = i;
+    k->submitted = 0;
+}
+
+/*----------------------
  | keyboard_caret_left / _right / _home / _end
  | Description: Move the text caret within the line: one char left/right (clamped
  |   to the ends) or straight to the start/end.

@@ -463,8 +463,20 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             continue;
         }
 
-        if (g_kbd_visible && mode_toggle_fired())
-            g_cmd_mode = (g_cmd_mode == IFACE_PANEL) ? IFACE_KEYBOARD : IFACE_PANEL;
+        /* The two interfaces keep their own buffers -- the panel draws p.line,
+           the keyboard k.input -- so the swap has to carry the half-built
+           command across, or the player loses what they just picked or typed.
+           cp_load_line re-derives the slot from the word count, exactly as it
+           does for a recalled command. */
+        if (g_kbd_visible && mode_toggle_fired()) {
+            if (g_cmd_mode == IFACE_PANEL) {
+                keyboard_load_line(&k, cpanel.line);
+                g_cmd_mode = IFACE_KEYBOARD;
+            } else {
+                cp_load_line(&cpanel, k.input);
+                g_cmd_mode = IFACE_PANEL;
+            }
+        }
 
         if (g_kbd_visible && g_cmd_mode == IFACE_PANEL) {
             CommandWords cw;

@@ -63,6 +63,36 @@ int main(void) {
     keyboard_set_scrolllock(0);
     assert(keyboard_get_scrolllock() == 0);
 
+    /* keyboard_load_line: the hand-off from the command panel when the player
+       swaps interfaces mid-command. The caret lands at the end, ready to keep
+       typing, and an over-long or null line is handled rather than trusted. */
+    keyboard_reset(&k);
+    keyboard_load_line(&k, "open mailbox");
+    assert(k.input_len == 12 && strcmp(k.input, "open mailbox") == 0);
+    assert(k.cursor == k.input_len);
+    assert(k.submitted == 0);
+
+    keyboard_load_line(&k, "take ");
+    assert(k.input_len == 5 && strcmp(k.input, "take ") == 0);
+    assert(k.cursor == 5);
+
+    keyboard_load_line(&k, "");
+    assert(k.input_len == 0 && k.input[0] == '\0' && k.cursor == 0);
+
+    keyboard_load_line(&k, 0);
+    assert(k.input_len == 0 && k.input[0] == '\0' && k.cursor == 0);
+
+    {
+        char big[KB_INPUT_MAX + 16];
+        int i;
+        for (i = 0; i < (int) sizeof(big) - 1; i++) big[i] = 'a';
+        big[sizeof(big) - 1] = '\0';
+        keyboard_load_line(&k, big);
+        assert(k.input_len == KB_INPUT_MAX - 1);
+        assert(k.input[k.input_len] == '\0');
+        assert(k.cursor == k.input_len);
+    }
+
     printf("test_keyboard: OK\n");
     return 0;
 }

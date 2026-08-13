@@ -113,9 +113,32 @@ static void test_digit_past_the_row_count_is_rejected(void) {
     assert(menu_row_digit('6', 5, &dir) == -1);   /* row 5 == nrows: the exact boundary */
 }
 
+static void test_zero_is_the_tenth_row(void) {
+    /* Zero comes after nine, where it sits on the keyboard -- the Controls page
+       has ten selectable rows since Space joined the face group, and the tenth
+       has to be typeable. */
+    int dir = 0;
+    assert(menu_row_digit('0', 10, &dir) == 9);
+    assert(dir == 1);
+    assert(menu_row_digit(')', 10, &dir) == 9);  /* Shift+0 */
+    assert(dir == -1);
+    assert(menu_row_digit('0', 5, &dir) == -1);  /* still past a five-row page */
+
+    /* And a page that prints its shortcuts prints the key, not the ordinal. */
+    assert(menu_row_digit_char(0) == '1');
+    assert(menu_row_digit_char(8) == '9');
+    assert(menu_row_digit_char(9) == '0');
+    assert(menu_row_digit_char(MENU_DIGIT_ROWS) == '\0');
+    assert(menu_row_digit_char(-1) == '\0');
+    {
+        int r;
+        for (r = 0; r < MENU_DIGIT_ROWS; r++)
+            assert(menu_row_digit(menu_row_digit_char(r), MENU_DIGIT_ROWS, &dir) == r);
+    }
+}
+
 static void test_non_selecting_characters_are_rejected(void) {
     int dir = 0;
-    assert(menu_row_digit('0', 5, &dir) == -1);  /* rows are 1-9, never 0 */
     assert(menu_row_digit('a', 5, &dir) == -1);
     assert(menu_row_digit(' ', 5, &dir) == -1);
 }
@@ -146,15 +169,16 @@ static void test_visible_digit_rejects_rows_past_the_window(void) {
 
 static void test_dim_row_label_fits(void) {
     /* The Display page numbers its rows and boxes them; "N) Background" ending at
-       column 17 is the longest label the box was sized for (menu_pages.cxx:691).
-       The new row must not be longer. */
+       column 17 is the longest label the box was sized for (menu_pages.cxx), and
+       the value column starts at x + 17. The Dimming row must clear both. */
     int i, longest = 0;
     for (i = 0; i < DISP_DIM_N; i++) {
         int n = (int) strlen(display_dim_name(i));
         if (n > longest) longest = n;
     }
     assert(strlen("Dimming") <= strlen("Background"));
-    assert(longest <= (int) strlen("Lighter +2"));
+    /* "< %s >" is printed in the 20 columns before the border. */
+    assert(longest + 4 <= 20);
 }
 
 int main(void) {
@@ -168,6 +192,7 @@ int main(void) {
     test_plain_digit_picks_a_row_forward();
     test_shifted_digit_picks_a_row_backward();
     test_digit_past_the_row_count_is_rejected();
+    test_zero_is_the_tenth_row();
     test_non_selecting_characters_are_rejected();
     test_visible_digit_maps_through_the_scroll_window();
     test_visible_digit_rejects_rows_past_the_end();

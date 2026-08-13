@@ -49,28 +49,37 @@ void menu_box_fit(const char *title, int content_w, int rows,
 }
 
 /*----------------------
- | MENU_SHIFTED_DIGITS
- | Description: The shifted digit symbols on a US layout, index 0 == Shift+1, so a
- |   shifted digit can be mapped back to its row and a backward direction.
+ | MENU_DIGIT_KEYS / MENU_SHIFTED_DIGITS
+ | Description: The keys that select a row, in row order, and their shifted forms
+ |   on a US layout -- index 0 is '1'/'!', index 9 is '0'/')'. Zero comes last
+ |   because that is where it sits on a keyboard: the tenth row is reached with
+ |   the tenth key, not with a two-digit number nobody can type.
  | Author: suinevere
  ----------------------*/
-static const char MENU_SHIFTED_DIGITS[] = "!@#$%^&*(";
+static const char MENU_DIGIT_KEYS[]     = "1234567890";
+static const char MENU_SHIFTED_DIGITS[] = "!@#$%^&*()";
 
 /*----------------------
  | menu_plain_digit_row / menu_shifted_digit_row
- | Description: Map a plain digit ('1'..'9') or a shifted digit symbol to its
- |   0-based row index, or -1 if the character is neither.
+ | Description: Map a plain digit or a shifted digit symbol to its 0-based row
+ |   index, or -1 if the character is neither.
  | Author: suinevere
  ----------------------*/
 static int menu_plain_digit_row(char ch) {
-    if (ch >= '1' && ch <= '9') return (int) (ch - '1');
+    int i;
+    for (i = 0; i < MENU_DIGIT_ROWS; i++) if (MENU_DIGIT_KEYS[i] == ch) return i;
     return -1;
 }
 
 static int menu_shifted_digit_row(char ch) {
     int i;
-    for (i = 0; i < 9; i++) if (MENU_SHIFTED_DIGITS[i] == ch) return i;
+    for (i = 0; i < MENU_DIGIT_ROWS; i++) if (MENU_SHIFTED_DIGITS[i] == ch) return i;
     return -1;
+}
+
+char menu_row_digit_char(int row) {
+    if (row < 0 || row >= MENU_DIGIT_ROWS) return '\0';
+    return MENU_DIGIT_KEYS[row];
 }
 
 /*----------------------

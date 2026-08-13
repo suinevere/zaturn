@@ -387,7 +387,7 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
         ke.kind == SATURN_KEY_CTRL_LEFT || ke.kind == SATURN_KEY_CTRL_RIGHT) ke.kind = SATURN_KEY_NONE;
 
     bool a_press   = pad && g_pad->WasPressed(face_button(FA_ACCEPT));
-    bool x_press   = pad && pad_fired(Button::X);
+    bool sp_press  = pad && pad_fired(face_button(FA_SPACE));
     bool has_ghost = selected && ghost_len() > 0;
     if (a_press) {
         if (has_ghost) accept(false);
@@ -399,7 +399,7 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
             keyboard_type_char(&k, ' ');
         ke.kind = SATURN_KEY_NONE;
     }
-    if (x_press) {
+    if (sp_press) {
         if (has_ghost) accept(true);
         else           keyboard_type_char(&k, ' ');
     }
@@ -476,6 +476,7 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
         text_print(2, row + 1 + r, "%s", rowbuf);
     }
     if (keyboard_get_caps()) text_print(30, row + 1, "CAPS");
-    text_print(0, row + 1 + KB_ROWS, "%s=type %s=accept %s=del  X=space",
-                      face_btn_name(FA_TYPE), face_btn_name(FA_ACCEPT), face_btn_name(FA_BACK));
+    text_print(0, row + 1 + KB_ROWS, "%s=type %s=accept %s=del  %s=space",
+                      face_btn_name(FA_TYPE), face_btn_name(FA_ACCEPT),
+                      face_btn_name(FA_BACK), face_btn_name(FA_SPACE));
 }

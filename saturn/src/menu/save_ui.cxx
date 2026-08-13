@@ -178,7 +178,8 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 if (g_pad->WasPressed(Button::Left))  keyboard_move(&k, -1, 0);
                 if (g_pad->WasPressed(Button::Right)) keyboard_move(&k,  1, 0);
                 if (g_pad->WasPressed(Button::C))     { if (k.input_len < maxchars) keyboard_type(&k); }
-                if (g_pad->WasPressed(Button::X))     { if (k.input_len < maxchars) keyboard_type_char(&k, ' '); }
+                if (g_pad->WasPressed(face_button(FA_SPACE)))
+                                                     { if (k.input_len < maxchars) keyboard_type_char(&k, ' '); }
                 if (g_pad->WasPressed(Button::B))     { editing = 0; SRL::Core::Synchronize(); continue; }
                 if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::START)) submit = true;
             }

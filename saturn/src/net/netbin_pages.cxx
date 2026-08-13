@@ -229,13 +229,14 @@ void netbin_dial_page(void) {
  |   actions (CA_*), shown as the row labels in the control-remap editor.
  | Author: suinevere
  ----------------------*/
-static const char *const FACE_LABEL[FA_N]  = { "Accept", "Backspace/Cancel", "Type Letter" };
+static const char *const FACE_LABEL[FA_N]  = { "Accept", "Backspace/Cancel", "Type Letter",
+                                               "Space" };
 static const char *const CHORD_LABEL[CA_N] = { "Autocomplete", "Recall", "Home/End",
                                                "Line Up/Down", "Cursor Move", "Page Up/Down" };
 
 /*----------------------
  | controls_page
- | Description: Gamepad Controls page -- live remap editor (3 face-button
+ | Description: Gamepad Controls page -- live remap editor (4 face-button
  |   rows + 6 shift-chord rows), the fixed L+R Caps Toggle chord
  |   (informational, not remappable), a Keyboard Caps on/off toggle moved
  |   here from the old standalone gamepad landing page, then Reset to
@@ -320,7 +321,8 @@ static bool controls_page(void) {
         else if (sel == R_CAPS) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
         else if (left || right) {
             if (sel < FA_N) {
-                int n = right ? (g_face_btn[sel] + 1) % 3 : (g_face_btn[sel] + 2) % 3;
+                int n = right ? (g_face_btn[sel] + 1) % FA_BTN_N
+                              : (g_face_btn[sel] + FA_BTN_N - 1) % FA_BTN_N;
                 face_assign(sel, n);
             } else {
                 int a = sel - FA_N;
@@ -338,13 +340,13 @@ static bool controls_page(void) {
         const int vx = x + 20 + MENU_DIGIT_COLS;
         for (int a = 0; a < FA_N; a++) {
             char cur = sel == a ? '>' : ' ';
-            if (nums) text_print(x, y, "%c %d) %s", cur, a + 1, FACE_LABEL[a]);
+            if (nums) text_print(x, y, "%c %c) %s", cur, menu_row_digit_char(a), FACE_LABEL[a]);
             else      text_print(x, y, "%c    %s", cur, FACE_LABEL[a]);
             text_print(vx, y++, "%s", face_btn_name(a));
         }
         for (int a = 0; a < CA_N; a++) {
             char cur = sel == FA_N + a ? '>' : ' ';
-            if (nums) text_print(x, y, "%c %d) %s", cur, FA_N + a + 1, CHORD_LABEL[a]);
+            if (nums) text_print(x, y, "%c %c) %s", cur, menu_row_digit_char(FA_N + a), CHORD_LABEL[a]);
             else      text_print(x, y, "%c    %s", cur, CHORD_LABEL[a]);
             text_print(vx, y++, "%s", slot_name(g_chord_slot[a]));
         }

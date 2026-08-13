@@ -3,7 +3,7 @@
  | Description: Controller input for the game loop and the mapping-editor menu
  |   pages: the MultiPad multi-port/multi-family gamepad aggregate and the single
  |   shared g_pad instance every input read goes through; the remappable face-
- |   button (Accept/Backspace/Type) and shift-chord (Autocomplete/Recall/Home-End/
+ |   button (Accept/Backspace/Type/Space) and shift-chord (Autocomplete/Recall/Home-End/
  |   Line/Cursor/Page) mapping tables and their tie-swap assign helpers; gamepad
  |   auto-repeat for the editing buttons and hold-repeat for the shift chords;
  |   gamepad-driven console scrollback and its physical-keyboard counterpart; and
@@ -82,17 +82,33 @@ extern MultiPad *g_pad;
 
 // ---- configurable controller mapping ---------------------------------------
 // Two tied groups the player can remap (Options > Controller > Configure):
-//   Group 1 (face buttons): Accept, Backspace/Cancel, Type-letter -- always a
-//     permutation of {A,B,C}; reassigning one swaps with whoever held that button
-//     ("alternate when changed").
+//   Group 1 (face buttons): Accept, Backspace/Cancel, Type-letter and Space --
+//     always a permutation of {A,B,C,X}; reassigning one swaps with whoever held
+//     that button ("alternate when changed").
 //   Group 2 (shift chords): Autocomplete, Recall, Home/End, Line, Cursor-move and
 //     Page -- each in one of seven slots {L/R, Z+Up/Dn, Z+L/R, Z+Left/Right,
 //     Y+Up/Dn, Y+Left/Right, Y+L/R}; reassigning to a used slot swaps, to the free
 //     spare just moves ("alternate iff already used").
-//   Fixed: A accept, X space/accept+space, C type, B backspace, L+R caps toggle.
+//   Fixed: L+R caps toggle.
 // Everything reads through face_button()/chord_fired() so both editors honor it.
-enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_N };
+//
+// Space joined group 1 rather than staying the fixed X it was: it is a typing
+// button like the other three -- on the on-screen keyboard it enters a space, or
+// accepts the showing completion and adds one -- and a player who has moved
+// Type-letter off C has no way to reason about why Space alone cannot move.
+enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_N };
 enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
+
+/*----------------------
+ | FA_BTN_N
+ | Description: How many physical buttons the face group permutes over, and so
+ |   the modulus the editors cycle a row's assignment by. Equal to FA_N because
+ |   the group is a permutation -- named separately because the two are different
+ |   things and only one of them is a button count.
+ | Author: suinevere
+ ----------------------*/
+#define FA_BTN_N 4
+
 // Directional chord slots. Y is the shift for line/home-end/page (it took over the
 // old X shift; X is now a normal button); Z carries recall/cursor. Suffix: "t" =
 // shoulder triggers L/R, "d" = D-pad Left/Right. The spare directional slot is
@@ -101,8 +117,8 @@ enum { SL_LR, SL_ZUD, SL_ZLRt, SL_ZLRd, SL_YUD, SL_YLRd, SL_YLRt, SL_N };
 
 /*----------------------
  | g_face_btn
- | Description: Which of {0=A,1=B,2=C} each FA_* action fires on; persisted by
- |   main.cxx's options_load/options_save.
+ | Description: Which of {0=A,1=B,2=C,3=X} each FA_* action fires on; persisted
+ |   by main.cxx's options_load/options_save.
  | Author: suinevere
  ----------------------*/
 extern int g_face_btn[FA_N];
@@ -117,25 +133,25 @@ extern int g_chord_slot[CA_N];
 
 /*----------------------
  | face_button
- | Description: The A/B/C button currently carrying face-action `action`
- |   (FA_ACCEPT/FA_BACK/FA_TYPE), per the player's remapping.
+ | Description: The A/B/C/X button currently carrying face-action `action`
+ |   (FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE), per the player's remapping.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE
- | Returns: the Button (A, B, or C) currently assigned to that action
+ | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
+ | Returns: the Button (A, B, C or X) currently assigned to that action
  ----------------------*/
 Button face_button(int action);
 
 /*----------------------
  | face_btn_name
- | Description: Display name ("A"/"B"/"C") of the button currently carrying
+ | Description: Display name ("A"/"B"/"C"/"X") of the button currently carrying
  |   face-action `action`, for the mapping-editor rows and in-game hints.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE
- | Returns: "A", "B", or "C"
+ | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
+ | Returns: "A", "B", "C" or "X"
  ----------------------*/
 const char *face_btn_name(int action);
 
@@ -312,11 +328,12 @@ void history_recall(KeyboardState *k, int older);
  | face_assign
  | Description: Assigns face-action `a` to button `b`. If another action already
  |   holds `b`, that action takes over whatever button `a` previously had (a
- |   swap), keeping the three face actions a permutation of {A,B,C}.
+ |   swap), keeping the four face actions a permutation of {A,B,C,X}.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: a -- the face action being reassigned; b -- the button (0=A,1=B,2=C) to give it
+ | Params: a -- the face action being reassigned; b -- the button
+ |   (0=A, 1=B, 2=C, 3=X) to give it
  | Returns: N/A
  ----------------------*/
 void face_assign(int a, int b);

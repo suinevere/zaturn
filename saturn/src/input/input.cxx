@@ -25,7 +25,7 @@ MultiPad *g_pad = nullptr;
  |   Edited by the Controls page; persisted in MOJOOPTS.
  | Author: suinevere
  ----------------------*/
-int g_face_btn[FA_N]   = { 0, 1, 2 };
+int g_face_btn[FA_N]   = { 0, 1, 2, 3 };
 int g_chord_slot[CA_N] = { SL_LR, SL_ZUD, SL_YLRd, SL_YUD, SL_ZLRt, SL_YLRt };
 
 /*----------------------
@@ -34,7 +34,7 @@ int g_chord_slot[CA_N] = { SL_LR, SL_ZUD, SL_YLRd, SL_YUD, SL_ZLRt, SL_YLRt };
  |   mapping_reset_defaults.
  | Author: suinevere
  ----------------------*/
-static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2 };
+static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2, 3 };
 static const int CHORD_DEFAULT[CA_N] = { SL_LR, SL_ZUD, SL_YLRd, SL_YUD, SL_ZLRt, SL_YLRt };
 
 /*----------------------
@@ -87,16 +87,16 @@ static const int PAD_SCROLL_RATE  = 4;
 
 /*----------------------
  | face_button
- | Description: Indexes a fixed {A,B,C} table by the currently-mapped button
+ | Description: Indexes a fixed {A,B,C,X} table by the currently-mapped button
  |   number for face-action `action`.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE
+ | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
  | Returns: the Button currently assigned to that action
  ----------------------*/
 Button face_button(int action) {
-    static const Button BTN[3] = { Button::A, Button::B, Button::C };
+    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C, Button::X };
     return BTN[g_face_btn[action]];
 }
 
@@ -109,11 +109,11 @@ Button face_button(int action) {
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE
- | Returns: "A", "B", or "C"
+ | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
+ | Returns: "A", "B", "C" or "X"
  ----------------------*/
 const char *face_btn_name(int action) {
-    static const char *N[3] = { "A", "B", "C" };
+    static const char *N[FA_BTN_N] = { "A", "B", "C", "X" };
     return N[g_face_btn[action]];
 }
 
@@ -451,13 +451,15 @@ void history_recall(KeyboardState *k, int older) {
 
 /*----------------------
  | face_assign
- | Description: Scans the other two face actions for one that currently holds
- |   button `b`; if found, gives it `a`'s previous button (the swap), then sets
- |   `a` to `b`.
+ | Description: Scans the other face actions for one that currently holds button
+ |   `b`; if found, gives it `a`'s previous button (the swap), then sets `a` to
+ |   `b`. Four actions over four buttons, so the result is always a permutation:
+ |   no action is ever left without a button and no button ever carries two.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: a -- the face action being reassigned; b -- the button (0=A,1=B,2=C) to give it
+ | Params: a -- the face action being reassigned; b -- the button
+ |   (0=A, 1=B, 2=C, 3=X) to give it
  | Returns: N/A
  ----------------------*/
 void face_assign(int a, int b) {

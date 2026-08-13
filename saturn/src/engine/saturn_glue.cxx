@@ -225,8 +225,13 @@ extern "C" void saturn_writestr(const char *str, size_t slen) {
 
 /*----------------------
  | gather_lines
- | Description: Concatenates console lines [from, to) into `buf`, newest first,
- |   stopping when it is full -- so what a short buffer drops is the oldest text.
+ | Description: Concatenates console lines [from, to) into `buf` in forward print
+ |   order. When the whole range does not fit, it keeps the newest lines -- a
+ |   backward pass finds the earliest line that still fits, then the text is
+ |   emitted forward from there. Forward order matters because the screen marker
+ |   ranks nouns by scan position (later = more recently printed); emitting newest
+ |   first would invert that and offer the room's first-named object over its
+ |   last, which read as "open house" when the last line said "a mailbox is here".
  | Author: suinevere
  | Dependencies: console.h
  | Globals: N/A
@@ -234,8 +239,15 @@ extern "C" void saturn_writestr(const char *str, size_t slen) {
  | Returns: N/A
  ----------------------*/
 static void gather_lines(int from, int to, char *buf, int cap) {
-    int sp = 0;
-    for (int li = to - 1; li >= from && sp < cap - 1; li--) {
+    int start = to, used = 0, sp = 0;
+    for (int li = to - 1; li >= from; li--) {
+        const char* ln = console_get_line(li);
+        int len = 0; while (ln[len]) len++;
+        if (used + len + 1 > cap - 1) break;
+        used += len + 1;
+        start = li;
+    }
+    for (int li = start; li < to && sp < cap - 1; li++) {
         const char* ln = console_get_line(li);
         for (int j = 0; ln[j] && sp < cap - 1; j++) buf[sp++] = ln[j];
         if (sp < cap - 1) buf[sp++] = ' ';

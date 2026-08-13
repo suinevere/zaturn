@@ -88,10 +88,11 @@ static const char *CV_CMD_WORD[CV_CMD_N] = { "inventory", "look", "save", "load"
  |   game that does not define "attack" never offers it.
  | Author: suinevere
  ----------------------*/
-static const char *CV_VERB_CORE[16] = {
-    "look", "take", "open", "read", "drop", "close", "push", "pull",
+static const char *CV_VERB_CORE[] = {
+    "take", "open", "read", "drop", "close", "push", "pull",
     "move", "attack", "climb", "enter", "throw", "turn", "eat", "drink"
 };
+#define CV_VERB_CORE_N ((int) (sizeof(CV_VERB_CORE) / sizeof(CV_VERB_CORE[0])))
 
 /*----------------------
  | CV_CAND_MAX
@@ -154,6 +155,34 @@ static int cv_add_cand(const char **out, int n, const char *word) {
     for (i = 0; i < n; i++) if (cv_str_eq(out[i], word)) return n;
     out[n++] = word;
     return n;
+}
+
+/*----------------------
+ | cv_in_cmd_module
+ | Description: Whether the fixed command module already offers `word`, so the
+ |   word list can leave it out rather than showing it twice in one strip. Tests
+ |   both tables: CV_CMD_WORD is what those rows submit and so what the story's
+ |   dictionary holds, CV_CMD_ROW is what they display, and only "invent" makes
+ |   the two differ.
+ |
+ |   The word list needs this because it sources verbs from the story's own
+ |   dictionary as well as from CV_VERB_CORE -- dropping a duplicate from the
+ |   curated table alone would not remove it, only move it down into the
+ |   weighted tail where it reappears.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: word -- the candidate to test
+ | Returns: 1 when the command module already carries it, else 0
+ ----------------------*/
+static int cv_in_cmd_module(const char *word) {
+    int i;
+    if (word == 0) return 0;
+    for (i = 0; i < CV_CMD_N; i++) {
+        if (cv_str_eq(CV_CMD_WORD[i], word)) return 1;
+        if (cv_str_eq(CV_CMD_ROW[i],  word)) return 1;
+    }
+    return 0;
 }
 
 // ---- candidate sourcing -----------------------------------------------------
@@ -227,7 +256,7 @@ static int cv_build_verb_cands(TrieNode *root, const char **out, int *core_n) {
     int restwt[CV_CAND_MAX];
     int nrest;
 
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < CV_VERB_CORE_N; i++) {
         const char *v = CV_VERB_CORE[i];
         int ok = have_model ? room_model_has_word(v)
                              : (root != 0 ? (find_exact_word(root, v) != 0) : 1);
@@ -237,7 +266,8 @@ static int cv_build_verb_cands(TrieNode *root, const char **out, int *core_n) {
     if (root != 0) {
         nrest = cv_collect_type(root, TYPE_VERB, rest, restwt, 0);
         cv_sort_weight(rest, restwt, nrest);
-        for (i = 0; i < nrest && n < CV_CAND_MAX; i++) n = cv_add_cand(out, n, rest[i]);
+        for (i = 0; i < nrest && n < CV_CAND_MAX; i++)
+            if (!cv_in_cmd_module(rest[i])) n = cv_add_cand(out, n, rest[i]);
     }
     return n;
 }

@@ -424,9 +424,24 @@ void history_push(const char *s) {
  | Params: k -- keyboard state to overwrite
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | history_entry
+ | Description: The ring slot g_hist_browse steps back from the newest,
+ |   mod-wrapped through HISTORY_MAX*2 to stay positive. File-local because the
+ |   browse offset it reads is file-local; callers outside go through
+ |   history_load or history_recall_text.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_history, g_hist_head, g_hist_browse
+ | Params: N/A
+ | Returns: the selected history string
+ ----------------------*/
+static const char *history_entry(void) {
+    return g_history[(g_hist_head - 1 - g_hist_browse + HISTORY_MAX * 2) % HISTORY_MAX];
+}
+
 void history_load(KeyboardState *k) {
-    int idx = (g_hist_head - 1 - g_hist_browse + HISTORY_MAX * 2) % HISTORY_MAX;
-    const char *s = g_history[idx];
+    const char *s = history_entry();
     int n = 0; while (s[n] && n < KB_INPUT_MAX - 1) { k->input[n] = s[n]; n++; }
     k->input[n] = '\0';
     k->input_len = n;
@@ -447,13 +462,58 @@ void history_load(KeyboardState *k) {
  | Returns: N/A
  ----------------------*/
 void history_recall(KeyboardState *k, int older) {
-    if (g_hist_count == 0) return;
+    const char *s = history_recall_text(older);
+    if (s == nullptr) return;
+    int n = 0; while (s[n] && n < KB_INPUT_MAX - 1) { k->input[n] = s[n]; n++; }
+    k->input[n] = '\0';
+    k->input_len = n;
+    k->cursor = n;
+}
+
+/*----------------------
+ | history_recall_text
+ | Description: The stepping half of history_recall, split out so the command
+ |   panel can browse the same ring without a KeyboardState to write into --
+ |   it keeps its command in CommandPanel::line, not in the input line, so
+ |   sharing the browse position rather than the destination is what makes Up
+ |   and Down walk one history in both interfaces.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_hist_count, g_hist_browse
+ | Params: older -- nonzero to step toward older commands, zero toward newer
+ | Returns: the entry now selected; "" when stepping past the newest (the
+ |   caller should clear its line); nullptr when nothing moved, which is an
+ |   empty history or an end already reached
+ ----------------------*/
+const char *history_recall_text(int older) {
+    if (g_hist_count == 0) return nullptr;
     if (older) {
-        if (g_hist_browse < g_hist_count - 1) { g_hist_browse++; history_load(k); }
-    } else {
-        if (g_hist_browse > 0) { g_hist_browse--; history_load(k); }
-        else { g_hist_browse = -1; k->input_len = 0; k->input[0] = '\0'; k->cursor = 0; }
+        if (g_hist_browse >= g_hist_count - 1) return nullptr;
+        g_hist_browse++;
+        return history_entry();
     }
+    if (g_hist_browse > 0) { g_hist_browse--; return history_entry(); }
+    g_hist_browse = -1;
+    return "";
+}
+
+/*----------------------
+ | chord_shift_held
+ | Description: Whether any shift button that a chord slot is built on is down.
+ |   The D-pad is the direction half of every shift chord as well as the cursor
+ |   for both interfaces, so a cursor must stand still while one of these is
+ |   held or a scroll or a recall drags the selection along with it. One place
+ |   rather than a test per call site, so a slot added on a fourth shift button
+ |   reaches every cursor at once.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: true while Z, Y or X is held
+ ----------------------*/
+bool chord_shift_held(void) {
+    return g_pad->IsHeld(Button::Z) || g_pad->IsHeld(Button::Y) ||
+           g_pad->IsHeld(Button::X);
 }
 
 /*----------------------

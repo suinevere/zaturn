@@ -129,6 +129,20 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep);
 void cp_submit(CommandPanel *p);
 
 /*----------------------
+ | cp_load_line
+ | Description: Replaces the command with `text`, leaving the panel as though
+ |   those words had been picked one at a time -- the slot is derived from the
+ |   word count -- so Back unwinds a recalled command like a built one. Null or
+ |   empty clears to the verb slot. Focus is not moved.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; text -- the command to load, may be null or empty
+ | Returns: N/A
+ ----------------------*/
+void cp_load_line(CommandPanel *p, const char *text);
+
+/*----------------------
  | cp_back
  | Description: Removes the last word from the command and steps the slot back
  |   one. From an empty command at the verb slot, moves focus to the travel

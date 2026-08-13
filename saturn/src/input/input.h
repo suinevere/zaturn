@@ -336,6 +336,35 @@ void history_load(KeyboardState *k);
 void history_recall(KeyboardState *k, int older);
 
 /*----------------------
+ | history_recall_text
+ | Description: Steps the history browse position and hands back the entry,
+ |   instead of writing it into an input line -- what the command panel needs,
+ |   since it keeps its command in CommandPanel::line. Shares the browse
+ |   position with history_recall, so Up and Down walk one history however the
+ |   player switches interface mid-game.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: older -- nonzero to step toward older commands, zero toward newer
+ | Returns: the entry now selected; "" when stepping past the newest (clear the
+ |   line); nullptr when nothing moved (empty history, or an end reached)
+ ----------------------*/
+const char *history_recall_text(int older);
+
+/*----------------------
+ | chord_shift_held
+ | Description: Whether a shift button any chord slot is built on (Z, Y or X) is
+ |   currently down, so a cursor can hold still while a chord is being pressed --
+ |   the D-pad is both the cursor and the direction half of every chord.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: true while Z, Y or X is held
+ ----------------------*/
+bool chord_shift_held(void);
+
+/*----------------------
  | face_assign
  | Description: Assigns face-action `a` to button `b`. If another action already
  |   holds `b`, that action takes over whatever button `a` previously had (a

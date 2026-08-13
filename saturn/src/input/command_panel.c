@@ -126,6 +126,45 @@ void cp_submit(CommandPanel *p) {
 }
 
 /*----------------------
+ | cp_load_line
+ | Description: Replaces the command with `text` and leaves the panel in the
+ |   state it would have been in had the player picked those words one at a
+ |   time, so Back unwinds a recalled command exactly like a built one: the slot
+ |   is derived from the word count along the VERB -> NOUN -> (PREP -> NOUN2) ->
+ |   DONE chain. Two words land on DONE rather than PREP because whether the verb
+ |   takes a preposition is the trie's answer, not this file's, and a recalled
+ |   line has no pick to ask on; a verb that does wants one more Back than it
+ |   would have taken. An empty or null `text` clears the line to the verb slot.
+ |   Focus is left where it was -- a recall is not a reason to move the player
+ |   off the module they were reading. Truncates at CP_LINE_MAX, which equals
+ |   KB_INPUT_MAX, so nothing the history can hold is ever cut.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; text -- the command to load, may be null or empty
+ | Returns: N/A
+ ----------------------*/
+void cp_load_line(CommandPanel *p, const char *text) {
+    int i = 0, words = 0, in_word = 0;
+    while (text != 0 && text[i] != '\0' && i < CP_LINE_MAX - 1) {
+        if (text[i] == ' ') in_word = 0;
+        else if (!in_word) { in_word = 1; words++; }
+        p->line[i] = text[i];
+        i++;
+    }
+    p->line[i] = '\0';
+    p->line_len = i;
+    p->slot = (words == 0) ? CP_SLOT_VERB
+            : (words == 1) ? CP_SLOT_NOUN
+            : (words == 3) ? CP_SLOT_NOUN2
+                           : CP_SLOT_DONE;
+    p->cursor = 0;
+    p->top = 0;
+    p->overlay = 0;
+    p->submitted = 0;
+}
+
+/*----------------------
  | cp_back
  | Description: Removes the last word from the command and steps the slot back
  |   one. From an empty command at the verb slot, moves focus to the travel

@@ -1187,9 +1187,28 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
 
         ncand = cv_refill_words(p, root, w);
 
-        if      (p.box == CP_BOX_TRAVEL) cv_travel_dpad(p, exits, ncand);
-        else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, exits, ncand);
-        else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p, ncand);
+        /* Recall loads a past command into the panel's own line rather than the
+           input line the on-screen keyboard fills -- the panel draws p.line, and
+           a history entry written anywhere else would not appear. "" is the step
+           past the newest entry and clears, which cp_load_line reads as empty;
+           null is "nothing moved" and must leave the line alone, not clear it. */
+        if (chord_fired(CA_RECALL, -1)) {
+            const char *h = history_recall_text(1);
+            if (h != 0) cp_load_line(&p, h);
+        }
+        if (chord_fired(CA_RECALL, +1)) {
+            const char *h = history_recall_text(0);
+            if (h != 0) cp_load_line(&p, h);
+        }
+
+        /* The D-pad is the cursor AND the direction half of every chord, so it
+           stops moving the selection while a shift is held -- otherwise a recall
+           or a scroll drags the cursor across the module underneath it. */
+        if (!chord_shift_held()) {
+            if      (p.box == CP_BOX_TRAVEL) cv_travel_dpad(p, exits, ncand);
+            else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, exits, ncand);
+            else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p, ncand);
+        }
 
         if (pad_fired(face_button(FA_TYPE))) {
             if (p.box == CP_BOX_TRAVEL) {

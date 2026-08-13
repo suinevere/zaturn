@@ -378,7 +378,10 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
         if (chord_fired(CA_RECALL, +1)) history_recall(&k, 0);
         if (chord_fired(CA_CURSOR, -1)) keyboard_caret_left(&k);
         if (chord_fired(CA_CURSOR, +1)) keyboard_caret_right(&k);
-        if (!g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y)) {
+        // X joined Z and Y as a chord shift when Recall moved onto X+Up/Dn, so
+        // the grid cursor has to stand still for it too -- chord_shift_held is
+        // the one place that knows which buttons those are.
+        if (!chord_shift_held()) {
             if (pad_fired(Button::Up))    keyboard_move(&k, 0, -1);
             if (pad_fired(Button::Down))  keyboard_move(&k, 0,  1);
             if (pad_fired(Button::Left))  keyboard_move(&k, -1, 0);

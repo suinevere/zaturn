@@ -188,30 +188,44 @@ static int cr_row_pick(const unsigned char *exits, int r, int from_right) {
 }
 
 /*----------------------
- | cr_row_nearest
- | Description: The available direction on grid row `r` closest to column
- |   `prefer`. What makes a vertical press useful in the centre column, where
- |   the top and bottom rows have no cell of their own: pressing up from north
- |   should reach up, not stop dead against the gap directly above it.
+ | CR_UP / CR_DOWN / CR_LEFT / CR_RIGHT / CR_LEAVE
+ | Description: The four presses, as CR_STEP's column index, and the marker for
+ |   a step that carries focus out of the module.
  | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: exits -- the exit states; r -- grid row; prefer -- the column to
- |   start from
- | Returns: an RM_* index, or -1 when the row offers nothing
  ----------------------*/
-static int cr_row_nearest(const unsigned char *exits, int r, int prefer) {
-    int step, s, c, d;
-    for (step = 0; step < CR_GRID_COLS; step++) {
-        for (s = 0; s < 2; s++) {
-            c = prefer + (s ? step : -step);
-            d = cr_grid_dir(r, c);
-            if (d >= 0 && shown(exits[d])) return d;
-            if (step == 0) break;
-        }
-    }
-    return -1;
-}
+enum { CR_UP, CR_DOWN, CR_LEFT, CR_RIGHT, CR_STEP_N };
+#define CR_LEAVE (-2)
+
+/*----------------------
+ | CR_STEP
+ | Description: Where each press goes from each direction, in RM_* row order and
+ |   up/down/left/right column order. Written out rather than derived from the
+ |   grid because the rose is not a rectangle: the corners have no neighbour
+ |   across from them, the middle row has no centre cell, and each column wraps
+ |   end to end, so every plausible rule produced at least one press that went
+ |   somewhere the shape did not suggest. A table has no such cases -- it is the
+ |   shape.
+ |
+ |   Only the right-hand column leaves; the travel module is the leftmost of the
+ |   three, so a press against its left edge has nowhere to go and rides the
+ |   column round instead.
+ | Author: suinevere
+ ----------------------*/
+static const signed char CR_STEP[RM_DIR_N][CR_STEP_N] = {
+    /*            up        down      left      right   */
+    /* N    */ { RM_S,     RM_S,     RM_NW,    RM_NE    },
+    /* E    */ { RM_NE,    RM_SE,    RM_W,     CR_LEAVE },
+    /* W    */ { RM_NW,    RM_SW,    RM_UP,    RM_E     },
+    /* S    */ { RM_N,     RM_N,     RM_SW,    RM_SE    },
+    /* NE   */ { RM_IN,    RM_E,     RM_N,     CR_LEAVE },
+    /* NW   */ { RM_UP,    RM_W,     RM_UP,    RM_N     },
+    /* SE   */ { RM_E,     RM_OUT,   RM_S,     CR_LEAVE },
+    /* SW   */ { RM_W,     RM_DOWN,  RM_UP,    RM_S     },
+    /* UP   */ { RM_DOWN,  RM_NW,    RM_DOWN,  RM_NW    },
+    /* DOWN */ { RM_SW,    RM_UP,    RM_OUT,   RM_SW    },
+    /* IN   */ { RM_OUT,   RM_NE,    RM_NE,    CR_LEAVE },
+    /* OUT  */ { RM_SE,    RM_IN,    RM_SE,    CR_LEAVE }
+};
 
 int cr_enter(const unsigned char *exits, int want_row, int from_right) {
     int want = 0, r, spread, d;
@@ -235,35 +249,31 @@ int cr_enter(const unsigned char *exits, int want_row, int from_right) {
 }
 
 int cr_move(const unsigned char *exits, int dir, int dx, int dy, int *out) {
-    int r, c;
+    int step, at, hops;
 
     if (out) *out = dir;
     if (dir < 0 || dir >= RM_DIR_N) return 0;
-    r = CR_CELL[dir].grow;
-    c = CR_CELL[dir].gcol;
 
-    if (dx != 0) {
-        for (c += dx; c >= 0 && c < CR_GRID_COLS; c += dx) {
-            int d = cr_grid_dir(r, c);
-            if (d >= 0 && shown(exits[d])) { if (out) *out = d; return 0; }
-        }
-        return (dx > 0) ? 1 : -1;
-    }
+    if      (dx < 0) step = CR_LEFT;
+    else if (dx > 0) step = CR_RIGHT;
+    else if (dy < 0) step = CR_UP;
+    else if (dy > 0) step = CR_DOWN;
+    else return 0;
 
-    if (dy != 0) {
-        int rr, d;
-        /* Straight down the column first: north to south is one press, even
-           though the row between them has no centre cell. Only when the whole
-           column is empty that way does the press spill sideways -- which is
-           what carries north up to the corner where up lives. */
-        for (rr = r + dy; rr >= 0 && rr < CR_GRID_ROWS; rr += dy) {
-            d = cr_grid_dir(rr, c);
-            if (d >= 0 && shown(exits[d])) { if (out) *out = d; return 0; }
-        }
-        for (rr = r + dy; rr >= 0 && rr < CR_GRID_ROWS; rr += dy) {
-            d = cr_row_nearest(exits, rr, c);
-            if (d >= 0) { if (out) *out = d; return 0; }
-        }
+    /* A step onto a direction the room does not offer is not refused, it is
+       taken again from there in the same direction -- so a press walks over the
+       missing ones and lands on the next real neighbour along its own line,
+       rather than stopping dead or jumping somewhere off the line entirely. The
+       walk ends when it comes back to where it started, which is the only way a
+       room with a single exit can be left alone. */
+    at = dir;
+    for (hops = 0; hops < RM_DIR_N; hops++) {
+        int next = CR_STEP[at][step];
+        if (next == CR_LEAVE) return 1;
+        if (next < 0 || next >= RM_DIR_N) return 0;
+        if (shown(exits[next])) { if (out) *out = next; return 0; }
+        if (next == dir) return 0;
+        at = next;
     }
     return 0;
 }

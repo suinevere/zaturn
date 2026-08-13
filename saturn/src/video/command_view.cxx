@@ -693,8 +693,9 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
 /*----------------------
  | cv_draw_cmd_row
  | Description: Draws one command-module content row -- CV_CMD_ROW[row] in a
- |   seven-column field, in reverse video when the command module holds focus
- |   and its cursor sits on this row.
+ |   seven-column field, its letters alone in reverse video when the command
+ |   module holds focus and its cursor sits on this row. Letters and not the
+ |   whole field for the reason cv_draw_word_row gives.
  | Author: suinevere
  | Dependencies: command_panel.h, text_map.h
  | Globals: N/A
@@ -704,9 +705,12 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
 static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
     int x = CV_CMD_X + 1;
     char field[8];
-    cv_pad_field(CV_CMD_ROW[row], field);
-    if (p.box == CP_BOX_CMD && p.cursor == row) text_print_hl(x, y, field);
-    else                                        text_print(x, y, field);
+    int used = cv_pad_field(CV_CMD_ROW[row], field);
+    text_print(x, y, field);
+    if (used > 0 && p.box == CP_BOX_CMD && p.cursor == row) {
+        field[used] = '\0';
+        text_print_hl(x, y, field);
+    }
 }
 
 /*----------------------

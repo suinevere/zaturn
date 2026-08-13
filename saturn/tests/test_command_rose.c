@@ -113,40 +113,110 @@ static void test_grid_is_complete(void) {
     assert(cr_grid_dir(0, CR_GRID_COLS) == -1);
 }
 
-static void test_move_skips_and_reports_edges(void) {
+/*----------------------
+ | STEP_SPEC
+ | Description: The adjacency the rose is specified to have, as {from, up, down,
+ |   left, right}. LEAVE marks a press that carries focus out of the module.
+ |   Written here independently of command_rose.c's own table so the two have to
+ |   agree, which is the whole value of asserting it.
+ ----------------------*/
+#define LEAVE (-2)
+static const int STEP_SPEC[RM_DIR_N][5] = {
+    { RM_UP,   RM_DOWN, RM_NW,   RM_DOWN, RM_NW },
+    { RM_DOWN, RM_SW,   RM_UP,   RM_OUT,  RM_SW },
+    { RM_NW,   RM_UP,   RM_W,    RM_UP,   RM_N  },
+    { RM_W,    RM_NW,   RM_SW,   RM_UP,   RM_E  },
+    { RM_SW,   RM_W,    RM_DOWN, RM_UP,   RM_S  },
+    { RM_N,    RM_S,    RM_S,    RM_NW,   RM_NE },
+    { RM_S,    RM_N,    RM_N,    RM_SW,   RM_SE },
+    { RM_IN,   RM_OUT,  RM_NE,   RM_NE,   LEAVE },
+    { RM_NE,   RM_IN,   RM_E,    RM_N,    LEAVE },
+    { RM_E,    RM_NE,   RM_SE,   RM_W,    LEAVE },
+    { RM_SE,   RM_E,    RM_OUT,  RM_S,    LEAVE },
+    { RM_OUT,  RM_SE,   RM_IN,   RM_SE,   LEAVE }
+};
+
+static void step_deltas(int which, int *dx, int *dy) {
+    *dx = 0; *dy = 0;
+    switch (which) {
+        case 0: *dy = -1; break;   /* up    */
+        case 1: *dy = +1; break;   /* down  */
+        case 2: *dx = -1; break;   /* left  */
+        default: *dx = +1; break;  /* right */
+    }
+}
+
+static void test_move_follows_the_specified_adjacency(void) {
+    /* With every direction available, each press lands exactly where the rose is
+       specified to send it. */
+    unsigned char e[RM_DIR_N];
+    int i, which, out;
+
+    all(e, RM_EXIT_OPEN);
+    for (i = 0; i < RM_DIR_N; i++) {
+        for (which = 0; which < 4; which++) {
+            int dx, dy, want = STEP_SPEC[i][which + 1];
+            int from = STEP_SPEC[i][0];
+            step_deltas(which, &dx, &dy);
+            if (want == LEAVE) {
+                assert(cr_move(e, from, dx, dy, &out) == 1);
+            } else {
+                assert(cr_move(e, from, dx, dy, &out) == 0);
+                assert(out == want);
+            }
+        }
+    }
+}
+
+static void test_move_walks_over_missing_directions(void) {
+    /* A step onto a direction the room does not offer is taken again from
+       there, in the same direction. */
     unsigned char e[RM_DIR_N];
     int out;
 
+    /* Down the left column with the middle of it gone: up -> nw -> w -> sw. */
     all(e, RM_EXIT_OPEN);
+    e[RM_NW] = RM_EXIT_NONE;
+    assert(cr_move(e, RM_UP, 0, +1, &out) == 0 && out == RM_W);
+    e[RM_W] = RM_EXIT_NONE;
+    assert(cr_move(e, RM_UP, 0, +1, &out) == 0 && out == RM_SW);
 
-    /* Along the middle row: the '+' in the centre column is stepped over, not
-       landed on. */
-    assert(cr_move(e, RM_W, +1, 0, &out) == 0 && out == RM_E);
-    assert(cr_move(e, RM_E, -1, 0, &out) == 0 && out == RM_W);
-
-    /* Rightmost column reports the edge so the view can carry focus on. */
-    assert(cr_move(e, RM_E,  +1, 0, &out) == 1 && out == RM_E);
-    assert(cr_move(e, RM_IN, +1, 0, &out) == 1);
-    assert(cr_move(e, RM_W,  -1, 0, &out) == -1);
-
-    /* Vertical presses stop at the ends rather than reporting anything. */
-    assert(cr_move(e, RM_UP,   -1 * 0, -1, &out) == 0 && out == RM_UP);
-    assert(cr_move(e, RM_DOWN,  0,     +1, &out) == 0 && out == RM_DOWN);
-    assert(cr_move(e, RM_N,     0,     -1, &out) == 0 && out == RM_UP);
-    assert(cr_move(e, RM_N,     0,     +1, &out) == 0 && out == RM_S);
-
-    /* An unavailable direction is stepped over, never selected. */
+    /* The walk crosses columns when the table does: west's right is east, and
+       east's right leaves, so with no east a right press from west leaves. */
     all(e, RM_EXIT_OPEN);
     e[RM_E] = RM_EXIT_NONE;
-    assert(cr_move(e, RM_W, +1, 0, &out) == 1);          /* nothing right of W */
-    e[RM_N] = RM_EXIT_BLOCKED;
-    /* With north blocked the column above south is empty, so the press spills
-       to the nearest row that has anything -- west, one row up, not the corner
-       two rows further. */
-    assert(cr_move(e, RM_S, 0, -1, &out) == 0 && out == RM_W);
-    /* And with that row gone too it carries on to the one above. */
-    e[RM_W] = RM_EXIT_NONE;
-    assert(cr_move(e, RM_S, 0, -1, &out) == 0 && out == RM_NW);
+    assert(cr_move(e, RM_W, +1, 0, &out) == 1);
+
+    /* And it chains through several before leaving: up -> nw -> n -> ne. */
+    all(e, RM_EXIT_NONE);
+    e[RM_UP] = RM_EXIT_OPEN;
+    assert(cr_move(e, RM_UP, +1, 0, &out) == 1);
+
+    /* The centre column wraps between north and south rather than spilling to
+       the corners, which is what makes one press cross the whole rose. */
+    all(e, RM_EXIT_OPEN);
+    assert(cr_move(e, RM_N, 0, -1, &out) == 0 && out == RM_S);
+    assert(cr_move(e, RM_S, 0, +1, &out) == 0 && out == RM_N);
+}
+
+static void test_move_leaves_a_lone_exit_alone(void) {
+    /* One exit and nothing else: every press walks its whole line, finds only
+       the direction it started on, and stops. It must not loop. */
+    unsigned char e[RM_DIR_N];
+    int d, which, out;
+
+    for (d = 0; d < RM_DIR_N; d++) {
+        all(e, RM_EXIT_NONE);
+        e[d] = RM_EXIT_OPEN;
+        for (which = 0; which < 4; which++) {
+            int dx, dy;
+            step_deltas(which, &dx, &dy);
+            out = -99;
+            /* Leaving is still allowed: the right column's right press does not
+               depend on any direction being available. */
+            if (cr_move(e, d, dx, dy, &out) == 0) assert(out == d);
+        }
+    }
 
     /* A room with no exits at all: the cursor has nowhere to be. */
     all(e, RM_EXIT_NONE);
@@ -176,7 +246,9 @@ int main(void) {
     test_rows();
     test_labels_land_where_drawn();
     test_grid_is_complete();
-    test_move_skips_and_reports_edges();
+    test_move_follows_the_specified_adjacency();
+    test_move_walks_over_missing_directions();
+    test_move_leaves_a_lone_exit_alone();
     test_enter_keeps_its_row();
     printf("test_command_rose ok\n");
     return 0;

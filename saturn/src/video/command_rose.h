@@ -122,19 +122,22 @@ int cr_enter(const unsigned char *exits, int want_row, int from_right);
 
 /*----------------------
  | cr_move
- | Description: Steps the cursor one cell over the grid, skipping gaps and
- |   directions this room does not offer, so a press always lands on something
- |   selectable or on nothing at all. Vertical presses that run out of grid stop;
- |   horizontal ones report the edge instead, which is what lets the view carry
- |   focus into the next module.
+ | Description: Steps the cursor one direction along the rose's own adjacency
+ |   (CR_STEP in command_rose.c), which wraps each column end to end rather than
+ |   stopping at the poles. A step onto a direction the room does not offer is
+ |   taken again from there, in the same direction, until an available one turns
+ |   up or the walk arrives back where it began -- so a missing exit is walked
+ |   over rather than blocking the press, and the cursor stays on the line the
+ |   player pushed along. Only the right-hand column leaves the module: travel is
+ |   the leftmost of the three, so a left press has nowhere to go.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: exits -- RM_DIR_N exit states; dir -- the RM_* index under the cursor;
- |   dx, dy -- -1, 0 or +1; out -- receives the new RM_* index, unchanged when
- |   the press does not move
- | Returns: 0 when the cursor stayed in the rose, -1 when it stepped off the
- |   left edge, +1 when it stepped off the right
+ |   dx, dy -- -1, 0 or +1, dx taking precedence; out -- receives the new RM_*
+ |   index, unchanged when the press does not move
+ | Returns: 0 when the cursor stayed in the rose, +1 when the press carried focus
+ |   off the right edge
  ----------------------*/
 int cr_move(const unsigned char *exits, int dir, int dx, int dy, int *out);
 

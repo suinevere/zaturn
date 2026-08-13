@@ -354,22 +354,16 @@ static int cv_build_dict_nouns(const char **out, int n) {
  |   predict_candidates' own on-screen boost, then the story's remaining nouns,
  |   trie-weight ranked. Falls back to the dictionary enumerator when that
  |   yields nothing -- root null or (on Hard) present but wordless either mean
- |   there is no trie to source from. The predicted run is reported as `ranked`
- |   so cv_reorder leaves it alone: predict_candidates has already ordered it
- |   on-screen first, and Easy's solution-first pass would otherwise bury the
- |   object the player is looking at under the whole winning path.
+ |   there is no trie to source from.
  | Author: suinevere
  | Dependencies: typeahead.h, room_model.h
  | Globals: N/A
  | Params: root -- typeahead trie, may be null; prev -- the preceding word, may
- |   be null; out -- receives candidates; ranked -- receives the already-ordered
- |   leading count
+ |   be null; out -- receives candidates
  | Returns: candidate count
  ----------------------*/
-static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char **out,
-                               int *ranked) {
+static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char **out) {
     int n = 0, i;
-    *ranked = 0;
     if (root != 0) {
         DictionaryWord *hot[CV_CAND_MAX];
         int nh = predict_candidates(root, prev, "", hot, CV_CAND_MAX, 0);
@@ -377,7 +371,6 @@ static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char 
         int restwt[CV_CAND_MAX];
         int nrest;
         for (i = 0; i < nh; i++) n = cv_add_cand(out, n, hot[i]->text);
-        *ranked = n;
         nrest = cv_collect_type(root, TYPE_NOUN, rest, restwt, 0);
         cv_sort_weight(rest, restwt, nrest);
         for (i = 0; i < nrest && n < CV_CAND_MAX; i++) n = cv_add_cand(out, n, rest[i]);
@@ -453,10 +446,9 @@ static int cv_has_solution_link(DictionaryWord *prev, const char *text) {
  | Description: Reorders a sourced candidate list to match g_difficulty --
  |   solution-overlay links first on Easy, unchanged (trie weight, already
  |   folded into the sourcing order) on Medium, flat alphabetical on Hard. The
- |   leading `protect` entries -- the verb slot's curated core in its declared
- |   order, or the noun slot's already-ranked run -- are never moved by either
- |   branch, so that head leads at every difficulty and only what ranks below it
- |   changes. Membership is whatever
+ |   leading `protect` entries -- the verb slot's curated core, in its declared
+ |   order -- are never moved by either branch, so the core leads at every
+ |   difficulty and only what ranks below it changes. Membership is whatever
  |   cv_build_*_cands sourced; only the order changes.
  | Author: suinevere
  | Dependencies: N/A
@@ -542,7 +534,7 @@ static int cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &
         ncand = cv_build_verb_cands(root, cand, &core_n);
     } else if (p.slot == CP_SLOT_NOUN || p.slot == CP_SLOT_NOUN2) {
         prev = cv_last_word(p, root);
-        ncand = cv_build_noun_cands(root, prev, cand, &core_n);
+        ncand = cv_build_noun_cands(root, prev, cand);
     } else if (p.slot == CP_SLOT_PREP) {
         ncand = cv_build_prep_cands(root, cand);
     }

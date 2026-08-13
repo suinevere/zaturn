@@ -194,10 +194,10 @@ void destroy_typeahead(TrieNode* node) {
  | CAND_MAX / FIRST_WORD_POS_BONUS / SCREEN_BONUS / HOT_MAX / EXACT_MATCH_WEIGHT
  | Description: Ranking constants. CAND_MAX caps the candidate arrays.
  |   FIRST_WORD_POS_BONUS lifts verbs/directions at the start of a command (above
- |   base weights, below a context match's CONTEXT_TIER). SCREEN_BONUS tops a
- |   word's tier when it is visible on screen without crossing tiers; HOT_MAX caps
- |   the on-screen list. EXACT_MATCH_WEIGHT floats the word the player actually
- |   typed above every other tier so a complete word leads its own completions.
+ |   base weights, below a context match's 10000). SCREEN_BONUS tops a word's tier
+ |   when it is visible on screen without crossing tiers; HOT_MAX caps the
+ |   on-screen list. EXACT_MATCH_WEIGHT floats the word the player actually typed
+ |   above every other tier so a complete word leads its own completions.
  | Author: suinevere
  ----------------------*/
 #define CAND_MAX 32
@@ -205,21 +205,6 @@ void destroy_typeahead(TrieNode* node) {
 #define SCREEN_BONUS 500
 #define HOT_MAX 64
 #define EXACT_MATCH_WEIGHT 100000
-
-/*----------------------
- | CONTEXT_TIER / SOLUTION_TIER / SCREEN_TIER
- | Description: The three bands an object-slot candidate can land in, ranked by
- |   how likely the player is to want it next. CONTEXT_TIER is a plain grammar
- |   link; SOLUTION_TIER is a winning-path link; SCREEN_TIER is a noun the game
- |   has put on screen, which leads because an object that is not here cannot be
- |   acted on whatever the walkthrough says. A winning-path object that is also on
- |   screen lands in SCREEN_TIER too and leads it on the overlay's own boosted base
- |   weight.
- | Author: suinevere
- ----------------------*/
-#define CONTEXT_TIER  10000
-#define SOLUTION_TIER 20000
-#define SCREEN_TIER   30000
 
 /*----------------------
  | g_hot_gen / g_hot / g_nhot
@@ -369,8 +354,8 @@ static void cand_collect(TrieNode* node, DictionaryWord** cand, int* wt, int* n,
                 int hot = word_hot(w);
                 weight += hot;
                 // An on-screen object mid-command leads even a grammar-listed
-                // off-screen object: lift it into the screen tier.
-                if (!fw && hot) weight += SCREEN_TIER;
+                // off-screen object: lift it into the context tier.
+                if (!fw && hot) weight += 10000;
             }
         }
         if (fw && (w->type == TYPE_VERB || w->type == TYPE_DIRECTION))
@@ -422,14 +407,13 @@ static int prev_links_to(DictionaryWord* prev, DictionaryWord* target, int* sol)
  |   prefix given the previous word and first-word flag. Suppresses the four stock
  |   abbreviations the trie lacks as first words (d/u/g/x, so Accept never grows
  |   them). Collects context matches (prev -> next starting with the prefix, biased
- |   above trie completions, with movement verbs leading the compass), surfaces the
- |   on-screen nouns matching the prefix above them, then adds trie completions
- |   under the prefix. In Normal mode a grammar filter drops invalid shapes (verb
- |   after verb, noun after noun, verb + non-object noun) unless the pair is a
- |   solution link or the noun is on screen -- a story links its verbs to object
- |   classes, not to every object, so most concrete nouns have no verb link and
- |   would otherwise never be suggested. Finally the exact typed word leads its own
- |   completions, and the top `max` are selection-sorted by descending weight.
+ |   above trie completions, with movement verbs leading the compass and solution
+ |   links leading even over on-screen words), surfaces on-screen nouns at an empty
+ |   object slot, then adds trie completions under the prefix. In Normal mode a
+ |   grammar filter drops invalid shapes (verb after verb, noun after noun, verb +
+ |   non-object noun) unless the pair is a solution link. Finally the exact typed
+ |   word leads its own completions, and the top `max` are selection-sorted by
+ |   descending weight.
  | Author: suinevere
  | Dependencies: string.h, ctype.h
  | Globals: g_pred_easy, g_have_solution, g_hot, g_nhot
@@ -482,18 +466,18 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
                     w = l->transition_weight + word_hot(tw);
                 else
                     w = l->transition_weight;            // preposition, or dir-as-prep
-                n = cand_add(cand, wt, n, tw,
-                             (l->solution ? SOLUTION_TIER : CONTEXT_TIER) + w);
+                // Winning-path links lead even over an on-screen word.
+                n = cand_add(cand, wt, n, tw, (l->solution ? 20000 : 10000) + w);
             }
         }
-        // Surface the on-screen nouns, so what the game just described leads the
-        // object slot. This runs in Easy too: Easy narrows the *hints* to the
-        // winning path, but an object in front of the player has to stay typeable.
-        for (int i = 0; i < g_nhot; i++)
-            if (g_hot[i]->type == TYPE_NOUN
-                && (plen == 0 || strncmp(g_hot[i]->text, prefix, plen) == 0))
-                n = cand_add(cand, wt, n, g_hot[i],
-                             SCREEN_TIER + g_hot[i]->base_weight + word_hot(g_hot[i]));
+        // At an empty object slot, surface on-screen nouns in the context tier so a
+        // thing the game just described leads over a grammar-listed unseen object.
+        if (plen == 0 && !easy_here) {
+            for (int i = 0; i < g_nhot; i++)
+                if (g_hot[i]->type == TYPE_NOUN)
+                    n = cand_add(cand, wt, n, g_hot[i],
+                                 10000 + g_hot[i]->base_weight + word_hot(g_hot[i]));
+        }
     }
 
     // 2. Trie completions under the prefix (only when something is typed).
@@ -517,8 +501,7 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
                 WordType pt = prev_word->type, ct = cand[i]->type;
                 if      (pt == TYPE_VERB && ct == TYPE_VERB) drop = 1;
                 else if (pt == TYPE_NOUN && ct == TYPE_NOUN) drop = 1;
-                else if (pt == TYPE_VERB && ct == TYPE_NOUN && !has && !word_hot(cand[i]))
-                    drop = 1;
+                else if (pt == TYPE_VERB && ct == TYPE_NOUN && !has) drop = 1;
             }
             if (!drop) { cand[w2] = cand[i]; wt[w2] = wt[i]; w2++; }
         }

@@ -1006,11 +1006,22 @@ static int cv_enter_travel(CommandPanel &p, const unsigned char *exits, int want
  | Returns: N/A
  ----------------------*/
 static void cv_travel_dpad(CommandPanel &p, const unsigned char *exits, int ncand) {
-    int dx = (pad_fired(Button::Right) ? 1 : 0) - (pad_fired(Button::Left) ? 1 : 0);
-    int dy = (pad_fired(Button::Down)  ? 1 : 0) - (pad_fired(Button::Up)   ? 1 : 0);
-    int dir = p.cursor, edge;
+    bool fr = pad_fired(Button::Right), fl = pad_fired(Button::Left);
+    bool fd = pad_fired(Button::Down),  fu = pad_fired(Button::Up);
+    int dx, dy, dir = p.cursor, edge;
 
-    if (dx == 0 && dy == 0) return;
+    if (!fr && !fl && !fd && !fu) return;
+
+    /* A diagonal is one press to the player and two edges to the pad, and the
+       two almost never land on the same frame. So the axis that did not fire is
+       read as held instead: whichever edged this frame carries the press, and
+       anything still down alongside it makes that press diagonal -- the same
+       fired-plus-held pairing the rose used when the D-pad travelled directly. */
+    dx = fr ? 1 : fl ? -1 : g_pad->IsHeld(Button::Right) ? 1
+                          : g_pad->IsHeld(Button::Left)  ? -1 : 0;
+    dy = fd ? 1 : fu ? -1 : g_pad->IsHeld(Button::Down)  ? 1
+                          : g_pad->IsHeld(Button::Up)    ? -1 : 0;
+
     if (cr_dir_row(dir) < 0) { cv_enter_travel(p, exits, CV_LIST_ROW0); return; }
 
     edge = cr_move(exits, dir, dx, dy, &dir);

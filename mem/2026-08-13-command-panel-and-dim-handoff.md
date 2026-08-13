@@ -5,6 +5,13 @@ metadata:
   type: project
 ---
 
+> **Partly stale.** The "never compiled or run" claim below and the instruction
+> to build first were both overtaken on 2026-08-13: the owner has since run
+> builds across the session [[controls-and-panel-interface-handoff]] covers, and
+> the branch has moved to `ba370b4`. The eight commits *this* entry describes
+> were still not individually confirmed on screen, and its four open decisions
+> are still open — those parts stand.
+
 Branch `controller-command-interface2` @ `2a0f550`. Everything below was written
 from the owner's hardware/emulator observations and **has never been compiled or
 run** — only host tests and `saturn/syntax-check.sh` (DEBUG, release, NETBIN).

@@ -68,6 +68,110 @@ bool g_kbd_visible = true;
  | Params: N/A
  | Returns: the number of rows the console view may draw into
  ----------------------*/
+/*----------------------
+ | WIN_W0_* / WIN_NBG0_SUPPRESS
+ | Description: The VDP2 window-0 WCTL byte that suppresses the image behind a
+ |   box. SGL exposes no constants, so the encoding was read from the library:
+ |   slScrWindowMode(scrn, mode) stores `mode` at 0x060ffd90 + scrn into SGL's
+ |   WCTLA..WCTLD shadow (flushed at vblank), so `mode` is the raw per-screen WCTL
+ |   byte. ENABLE = bit 1 (window 0 applies here), INSIDE/OUTSIDE = bit 0 (which
+ |   side of the rect is the window). WIN_NBG0_SUPPRESS is the combined value; if
+ |   the image ever hides everywhere except the box, swap INSIDE for OUTSIDE.
+ | Author: suinevere
+ ----------------------*/
+#define WIN_W0_ENABLE       0x02
+#define WIN_W0_INSIDE       0x00
+#define WIN_W0_OUTSIDE      0x01
+#define WIN_NBG0_SUPPRESS   (WIN_W0_ENABLE | WIN_W0_INSIDE)
+
+/*----------------------
+ | image_window_box
+ | Description: See console_view.h. Converts text cells to pixels (cells are 8x8,
+ |   the display is 320x224) and clamps to the screen.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: x0, y0 -- top-left corner in text cells; w, h -- size in cells
+ | Returns: N/A
+ ----------------------*/
+void image_window_box(int x0, int y0, int w, int h) {
+    int x1 = x0 * 8,             y1 = y0 * 8;
+    int x2 = (x0 + w) * 8 - 1,   y2 = (y0 + h) * 8 - 1;
+    if (x2 > 319) x2 = 319;
+    if (y2 > 223) y2 = 223;
+    if (x1 < 0)   x1 = 0;
+    if (y1 < 0)   y1 = 0;
+    slScrWindow0((uint16_t) x1, (uint16_t) y1, (uint16_t) x2, (uint16_t) y2);
+}
+
+/*----------------------
+ | image_window_on
+ | Description: See console_view.h. Cancels any window-off still owed to the next
+ |   text flush before switching on, so a caller that arms the window every frame
+ |   cannot be switched back off underneath itself by a menu that has just closed.
+ | Author: suinevere
+ | Dependencies: SRL, text_map.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void image_window_on(void) {
+    text_on_flush(nullptr);
+    slScrWindowModeNbg0(WIN_NBG0_SUPPRESS);
+}
+
+/*----------------------
+ | image_window_off
+ | Description: See console_view.h.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void image_window_off(void) {
+    slScrWindowModeNbg0(0);
+}
+
+/*----------------------
+ | SGL_TVMD_SHADOW / VDP2_TVMD_BDCLMD
+ | Description: SGL's shadow copy of the VDP2 TVMD register, and the border
+ |   colour mode bit inside it (0 = black border, 1 = back-screen colour).
+ |
+ |   SGL owns TVMD and rewrites it from this shadow, so the hardware register at
+ |   0x25f80000 cannot be poked directly -- the write is undone. slTVOn/slTVOff
+ |   disassemble to a read-modify-write of `@(192, gbr)`, which puts the shadow
+ |   at GBR + 0xC0; SGL sets GBR to 0x060ffc00 (workarea.c's MasterStack), so
+ |   TVMD's shadow is 0x060ffcc0 and the block from there mirrors the VDP2
+ |   register offsets one for one. Five SGL functions confirm that layout, each
+ |   landing exactly on its register: slScrCycleSet 0x060ffcd0 (CYCA0L 0x010),
+ |   slScrScaleNbg0/1 0x060ffd38/0x060ffd48 (ZMXIN0 0x078 / ZMXIN1 0x088),
+ |   slScrWindowMode 0x060ffd90 (WCTLA 0x0D0 -- the one menu.c already relies
+ |   on), slColorCalcOn 0x060ffdac (CCCTL 0x0EC), slPriority 0x060ffdb8
+ |   (PRINA 0x0F8).
+ |
+ |   SGL exposes no wrapper for this bit, which is why it is reached by address.
+ |   Nothing else writes the shadow after boot -- slTVOn and slTVOff touch only
+ |   bit 15 (DISP), and preserve the rest -- so clearing it once holds.
+ | Author: suinevere
+ ----------------------*/
+#define SGL_TVMD_SHADOW    ((volatile uint16_t *) 0x060ffcc0)
+#define VDP2_TVMD_BDCLMD   0x0100
+
+/*----------------------
+ | border_use_black
+ | Description: See console_view.h. Clears BDCLMD in SGL's TVMD shadow, which
+ |   SGL flushes to the hardware register at the next vblank.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void border_use_black(void) {
+    *SGL_TVMD_SHADOW = (uint16_t) (*SGL_TVMD_SHADOW & ~VDP2_TVMD_BDCLMD);
+}
+
 int console_height(void) {
     int avail = SCREEN_ROWS - TOP_MARGIN;
     if (!g_kbd_visible) return avail - 1;
@@ -313,7 +417,10 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
         if (chord_fired(CA_RECALL, +1)) history_recall(&k, 0);
         if (chord_fired(CA_CURSOR, -1)) keyboard_caret_left(&k);
         if (chord_fired(CA_CURSOR, +1)) keyboard_caret_right(&k);
-        if (!g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y)) {
+        // X joined Z and Y as a chord shift when Recall moved onto X+Up/Dn, so
+        // the grid cursor has to stand still for it too -- chord_shift_held is
+        // the one place that knows which buttons those are.
+        if (!chord_shift_held()) {
             if (pad_fired(Button::Up))    keyboard_move(&k, 0, -1);
             if (pad_fired(Button::Down))  keyboard_move(&k, 0,  1);
             if (pad_fired(Button::Left))  keyboard_move(&k, -1, 0);
@@ -453,6 +560,15 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
     bool block_on = ((blink++ / CURSOR_BLINK_FRAMES) & 1) != 0;
 
     int base = TOP_MARGIN + console_height();
+    /* Black behind the on-screen keyboard, matching the command panel and the
+       menu boxes. Only in game and only while the grid is up: on the title
+       screen's online terminal there is no wallpaper to punch through, and with
+       a real keyboard in hand there is no interface here to back -- just the
+       input line, which reads fine over a picture like the console above it. */
+    if (g_in_game) {
+        if (g_kbd_visible) { image_window_box(0, base, 40, KB_ROWS + 2); image_window_on(); }
+        else               image_window_off();
+    }
     if (!g_kbd_visible) {
         int row = base - 1;
         text_clear_line(base);

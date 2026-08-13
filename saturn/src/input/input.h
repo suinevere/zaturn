@@ -86,9 +86,9 @@ extern MultiPad *g_pad;
 //     always a permutation of {A,B,C,X}; reassigning one swaps with whoever held
 //     that button ("alternate when changed").
 //   Group 2 (shift chords): Autocomplete, Recall, Home/End, Line, Cursor-move and
-//     Page -- each in one of seven slots {L/R, Z+Up/Dn, Z+L/R, Z+Left/Right,
-//     Y+Up/Dn, Y+Left/Right, Y+L/R}; reassigning to a used slot swaps, to the free
-//     spare just moves ("alternate iff already used").
+//     Page -- each in one of eight slots {L/R, Z+Up/Dn, Z+L/R, Z+Left/Right,
+//     Y+Up/Dn, Y+Left/Right, Y+L/R, X+Up/Dn}; reassigning to a used slot swaps, to
+//     a free spare just moves ("alternate iff already used").
 //   Fixed: L+R caps toggle.
 // Everything reads through face_button()/chord_fired() so both editors honor it.
 //
@@ -109,11 +109,22 @@ enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
  ----------------------*/
 #define FA_BTN_N 4
 
-// Directional chord slots. Y is the shift for line/home-end/page (it took over the
-// old X shift; X is now a normal button); Z carries recall/cursor. Suffix: "t" =
-// shoulder triggers L/R, "d" = D-pad Left/Right. The spare directional slot is
-// SL_ZLRd; caps-toggle rides the fixed L+R combo instead of a slot.
-enum { SL_LR, SL_ZUD, SL_ZLRt, SL_ZLRd, SL_YUD, SL_YLRd, SL_YLRt, SL_N };
+// Directional chord slots. Y shifts home-end/page, Z shifts line/cursor, X shifts
+// recall. Suffix: "t" = shoulder triggers L/R, "d" = D-pad Left/Right. The spare
+// directional slots are SL_ZLRd and SL_YLRt; caps-toggle rides the fixed L+R combo
+// instead of a slot.
+//
+// SL_XUD is last so the numbers already written into a save keep their meaning --
+// the slot list is persisted by index, and inserting in the middle would silently
+// re-read every stored chord as its neighbour.
+//
+// X carries a chord *and* stays the default Space button, which is the one overlap
+// in the set: in the Command Panel interface Space has no job, so X is free, but in
+// the Keyboard interface X+Up both types a space and recalls. Harmless in practice
+// -- history_load overwrites the whole input line, so the stray space is gone the
+// same frame -- and remappable either way. Y and Z, by contrast, do nothing alone;
+// see mode_toggle_fired, which claims a clean tap of one of them.
+enum { SL_LR, SL_ZUD, SL_ZLRt, SL_ZLRd, SL_YUD, SL_YLRd, SL_YLRt, SL_XUD, SL_N };
 
 /*----------------------
  | g_face_btn
@@ -325,6 +336,35 @@ void history_load(KeyboardState *k);
 void history_recall(KeyboardState *k, int older);
 
 /*----------------------
+ | history_recall_text
+ | Description: Steps the history browse position and hands back the entry,
+ |   instead of writing it into an input line -- what the command panel needs,
+ |   since it keeps its command in CommandPanel::line. Shares the browse
+ |   position with history_recall, so Up and Down walk one history however the
+ |   player switches interface mid-game.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: older -- nonzero to step toward older commands, zero toward newer
+ | Returns: the entry now selected; "" when stepping past the newest (clear the
+ |   line); nullptr when nothing moved (empty history, or an end reached)
+ ----------------------*/
+const char *history_recall_text(int older);
+
+/*----------------------
+ | chord_shift_held
+ | Description: Whether a shift button any chord slot is built on (Z, Y or X) is
+ |   currently down, so a cursor can hold still while a chord is being pressed --
+ |   the D-pad is both the cursor and the direction half of every chord.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: true while Z, Y or X is held
+ ----------------------*/
+bool chord_shift_held(void);
+
+/*----------------------
  | face_assign
  | Description: Assigns face-action `a` to button `b`. If another action already
  |   holds `b`, that action takes over whatever button `a` previously had (a
@@ -342,7 +382,7 @@ void face_assign(int a, int b);
  | chord_assign
  | Description: Assigns chord action `a` to slot `s`. If another chord action
  |   already holds `s`, that action takes over `a`'s previous slot (a swap);
- |   otherwise (the slot was the free spare) `a` simply moves.
+ |   otherwise (the slot was a free spare) `a` simply moves.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_chord_slot

@@ -230,7 +230,11 @@ static void netbin_video_init(void) {
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
 int main(void) {
-    SRL::Core::Initialize(HighColor::Colors::Black);
+    // 320x224 for the same reason main.cxx picks it: the text grid is 28 rows of
+    // 8 lines and nothing paints below it. The netbin shows no wallpaper at all,
+    // so here the surplus lines were pure back-plane.
+    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
+    border_use_black();
     text_map_init();
 
     static MultiPad pads;

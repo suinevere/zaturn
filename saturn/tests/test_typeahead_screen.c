@@ -37,7 +37,7 @@ int main(void) {
     DictionaryWord* boat = create_word("boat", TYPE_NOUN, 30);       /* grammar-linked */
     DictionaryWord* leaflet = create_word("leaflet", TYPE_NOUN, 30); /* on screen only */
     DictionaryWord* lamp = create_word("lamp", TYPE_NOUN, 30);       /* neither */
-    DictionaryWord* lantern = create_word("lantern", TYPE_NOUN, 30); /* winning path */
+    DictionaryWord* lantern = create_word("lantern", TYPE_NOUN, 48); /* winning path */
     insert_trie(root, take);
     insert_trie(root, boat);
     insert_trie(root, leaflet);
@@ -68,18 +68,27 @@ int main(void) {
     /* Noun after noun is still an invalid shape, on screen or not. */
     assert(offers(root, boat, "l", "leaflet") == 0);
 
-    /* Easy narrows the hints to the winning path, but an object the game has
-       just described must stay typeable -- it just ranks under the solution
-       word. An off-screen, off-path noun still stays out. */
+    /* Easy narrows the hints to the winning path, but an object the game has just
+       described must stay typeable, and leads: a winning-path object that is not
+       here cannot be acted on whatever the walkthrough says. An off-screen,
+       off-path noun still stays out. */
     typeahead_set_easy(1, 1);
     int el = offers(root, take, "", "leaflet");
     int en = offers(root, take, "", "lantern");
     printf("  easy, after 'take', empty prefix: leaflet at %d, lantern at %d\n", el, en);
-    assert(en > 0);
     assert(el > 0);
-    assert(en < el);
+    assert(en > 0);
+    assert(el < en);
     assert(offers(root, take, "le", "leaflet") > 0);
     assert(offers(root, take, "l", "lamp") == 0);
+
+    /* Once the winning-path object is on screen too it leads again, on the
+       overlay's own heavier base weight. */
+    typeahead_set_screen(root, "A lantern sits beside the leaflet.");
+    el = offers(root, take, "", "leaflet");
+    en = offers(root, take, "", "lantern");
+    printf("  easy, both on screen: leaflet at %d, lantern at %d\n", el, en);
+    assert(en > 0 && el > 0 && en < el);
     typeahead_set_easy(0, 0);
 
     /* The marks expire with the screen: a later screen without it drops it. */

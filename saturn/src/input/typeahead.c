@@ -649,6 +649,20 @@ void typeahead_set_screen(TrieNode* root, const char* text) {
 }
 
 /*----------------------
+ | typeahead_screen_gen
+ | Description: The current screen generation, for callers caching work derived
+ |   from the on-screen marks.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_hot_gen
+ | Params: N/A
+ | Returns: the generation counter
+ ----------------------*/
+int typeahead_screen_gen(void) {
+    return g_hot_gen;
+}
+
+/*----------------------
  | ABBREV_DIR_WEIGHT / ABBREV_VERB_WEIGHT
  | Description: Base weights for a synthesized abbreviation, mirroring
  |   typeahead_extract.c's part-of-speech priors. A direction's rank is recomputed

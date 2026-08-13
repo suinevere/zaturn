@@ -95,13 +95,35 @@ static const char *CV_VERB_CORE[] = {
 #define CV_VERB_CORE_N ((int) (sizeof(CV_VERB_CORE) / sizeof(CV_VERB_CORE[0])))
 
 /*----------------------
- | CV_CAND_MAX
+ | CV_CAND_MAX / CV_PRED_MAX
  | Description: The cap on how many candidate words a slot's sourcing pass
- |   collects before ordering and paging, matching typeahead.c's own CAND_MAX --
- |   the panel does not need to rank more than the trie's own ranking pass does.
+ |   collects before ordering and paging. It has to hold a whole story's nouns,
+ |   because the module pages through the list and anything past the cap is
+ |   unreachable however far the player pages -- at the old 32 the Hard word list
+ |   stopped inside the letter D and ZORK1's "leafle" (58th of its 118 nouns) could
+ |   never be picked. 448 covers the largest shipped v3 game, Hitchhiker's, at 406.
+ |   CV_PRED_MAX is the separate, smaller cap on the predicted head, matching
+ |   typeahead.c's own CAND_MAX -- asking predict_candidates for more than it
+ |   ranks would just size an array for nothing.
  | Author: suinevere
  ----------------------*/
-#define CV_CAND_MAX 32
+#define CV_CAND_MAX 448
+#define CV_PRED_MAX 32
+
+/*----------------------
+ | g_cv_rest / g_cv_restwt / g_cv_cand / g_cv_tmp
+ | Description: The sourcing and ordering scratch, file-scope rather than
+ |   function-local: at CV_CAND_MAX entries these are kilobytes apiece and the
+ |   call chain nests three deep, which is more than the Saturn stack should
+ |   carry. Nothing here recurses or runs concurrently, so one set is enough --
+ |   g_cv_rest/g_cv_restwt for whichever sourcing pass is running, g_cv_cand for
+ |   the refill that called it, g_cv_tmp for the reorder that follows.
+ | Author: suinevere
+ ----------------------*/
+static const char *g_cv_rest[CV_CAND_MAX];
+static int         g_cv_restwt[CV_CAND_MAX];
+static const char *g_cv_cand[CV_CAND_MAX];
+static const char *g_cv_tmp[CV_CAND_MAX];
 
 // ---- string helpers (hand-rolled, matching game_catalog.cxx's precedent so
 // this file needs no <string.h>) --------------------------------------------
@@ -252,8 +274,6 @@ static void cv_sort_weight(const char **out, int *wt, int n) {
 static int cv_build_verb_cands(TrieNode *root, const char **out, int *core_n) {
     int n = 0, i;
     int have_model = room_model_available();
-    const char *rest[CV_CAND_MAX];
-    int restwt[CV_CAND_MAX];
     int nrest;
 
     for (i = 0; i < CV_VERB_CORE_N; i++) {
@@ -264,10 +284,10 @@ static int cv_build_verb_cands(TrieNode *root, const char **out, int *core_n) {
     }
     *core_n = n;
     if (root != 0) {
-        nrest = cv_collect_type(root, TYPE_VERB, rest, restwt, 0);
-        cv_sort_weight(rest, restwt, nrest);
+        nrest = cv_collect_type(root, TYPE_VERB, g_cv_rest, g_cv_restwt, 0);
+        cv_sort_weight(g_cv_rest, g_cv_restwt, nrest);
         for (i = 0; i < nrest && n < CV_CAND_MAX; i++)
-            if (!cv_in_cmd_module(rest[i])) n = cv_add_cand(out, n, rest[i]);
+            if (!cv_in_cmd_module(g_cv_rest[i])) n = cv_add_cand(out, n, g_cv_rest[i]);
     }
     return n;
 }
@@ -365,15 +385,13 @@ static int cv_build_dict_nouns(const char **out, int n) {
 static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char **out) {
     int n = 0, i;
     if (root != 0) {
-        DictionaryWord *hot[CV_CAND_MAX];
-        int nh = predict_candidates(root, prev, "", hot, CV_CAND_MAX, 0);
-        const char *rest[CV_CAND_MAX];
-        int restwt[CV_CAND_MAX];
+        DictionaryWord *hot[CV_PRED_MAX];
+        int nh = predict_candidates(root, prev, "", hot, CV_PRED_MAX, 0);
         int nrest;
         for (i = 0; i < nh; i++) n = cv_add_cand(out, n, hot[i]->text);
-        nrest = cv_collect_type(root, TYPE_NOUN, rest, restwt, 0);
-        cv_sort_weight(rest, restwt, nrest);
-        for (i = 0; i < nrest && n < CV_CAND_MAX; i++) n = cv_add_cand(out, n, rest[i]);
+        nrest = cv_collect_type(root, TYPE_NOUN, g_cv_rest, g_cv_restwt, 0);
+        cv_sort_weight(g_cv_rest, g_cv_restwt, nrest);
+        for (i = 0; i < nrest && n < CV_CAND_MAX; i++) n = cv_add_cand(out, n, g_cv_rest[i]);
     }
     if (n == 0) n = cv_build_dict_nouns(out, n);
     return n;
@@ -390,13 +408,11 @@ static int cv_build_noun_cands(TrieNode *root, DictionaryWord *prev, const char 
  | Returns: candidate count
  ----------------------*/
 static int cv_build_prep_cands(TrieNode *root, const char **out) {
-    const char *rest[CV_CAND_MAX];
-    int restwt[CV_CAND_MAX];
     int nrest, n = 0, i;
     if (root == 0) return 0;
-    nrest = cv_collect_type(root, TYPE_PREP, rest, restwt, 0);
-    cv_sort_weight(rest, restwt, nrest);
-    for (i = 0; i < nrest; i++) n = cv_add_cand(out, n, rest[i]);
+    nrest = cv_collect_type(root, TYPE_PREP, g_cv_rest, g_cv_restwt, 0);
+    cv_sort_weight(g_cv_rest, g_cv_restwt, nrest);
+    for (i = 0; i < nrest; i++) n = cv_add_cand(out, n, g_cv_rest[i]);
     return n;
 }
 
@@ -470,11 +486,10 @@ static void cv_reorder(const char **cand, int n, DictionaryWord *prev, int prote
             cand[j + 1] = key;
         }
     } else if (g_difficulty == DIFF_EASY) {
-        const char *tmp[CV_CAND_MAX];
         int w = protect;
-        for (i = protect; i < n; i++) tmp[i] = cand[i];
-        for (i = protect; i < n; i++) if (cv_has_solution_link(prev, tmp[i])) cand[w++] = tmp[i];
-        for (i = protect; i < n; i++) if (!cv_has_solution_link(prev, tmp[i])) cand[w++] = tmp[i];
+        for (i = protect; i < n; i++) g_cv_tmp[i] = cand[i];
+        for (i = protect; i < n; i++) if (cv_has_solution_link(prev, g_cv_tmp[i])) cand[w++] = g_cv_tmp[i];
+        for (i = protect; i < n; i++) if (!cv_has_solution_link(prev, g_cv_tmp[i])) cand[w++] = g_cv_tmp[i];
     }
 }
 
@@ -513,35 +528,75 @@ static void cv_truncate_all(const char **cand, int n) {
 }
 
 /*----------------------
+ | cv_cache_stale
+ | Description: Whether the sourced list has to be rebuilt: true when the slot,
+ |   the sentence so far, the difficulty, the trie or the screen generation has
+ |   changed since the last build. Records the new key as it answers.
+ |
+ |   The list is worth caching because command_edit runs cv_refill_words every
+ |   frame while the panel is up, and a rebuild walks the whole trie and then
+ |   selection-sorts what it found -- quadratic work that a full story's nouns
+ |   turn from a few hundred comparisons into a hundred thousand. None of its
+ |   inputs can change without one of these five changing too. The page position
+ |   is deliberately not part of the key: paging re-windows the same list, which
+ |   cp_fill does for nothing.
+ | Author: suinevere
+ | Dependencies: command_panel.h, typeahead.h, app_state.h
+ | Globals: g_difficulty
+ | Params: p -- panel state; root -- the trie, may be null
+ | Returns: 1 when the list must be rebuilt, 0 when the cached one still stands
+ ----------------------*/
+static int cv_cache_stale(const CommandPanel &p, TrieNode *root) {
+    static int   last_slot = -1, last_diff = -1, last_gen = -1, last_len = -1;
+    static TrieNode *last_root = 0;
+    static char  last_line[CP_LINE_MAX];
+    int gen = typeahead_screen_gen();
+    int i, same = (p.slot == last_slot && g_difficulty == last_diff && gen == last_gen
+                   && root == last_root && p.line_len == last_len);
+    if (same)
+        for (i = 0; i < p.line_len; i++)
+            if (p.line[i] != last_line[i]) { same = 0; break; }
+    if (same) return 0;
+    last_slot = p.slot; last_diff = g_difficulty; last_gen = gen;
+    last_root = root;   last_len = p.line_len;
+    for (i = 0; i < p.line_len && i < CP_LINE_MAX; i++) last_line[i] = p.line[i];
+    return 1;
+}
+
+/*----------------------
  | cv_refill_words
  | Description: Sources and orders the current slot's candidates, truncates
  |   each to six characters, and fills the window the renderer should draw.
+ |   Sourcing is skipped while cv_cache_stale says the list still stands; the
+ |   window is refilled either way, since that is where the page position lands.
  | Author: suinevere
  | Dependencies: command_panel.h, typeahead.h
- | Globals: N/A
+ | Globals: g_cv_cand, g_cv_ncand
  | Params: p -- panel state; root -- typeahead trie, may be null; w -- receives
  |   the window
  | Returns: the whole candidate count, which the cursor's scrolling needs and
  |   the window itself does not carry
  ----------------------*/
-static int cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &w) {
-    const char *cand[CV_CAND_MAX];
-    int ncand = 0;
-    int core_n = 0;
-    DictionaryWord *prev = 0;
+static int g_cv_ncand = 0;
 
-    if (p.slot == CP_SLOT_VERB) {
-        ncand = cv_build_verb_cands(root, cand, &core_n);
-    } else if (p.slot == CP_SLOT_NOUN || p.slot == CP_SLOT_NOUN2) {
-        prev = cv_last_word(p, root);
-        ncand = cv_build_noun_cands(root, prev, cand);
-    } else if (p.slot == CP_SLOT_PREP) {
-        ncand = cv_build_prep_cands(root, cand);
+static int cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &w) {
+    if (cv_cache_stale(p, root)) {
+        int core_n = 0;
+        DictionaryWord *prev = 0;
+        g_cv_ncand = 0;
+        if (p.slot == CP_SLOT_VERB) {
+            g_cv_ncand = cv_build_verb_cands(root, g_cv_cand, &core_n);
+        } else if (p.slot == CP_SLOT_NOUN || p.slot == CP_SLOT_NOUN2) {
+            prev = cv_last_word(p, root);
+            g_cv_ncand = cv_build_noun_cands(root, prev, g_cv_cand);
+        } else if (p.slot == CP_SLOT_PREP) {
+            g_cv_ncand = cv_build_prep_cands(root, g_cv_cand);
+        }
+        cv_reorder(g_cv_cand, g_cv_ncand, prev, core_n);
+        cv_truncate_all(g_cv_cand, g_cv_ncand);
     }
-    cv_reorder(cand, ncand, prev, core_n);
-    cv_truncate_all(cand, ncand);
-    cp_fill(cand, ncand, p.top, &w);
-    return ncand;
+    cp_fill(g_cv_cand, g_cv_ncand, p.top, &w);
+    return g_cv_ncand;
 }
 
 /*----------------------

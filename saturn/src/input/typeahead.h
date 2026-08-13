@@ -170,6 +170,15 @@ void typeahead_set_screen(TrieNode* root, const char* text);
  ----------------------*/
 void typeahead_set_screen_recent(TrieNode* root, const char* older, const char* recent);
 
+/*----------------------
+ | typeahead_screen_gen
+ | Description: The current screen generation, bumped once per prompt by
+ |   typeahead_set_screen*. A caller caching anything derived from the on-screen
+ |   marks can watch this to know when its cache is stale.
+ | Author: suinevere
+ ----------------------*/
+int typeahead_screen_gen(void);
+
 #ifdef __cplusplus
 }
 #endif

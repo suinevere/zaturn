@@ -56,7 +56,7 @@ bool g_kbd_visible = true;
  |   rows + 2 panel borders; every other gamepad-in-hand case (the on-screen
  |   keyboard explicitly selected, OR no game running at all -- the online
  |   terminal before/without a story, and the whole netbin build, which never
- |   assigns g_cmd_mode), 1 input row + KB_ROWS keyboard rows + 1 hint row. The
+ |   assigns g_cmd_mode), 1 input row + KB_ROWS keyboard rows. The
  |   g_in_game gate matters because g_cmd_mode initializes to IFACE_PANEL and is
  |   assigned nowhere else: without it, the panel's layout would leak into
  |   every screen that draws through render_keyboard instead of the panel --
@@ -176,7 +176,7 @@ int console_height(void) {
     int avail = SCREEN_ROWS - TOP_MARGIN;
     if (!g_kbd_visible) return avail - 1;
     if (g_in_game && g_cmd_mode == IFACE_PANEL) return avail - (1 + CV_STRIP_ROWS + 2);
-    return avail - (1 + KB_ROWS + 1);
+    return avail - (1 + KB_ROWS);
 }
 
 /*----------------------
@@ -542,8 +542,9 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
  |   marker render_console drew on that shared row is repainted since the clear
  |   wiped it. When the on-screen keyboard is showing, the input line goes on its
  |   own row below the console, followed by the KB_ROWS keyboard grid (marking
- |   the picker cell with '['), the CapsLock indicator, and the remappable
- |   face-button legend.
+ |   the picker cell with '[') and the CapsLock indicator. The face-button legend
+ |   that used to sit under the grid is gone, and console_height hands its row
+ |   back to the story text.
  | Author: suinevere
  | Dependencies: keyboard.c, input.cxx, SRL
  | Globals: g_kbd_visible, g_more_below
@@ -566,7 +567,7 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
        a real keyboard in hand there is no interface here to back -- just the
        input line, which reads fine over a picture like the console above it. */
     if (g_in_game) {
-        if (g_kbd_visible) { image_window_box(0, base, 40, KB_ROWS + 2); image_window_on(); }
+        if (g_kbd_visible) { image_window_box(0, base, 40, KB_ROWS + 1); image_window_on(); }
         else               image_window_off();
     }
     if (!g_kbd_visible) {
@@ -592,7 +593,4 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
         text_print(2, row + 1 + r, "%s", rowbuf);
     }
     if (keyboard_get_caps()) text_print(30, row + 1, "CAPS");
-    text_print(0, row + 1 + KB_ROWS, "%s=type %s=accept %s=del  %s=space",
-                      face_btn_name(FA_TYPE), face_btn_name(FA_ACCEPT),
-                      face_btn_name(FA_BACK), face_btn_name(FA_SPACE));
 }

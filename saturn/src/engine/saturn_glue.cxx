@@ -209,26 +209,55 @@ extern "C" void saturn_writestr(const char *str, size_t slen) {
 /*----------------------
  | typeahead_scan_screen
  | Description: Marks the words currently visible on the console as on-screen, so
- |   objects the game just described lead their suggestions. Re-run after any trie
- |   rebuild (e.g. a mid-game difficulty change), since the marks live on the
- |   words.
+ |   objects the game just described lead their suggestions. The visible text is
+ |   split at g_output_start -- the line the last command's reply began on -- so
+ |   the reply's nouns rank as fresh and the room description above them as
+ |   ordinary scenery. Each half is gathered newest line first, so when the buffer
+ |   fills it is the oldest text that is lost rather than the line that just
+ |   arrived. Re-run after any trie rebuild (e.g. a mid-game difficulty change),
+ |   since the marks live on the words.
  | Author: suinevere
  | Dependencies: console.h, console_view.h, typeahead.h
- | Globals: N/A
+ | Globals: g_output_start
  | Params: root -- the trie whose words to mark
  | Returns: N/A
  ----------------------*/
+
+/*----------------------
+ | gather_lines
+ | Description: Concatenates console lines [from, to) into `buf`, newest first,
+ |   stopping when it is full -- so what a short buffer drops is the oldest text.
+ | Author: suinevere
+ | Dependencies: console.h
+ | Globals: N/A
+ | Params: from, to -- the half-open line range; buf/cap -- output
+ | Returns: N/A
+ ----------------------*/
+static void gather_lines(int from, int to, char *buf, int cap) {
+    int sp = 0;
+    for (int li = to - 1; li >= from && sp < cap - 1; li--) {
+        const char* ln = console_get_line(li);
+        for (int j = 0; ln[j] && sp < cap - 1; j++) buf[sp++] = ln[j];
+        if (sp < cap - 1) buf[sp++] = ' ';
+    }
+    buf[sp] = '\0';
+}
+
 static void typeahead_scan_screen(TrieNode *root) {
-    char scr[1024]; int sp = 0;
+    char older[768], recent[512];
     int total = console_line_count(), rows = console_height();
     int startln = (total > rows) ? (total - rows) : 0;
-    for (int li = startln; li < total && sp < (int) sizeof(scr) - 1; li++) {
-        const char* ln = console_get_line(li);
-        for (int j = 0; ln[j] && sp < (int) sizeof(scr) - 1; j++) scr[sp++] = ln[j];
-        if (sp < (int) sizeof(scr) - 1) scr[sp++] = ' ';
-    }
-    scr[sp] = '\0';
-    typeahead_set_screen(root, scr);
+    /* g_output_start counts lines ever produced; console_get_line indexes only
+       the retained ones, and the two part company as soon as the ring evicts.
+       Convert through the turn's line count, the way console_view.cxx:286 does. */
+    long added = console_total_lines() - g_output_start;
+    if (added < 0) added = 0;
+    if (added > total) added = total;
+    int split = total - (int) added;
+    if (split < startln) split = startln;
+    gather_lines(startln, split, older, (int) sizeof older);
+    gather_lines(split, total, recent, (int) sizeof recent);
+    typeahead_set_screen_recent(root, older, recent);
 }
 
 /*----------------------

@@ -207,6 +207,19 @@ void destroy_typeahead(TrieNode* node) {
 #define EXACT_MATCH_WEIGHT 100000
 
 /*----------------------
+ | FRESH_TIER
+ | Description: The band a noun the last command printed lands in at an object
+ |   slot -- above the context match's 10000 and the solution link's 20000, so the
+ |   thing the game has just described leads whatever the grammar or the
+ |   walkthrough would otherwise offer. Only the newest output earns it: the room
+ |   description still on screen above stays ordinary scenery in the context band,
+ |   which is what keeps "take" from leading with the house the player is
+ |   standing outside of.
+ | Author: suinevere
+ ----------------------*/
+#define FRESH_TIER 30000
+
+/*----------------------
  | g_hot_gen / g_hot / g_nhot
  | Description: The on-screen ("hot") word set for the current prompt: a generation
  |   counter bumped each time the screen is set (so the previous marks expire for
@@ -218,6 +231,18 @@ static DictionaryWord* g_hot[HOT_MAX];
 static int g_nhot = 0;
 
 /*----------------------
+ | g_fresh / g_nfresh
+ | Description: The subset of the on-screen set that the last command printed --
+ |   the objects the player has just been told about, which lead the object slot.
+ |   Kept as its own short list rather than a per-word field: it is rebuilt with
+ |   g_hot every prompt, and at HOT_MAX entries the membership scan costs less
+ |   than four bytes on every DictionaryWord in the trie.
+ | Author: suinevere
+ ----------------------*/
+static DictionaryWord* g_fresh[HOT_MAX];
+static int g_nfresh = 0;
+
+/*----------------------
  | word_hot
  | Description: SCREEN_BONUS if the word is marked for the current on-screen
  |   generation, else 0.
@@ -225,6 +250,20 @@ static int g_nhot = 0;
  ----------------------*/
 static int word_hot(DictionaryWord* w) {
     return (g_hot_gen != 0 && w->hot_gen == g_hot_gen) ? SCREEN_BONUS : 0;
+}
+
+/*----------------------
+ | word_fresh
+ | Description: Whether `w` is one of the nouns the last command printed.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_fresh, g_nfresh
+ | Params: w -- the word to test
+ | Returns: 1 when it is fresh this prompt, 0 otherwise
+ ----------------------*/
+static int word_fresh(DictionaryWord* w) {
+    for (int i = 0; i < g_nfresh; i++) if (g_fresh[i] == w) return 1;
+    return 0;
 }
 
 /*----------------------
@@ -470,8 +509,14 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
                 n = cand_add(cand, wt, n, tw, (l->solution ? 20000 : 10000) + w);
             }
         }
-        // At an empty object slot, surface on-screen nouns in the context tier so a
-        // thing the game just described leads over a grammar-listed unseen object.
+        // What the last command printed leads the object slot, at any prefix and
+        // in either mode: the player is answering the sentence the game just put
+        // on screen. Easy still narrows everything else to the winning path.
+        for (int i = 0; i < g_nfresh; i++)
+            if (plen == 0 || strncmp(g_fresh[i]->text, prefix, plen) == 0)
+                n = cand_add(cand, wt, n, g_fresh[i], FRESH_TIER + g_fresh[i]->base_weight);
+        // At an empty object slot, surface the rest of the on-screen nouns in the
+        // context tier so a thing still visible leads a grammar-listed unseen one.
         if (plen == 0 && !easy_here) {
             for (int i = 0; i < g_nhot; i++)
                 if (g_hot[i]->type == TYPE_NOUN)
@@ -501,7 +546,12 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
                 WordType pt = prev_word->type, ct = cand[i]->type;
                 if      (pt == TYPE_VERB && ct == TYPE_VERB) drop = 1;
                 else if (pt == TYPE_NOUN && ct == TYPE_NOUN) drop = 1;
-                else if (pt == TYPE_VERB && ct == TYPE_NOUN && !has) drop = 1;
+                // A story links its verbs to object classes, not to every object,
+                // so most concrete nouns have no verb link at all. Anything on
+                // screen is exempt -- it is in front of the player -- and the
+                // fresh tier above decides which of them leads.
+                else if (pt == TYPE_VERB && ct == TYPE_NOUN && !has && !word_hot(cand[i]))
+                    drop = 1;
             }
             if (!drop) { cand[w2] = cand[i]; wt[w2] = wt[i]; w2++; }
         }
@@ -533,20 +583,19 @@ int predict_candidates(TrieNode* root, DictionaryWord* prev_word,
 }
 
 /*----------------------
- | typeahead_set_screen
+ | mark_screen_text
  | Description: Marks the object (noun) vocabulary appearing in `text` as on-screen
- |   for the current prompt, using a generation counter so the previous screen's
- |   marks expire for free. Only nouns are marked -- boosting prose function words
- |   would wrongly top the suggestions, and directions cycle in fixed compass order.
+ |   for the current generation, and as fresh as well when `fresh` is set. Only
+ |   nouns are marked -- boosting prose function words would wrongly top the
+ |   suggestions, and directions cycle in fixed compass order.
  | Author: suinevere
  | Dependencies: string.h
- | Globals: g_hot_gen, g_nhot, g_hot
- | Params: root -- the trie; text -- the on-screen text
+ | Globals: g_hot_gen, g_nhot, g_hot, g_nfresh, g_fresh
+ | Params: root -- the trie; text -- the text to scan; fresh -- 1 to also mark
+ |   each noun as just-printed
  | Returns: N/A
  ----------------------*/
-void typeahead_set_screen(TrieNode* root, const char* text) {
-    g_hot_gen++;
-    g_nhot = 0;
+static void mark_screen_text(TrieNode* root, const char* text, int fresh) {
     if (root == NULL || text == NULL) return;
     char tok[24];
     int tp = 0;
@@ -564,12 +613,39 @@ void typeahead_set_screen(TrieNode* root, const char* text) {
                     int dup = 0;
                     for (int i = 0; i < g_nhot; i++) if (g_hot[i] == w) { dup = 1; break; }
                     if (!dup && g_nhot < HOT_MAX) g_hot[g_nhot++] = w;
+                    if (fresh && !word_fresh(w) && g_nfresh < HOT_MAX) g_fresh[g_nfresh++] = w;
                 }
                 tp = 0;
             }
             if (c == 0) break;
         }
     }
+}
+
+/*----------------------
+ | typeahead_set_screen / typeahead_set_screen_recent
+ | Description: Marks the on-screen noun vocabulary for the current prompt, using
+ |   a generation counter so the previous screen's marks expire for free. The
+ |   _recent form additionally marks the nouns in what the last command printed as
+ |   fresh; the one-argument form marks a whole screen with no recency, which is
+ |   what a caller with no output boundary to point at (the telnet terminal) has.
+ | Author: suinevere
+ | Dependencies: string.h
+ | Globals: g_hot_gen, g_nhot, g_hot, g_nfresh, g_fresh
+ | Params: root -- the trie; older -- screen text already there; recent -- what
+ |   the last command printed, may be null
+ | Returns: N/A
+ ----------------------*/
+void typeahead_set_screen_recent(TrieNode* root, const char* older, const char* recent) {
+    g_hot_gen++;
+    g_nhot = 0;
+    g_nfresh = 0;
+    mark_screen_text(root, older, 0);
+    mark_screen_text(root, recent, 1);
+}
+
+void typeahead_set_screen(TrieNode* root, const char* text) {
+    typeahead_set_screen_recent(root, text, NULL);
 }
 
 /*----------------------

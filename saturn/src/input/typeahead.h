@@ -157,6 +157,19 @@ void typeahead_add_abbreviations(TrieNode* root);
  ----------------------*/
 void typeahead_set_screen(TrieNode* root, const char* text);
 
+/*----------------------
+ | typeahead_set_screen_recent
+ | Description: typeahead_set_screen split by recency: `older` is the screen text
+ |   that was already there, `recent` is what the last command printed. Both are
+ |   marked on-screen; the nouns in `recent` are additionally marked fresh, which
+ |   leads the object slot in every mode and passes the grammar filter -- what the
+ |   game just described is what the player is about to act on, whether or not the
+ |   story's grammar links the verb to it. Passing null `recent` is the
+ |   one-argument form.
+ | Author: suinevere
+ ----------------------*/
+void typeahead_set_screen_recent(TrieNode* root, const char* older, const char* recent);
+
 #ifdef __cplusplus
 }
 #endif

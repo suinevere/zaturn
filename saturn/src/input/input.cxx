@@ -25,17 +25,22 @@ MultiPad *g_pad = nullptr;
  |   Edited by the Controls page; persisted in MOJOOPTS.
  | Author: suinevere
  ----------------------*/
-int g_face_btn[FA_N]   = { 0, 1, 2 };
-int g_chord_slot[CA_N] = { SL_LR, SL_ZUD, SL_YLRd, SL_YUD, SL_ZLRt, SL_YLRt };
+int g_face_btn[FA_N]   = { 0, 1, 2, 3 };
+int g_chord_slot[CA_N] = { SL_LR, SL_XUD, SL_YLRd, SL_ZUD, SL_ZLRt, SL_YUD };
 
 /*----------------------
  | FACE_DEFAULT / CHORD_DEFAULT
  | Description: The factory mappings, copied back over g_face_btn/g_chord_slot by
- |   mapping_reset_defaults.
+ |   mapping_reset_defaults. The chord defaults are the Command Panel's layout --
+ |   recall on X+Up/Dn, line on Z+Up/Dn, page on Y+Up/Dn, home/end on Y+Left/Right
+ |   -- because the panel is the interface a pad starts a game in. Autocomplete and
+ |   Cursor Move keep L/R and Z+L/R: neither row shows in the panel view (the panel
+ |   has no completion list, and its D-pad moves the rose cursor with no shift), so
+ |   they take the two slots the panel layout leaves free.
  | Author: suinevere
  ----------------------*/
-static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2 };
-static const int CHORD_DEFAULT[CA_N] = { SL_LR, SL_ZUD, SL_YLRd, SL_YUD, SL_ZLRt, SL_YLRt };
+static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2, 3 };
+static const int CHORD_DEFAULT[CA_N] = { SL_LR, SL_XUD, SL_YLRd, SL_ZUD, SL_ZLRt, SL_YUD };
 
 /*----------------------
  | SCROLL_PAGE / SCROLL_ALL
@@ -87,16 +92,16 @@ static const int PAD_SCROLL_RATE  = 4;
 
 /*----------------------
  | face_button
- | Description: Indexes a fixed {A,B,C} table by the currently-mapped button
+ | Description: Indexes a fixed {A,B,C,X} table by the currently-mapped button
  |   number for face-action `action`.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE
+ | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
  | Returns: the Button currently assigned to that action
  ----------------------*/
 Button face_button(int action) {
-    static const Button BTN[3] = { Button::A, Button::B, Button::C };
+    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C, Button::X };
     return BTN[g_face_btn[action]];
 }
 
@@ -109,11 +114,11 @@ Button face_button(int action) {
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE
- | Returns: "A", "B", or "C"
+ | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
+ | Returns: "A", "B", "C" or "X"
  ----------------------*/
 const char *face_btn_name(int action) {
-    static const char *N[3] = { "A", "B", "C" };
+    static const char *N[FA_BTN_N] = { "A", "B", "C", "X" };
     return N[g_face_btn[action]];
 }
 
@@ -128,13 +133,13 @@ const char *face_btn_name(int action) {
  ----------------------*/
 const char *slot_name(int slot) {
     static const char *N[SL_N] = { "L/R", "Z+Up/Dn", "Z+L/R", "Z+Left/Right",
-                                   "Y+Up/Dn", "Y+Left/Right", "Y+L/R" };
+                                   "Y+Up/Dn", "Y+Left/Right", "Y+L/R", "X+Up/Dn" };
     return N[slot];
 }
 
 /*----------------------
  | slot_raw
- | Description: Reads g_pad directly for the four modifier/direction pairs (Z, Y,
+ | Description: Reads g_pad directly for the modifier/direction pairs (Z, Y, X,
  |   L/R, D-pad) and switches on `slot` to return its raw held direction this
  |   frame. Trigger slots (the "t" suffix) return 0 when both L+R are held, since
  |   that combo is reserved for the caps toggle; the plain L/R slot returns 0
@@ -148,6 +153,7 @@ const char *slot_name(int slot) {
  ----------------------*/
 static int slot_raw(int slot) {
     bool z = g_pad->IsHeld(Button::Z), y = g_pad->IsHeld(Button::Y);
+    bool x = g_pad->IsHeld(Button::X);
     bool l = g_pad->IsHeld(Button::L), r = g_pad->IsHeld(Button::R);
     bool up = g_pad->IsHeld(Button::Up),   dn = g_pad->IsHeld(Button::Down);
     bool lt = g_pad->IsHeld(Button::Left), rt = g_pad->IsHeld(Button::Right);
@@ -159,6 +165,7 @@ static int slot_raw(int slot) {
         case SL_YUD:  if (!y) return 0;                 return up ? -1 : dn ? 1 : 0;
         case SL_YLRd: if (!y) return 0;                 return lt ? -1 : rt ? 1 : 0;
         case SL_YLRt: if (!y || (l && r)) return 0;     return l ? -1 : r ? 1 : 0;
+        case SL_XUD:  if (!x) return 0;                 return up ? -1 : dn ? 1 : 0;
     }
     return 0;
 }
@@ -417,9 +424,24 @@ void history_push(const char *s) {
  | Params: k -- keyboard state to overwrite
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | history_entry
+ | Description: The ring slot g_hist_browse steps back from the newest,
+ |   mod-wrapped through HISTORY_MAX*2 to stay positive. File-local because the
+ |   browse offset it reads is file-local; callers outside go through
+ |   history_load or history_recall_text.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_history, g_hist_head, g_hist_browse
+ | Params: N/A
+ | Returns: the selected history string
+ ----------------------*/
+static const char *history_entry(void) {
+    return g_history[(g_hist_head - 1 - g_hist_browse + HISTORY_MAX * 2) % HISTORY_MAX];
+}
+
 void history_load(KeyboardState *k) {
-    int idx = (g_hist_head - 1 - g_hist_browse + HISTORY_MAX * 2) % HISTORY_MAX;
-    const char *s = g_history[idx];
+    const char *s = history_entry();
     int n = 0; while (s[n] && n < KB_INPUT_MAX - 1) { k->input[n] = s[n]; n++; }
     k->input[n] = '\0';
     k->input_len = n;
@@ -440,24 +462,71 @@ void history_load(KeyboardState *k) {
  | Returns: N/A
  ----------------------*/
 void history_recall(KeyboardState *k, int older) {
-    if (g_hist_count == 0) return;
+    const char *s = history_recall_text(older);
+    if (s == nullptr) return;
+    int n = 0; while (s[n] && n < KB_INPUT_MAX - 1) { k->input[n] = s[n]; n++; }
+    k->input[n] = '\0';
+    k->input_len = n;
+    k->cursor = n;
+}
+
+/*----------------------
+ | history_recall_text
+ | Description: The stepping half of history_recall, split out so the command
+ |   panel can browse the same ring without a KeyboardState to write into --
+ |   it keeps its command in CommandPanel::line, not in the input line, so
+ |   sharing the browse position rather than the destination is what makes Up
+ |   and Down walk one history in both interfaces.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_hist_count, g_hist_browse
+ | Params: older -- nonzero to step toward older commands, zero toward newer
+ | Returns: the entry now selected; "" when stepping past the newest (the
+ |   caller should clear its line); nullptr when nothing moved, which is an
+ |   empty history or an end already reached
+ ----------------------*/
+const char *history_recall_text(int older) {
+    if (g_hist_count == 0) return nullptr;
     if (older) {
-        if (g_hist_browse < g_hist_count - 1) { g_hist_browse++; history_load(k); }
-    } else {
-        if (g_hist_browse > 0) { g_hist_browse--; history_load(k); }
-        else { g_hist_browse = -1; k->input_len = 0; k->input[0] = '\0'; k->cursor = 0; }
+        if (g_hist_browse >= g_hist_count - 1) return nullptr;
+        g_hist_browse++;
+        return history_entry();
     }
+    if (g_hist_browse > 0) { g_hist_browse--; return history_entry(); }
+    g_hist_browse = -1;
+    return "";
+}
+
+/*----------------------
+ | chord_shift_held
+ | Description: Whether any shift button that a chord slot is built on is down.
+ |   The D-pad is the direction half of every shift chord as well as the cursor
+ |   for both interfaces, so a cursor must stand still while one of these is
+ |   held or a scroll or a recall drags the selection along with it. One place
+ |   rather than a test per call site, so a slot added on a fourth shift button
+ |   reaches every cursor at once.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: true while Z, Y or X is held
+ ----------------------*/
+bool chord_shift_held(void) {
+    return g_pad->IsHeld(Button::Z) || g_pad->IsHeld(Button::Y) ||
+           g_pad->IsHeld(Button::X);
 }
 
 /*----------------------
  | face_assign
- | Description: Scans the other two face actions for one that currently holds
- |   button `b`; if found, gives it `a`'s previous button (the swap), then sets
- |   `a` to `b`.
+ | Description: Scans the other face actions for one that currently holds button
+ |   `b`; if found, gives it `a`'s previous button (the swap), then sets `a` to
+ |   `b`. Four actions over four buttons, so the result is always a permutation:
+ |   no action is ever left without a button and no button ever carries two.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
- | Params: a -- the face action being reassigned; b -- the button (0=A,1=B,2=C) to give it
+ | Params: a -- the face action being reassigned; b -- the button
+ |   (0=A, 1=B, 2=C, 3=X) to give it
  | Returns: N/A
  ----------------------*/
 void face_assign(int a, int b) {
@@ -468,8 +537,8 @@ void face_assign(int a, int b) {
 /*----------------------
  | chord_assign
  | Description: Scans the other chord actions for one that currently holds slot
- |   `s`; if found, gives it `a`'s previous slot (the swap; the free spare slot
- |   has no owner, so this is skipped and `a` simply moves), then sets `a` to `s`.
+ |   `s`; if found, gives it `a`'s previous slot (the swap; a free spare slot has
+ |   no owner, so this is skipped and `a` simply moves), then sets `a` to `s`.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_chord_slot

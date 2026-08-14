@@ -209,26 +209,67 @@ extern "C" void saturn_writestr(const char *str, size_t slen) {
 /*----------------------
  | typeahead_scan_screen
  | Description: Marks the words currently visible on the console as on-screen, so
- |   objects the game just described lead their suggestions. Re-run after any trie
- |   rebuild (e.g. a mid-game difficulty change), since the marks live on the
- |   words.
+ |   objects the game just described lead their suggestions. The visible text is
+ |   split at g_output_start -- the line the last command's reply began on -- so
+ |   the reply's nouns rank as fresh and the room description above them as
+ |   ordinary scenery. Each half is gathered newest line first, so when the buffer
+ |   fills it is the oldest text that is lost rather than the line that just
+ |   arrived. Re-run after any trie rebuild (e.g. a mid-game difficulty change),
+ |   since the marks live on the words.
  | Author: suinevere
  | Dependencies: console.h, console_view.h, typeahead.h
- | Globals: N/A
+ | Globals: g_output_start
  | Params: root -- the trie whose words to mark
  | Returns: N/A
  ----------------------*/
+
+/*----------------------
+ | gather_lines
+ | Description: Concatenates console lines [from, to) into `buf` in forward print
+ |   order. When the whole range does not fit, it keeps the newest lines -- a
+ |   backward pass finds the earliest line that still fits, then the text is
+ |   emitted forward from there. Forward order matters because the screen marker
+ |   ranks nouns by scan position (later = more recently printed); emitting newest
+ |   first would invert that and offer the room's first-named object over its
+ |   last, which read as "open house" when the last line said "a mailbox is here".
+ | Author: suinevere
+ | Dependencies: console.h
+ | Globals: N/A
+ | Params: from, to -- the half-open line range; buf/cap -- output
+ | Returns: N/A
+ ----------------------*/
+static void gather_lines(int from, int to, char *buf, int cap) {
+    int start = to, used = 0, sp = 0;
+    for (int li = to - 1; li >= from; li--) {
+        const char* ln = console_get_line(li);
+        int len = 0; while (ln[len]) len++;
+        if (used + len + 1 > cap - 1) break;
+        used += len + 1;
+        start = li;
+    }
+    for (int li = start; li < to && sp < cap - 1; li++) {
+        const char* ln = console_get_line(li);
+        for (int j = 0; ln[j] && sp < cap - 1; j++) buf[sp++] = ln[j];
+        if (sp < cap - 1) buf[sp++] = ' ';
+    }
+    buf[sp] = '\0';
+}
+
 static void typeahead_scan_screen(TrieNode *root) {
-    char scr[1024]; int sp = 0;
+    char older[768], recent[512];
     int total = console_line_count(), rows = console_height();
     int startln = (total > rows) ? (total - rows) : 0;
-    for (int li = startln; li < total && sp < (int) sizeof(scr) - 1; li++) {
-        const char* ln = console_get_line(li);
-        for (int j = 0; ln[j] && sp < (int) sizeof(scr) - 1; j++) scr[sp++] = ln[j];
-        if (sp < (int) sizeof(scr) - 1) scr[sp++] = ' ';
-    }
-    scr[sp] = '\0';
-    typeahead_set_screen(root, scr);
+    /* g_output_start counts lines ever produced; console_get_line indexes only
+       the retained ones, and the two part company as soon as the ring evicts.
+       Convert through the turn's line count, the way console_view.cxx:286 does. */
+    long added = console_total_lines() - g_output_start;
+    if (added < 0) added = 0;
+    if (added > total) added = total;
+    int split = total - (int) added;
+    if (split < startln) split = startln;
+    gather_lines(startln, split, older, (int) sizeof older);
+    gather_lines(split, total, recent, (int) sizeof recent);
+    typeahead_set_screen_recent(root, older, recent);
 }
 
 /*----------------------
@@ -463,8 +504,20 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             continue;
         }
 
-        if (g_kbd_visible && mode_toggle_fired())
-            g_cmd_mode = (g_cmd_mode == IFACE_PANEL) ? IFACE_KEYBOARD : IFACE_PANEL;
+        /* The two interfaces keep their own buffers -- the panel draws p.line,
+           the keyboard k.input -- so the swap has to carry the half-built
+           command across, or the player loses what they just picked or typed.
+           cp_load_line re-derives the slot from the word count, exactly as it
+           does for a recalled command. */
+        if (g_kbd_visible && mode_toggle_fired()) {
+            if (g_cmd_mode == IFACE_PANEL) {
+                keyboard_load_line(&k, cpanel.line);
+                g_cmd_mode = IFACE_KEYBOARD;
+            } else {
+                cp_load_line(&cpanel, k.input);
+                g_cmd_mode = IFACE_PANEL;
+            }
+        }
 
         if (g_kbd_visible && g_cmd_mode == IFACE_PANEL) {
             CommandWords cw;

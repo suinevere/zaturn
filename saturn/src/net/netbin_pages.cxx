@@ -33,6 +33,7 @@
 
 extern "C" {
 #include "keyboard.h"
+#include "numpad.h"
 #include "menu_layout.h"
 #include "display.h"
 }
@@ -98,30 +99,23 @@ static void controls_dispatch(void);
 
 /*----------------------
  | netbin_dial_page
- | Description: Server dial-number editor, driven by either a real keyboard
- |   or the on-screen keyboard grid under pad control, plus Dial and Controls
- |   rows below the grid. Seeds the edit buffer from g_dialnum, then loops: a
- |   real-keyboard char/backspace/clear edits directly; Enter accepts, unless
- |   `arow` is on Controls (see below), in which case it opens Controls
- |   instead -- a real keyboard's only activation key, mirroring what C does
- |   for the pad. The pad moves a cursor that starts in the on-screen keyboard
- |   grid (Up/Down/Left/Right highlight a key, C types it) and, from the
- |   grid's bottom row, Down carries it onto Dial then Controls (Left/Right
- |   also toggle between the two once there, Up climbs back into the grid) --
- |   `arow` tracks this: -1 in the grid, 0 on Dial, 1 on Controls. A real
- |   keyboard's Up/Down drive the same `arow` the same way, so Controls stays
- |   reachable with no pad plugged in at all -- there is no Options screen in
- |   this build, so that cursor is the only path to it. B and Backspace
- |   backspace (and do nothing when the buffer is already empty -- there is no
- |   Cancel to fall through to); A always accepts regardless of cursor
- |   position. Accept validates the buffer with valid_dialnum before
- |   committing it into g_dialnum and calling options_save(); an invalid
- |   buffer keeps the page open with an inline error instead of closing.
- |   Controls opens controls_dispatch in place and, on return, re-syncs and
- |   re-enters this same loop rather than exiting -- this page is the
- |   netbin's root screen, so there is nowhere to leave it for. Redraws the
- |   NETWORK box, the current input line, the on-screen keyboard grid, and
- |   the Dial/Controls rows every frame.
+ | Description: Server dial-number editor. Seeds the edit buffer from g_dialnum,
+ |   then loops. The on-screen numpad is shown only while a gamepad is the active
+ |   device (g_kbd_visible) -- it is how a controller enters digits; once a real
+ |   keyboard is in hand it is hidden and the box shrinks to just the input line
+ |   and the Dial/Controls rows, since the number is typed directly then. `arow`
+ |   is -1 on the numpad, 0 on Dial, 1 on Controls: the D-pad walks the numpad and
+ |   drops off its bottom onto Dial then Controls, C types the highlighted digit or
+ |   activates the row; a real keyboard's Up/Down move between Dial and Controls
+ |   (it never enters the hidden numpad) and Enter activates the selected one, so
+ |   Controls stays reachable with no pad plugged in -- there is no Options screen
+ |   in this build, so that row is the only path to it. B and Backspace backspace
+ |   (a no-op on an empty buffer -- there is no Cancel to fall through to); A always
+ |   accepts. Accept validates with valid_dialnum before committing into g_dialnum
+ |   and calling options_save(); an invalid buffer keeps the page open with an
+ |   inline error. Controls opens controls_dispatch in place and, on return,
+ |   re-syncs and re-enters this same loop -- this page is the netbin's root
+ |   screen, so there is nowhere to leave it for.
  | Author: suinevere
  | Dependencies: keyboard.c, saturn_keyboard.h, soft_reset.h, options.c
  |   (valid_dialnum, options_save), menu.c, console_view.c, netbin_pages.cxx
@@ -135,42 +129,31 @@ void netbin_dial_page(void) {
     KeyboardState k; keyboard_reset(&k);
     for (int i = 0; g_dialnum[i] && k.input_len < DIALNUM_MAX; i++) keyboard_type_char(&k, g_dialnum[i]);
     const char *err = "";
-    int arow = -1;   // -1 = cursor in the KB grid; 0 = Dial; 1 = Controls
+    int arow = 0;   // 0 = Dial; 1 = Controls
     SRL::Core::Synchronize();
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
+        // Switching to a real keyboard hides the numpad, so the cursor cannot be
+        // left sitting on it -- drop it to Dial.
+        if (!g_kbd_visible && arow < 0) arow = 0;
         bool accept = false, controls = false;
         if      (ke.kind == SATURN_KEY_CHAR)      { if (k.input_len < DIALNUM_MAX) keyboard_type_char(&k, ke.ch); }
         else if (ke.kind == SATURN_KEY_BACKSPACE) { if (k.input_len > 0) keyboard_backspace(&k); }
         else if (ke.kind == SATURN_KEY_ENTER)     { if (arow == 1) controls = true; else accept = true; }
         else if (ke.kind == SATURN_KEY_CLEAR)     { k.input_len = 0; k.input[0] = '\0'; k.cursor = 0; }
         else {
-            // Up/Down also drive `arow` for a real keyboard (SATURN_KEY_UP/
-            // DOWN), matching the pad -- Controls has no other way in, and
-            // this is the only screen in the build, so a keyboard-only user
-            // with no pad plugged in previously had no way to reach it at
-            // all. Enter above is the keyboard's activation key once `arow`
-            // gets there, mirroring how C activates the row it lands on for
-            // the pad.
-            if (g_pad->WasPressed(Button::Up) || ke.kind == SATURN_KEY_UP) {
-                if      (arow == 1) arow = 0;
-                else if (arow == 0) arow = -1;
-                else                keyboard_move(&k, 0, -1);
-            }
-            if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) {
-                if      (arow == -1 && k.cursor_row == KB_ROWS - 1) arow = 0;
-                else if (arow == 0) arow = 1;
-                else if (arow == -1) keyboard_move(&k, 0, 1);
-            }
-            if (g_pad->WasPressed(Button::Left))  { if (arow >= 0) arow = 0; else keyboard_move(&k, -1, 0); }
-            if (g_pad->WasPressed(Button::Right)) { if (arow >= 0) arow = 1; else keyboard_move(&k,  1, 0); }
+            bool up   = g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP;
+            bool down = g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN;
+            np_dpad(up, down, g_pad->WasPressed(Button::Left), g_pad->WasPressed(Button::Right),
+                    g_kbd_visible, &arow, &k.cursor_row, &k.cursor_col);
             if (g_pad->WasPressed(Button::C)) {
                 if      (arow == 0) accept = true;
                 else if (arow == 1) controls = true;
-                else if (k.input_len < DIALNUM_MAX) keyboard_type(&k);
+                else if (np_valid(k.cursor_row, k.cursor_col) && k.input_len < DIALNUM_MAX)
+                    keyboard_type_char(&k, np_char(k.cursor_row, k.cursor_col));
             }
             if (g_pad->WasPressed(Button::B))     { if (k.input_len > 0) keyboard_backspace(&k); }
             if (g_pad->WasPressed(Button::A))     accept = true;
@@ -195,29 +178,36 @@ void netbin_dial_page(void) {
         }
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("NETWORK", 34, 14, &fx, &fy, &fw, &fh);
+        /* Taller when the numpad is up (gamepad), shrinking to the line and the
+           two rows once a real keyboard hides it. */
+        menu_box_fit("NETWORK", 24, g_kbd_visible ? 15 : 10, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "NETWORK");
         int x = fx + 2, y = fy + 4;
         text_print(x, y++, "Server dial number:");
         text_print(x, y++, "> %s_", k.input);
         y++;
-        for (int r = 0; r < KB_ROWS; r++) {
-            char rowbuf[KB_COLS * 2 + 1]; int p = 0;
-            for (int c = 0; c < KB_COLS; c++) {
-                rowbuf[p++] = (r == k.cursor_row && c == k.cursor_col && arow < 0) ? '[' : ' ';
-                rowbuf[p++] = KB_LAYOUT[r][c];
+        if (g_kbd_visible) {
+            int npx = fx + 2 + ((fw - 4) - (NP_COLS * 2 - 1)) / 2;   // centre the pad
+            for (int r = 0; r < NP_ROWS; r++) {
+                char rowbuf[NP_COLS * 2]; int p = 0;
+                for (int c = 0; c < NP_COLS; c++) { rowbuf[p++] = np_char(r, c); if (c < NP_COLS - 1) rowbuf[p++] = ' '; }
+                rowbuf[p] = '\0';
+                text_print(npx, y, rowbuf);
+                if (arow < 0 && r == k.cursor_row && np_valid(r, k.cursor_col)) {
+                    char one[2] = { np_char(r, k.cursor_col), '\0' };
+                    text_print_hl(npx + k.cursor_col * 2, y, one);
+                }
+                y++;
             }
-            rowbuf[p] = '\0';
-            text_print(x + 2, y++, "%s", rowbuf);
+            y++;
         }
-        y++;
         text_print(x, y++, "%c Dial",     arow == 0 ? '>' : ' ');
         text_print(x, y++, "%c Controls", arow == 1 ? '>' : ' ');
         if (err[0]) text_print(x, y, "%s", err);
         y++;
         y++;
         text_print(x, y, "%s",
-            hint("C=type B=del  A=Dial", "type number Up/Dn=Ctrls Enter=Dial"));
+            hint("A=Dial C=type  B=del", "type number  Enter=Dial"));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -229,46 +219,192 @@ void netbin_dial_page(void) {
  |   actions (CA_*), shown as the row labels in the control-remap editor.
  | Author: suinevere
  ----------------------*/
-static const char *const FACE_LABEL[FA_N]  = { "Accept", "Backspace/Cancel", "Type Letter" };
+static const char *const FACE_LABEL[FA_N]  = { "Accept", "Backspace/Cancel", "Type Letter",
+                                               "Space" };
 static const char *const CHORD_LABEL[CA_N] = { "Autocomplete", "Recall", "Home/End",
                                                "Line Up/Down", "Cursor Move", "Page Up/Down" };
 
 /*----------------------
+ | PANEL_FACE_LABEL
+ | Description: The Command Panel view's names for the face actions, differing
+ |   from FACE_LABEL only at FA_TYPE: the panel commits a whole word off the rose,
+ |   not a letter off a grid. Indexed by FA_* like its counterpart rather than by
+ |   visible-row number, so a row lookup never has to know which table it is in.
+ |   FA_SPACE's entry is never drawn -- the panel view does not list it -- but is
+ |   present so the two tables stay index-compatible.
+ | Author: suinevere
+ ----------------------*/
+static const char *const PANEL_FACE_LABEL[FA_N] = { "Accept", "Backspace/Cancel",
+                                                    "Type Word", "Space" };
+
+/*----------------------
+ | INAMES / IDESC
+ | Description: The Interface row's value names and description lines, indexed by
+ |   IFACE_KEYBOARD/IFACE_PANEL. Word for word what the Gameplay page showed
+ |   before the row moved here; file scope rather than function-local because the
+ |   row now heads a page that is drawn from tables either side of it.
+ | Author: suinevere
+ ----------------------*/
+static const char *const INAMES[] = { "Keyboard", "Command Panel" };
+static const char *const IDESC[]  = { "Type words, autocomplete",
+                                      "Pick words with the pad" };
+
+/*----------------------
+ | CtlRow / CTL_PANEL / CTL_KBD / CTL_PANEL_N / CTL_KBD_N / CTL_ASSIGN_MAX
+ | Description: The remappable rows each Controls view lists, in the order they
+ |   are drawn. Both tables index the one shared g_face_btn/g_chord_slot mapping --
+ |   a view is a filter over it, not a second copy -- so a row absent from a view
+ |   is still live in the interface that uses it. The panel drops Space (it types
+ |   whole words), Autocomplete (it has no completion list) and Cursor Move (its
+ |   D-pad drives the rose directly, unshifted), and orders its chords the way the
+ |   hand reaches them rather than by CA_* number.
+ |
+ |   A consequence worth knowing: remapping a shown row onto a hidden row's slot
+ |   still swaps, silently, because chord_assign only sees the mapping and not the
+ |   view. Moving Recall onto L/R from the panel view sends Autocomplete to
+ |   Recall's old slot with nothing on screen to say so; it is visible again the
+ |   moment the player switches to the Keyboard view.
+ |
+ |   CTL_ASSIGN_MAX is the longer of the two lists, used to reserve the rows the
+ |   block occupies so the box and everything below it hold still when the player
+ |   flips the Interface row.
+ | Author: suinevere
+ ----------------------*/
+enum { CK_FACE, CK_CHORD };
+struct CtlRow { unsigned char kind; unsigned char idx; };
+
+static const CtlRow CTL_PANEL[] = {
+    { CK_FACE,  FA_ACCEPT }, { CK_FACE,  FA_BACK },    { CK_FACE,  FA_TYPE },
+    { CK_CHORD, CA_RECALL }, { CK_CHORD, CA_PAGE },    { CK_CHORD, CA_HOMEEND },
+    { CK_CHORD, CA_LINE },
+};
+static const CtlRow CTL_KBD[] = {
+    { CK_FACE,  FA_ACCEPT }, { CK_FACE,  FA_BACK },    { CK_FACE,  FA_TYPE },
+    { CK_FACE,  FA_SPACE },
+    { CK_CHORD, CA_AUTO },   { CK_CHORD, CA_RECALL },  { CK_CHORD, CA_HOMEEND },
+    { CK_CHORD, CA_LINE },   { CK_CHORD, CA_CURSOR },  { CK_CHORD, CA_PAGE },
+};
+#define CTL_PANEL_N   7
+#define CTL_KBD_N     10
+#define CTL_ASSIGN_MAX CTL_KBD_N
+
+/*----------------------
+ | CTL_BLOCK_ROWS
+ | Description: Rows reserved for the assignable list plus the unremappable ones
+ |   under it -- the panel's Cycle Module and Caps Toggle, the keyboard's Caps
+ |   Toggle alone. The keyboard's 10 + 1 is the taller of the two; the panel's
+ |   7 + 2 leaves the last two blank. Reserved rather than measured so Keyboard
+ |   Caps, the Swap row and Ok/Cancel keep their screen position across a view
+ |   flip instead of sliding two rows up and back under the cursor.
+ | Author: suinevere
+ ----------------------*/
+#define CTL_BLOCK_ROWS (CTL_KBD_N + 1)
+
+/*----------------------
+ | CtlView / ctl_view
+ | Description: The Controls page's row geometry for whichever interface the
+ |   Interface row currently names: which table the assignable rows come from, how many there
+ |   are, and the `sel` index of every row below them (all offset by one for the
+ |   Interface row at index 0). Derived rather than stored because the page
+ |   calls it twice per frame -- once before reading input and again after, so the
+ |   frame that flips the Interface row already draws the list it flipped to
+ |   instead of
+ |   showing the old one for a frame.
+ | Author: suinevere
+ | Dependencies: app_state.h (g_cmd_iface, IFACE_PANEL)
+ | Globals: g_cmd_iface
+ | Params: N/A
+ | Returns: the row geometry for the named interface
+ ----------------------*/
+struct CtlView {
+    const CtlRow *rows;
+    bool panel;
+    int nassign, r_caps, r_toggle, r_reset, r_done, r_cancel, nrows;
+};
+
+static CtlView ctl_view(void) {
+    CtlView v;
+    v.panel    = (g_cmd_iface == IFACE_PANEL);
+    v.rows     = v.panel ? CTL_PANEL : CTL_KBD;
+    v.nassign  = v.panel ? CTL_PANEL_N : CTL_KBD_N;
+    v.r_caps   = v.nassign + 1;
+    v.r_toggle = v.nassign + 2;
+    v.r_reset  = v.nassign + 3;
+    v.r_done   = v.nassign + 4;
+    v.r_cancel = v.nassign + 5;
+    v.nrows    = v.nassign + 6;
+    return v;
+}
+
+/*----------------------
  | controls_page
- | Description: Gamepad Controls page -- live remap editor (3 face-button
- |   rows + 6 shift-chord rows), the fixed L+R Caps Toggle chord
- |   (informational, not remappable), a Keyboard Caps on/off toggle moved
- |   here from the old standalone gamepad landing page, then Reset to
- |   Defaults, Ok, and Cancel. Only the face/chord rows are numbered (there
- |   are just 9 digit keys, so Caps/Reset/Ok/Cancel stay reachable only by
- |   Up/Down). Snapshots g_face_btn/g_chord_slot on entry so Cancel (or
- |   B/Esc/Start) can restore them verbatim; Keyboard Caps takes effect
- |   immediately and is not part of that snapshot, matching the toggles on
- |   every other page. Up/Down move the row cursor with wraparound, resolved
- |   before the digit-row jump so a same-frame digit press wins the tie
- |   against the pad -- the order the other option pages use; resolving
- |   Up/Down first would let a simultaneous press move `sel` while
- |   left/right/act stayed set from the digit, cycling whichever row the pad
- |   happened to land on instead. Left/Right cycle the selected row's
- |   assignment via face_assign/chord_assign (applying their own
- |   tie-breaking rules), flip Keyboard Caps, or activate Reset/Ok/Cancel.
- |   The value column is drawn at a fixed offset of x + 20 + MENU_DIGIT_COLS,
+ | Description: Gamepad Controls page. The top row is the Interface slider,
+ |   moved here verbatim from the Gameplay page -- same wording, same clamped
+ |   Left/Right, same description line under it -- and everything below it is
+ |   that interface's own configuration: the Command Panel lists Accept, Backspace/
+ |   Cancel, Type Word, Recall, Page Up/Down, Home/End and Line Up/Down, then a
+ |   fixed Cycle Module (L/R) and the fixed L+R Caps Toggle; the Keyboard lists
+ |   all four face actions and all six chords, then the Caps Toggle alone. Below
+ |   the swapped block, shared by both views: a Keyboard Caps on/off toggle, a
+ |   Panel/Keyboard Swap row cycling g_toggle_btn between the Z and Y shift
+ |   buttons that flip the in-game interface, then Reset to Defaults, Ok and
+ |   Cancel.
+ |
+ |   The two views are filters over the one g_face_btn/g_chord_slot mapping, not
+ |   separate tables -- see CTL_PANEL/CTL_KBD for what that costs. Interface is
+ |   g_cmd_iface, the persisted preference main.cxx seeds g_cmd_mode from at game
+ |   start, and this page is now its only editor; a session already in progress
+ |   keeps whatever the toggle button last picked, exactly as it did while the
+ |   row lived on the Gameplay page. It is deliberately NOT touched by Reset to
+ |   Defaults, which restores bindings and has no business throwing the player
+ |   out of the view they are reading.
+ |
+ |   Content starts one row higher than the other option pages, at fy + 3 rather
+ |   than fy + 4, so the Interface row plus its description line finish where a
+ |   single row would have and the swapped block below opens on the same line it
+ |   did when the head row was one line tall.
+ |
+ |   Only the assignable rows are numbered -- the keyboard view's ten use every
+ |   digit key there is, so Interface, Caps, Swap, Reset, Ok and Cancel stay
+ |   reachable only by Up/Down. menu_digit_row therefore indexes the assignable
+ |   list and its result is offset past the Interface row rather than used as
+ |   `sel` directly. Snapshots g_face_btn/g_chord_slot/g_toggle_btn/g_cmd_iface on
+ |   entry so Cancel (or B/Backspace) can restore them verbatim; Start/Esc leave
+ |   the other way, saving what is on screen exactly as the Ok row does. Keyboard
+ |   Caps takes effect immediately and is not part of that snapshot, matching the
+ |   toggles on every other page; Panel/Keyboard Swap and Interface ARE
+ |   snapshotted, since a stray edit to either should be as cancellable as a
+ |   face/chord remap. Up/Down move the row cursor with wraparound, resolved
+ |   before the digit-row jump so a same-frame digit press wins the tie against
+ |   the pad -- the order the other option pages use; resolving Up/Down first
+ |   would let a simultaneous press move `sel` while left/right/act stayed set
+ |   from the digit, cycling whichever row the pad happened to land on instead.
+ |   Left/Right cycle the selected row's assignment via face_assign/chord_assign
+ |   (applying their own tie-breaking rules), move Interface, flip Keyboard Caps or
+ |   the Panel/Keyboard Swap, or activate Reset/Ok/Cancel.
+ |
+ |   Only the Interface row can change the row count, and it sits at index 0,
+ |   so `sel` is always 0 at the moment the count changes and never needs
+ |   clamping. The swapped block is drawn to the reserved CTL_BLOCK_ROWS height
+ |   for the same reason the value column is reserved: nothing below it may move
+ |   when the view flips. The value column stays at x + 20 + MENU_DIGIT_COLS,
  |   reserved unconditionally so it does not shift when the player switches
- |   between gamepad and keyboard mid-page; the widest value string is
- |   "Z+Left/Right" (12 chars), still clearing the box's right border at
- |   column 39. Returns true, without saving or restoring, if the active
- |   input device's family (pad vs. real keyboard) changed while this page
- |   was open, so controls_dispatch can hand off to keyboard_controls_page
- |   instead of leaving this page on screen showing the wrong device's
- |   controls with the music still paused; false on a genuine Ok/Cancel/
- |   B/Esc/Start exit.
+ |   between gamepad and keyboard mid-page; the widest value string is still
+ |   "Z+Left/Right" (12 chars), clearing the box's right border at column 39.
+ |
+ |   Returns true, without saving or restoring, if the active input device's
+ |   family (pad vs. real keyboard) changed while this page was open, so
+ |   controls_dispatch can hand off to keyboard_controls_page instead of leaving
+ |   this page on screen showing the wrong device's controls with the music still
+ |   paused; false on a genuine Ok/Cancel/B/Backspace/Start/Esc exit.
  | Author: suinevere
  | Dependencies: input.c (g_face_btn/g_chord_slot/face_assign/chord_assign/
  |   mapping_reset_defaults/face_btn_name/slot_name), keyboard.c
  |   (keyboard_get_caps/keyboard_set_caps), console_view.c
  |   (note_input_device/hint/g_kbd_visible), menu.c, menu_layout.c
- |   (MENU_DIGIT_COLS), options.c (options_save), saturn_keyboard.h
- | Globals: g_face_btn, g_chord_slot, g_kbd_visible
+ |   (MENU_DIGIT_COLS), options.c (options_save), app_state.h (g_toggle_btn,
+ |   g_cmd_iface, IFACE_PANEL/IFACE_KEYBOARD), saturn_keyboard.h
+ | Globals: g_face_btn, g_chord_slot, g_toggle_btn, g_cmd_iface, g_kbd_visible
  | Params: N/A
  | Returns: true if it exited because the input device family changed
  |   (caller should redispatch to the other Controls page); false on a
@@ -280,16 +416,15 @@ static bool controls_page(void) {
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
     int s_face[FA_N], s_chord[CA_N];
+    int s_toggle = g_toggle_btn;
+    int s_iface  = g_cmd_iface;
     for (int a = 0; a < FA_N; a++) s_face[a]  = g_face_btn[a];
     for (int a = 0; a < CA_N; a++) s_chord[a] = g_chord_slot[a];
-    const int NASSIGN  = FA_N + CA_N;
-    const int R_CAPS   = NASSIGN;
-    const int R_RESET  = NASSIGN + 1;
-    const int R_DONE   = NASSIGN + 2;
-    const int R_CANCEL = NASSIGN + 3;
+    const int R_IFACE = 0;
     int sel = 0;
     bool switched = false;
     for (;;) {
+        CtlView v = ctl_view();
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         if (g_kbd_visible != started_kbd) { switched = true; break; }
@@ -305,58 +440,87 @@ static bool controls_page(void) {
         if (back) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
             for (int a = 0; a < CA_N; a++) g_chord_slot[a] = s_chord[a];
+            g_toggle_btn = s_toggle;
+            g_cmd_iface  = s_iface;
             break;
         }
         if (done) { options_save(); break; }
-        if (up)   sel = (sel - 1 + R_CANCEL + 1) % (R_CANCEL + 1);
-        if (down) sel = (sel + 1) % (R_CANCEL + 1);
-        if (menu_digit_row(ke, NASSIGN, sel, left, right)) act = true;
-        if (sel == R_DONE)  { if (act) { options_save(); break; } }
-        else if (sel == R_CANCEL) { if (act) {
+        if (up)   sel = (sel - 1 + v.nrows) % v.nrows;
+        if (down) sel = (sel + 1) % v.nrows;
+        int drow = 0;
+        if (menu_digit_row(ke, v.nassign, drow, left, right)) { sel = drow + 1; act = true; }
+        if (sel == v.r_done)  { if (act) { options_save(); break; } }
+        else if (sel == v.r_cancel) { if (act) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
             for (int a = 0; a < CA_N; a++) g_chord_slot[a] = s_chord[a];
+            g_toggle_btn = s_toggle;
+            g_cmd_iface  = s_iface;
             break; } }
-        else if (sel == R_RESET) { if (act) mapping_reset_defaults(); }
-        else if (sel == R_CAPS) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
+        else if (sel == v.r_reset) { if (act) mapping_reset_defaults(); }
+        else if (sel == v.r_caps) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
+        else if (sel == v.r_toggle) { if (left || right || act) g_toggle_btn = 1 - g_toggle_btn; }
+        else if (sel == R_IFACE) {
+            if (left  && g_cmd_iface > IFACE_KEYBOARD) g_cmd_iface--;
+            if (right && g_cmd_iface < IFACE_PANEL)    g_cmd_iface++;
+        }
         else if (left || right) {
-            if (sel < FA_N) {
-                int n = right ? (g_face_btn[sel] + 1) % 3 : (g_face_btn[sel] + 2) % 3;
-                face_assign(sel, n);
+            const CtlRow &r = v.rows[sel - 1];
+            if (r.kind == CK_FACE) {
+                int n = right ? (g_face_btn[r.idx] + 1) % FA_BTN_N
+                              : (g_face_btn[r.idx] + FA_BTN_N - 1) % FA_BTN_N;
+                face_assign(r.idx, n);
             } else {
-                int a = sel - FA_N;
-                int n = right ? (g_chord_slot[a] + 1) % SL_N : (g_chord_slot[a] + SL_N - 1) % SL_N;
-                chord_assign(a, n);
+                int n = right ? (g_chord_slot[r.idx] + 1) % SL_N
+                              : (g_chord_slot[r.idx] + SL_N - 1) % SL_N;
+                chord_assign(r.idx, n);
             }
         }
 
+        v = ctl_view();
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", 36, FA_N + CA_N + 10, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", 36, CTL_BLOCK_ROWS + 11, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
-        int x = fx + 2, y = fy + 4;
+        /* One row higher than every other page's content start, so the Interface
+           row and its description line together end where a single row would
+           have: the swapped block below opens on the same line either way. */
+        int x = fx + 2, y = fy + 3;
         bool nums = !g_kbd_visible;
         const int vx = x + 20 + MENU_DIGIT_COLS;
-        for (int a = 0; a < FA_N; a++) {
-            char cur = sel == a ? '>' : ' ';
-            if (nums) text_print(x, y, "%c %d) %s", cur, a + 1, FACE_LABEL[a]);
-            else      text_print(x, y, "%c    %s", cur, FACE_LABEL[a]);
-            text_print(vx, y++, "%s", face_btn_name(a));
-        }
-        for (int a = 0; a < CA_N; a++) {
-            char cur = sel == FA_N + a ? '>' : ' ';
-            if (nums) text_print(x, y, "%c %d) %s", cur, FA_N + a + 1, CHORD_LABEL[a]);
-            else      text_print(x, y, "%c    %s", cur, CHORD_LABEL[a]);
-            text_print(vx, y++, "%s", slot_name(g_chord_slot[a]));
-        }
-        text_print(x + 2 + MENU_DIGIT_COLS, y, "Caps Toggle");
-        text_print(vx, y++, "L+R (fixed)");
-        text_print(x, y++, "%c    Keyboard Caps: %s", sel == R_CAPS ? '>' : ' ',
-                           keyboard_get_caps() ? "On" : "Off");
+        const int lx = x + 2 + MENU_DIGIT_COLS;
+        text_print(x, y++, "%c    Interface:  %s %s %s", sel == R_IFACE ? '>' : ' ',
+                           g_cmd_iface > IFACE_KEYBOARD ? "<" : " ", INAMES[g_cmd_iface],
+                           g_cmd_iface < IFACE_PANEL ? ">" : " ");
+        text_print(x + 4, y++, "%s", IDESC[g_cmd_iface]);
         y++;
-        text_print(x, y++, "%c    Reset to Defaults", sel == R_RESET ? '>' : ' ');
-        text_print(x, y++, "%c    Ok", sel == R_DONE ? '>' : ' ');
-        text_print(x, y++, "%c    Cancel", sel == R_CANCEL ? '>' : ' ');
-        y += 2;
+        const int block_y = y;
+        for (int i = 0; i < v.nassign; i++) {
+            const CtlRow &r = v.rows[i];
+            const char *label = r.kind == CK_FACE
+                              ? (v.panel ? PANEL_FACE_LABEL[r.idx] : FACE_LABEL[r.idx])
+                              : CHORD_LABEL[r.idx];
+            char cur = sel == i + 1 ? '>' : ' ';
+            if (nums) text_print(x, y, "%c %c) %s", cur, menu_row_digit_char(i), label);
+            else      text_print(x, y, "%c    %s", cur, label);
+            text_print(vx, y++, "%s", r.kind == CK_FACE ? face_btn_name(r.idx)
+                                                        : slot_name(g_chord_slot[r.idx]));
+        }
+        if (v.panel) {
+            text_print(lx, y, "Cycle Module");
+            text_print(vx, y++, "L/R (fixed)");
+        }
+        text_print(lx, y, "Caps Toggle");
+        text_print(vx, y++, "L+R (fixed)");
+        y = block_y + CTL_BLOCK_ROWS;
+        text_print(x, y++, "%c    Keyboard Caps: %s", sel == v.r_caps ? '>' : ' ',
+                           keyboard_get_caps() ? "On" : "Off");
+        text_print(x, y++, "%c    Panel/Keyboard Swap: %s", sel == v.r_toggle ? '>' : ' ',
+                           g_toggle_btn == 1 ? "Y" : "Z");
+        y++;
+        text_print(x, y++, "%c    Reset to Defaults", sel == v.r_reset ? '>' : ' ');
+        text_print(x, y++, "%c    Ok", sel == v.r_done ? '>' : ' ');
+        text_print(x, y++, "%c    Cancel", sel == v.r_cancel ? '>' : ' ');
+        y++;
         text_print(x, y++, "%s", hint("A/C/Start=Ok  B=Cancel",
                                              "Enter/Esc=Ok  Bksp=Cancel"));
         menu_sync();

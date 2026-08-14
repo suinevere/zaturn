@@ -11,11 +11,11 @@
  |   The shape:
  |
  |       UP         IN
- |         NW  N  NE
- |           \ | /
- |         W - + - E
- |           / | \
- |         SW  S  SE
+ |         NW N NE
+ |           \|/
+ |         W -+- E
+ |           /|\
+ |         SW S SE
  |       DOWN      OUT
  |
  |   Up, down, in and out sit in the corners as words rather than as markers on
@@ -122,19 +122,31 @@ int cr_enter(const unsigned char *exits, int want_row, int from_right);
 
 /*----------------------
  | cr_move
- | Description: Steps the cursor one cell over the grid, skipping gaps and
- |   directions this room does not offer, so a press always lands on something
- |   selectable or on nothing at all. Vertical presses that run out of grid stop;
- |   horizontal ones report the edge instead, which is what lets the view carry
- |   focus into the next module.
+ | Description: Aims the press and takes whichever available direction it points
+ |   at best -- nearest in bearing first, then nearest in distance. Geometric
+ |   rather than a table of neighbours, because the rose is not a full grid: half
+ |   its cells are missing in any given room, and a rule written in terms of the
+ |   cells that would be there has to answer for every combination that is not.
+ |   Aiming answers all of them the same way, so a press with north gone finds
+ |   whatever is next along that bearing rather than a special case.
+ |
+ |   Diagonal presses are the same operation with a diagonal vector, which is
+ |   what makes up-and-right from west find north -- squarely on the bearing --
+ |   ahead of north-east, which is further off it.
+ |
+ |   A vertical press with nothing ahead of it wraps to the far side, so a short
+ |   column can be ridden round rather than stopping at the pole. A press leaning
+ |   right with nothing ahead of it leaves the module instead: travel is the
+ |   leftmost of the three, so right is the only side with anywhere to go, and
+ |   that is what guarantees the cursor can always get out.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: exits -- RM_DIR_N exit states; dir -- the RM_* index under the cursor;
- |   dx, dy -- -1, 0 or +1; out -- receives the new RM_* index, unchanged when
- |   the press does not move
- | Returns: 0 when the cursor stayed in the rose, -1 when it stepped off the
- |   left edge, +1 when it stepped off the right
+ |   dx, dy -- each -1, 0 or +1, both set for a diagonal; out -- receives the new
+ |   RM_* index, unchanged when the press does not move
+ | Returns: 0 when the cursor stayed in the rose, +1 when the press carried focus
+ |   off the right edge
  ----------------------*/
 int cr_move(const unsigned char *exits, int dir, int dx, int dy, int *out);
 

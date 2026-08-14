@@ -37,14 +37,36 @@ void menu_box_fit(const char *title, int content_w, int rows,
                   int *x0, int *y0, int *w, int *h);
 
 /*----------------------
+ | MENU_DIGIT_ROWS
+ | Description: How many rows the digit shortcuts can reach: '1'..'9' then '0',
+ |   ten in all. A page with more selectable rows than this still works, it just
+ |   leaves the ones past the tenth to the D-pad.
+ | Author: suinevere
+ ----------------------*/
+#define MENU_DIGIT_ROWS 10
+
+/*----------------------
  | menu_row_digit
- | Description: Maps a character to a 0-based row index (or -1). A plain digit 1-9
- |   sets *dir to +1; its shifted symbol (!@#$%^&*(, US layout) sets -1, so value
- |   rows cycle forward/backward and action rows just activate. The shifted
+ | Description: Maps a character to a 0-based row index (or -1). A plain digit
+ |   sets *dir to +1; its shifted symbol (!@#$%^&*(), US layout) sets -1, so
+ |   value rows cycle forward/backward and action rows just activate. The shifted
  |   character is matched because SaturnKeyEvent carries no modifier flag.
  | Author: suinevere
  ----------------------*/
 int menu_row_digit(char ch, int nrows, int *dir);
+
+/*----------------------
+ | menu_row_digit_char
+ | Description: The key that selects a row, for pages that print the shortcut
+ |   beside the label. Exists so a page cannot print a number the player then
+ |   cannot type -- the tenth row's key is '0', not "10".
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: row -- 0-based row index
+ | Returns: the character, or '\0' when the row is past what digits reach
+ ----------------------*/
+char menu_row_digit_char(int row);
 
 /*----------------------
  | menu_visible_digit

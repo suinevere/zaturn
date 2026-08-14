@@ -177,10 +177,12 @@ void display_cycle_row(DisplayCycleRow which, int dir) {
  |   legacy blob instead stored one sound flag here (1 = off, else on), so
  |   when the pair doesn't parse as two in-range levels it is read as that
  |   flag and mapped to pcm 0 (off) or 4, music forced to 7; a controller-
- |   mapping block, format sentinel 2 followed by FA_N face-button bytes then
+ |   mapping block, format sentinel 3 followed by FA_N face-button bytes then
  |   CA_N chord-slot bytes, each byte accepted only if within range, applied
- |   only when the sentinel matches (an older/absent blob keeps the compiled
- |   default mapping); a sound block, sentinel 1 followed by [mix][track]; a
+ |   only when the sentinel matches. Sentinel 2 is the same block one face byte
+ |   shorter, from before Space became remappable, and is still read -- the width
+ |   found is what every block behind it is measured from (an absent block keeps
+ |   the compiled default mapping); a sound block, sentinel 1 followed by [mix][track]; a
  |   gameplay block -- sentinel 5 followed by one VERB_* verbosity byte (the
  |   original form), or sentinel 7 followed by the verbosity byte plus a packed
  |   byte (bit 0 = g_cmd_iface, bit 1 = g_toggle_btn), the form that also carries
@@ -222,12 +224,23 @@ void options_load(void) {
         if (a <= 7 && b <= 7) { g_music_level = a; g_pcm_level = b; }
         else { g_pcm_level = (a == 1) ? 0 : 4; g_music_level = 7; }   // legacy sound flag
     }
+    /* The mapping block grew a face action -- Space joined Accept, Backspace and
+       Type-letter when it stopped being a fixed X -- so sentinel 2's block is one
+       byte shorter than sentinel 3's, and everything after it (sound, gameplay,
+       display) sits at a different offset. Both widths are read, and the width
+       actually found is what the rest of the layout is measured from; getting
+       that wrong would not lose the mapping, it would silently misparse every
+       block behind it. A sentinel-2 blob carries no Space byte, so Space keeps
+       its compiled default of X -- which is where it always fired. */
+    const int FA_N_V1 = 3;
     int m = i + 3;
-    if (m + 1 + FA_N + CA_N <= (int) sizeof(buf) && buf[m] == 2) {
-        for (int a = 0; a < FA_N; a++) { int v = buf[m + 1 + a];        if (v < 3)    g_face_btn[a]   = v; }
-        for (int a = 0; a < CA_N; a++) { int v = buf[m + 1 + FA_N + a]; if (v < SL_N) g_chord_slot[a] = v; }
+    int fa_stored = (buf[m] == 3) ? FA_N : FA_N_V1;
+    int btn_max   = (buf[m] == 3) ? FA_BTN_N : FA_N_V1;
+    if (m + 1 + fa_stored + CA_N <= (int) sizeof(buf) && (buf[m] == 2 || buf[m] == 3)) {
+        for (int a = 0; a < fa_stored; a++) { int v = buf[m + 1 + a];             if (v < btn_max) g_face_btn[a]   = v; }
+        for (int a = 0; a < CA_N; a++)      { int v = buf[m + 1 + fa_stored + a]; if (v < SL_N)    g_chord_slot[a] = v; }
     }
-    int s = m + 1 + FA_N + CA_N;
+    int s = m + 1 + fa_stored + CA_N;
     if (s + 2 < (int) sizeof(buf) && buf[s] == 1) {
         if (buf[s + 1] <= MIX_RANDOM) g_mix_mode = buf[s + 1];
         if (buf[s + 2] >= MUSIC_TRACK_MIN && buf[s + 2] <= MUSIC_TRACK_MAX) g_sel_track = buf[s + 2];
@@ -264,7 +277,7 @@ void options_load(void) {
  | options_save
  | Description: Serializes the current option globals into the same MOJOOPTS
  |   layout options_load reads: difficulty byte; NUL-terminated dial number;
- |   music and pcm level bytes; controller-mapping sentinel byte (2) followed
+ |   music and pcm level bytes; controller-mapping sentinel byte (3) followed
  |   by the face-button and chord-slot bytes; sound-block sentinel byte (1)
  |   followed by mix mode and selected track; gameplay-block sentinel byte (7)
  |   followed by the verbosity byte and a packed byte (bit 0 = g_cmd_iface, bit
@@ -286,7 +299,7 @@ void options_save(void) {
     buf[n++] = 0;
     buf[n++] = (uint8_t) g_music_level;           // audio levels: [music][pcm], 0..7
     buf[n++] = (uint8_t) g_pcm_level;
-    buf[n++] = 2;                                 // controller-mapping format sentinel
+    buf[n++] = 3;                                 // controller-mapping format sentinel: + Space
     for (int a = 0; a < FA_N && n < 62; a++) buf[n++] = (uint8_t) g_face_btn[a];
     for (int a = 0; a < CA_N && n < 62; a++) buf[n++] = (uint8_t) g_chord_slot[a];
     buf[n++] = 1;                                 // sound-block sentinel

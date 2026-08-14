@@ -272,6 +272,68 @@ int main(void) {
     assert(strcmp(p.line, "take") == 0);
     assert(p.slot == CP_SLOT_NOUN);
 
+    /* cp_submit sends a line the grammar chain has not finished with. */
+    cp_reset(&p);
+    cp_pick(&p, "read", 0);
+    assert(p.slot == CP_SLOT_NOUN);
+    assert(p.submitted == 0);
+    cp_submit(&p);
+    assert(p.submitted == 1);
+    assert(p.slot == CP_SLOT_DONE);
+    assert(strcmp(p.line, "read") == 0);
+
+    /* An empty line is not a command, so the button does nothing on one. */
+    cp_reset(&p);
+    cp_submit(&p);
+    assert(p.submitted == 0);
+    assert(p.slot == CP_SLOT_VERB);
+    assert(p.line_len == 0);
+
+    /* Backing up after a send takes the submit back with the word. */
+    cp_reset(&p);
+    cp_pick(&p, "read", 0);
+    cp_submit(&p);
+    assert(p.submitted == 1);
+    cp_back(&p);
+    assert(p.submitted == 0);
+    assert(p.line_len == 0);
+
+    /* cp_load_line leaves the panel where picking those words would have. */
+    cp_reset(&p);
+    cp_load_line(&p, "take lamp");
+    assert(strcmp(p.line, "take lamp") == 0);
+    assert(p.line_len == 9);
+    assert(p.slot == CP_SLOT_DONE);
+    assert(p.submitted == 0);
+    /* and Back unwinds it a word at a time, like a built one */
+    cp_back(&p);
+    assert(strcmp(p.line, "take") == 0);
+
+    cp_reset(&p);
+    cp_load_line(&p, "look");
+    assert(p.slot == CP_SLOT_NOUN);
+    cp_reset(&p);
+    cp_load_line(&p, "put lamp in");
+    assert(p.slot == CP_SLOT_NOUN2);
+    cp_reset(&p);
+    cp_load_line(&p, "put lamp in case");
+    assert(p.slot == CP_SLOT_DONE);
+
+    /* Runs of spaces are one separator, not one word each. */
+    cp_reset(&p);
+    cp_load_line(&p, "take  lamp");
+    assert(p.slot == CP_SLOT_DONE);
+
+    /* Empty and null clear back to the verb slot -- the step past the newest
+       history entry arrives as "". */
+    cp_reset(&p);
+    cp_load_line(&p, "take lamp");
+    cp_load_line(&p, "");
+    assert(p.line_len == 0);
+    assert(p.slot == CP_SLOT_VERB);
+    cp_load_line(&p, 0);
+    assert(p.line_len == 0);
+
     printf("test_command_panel ok\n");
     return 0;
 }

@@ -16,6 +16,8 @@
 #include "console_view.h"
 #include "app_state.h"
 #include "command_view.h"
+#include "command_rose.h"
+#include "game_kb.h"
 #include "input.h"
 
 // ---- rendering -------------------------------------------------------------
@@ -56,7 +58,7 @@ bool g_kbd_visible = true;
  |   rows + 2 panel borders; every other gamepad-in-hand case (the on-screen
  |   keyboard explicitly selected, OR no game running at all -- the online
  |   terminal before/without a story, and the whole netbin build, which never
- |   assigns g_cmd_mode), 1 input row + KB_ROWS keyboard rows + 1 hint row. The
+ |   assigns g_cmd_mode), 1 input row + KB_ROWS keyboard rows. The
  |   g_in_game gate matters because g_cmd_mode initializes to IFACE_PANEL and is
  |   assigned nowhere else: without it, the panel's layout would leak into
  |   every screen that draws through render_keyboard instead of the panel --
@@ -68,11 +70,118 @@ bool g_kbd_visible = true;
  | Params: N/A
  | Returns: the number of rows the console view may draw into
  ----------------------*/
+/*----------------------
+ | WIN_W0_* / WIN_NBG0_SUPPRESS
+ | Description: The VDP2 window-0 WCTL byte that suppresses the image behind a
+ |   box. SGL exposes no constants, so the encoding was read from the library:
+ |   slScrWindowMode(scrn, mode) stores `mode` at 0x060ffd90 + scrn into SGL's
+ |   WCTLA..WCTLD shadow (flushed at vblank), so `mode` is the raw per-screen WCTL
+ |   byte. ENABLE = bit 1 (window 0 applies here), INSIDE/OUTSIDE = bit 0 (which
+ |   side of the rect is the window). WIN_NBG0_SUPPRESS is the combined value; if
+ |   the image ever hides everywhere except the box, swap INSIDE for OUTSIDE.
+ | Author: suinevere
+ ----------------------*/
+#define WIN_W0_ENABLE       0x02
+#define WIN_W0_INSIDE       0x00
+#define WIN_W0_OUTSIDE      0x01
+#define WIN_NBG0_SUPPRESS   (WIN_W0_ENABLE | WIN_W0_INSIDE)
+
+/*----------------------
+ | image_window_box
+ | Description: See console_view.h. Converts text cells to pixels (cells are 8x8,
+ |   the display is 320x224) and clamps to the screen.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: x0, y0 -- top-left corner in text cells; w, h -- size in cells
+ | Returns: N/A
+ ----------------------*/
+void image_window_box(int x0, int y0, int w, int h) {
+    int x1 = x0 * 8,             y1 = y0 * 8;
+    int x2 = (x0 + w) * 8 - 1,   y2 = (y0 + h) * 8 - 1;
+    if (x2 > 319) x2 = 319;
+    if (y2 > 223) y2 = 223;
+    if (x1 < 0)   x1 = 0;
+    if (y1 < 0)   y1 = 0;
+    slScrWindow0((uint16_t) x1, (uint16_t) y1, (uint16_t) x2, (uint16_t) y2);
+}
+
+/*----------------------
+ | image_window_on
+ | Description: See console_view.h. Cancels any window-off still owed to the next
+ |   text flush before switching on, so a caller that arms the window every frame
+ |   cannot be switched back off underneath itself by a menu that has just closed.
+ | Author: suinevere
+ | Dependencies: SRL, text_map.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void image_window_on(void) {
+    text_on_flush(nullptr);
+    slScrWindowModeNbg0(WIN_NBG0_SUPPRESS);
+}
+
+/*----------------------
+ | image_window_off
+ | Description: See console_view.h.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void image_window_off(void) {
+    slScrWindowModeNbg0(0);
+}
+
+/*----------------------
+ | SGL_TVMD_SHADOW / VDP2_TVMD_BDCLMD
+ | Description: SGL's shadow copy of the VDP2 TVMD register, and the border
+ |   colour mode bit inside it (0 = black border, 1 = back-screen colour).
+ |
+ |   SGL owns TVMD and rewrites it from this shadow, so the hardware register at
+ |   0x25f80000 cannot be poked directly -- the write is undone. slTVOn/slTVOff
+ |   disassemble to a read-modify-write of `@(192, gbr)`, which puts the shadow
+ |   at GBR + 0xC0; SGL sets GBR to 0x060ffc00 (workarea.c's MasterStack), so
+ |   TVMD's shadow is 0x060ffcc0 and the block from there mirrors the VDP2
+ |   register offsets one for one. Five SGL functions confirm that layout, each
+ |   landing exactly on its register: slScrCycleSet 0x060ffcd0 (CYCA0L 0x010),
+ |   slScrScaleNbg0/1 0x060ffd38/0x060ffd48 (ZMXIN0 0x078 / ZMXIN1 0x088),
+ |   slScrWindowMode 0x060ffd90 (WCTLA 0x0D0 -- the one menu.c already relies
+ |   on), slColorCalcOn 0x060ffdac (CCCTL 0x0EC), slPriority 0x060ffdb8
+ |   (PRINA 0x0F8).
+ |
+ |   SGL exposes no wrapper for this bit, which is why it is reached by address.
+ |   Nothing else writes the shadow after boot -- slTVOn and slTVOff touch only
+ |   bit 15 (DISP), and preserve the rest -- so clearing it once holds.
+ | Author: suinevere
+ ----------------------*/
+#define SGL_TVMD_SHADOW    ((volatile uint16_t *) 0x060ffcc0)
+#define VDP2_TVMD_BDCLMD   0x0100
+
+/*----------------------
+ | border_use_black
+ | Description: See console_view.h. Clears BDCLMD in SGL's TVMD shadow, which
+ |   SGL flushes to the hardware register at the next vblank.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void border_use_black(void) {
+    *SGL_TVMD_SHADOW = (uint16_t) (*SGL_TVMD_SHADOW & ~VDP2_TVMD_BDCLMD);
+}
+
 int console_height(void) {
     int avail = SCREEN_ROWS - TOP_MARGIN;
     if (!g_kbd_visible) return avail - 1;
-    if (g_in_game && g_cmd_mode == IFACE_PANEL) return avail - (1 + CV_STRIP_ROWS + 2);
-    return avail - (1 + KB_ROWS + 1);
+    /* In game both interfaces are the same bordered strip -- command panel or
+       keyboard, each is the input line, two borders, and the seven-row rose. Off
+       the title screen's online terminal keeps the smaller four-row grid. */
+    if (g_in_game) return avail - (1 + CV_STRIP_ROWS + 2);
+    return avail - (1 + KB_ROWS);
 }
 
 /*----------------------
@@ -303,6 +412,124 @@ static void draw_input_line(int row, const KeyboardState &k,
  |   suggestion or null; cw_len_out -- current word length
  | Returns: N/A
  ----------------------*/
+#ifndef NETBIN
+/*----------------------
+ | g_kb_on_rose / g_kb_rose_dir
+ | Description: The in-game keyboard's focus -- whether the picker sits on the
+ |   compass rose left of the keys, and the RM_* direction it holds when it does.
+ |   File-scope because the keyboard view is a singleton whose focus outlives one
+ |   frame. Compiled out of the netbin/online build, which has no rose.
+ | Author: suinevere
+ ----------------------*/
+static bool g_kb_on_rose = false;
+static int  g_kb_rose_dir = -1;
+
+/*----------------------
+ | kb_rose_row / kb_grid_row
+ | Description: Map a keyboard grid row (0..GKB_ROWS-1) to the strip row it shares
+ |   with the rose and back. The symbols and number rows sit above the divider on
+ |   strip row 2; the three letter rows and the space bar sit below it, so a grid
+ |   row from the qwerty row down draws one strip row lower than its index.
+ | Author: suinevere
+ | Params: grid_row / rose_row -- the row in the other geometry
+ | Returns: the mapped row
+ ----------------------*/
+static int kb_rose_row(int grid_row) { return grid_row < 2 ? grid_row : grid_row + 1; }
+static int kb_grid_row(int rose_row) {
+    if (rose_row < 2)  return rose_row;
+    if (rose_row == 2) return 2;
+    return rose_row - 1;
+}
+
+/*----------------------
+ | kb_exits
+ | Description: The current room's exit states as the rose draws them, flattened to
+ |   conditional on Hard so the keyboard's rose gives no more away than the panel's.
+ | Author: suinevere
+ | Dependencies: room_model.h
+ | Globals: g_difficulty
+ | Params: flat -- RM_DIR_N scratch the flattened copy is built in
+ | Returns: flat on Hard, the room's own exits otherwise
+ ----------------------*/
+static const unsigned char *kb_exits(unsigned char *flat) {
+    const RoomModel *m = room_model_get();
+    if (g_difficulty != DIFF_HARD) return m->exits;
+    for (int i = 0; i < RM_DIR_N; i++)
+        flat[i] = (m->exits[i] == RM_EXIT_OPEN) ? RM_EXIT_MAYBE : m->exits[i];
+    return flat;
+}
+
+/*----------------------
+ | game_kb_dpad
+ | Description: One frame of D-pad for the in-game keyboard. On the keys it walks
+ |   the grid; a left press off the leftmost column hands focus to the rose at the
+ |   height it left from. On the rose it aims the press the way the panel's travel
+ |   module does -- a fired edge plus a held one makes a diagonal -- and a press
+ |   that carries off the right edge returns to the keys at the same height.
+ | Author: suinevere
+ | Dependencies: game_kb.h, command_rose.h, input.h
+ | Globals: g_kb_on_rose, g_kb_rose_dir, g_pad
+ | Params: k -- keyboard state whose picker is moved
+ | Returns: N/A
+ ----------------------*/
+static void game_kb_dpad(KeyboardState &k) {
+    unsigned char flat[RM_DIR_N];
+    const unsigned char *exits = kb_exits(flat);
+    bool fu = pad_fired(Button::Up),   fd = pad_fired(Button::Down);
+    bool fl = pad_fired(Button::Left), fr = pad_fired(Button::Right);
+
+    if (g_kb_on_rose) {
+        if (!fr && !fl && !fd && !fu) return;
+        int dx = fr ? 1 : fl ? -1 : g_pad->IsHeld(Button::Right) ? 1
+                                  : g_pad->IsHeld(Button::Left)  ? -1 : 0;
+        int dy = fd ? 1 : fu ? -1 : g_pad->IsHeld(Button::Down)  ? 1
+                                  : g_pad->IsHeld(Button::Up)    ? -1 : 0;
+        if (g_kb_rose_dir < 0 || cr_dir_row(g_kb_rose_dir) < 0) {
+            g_kb_rose_dir = cr_enter(exits, 3, 1);
+            if (g_kb_rose_dir < 0) g_kb_on_rose = false;
+            return;
+        }
+        int dir = g_kb_rose_dir;
+        if (cr_move(exits, dir, dx, dy, &dir) > 0) {
+            g_kb_on_rose = false;
+            k.cursor_row = kb_grid_row(cr_dir_row(dir));
+            k.cursor_col = 0;
+        }
+        g_kb_rose_dir = dir;
+        return;
+    }
+
+    if (fu) game_kb_move(&k.cursor_row, &k.cursor_col, 0, -1);
+    if (fd) game_kb_move(&k.cursor_row, &k.cursor_col, 0, +1);
+    if (fr) game_kb_move(&k.cursor_row, &k.cursor_col, +1, 0);
+    if (fl && game_kb_move(&k.cursor_row, &k.cursor_col, -1, 0)) {
+        int d = cr_enter(exits, kb_rose_row(k.cursor_row), 1);
+        if (d >= 0) { g_kb_on_rose = true; g_kb_rose_dir = d; }
+    }
+}
+
+/*----------------------
+ | game_kb_travel
+ | Description: Sends the rose's selected direction as a command the way the panel
+ |   does -- the direction's word fills the line and is submitted -- when it names
+ |   an exit the room actually offers.
+ | Author: suinevere
+ | Dependencies: room_model.h, keyboard.h
+ | Globals: g_kb_rose_dir
+ | Params: k -- keyboard state the direction word is written into
+ | Returns: N/A
+ ----------------------*/
+static void game_kb_travel(KeyboardState &k) {
+    unsigned char flat[RM_DIR_N];
+    const unsigned char *exits = kb_exits(flat);
+    int d = g_kb_rose_dir;
+    if (d < 0 || d >= RM_DIR_N) return;
+    if (exits[d] != RM_EXIT_OPEN && exits[d] != RM_EXIT_MAYBE) return;
+    keyboard_load_line(&k, room_model_dir_word(d));
+    keyboard_submit(&k);
+}
+#endif /* NETBIN */
+
 void typeahead_edit(KeyboardState &k, TrieNode *root,
                     int &sug_index, char *sug_last,
                     SaturnKeyEvent &ke, bool pad,
@@ -313,14 +540,38 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
         if (chord_fired(CA_RECALL, +1)) history_recall(&k, 0);
         if (chord_fired(CA_CURSOR, -1)) keyboard_caret_left(&k);
         if (chord_fired(CA_CURSOR, +1)) keyboard_caret_right(&k);
-        if (!g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y)) {
-            if (pad_fired(Button::Up))    keyboard_move(&k, 0, -1);
-            if (pad_fired(Button::Down))  keyboard_move(&k, 0,  1);
-            if (pad_fired(Button::Left))  keyboard_move(&k, -1, 0);
-            if (pad_fired(Button::Right)) keyboard_move(&k,  1, 0);
+        // X joined Z and Y as a chord shift when Recall moved onto X+Up/Dn, so
+        // the grid cursor has to stand still for it too -- chord_shift_held is
+        // the one place that knows which buttons those are.
+        if (!chord_shift_held()) {
+#ifndef NETBIN
+            if (g_in_game) game_kb_dpad(k);
+            else
+#endif
+            {
+                if (pad_fired(Button::Up))    keyboard_move(&k, 0, -1);
+                if (pad_fired(Button::Down))  keyboard_move(&k, 0,  1);
+                if (pad_fired(Button::Left))  keyboard_move(&k, -1, 0);
+                if (pad_fired(Button::Right)) keyboard_move(&k,  1, 0);
+            }
         }
-        if (pad_fired(face_button(FA_TYPE))) keyboard_type(&k);
-        if (pad_fired(face_button(FA_BACK))) keyboard_backspace(&k);
+#ifndef NETBIN
+        if (g_in_game) {
+            if (g_kb_on_rose) {
+                if (pad_fired(face_button(FA_TYPE))) game_kb_travel(k);
+                if (pad_fired(face_button(FA_BACK))) g_kb_on_rose = false;
+            } else {
+                if (pad_fired(face_button(FA_TYPE)))
+                    keyboard_type_char(&k, game_kb_char_at(k.cursor_row, k.cursor_col,
+                                                           keyboard_get_caps()));
+                if (pad_fired(face_button(FA_BACK))) keyboard_backspace(&k);
+            }
+        } else
+#endif
+        {
+            if (pad_fired(face_button(FA_TYPE))) keyboard_type(&k);
+            if (pad_fired(face_button(FA_BACK))) keyboard_backspace(&k);
+        }
     }
 
     char current_word[256]; int cw_len; DictionaryWord *prev_word;
@@ -387,7 +638,7 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
         ke.kind == SATURN_KEY_CTRL_LEFT || ke.kind == SATURN_KEY_CTRL_RIGHT) ke.kind = SATURN_KEY_NONE;
 
     bool a_press   = pad && g_pad->WasPressed(face_button(FA_ACCEPT));
-    bool x_press   = pad && pad_fired(Button::X);
+    bool sp_press  = pad && pad_fired(face_button(FA_SPACE));
     bool has_ghost = selected && ghost_len() > 0;
     if (a_press) {
         if (has_ghost) accept(false);
@@ -399,7 +650,7 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
             keyboard_type_char(&k, ' ');
         ke.kind = SATURN_KEY_NONE;
     }
-    if (x_press) {
+    if (sp_press) {
         if (has_ghost) accept(true);
         else           keyboard_type_char(&k, ' ');
     }
@@ -423,20 +674,106 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
     cw_len_out = cw_len;
 }
 
+#ifndef NETBIN
+/*----------------------
+ | KB_STRIP_BORDER
+ | Description: The in-game keyboard strip's top and bottom border, 39 columns:
+ |   the rose module (1..13), the keyboard module (15..37), and the three dividers
+ |   at 0, 14 and 38 -- the same left column as the command panel so the two
+ |   interfaces line up when the player toggles between them.
+ | Author: suinevere
+ ----------------------*/
+static const char *KB_STRIP_BORDER = "+-------------+-----------------------+";
+
+/*----------------------
+ | render_game_keyboard
+ | Description: Draws the in-game keyboard as a bordered strip matching the command
+ |   panel: the input line above it, then the seven-row compass rose on the left and
+ |   the key block on the right, split by a divider on the middle row between the
+ |   number and letter rows and closed by the space bar. The focused picker cell is
+ |   reverse-video for a key or, when focus has crossed left, the rose's selected
+ |   direction; the space bar instead blinks filled/blank on the caret phase, like
+ |   the input-line cursor. CapsLock shows on the input row.
+ | Author: suinevere
+ | Dependencies: command_rose.h, command_view.h (cv_draw_rose_row), game_kb.h,
+ |   room_model.h, text_map.h
+ | Globals: g_kb_on_rose, g_kb_rose_dir, g_difficulty
+ | Params: k -- keyboard/input-line state; prediction -- selected completion or
+ |   null; current_word_len -- length of the word being completed; block_on -- the
+ |   caret blink phase; base -- the input row (first row of the strip block)
+ | Returns: N/A
+ ----------------------*/
+static void render_game_keyboard(const KeyboardState &k, DictionaryWord *prediction,
+                                 int current_word_len, bool block_on, int base) {
+    int input_row = base;
+    int border_top = input_row + 1;
+    int content0 = border_top + 1;
+    int border_bottom = content0 + CR_ROWS;
+
+    image_window_box(0, border_top, 40, border_bottom - border_top + 1);
+    image_window_on();
+
+    text_clear_line(input_row);
+    draw_input_line(input_row, k, prediction, current_word_len, block_on);
+    if (keyboard_get_caps()) text_print(35, input_row, "CAPS");
+
+    text_clear_line(border_top);    text_print(0, border_top, KB_STRIP_BORDER);
+    text_clear_line(border_bottom); text_print(0, border_bottom, KB_STRIP_BORDER);
+
+    unsigned char flat[RM_DIR_N];
+    const unsigned char *exits = kb_exits(flat);
+    int sel = g_kb_on_rose ? g_kb_rose_dir : -1;
+    int caps = keyboard_get_caps();
+
+    for (int r = 0; r < CR_ROWS; r++) {
+        int y = content0 + r;
+        text_clear_line(y);
+        text_print(0, y, "|");
+        cv_draw_rose_row(r, exits, y, sel);
+        text_print(14, y, "|");
+        text_print(38, y, "|");
+        if (r == 2) { text_print(15, y, "-----------------------"); continue; }
+        int gr = kb_grid_row(r);
+        if (gr == GKB_SPACE_ROW) {
+            bool selected = !g_kb_on_rose && k.cursor_row == GKB_SPACE_ROW;
+            /* Steady block when unselected; when the picker is on it, blink the
+               bar between filled and blank on the caret phase, the way the input
+               line's block cursor does, rather than sit reverse-video. */
+            if (!selected || block_on) {
+                char bar[15];
+                for (int i = 0; i < 14; i++) bar[i] = (char) 0x7f;
+                bar[14] = '\0';
+                text_print(20, y, bar);
+            }
+        } else {
+            char keys[GKB_COLS * 2];
+            int p = 0;
+            for (int c = 0; c < GKB_COLS; c++) {
+                keys[p++] = game_kb_char_at(gr, c, caps);
+                if (c < GKB_COLS - 1) keys[p++] = ' ';
+            }
+            keys[p] = '\0';
+            text_print(17, y, keys);
+            if (!g_kb_on_rose && k.cursor_row == gr) {
+                char one[2] = { game_kb_char_at(gr, k.cursor_col, caps), '\0' };
+                text_print_hl(17 + k.cursor_col * 2, y, one);
+            }
+        }
+    }
+}
+#endif /* NETBIN */
+
 /*----------------------
  | render_keyboard
  | Description: Installs the solid-block cursor glyph on first use (deferred
  |   here, not at boot, so VDP2/the font are guaranteed up by the first render),
- |   then advances the blink phase and draws the input line via draw_input_line.
- |   When the on-screen keyboard is hidden (a real keyboard is in hand), the
- |   console's last row is already the ">" prompt, so the input line is drawn
- |   over it (clearing that row and the one below first) instead of on a
- |   separate row -- otherwise the prompt would show twice -- and any "more v"
- |   marker render_console drew on that shared row is repainted since the clear
- |   wiped it. When the on-screen keyboard is showing, the input line goes on its
- |   own row below the console, followed by the KB_ROWS keyboard grid (marking
- |   the picker cell with '['), the CapsLock indicator, and the remappable
- |   face-button legend.
+ |   then advances the blink phase and dispatches. When the on-screen keyboard is
+ |   hidden (a real keyboard is in hand), the console's last row is already the ">"
+ |   prompt, so the input line is drawn over it (clearing that row and the one
+ |   below first) and any "more v" marker is repainted. In game the bordered strip
+ |   -- rose plus key block -- is drawn by render_game_keyboard. Off the title
+ |   screen's online terminal there is no room, so the original KB_ROWS grid is
+ |   drawn instead, its picker cell in reverse video.
  | Author: suinevere
  | Dependencies: keyboard.c, input.cxx, SRL
  | Globals: g_kbd_visible, g_more_below
@@ -453,7 +790,11 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
     bool block_on = ((blink++ / CURSOR_BLINK_FRAMES) & 1) != 0;
 
     int base = TOP_MARGIN + console_height();
+
     if (!g_kbd_visible) {
+        /* A real keyboard is in hand: no on-screen interface to back, so drop the
+           window and draw the input line over the console's ">" prompt row. */
+        if (g_in_game) image_window_off();
         int row = base - 1;
         text_clear_line(base);
         text_clear_line(row);
@@ -461,6 +802,13 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
         if (g_more_below) text_print(34, row, "more v");
         return;
     }
+
+#ifndef NETBIN
+    if (g_in_game) { render_game_keyboard(k, prediction, current_word_len, block_on, base); return; }
+#endif
+
+    /* Off the title screen's online terminal (no room, no rose): the original
+       four-row grid, its picker cell in reverse video. */
     int row = base;
     text_clear_line(row);
     draw_input_line(row, k, prediction, current_word_len, block_on);
@@ -468,14 +816,16 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
         char rowbuf[KB_COLS * 2 + 1];
         int p = 0;
         for (int c = 0; c < KB_COLS; c++) {
-            rowbuf[p++] = (r == k.cursor_row && c == k.cursor_col) ? '[' : ' ';
+            rowbuf[p++] = ' ';
             rowbuf[p++] = keyboard_char_at(r, c);
         }
         rowbuf[p] = '\0';
         text_clear_line(row + 1 + r);
         text_print(2, row + 1 + r, "%s", rowbuf);
+        if (r == k.cursor_row) {
+            char sel[2] = { keyboard_char_at(r, k.cursor_col), '\0' };
+            text_print_hl(2 + k.cursor_col * 2 + 1, row + 1 + r, sel);
+        }
     }
     if (keyboard_get_caps()) text_print(30, row + 1, "CAPS");
-    text_print(0, row + 1 + KB_ROWS, "%s=type %s=accept %s=del  X=space",
-                      face_btn_name(FA_TYPE), face_btn_name(FA_ACCEPT), face_btn_name(FA_BACK));
 }

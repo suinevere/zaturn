@@ -72,7 +72,7 @@ void cp_move(CommandPanel *p, int d, int count) {
  |   Marks `submitted` when the command is complete. While the overlay is up,
  |   this is also its sole close path: a pick that cannot land -- the panel is
  |   waiting for a verb, or `word` is empty -- closes the overlay instead of
- |   being silently dropped, so Accept can never leave it stuck open.
+ |   being silently dropped, so the picking button can never leave it stuck open.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -103,6 +103,65 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
     p->top = 0;
     p->overlay = 0;
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
+}
+
+/*----------------------
+ | cp_submit
+ | Description: Sends the command as it stands, however far short of the grammar
+ |   slot chain it stops -- the player's explicit "that will do", alongside the
+ |   automatic submit cp_pick performs when the chain runs out on its own. Does
+ |   nothing on an empty line, so the button cannot post a blank command, and
+ |   nothing while the overlay is up: that is the caller's guard, since only the
+ |   caller knows a picker is open over the line.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: N/A
+ ----------------------*/
+void cp_submit(CommandPanel *p) {
+    if (p->line_len == 0) return;
+    p->slot = CP_SLOT_DONE;
+    p->submitted = 1;
+}
+
+/*----------------------
+ | cp_load_line
+ | Description: Replaces the command with `text` and leaves the panel in the
+ |   state it would have been in had the player picked those words one at a
+ |   time, so Back unwinds a recalled command exactly like a built one: the slot
+ |   is derived from the word count along the VERB -> NOUN -> (PREP -> NOUN2) ->
+ |   DONE chain. Two words land on DONE rather than PREP because whether the verb
+ |   takes a preposition is the trie's answer, not this file's, and a recalled
+ |   line has no pick to ask on; a verb that does wants one more Back than it
+ |   would have taken. An empty or null `text` clears the line to the verb slot.
+ |   Focus is left where it was -- a recall is not a reason to move the player
+ |   off the module they were reading. Truncates at CP_LINE_MAX, which equals
+ |   KB_INPUT_MAX, so nothing the history can hold is ever cut.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; text -- the command to load, may be null or empty
+ | Returns: N/A
+ ----------------------*/
+void cp_load_line(CommandPanel *p, const char *text) {
+    int i = 0, words = 0, in_word = 0;
+    while (text != 0 && text[i] != '\0' && i < CP_LINE_MAX - 1) {
+        if (text[i] == ' ') in_word = 0;
+        else if (!in_word) { in_word = 1; words++; }
+        p->line[i] = text[i];
+        i++;
+    }
+    p->line[i] = '\0';
+    p->line_len = i;
+    p->slot = (words == 0) ? CP_SLOT_VERB
+            : (words == 1) ? CP_SLOT_NOUN
+            : (words == 3) ? CP_SLOT_NOUN2
+                           : CP_SLOT_DONE;
+    p->cursor = 0;
+    p->top = 0;
+    p->overlay = 0;
+    p->submitted = 0;
 }
 
 /*----------------------

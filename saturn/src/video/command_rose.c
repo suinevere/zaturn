@@ -24,13 +24,13 @@ typedef struct {
 
 static const CrCell CR_CELL[RM_DIR_N] = {
     { 1, 1, 1,  6, 1 },   /* RM_N    */
-    { 2, 2, 3, 10, 1 },   /* RM_E    */
-    { 2, 0, 3,  2, 1 },   /* RM_W    */
+    { 2, 2, 3,  9, 1 },   /* RM_E    */
+    { 2, 0, 3,  3, 1 },   /* RM_W    */
     { 3, 1, 5,  6, 1 },   /* RM_S    */
-    { 1, 2, 1,  9, 2 },   /* RM_NE   */
-    { 1, 0, 1,  2, 2 },   /* RM_NW   */
-    { 3, 2, 5,  9, 2 },   /* RM_SE   */
-    { 3, 0, 5,  2, 2 },   /* RM_SW   */
+    { 1, 2, 1,  8, 2 },   /* RM_NE   */
+    { 1, 0, 1,  3, 2 },   /* RM_NW   */
+    { 3, 2, 5,  8, 2 },   /* RM_SE   */
+    { 3, 0, 5,  3, 2 },   /* RM_SW   */
     { 0, 0, 0,  0, 2 },   /* RM_UP   */
     { 4, 0, 6,  0, 4 },   /* RM_DOWN */
     { 0, 2, 0, 11, 2 },   /* RM_IN   */
@@ -107,21 +107,21 @@ void cr_row(const unsigned char *exits, int row, char *out) {
             put(out, RM_NE, exits);
             break;
         case 2:
-            spoke(out, 4, '\\', exits[RM_NW]);
+            spoke(out, 5, '\\', exits[RM_NW]);
             spoke(out, 6, '|',  exits[RM_N]);
-            spoke(out, 8, '/',  exits[RM_NE]);
+            spoke(out, 7, '/',  exits[RM_NE]);
             break;
         case 3:
             put(out, RM_W, exits);
             put(out, RM_E, exits);
-            spoke(out, 4, '-', exits[RM_W]);
-            spoke(out, 8, '-', exits[RM_E]);
+            spoke(out, 5, '-', exits[RM_W]);
+            spoke(out, 7, '-', exits[RM_E]);
             out[6] = '+';
             break;
         case 4:
-            spoke(out, 4, '/',  exits[RM_SW]);
+            spoke(out, 5, '/',  exits[RM_SW]);
             spoke(out, 6, '|',  exits[RM_S]);
-            spoke(out, 8, '\\', exits[RM_SE]);
+            spoke(out, 7, '\\', exits[RM_SE]);
             break;
         case 5:
             put(out, RM_SW, exits);
@@ -188,30 +188,32 @@ static int cr_row_pick(const unsigned char *exits, int r, int from_right) {
 }
 
 /*----------------------
- | cr_row_nearest
- | Description: The available direction on grid row `r` closest to column
- |   `prefer`. What makes a vertical press useful in the centre column, where
- |   the top and bottom rows have no cell of their own: pressing up from north
- |   should reach up, not stop dead against the gap directly above it.
+ | CR_POS
+ | Description: Where each direction sits, as a point a press can be aimed at.
+ |   The row is the drawn one; the column is the grid column widened to 5 so the
+ |   three columns stand roughly as far apart as the drawn rose has them, which
+ |   is what makes an equal-length diagonal press score as a diagonal. Grid
+ |   column rather than drawn column because the labels are ragged -- "in" starts
+ |   a column further right than "ne" does -- and a press should not be able to
+ |   walk sideways along a column just because its labels are not flush.
  | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: exits -- the exit states; r -- grid row; prefer -- the column to
- |   start from
- | Returns: an RM_* index, or -1 when the row offers nothing
  ----------------------*/
-static int cr_row_nearest(const unsigned char *exits, int r, int prefer) {
-    int step, s, c, d;
-    for (step = 0; step < CR_GRID_COLS; step++) {
-        for (s = 0; s < 2; s++) {
-            c = prefer + (s ? step : -step);
-            d = cr_grid_dir(r, c);
-            if (d >= 0 && shown(exits[d])) return d;
-            if (step == 0) break;
-        }
-    }
-    return -1;
-}
+typedef struct { signed char x, y; } CrPoint;
+
+static const CrPoint CR_POS[RM_DIR_N] = {
+    {  5, 1 },   /* N    */
+    { 10, 3 },   /* E    */
+    {  0, 3 },   /* W    */
+    {  5, 5 },   /* S    */
+    { 10, 1 },   /* NE   */
+    {  0, 1 },   /* NW   */
+    { 10, 5 },   /* SE   */
+    {  0, 5 },   /* SW   */
+    {  0, 0 },   /* UP   */
+    {  0, 6 },   /* DOWN */
+    { 10, 0 },   /* IN   */
+    { 10, 6 }    /* OUT  */
+};
 
 int cr_enter(const unsigned char *exits, int want_row, int from_right) {
     int want = 0, r, spread, d;
@@ -234,36 +236,96 @@ int cr_enter(const unsigned char *exits, int want_row, int from_right) {
     return -1;
 }
 
+/*----------------------
+ | cr_better_toward / cr_better_away
+ | Description: The two comparisons cr_move ranks candidates by.
+ |
+ |   toward: of two directions the press points at, the better one is the one
+ |   whose bearing from the cursor more nearly matches the press -- cos of the
+ |   angle between them, compared as dot^2/len^2 cross-multiplied so no square
+ |   root or float is needed -- and, between two equally aimed ones, the nearer.
+ |   Alignment before distance because a press is a bearing, not a reach: from
+ |   west, up-and-right should find north rather than north-east even though both
+ |   are up and to the right, and should find north-east rather than east even
+ |   though east is closer.
+ |
+ |   away: used only when the press points at nothing, where the cursor wraps to
+ |   the far side. The better one is the one furthest against the press, then the
+ |   one least off its axis.
+ |
+ |   Both fall back to `hi_col` to settle an exact tie: the column the press
+ |   itself leans toward, so an up press between two equal candidates takes the
+ |   left one and a down press takes the right one. Arbitrary, but fixed, and it
+ |   keeps a press and its opposite from both landing on the same cell.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: dot/len2/vx -- the candidate's projection onto the press, its squared
+ |   distance, and its column offset; b* -- the same for the incumbent; hi_col --
+ |   1 to prefer the right-hand candidate on a tie
+ | Returns: 1 when the candidate beats the incumbent
+ ----------------------*/
+static int cr_better_toward(int dot, int len2, int vx, int bdot, int blen2, int bvx,
+                            int hi_col) {
+    int a = dot * dot * blen2;
+    int b = bdot * bdot * len2;
+    if (a != b)         return a > b;
+    if (len2 != blen2)  return len2 < blen2;
+    return hi_col ? (vx > bvx) : (vx < bvx);
+}
+
+static int cr_better_away(int dot, int vx, int bdot, int bvx, int hi_col) {
+    int ax = (vx < 0) ? -vx : vx;
+    int bx = (bvx < 0) ? -bvx : bvx;
+    if (dot != bdot) return dot < bdot;
+    if (ax != bx)    return ax < bx;
+    return hi_col ? (vx > bvx) : (vx < bvx);
+}
+
 int cr_move(const unsigned char *exits, int dir, int dx, int dy, int *out) {
-    int r, c;
+    int c, best = -1;
+    int bdot = 0, blen2 = 0, bvx = 0;
+    int hi_col;
 
     if (out) *out = dir;
     if (dir < 0 || dir >= RM_DIR_N) return 0;
-    r = CR_CELL[dir].grow;
-    c = CR_CELL[dir].gcol;
+    if (dx == 0 && dy == 0) return 0;
+    hi_col = (dx > 0) || (dx == 0 && dy > 0);
 
-    if (dx != 0) {
-        for (c += dx; c >= 0 && c < CR_GRID_COLS; c += dx) {
-            int d = cr_grid_dir(r, c);
-            if (d >= 0 && shown(exits[d])) { if (out) *out = d; return 0; }
-        }
-        return (dx > 0) ? 1 : -1;
-    }
-
-    if (dy != 0) {
-        int rr, d;
-        /* Straight down the column first: north to south is one press, even
-           though the row between them has no centre cell. Only when the whole
-           column is empty that way does the press spill sideways -- which is
-           what carries north up to the corner where up lives. */
-        for (rr = r + dy; rr >= 0 && rr < CR_GRID_ROWS; rr += dy) {
-            d = cr_grid_dir(rr, c);
-            if (d >= 0 && shown(exits[d])) { if (out) *out = d; return 0; }
-        }
-        for (rr = r + dy; rr >= 0 && rr < CR_GRID_ROWS; rr += dy) {
-            d = cr_row_nearest(exits, rr, c);
-            if (d >= 0) { if (out) *out = d; return 0; }
+    /* Everything the press points at, best bearing first. */
+    for (c = 0; c < RM_DIR_N; c++) {
+        int vx, vy, dot, len2;
+        if (c == dir || !shown(exits[c])) continue;
+        vx = CR_POS[c].x - CR_POS[dir].x;
+        vy = CR_POS[c].y - CR_POS[dir].y;
+        dot = vx * dx + vy * dy;
+        if (dot <= 0) continue;
+        len2 = vx * vx + vy * vy;
+        if (best < 0 || cr_better_toward(dot, len2, vx, bdot, blen2, bvx, hi_col)) {
+            best = c; bdot = dot; blen2 = len2; bvx = vx;
         }
     }
+    if (best >= 0) { if (out) *out = best; return 0; }
+
+    /* Nothing that way. A press with any rightward lean leaves the module --
+       travel is the leftmost of the three, so right is the only side with
+       somewhere to go, and this is what guarantees the cursor can always get
+       out of a rose however few exits it has. */
+    if (dx > 0) return 1;
+    if (dy == 0) return 0;
+
+    /* A vertical press wraps to the far side instead, so the short columns can
+       be ridden round rather than dead-ending at the poles. */
+    for (c = 0; c < RM_DIR_N; c++) {
+        int vx, vy, dot;
+        if (c == dir || !shown(exits[c])) continue;
+        vx = CR_POS[c].x - CR_POS[dir].x;
+        vy = CR_POS[c].y - CR_POS[dir].y;
+        dot = vx * dx + vy * dy;
+        if (best < 0 || cr_better_away(dot, vx, bdot, bvx, hi_col)) {
+            best = c; bdot = dot; bvx = vx;
+        }
+    }
+    if (best >= 0 && out) *out = best;
     return 0;
 }

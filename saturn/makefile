@@ -66,12 +66,14 @@ SOURCES = src/main_netbin.cxx \
           src/video/console.c \
           src/video/display.c \
           src/video/text_map.cxx \
+          src/video/glyph_invert.c \
           src/menu/menu.cxx \
           src/menu/menu_layout.c \
           src/menu/options.cxx \
           src/input/input.cxx \
           src/input/saturn_keyboard.cxx \
           src/input/keyboard.c \
+          src/input/numpad.c \
           src/input/typeahead.c \
           src/system/saturn_backup.cxx \
           src/engine/app_state.cxx

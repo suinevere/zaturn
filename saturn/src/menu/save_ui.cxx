@@ -178,7 +178,8 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 if (g_pad->WasPressed(Button::Left))  keyboard_move(&k, -1, 0);
                 if (g_pad->WasPressed(Button::Right)) keyboard_move(&k,  1, 0);
                 if (g_pad->WasPressed(Button::C))     { if (k.input_len < maxchars) keyboard_type(&k); }
-                if (g_pad->WasPressed(Button::X))     { if (k.input_len < maxchars) keyboard_type_char(&k, ' '); }
+                if (g_pad->WasPressed(face_button(FA_SPACE)))
+                                                     { if (k.input_len < maxchars) keyboard_type_char(&k, ' '); }
                 if (g_pad->WasPressed(Button::B))     { editing = 0; SRL::Core::Synchronize(); continue; }
                 if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::START)) submit = true;
             }
@@ -239,11 +240,15 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 char rowbuf[KB_COLS * 2 + 1];
                 int p = 0;
                 for (int c = 0; c < KB_COLS; c++) {
-                    rowbuf[p++] = (r == k.cursor_row && c == k.cursor_col) ? '[' : ' ';
+                    rowbuf[p++] = ' ';
                     rowbuf[p++] = KB_LAYOUT[r][c];
                 }
                 rowbuf[p] = '\0';
                 text_print(cx, cy + SAVE_SLOTS + 1 + r, "%s", rowbuf);
+                if (r == k.cursor_row) {
+                    char sel[2] = { KB_LAYOUT[r][k.cursor_col], '\0' };
+                    text_print_hl(cx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
+                }
             }
             text_print(cx, cy + SAVE_SLOTS + 2 + KB_ROWS, "%s",
                 hint(EDIT_HINT_PAD, EDIT_HINT_KBD));
@@ -254,11 +259,14 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
 
 /*----------------------
  | choose_dest
- | Description: Runs choose_device, then a menu_select over the SAVE_SLOTS slots
- |   with each row labelled by saturn_bup_info's comment (or "(empty)"). The
- |   labels are held in a function-static buffer so the const char* array handed
- |   to menu_select stays valid for the length of the menu. Cancelling either
- |   menu returns 0 without touching the out-params.
+ | Description: The restore-only device+slot picker (title-menu Load and in-game
+ |   Restore both come through here; saving uses the name editor instead). Runs
+ |   choose_device, then a menu_select over the SAVE_SLOTS slots with each row
+ |   labelled by saturn_bup_info's comment (or "(empty)"). The labels are held in
+ |   a function-static buffer so the const char* array handed to menu_select stays
+ |   valid for the length of the menu. A pick on an empty slot is refused with a
+ |   message and the list re-opens, since restoring from one black-screens the
+ |   interpreter. Cancelling either menu returns 0 without touching the out-params.
  | Author: suinevere
  | Dependencies: menu.h (menu_select), saturn_backup.h (SAVE_SLOTS/saturn_bup_info)
  | Globals: N/A
@@ -279,20 +287,32 @@ int choose_dest(const char *title_dev, const char *title_slot,
 
     static char labels[SAVE_SLOTS][40];
     const char *slot_items[SAVE_SLOTS];
+    bool used[SAVE_SLOTS];
     for (int i = 0; i < SAVE_SLOTS; i++) {
         char name[12];
         make_slot_name(name, i);
         char comment[12];
-        if (saturn_bup_info(device, name, comment)) snprintf(labels[i], sizeof(labels[i]), "%s", comment);
-        else                                        snprintf(labels[i], sizeof(labels[i]), "(empty)");
+        used[i] = saturn_bup_info(device, name, comment);
+        if (used[i]) snprintf(labels[i], sizeof(labels[i]), "%s", comment);
+        else         snprintf(labels[i], sizeof(labels[i]), "(empty)");
         slot_items[i] = labels[i];
     }
-    g_menu_intro_fade = g_menu_page_fade;   // slot list fades in from black
-    int slot = menu_select(title_slot, slot_items, SAVE_SLOTS);
-    if (slot < 0) { if (g_menu_page_fade) menu_fade_out(g_menu_page_fade); return 0; }
-    if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);   // slot list -> black
 
-    *out_device = device;
-    *out_slot = slot;
-    return 1;
+    /* Restore-only picker: an empty slot has nothing to load and restoring from
+       one drops the interpreter into a black screen, so a pick on one is refused
+       and the list re-opens rather than returned. Only the first open fades in
+       from black; the refusal re-opens at the brightness it left. */
+    g_menu_intro_fade = g_menu_page_fade;
+    for (;;) {
+        int slot = menu_select(title_slot, slot_items, SAVE_SLOTS);
+        if (slot < 0) { if (g_menu_page_fade) menu_fade_out(g_menu_page_fade); return 0; }
+        if (used[slot]) {
+            if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);   // slot list -> black
+            *out_device = device;
+            *out_slot = slot;
+            return 1;
+        }
+        menu_message(title_slot, "That slot is empty.", hint("A/C = back", "Enter = back"));
+        menu_wait();
+    }
 }

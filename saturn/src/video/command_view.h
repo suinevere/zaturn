@@ -35,7 +35,7 @@
  | render_command_panel
  | Description: Draws the input line, the strip's borders and dividers, the
  |   compass rose, the word page, and the fixed command list, highlighting the
- |   focused module's selected entry and its border hint in reverse video.
+ |   focused module's selected entry in reverse video. The borders are plain.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h, console_view.h
  | Globals: N/A
@@ -43,6 +43,21 @@
  | Returns: N/A
  ----------------------*/
 void render_command_panel(const CommandPanel &p, const RoomModel &m, const CommandWords &w);
+
+/*----------------------
+ | cv_draw_rose_row
+ | Description: Composes and prints one compass-rose row at the strip's left
+ |   module (column CV_TRAVEL_X), overprinting the selected direction's label in
+ |   reverse video when `sel` names a direction drawn on this row. Shared with the
+ |   keyboard view, whose rose sits in the same left column.
+ | Author: suinevere
+ | Dependencies: command_rose.h, text_map.h
+ | Globals: N/A
+ | Params: row -- 0..CR_ROWS-1; exits -- the exits to draw; y -- text row; sel --
+ |   the selected RM_* direction, or -1 when the rose is not focused
+ | Returns: N/A
+ ----------------------*/
+void cv_draw_rose_row(int row, const unsigned char *exits, int y, int sel);
 
 /*----------------------
  | command_edit

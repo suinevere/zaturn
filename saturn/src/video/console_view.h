@@ -38,6 +38,47 @@ extern bool g_kbd_visible;
 extern long g_output_start;
 
 /*----------------------
+ | image_window_box / image_window_on / image_window_off
+ | Description: VDP2 window 0, which suppresses the NBG0 wallpaper inside a
+ |   rectangle so the back-plane colour shows there while NBG3 text still draws
+ |   over it. NBG3 treats palette entry 0 as transparent, so without this a box
+ |   drawn over a picture shows the picture through its interior. box() aims the
+ |   window at a character-cell rectangle, on() switches the suppression in and
+ |   off() takes it back out; they are separate because a menu aims the window
+ |   every frame it redraws but switches it on once, on the outermost page.
+ |
+ |   Two callers: menu.c's MenuBacking, which blacks a menu box, and the in-game
+ |   interface strip, which blacks the command panel or the on-screen keyboard.
+ |   Only one rectangle exists in hardware, so the two must never want it at the
+ |   same time -- they do not, because menus are modal and the game's render loop
+ |   does not run while one is up.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: box: x0, y0 -- top-left in text cells; w, h -- size in cells
+ | Returns: N/A
+ ----------------------*/
+void image_window_box(int x0, int y0, int w, int h);
+void image_window_on(void);
+void image_window_off(void);
+
+/*----------------------
+ | border_use_black
+ | Description: Makes the display border draw black instead of the back-screen
+ |   colour. The border is the raster outside the active display -- the columns
+ |   either side of the 320 the layers cover, and the lines below the 224 they
+ |   are tall -- and by default VDP2 fills it with the back screen, which is the
+ |   same register the player's background colour and every menu box's backing
+ |   read from. Call once, after Core::Initialize.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void border_use_black(void);
+
+/*----------------------
  | console_height
  | Description: How many console text rows are currently available for
  |   scrollback, given whether the on-screen keyboard is showing (it reserves its

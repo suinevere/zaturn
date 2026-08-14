@@ -230,7 +230,11 @@ static void netbin_video_init(void) {
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
 int main(void) {
-    SRL::Core::Initialize(HighColor::Colors::Black);
+    // 320x224 for the same reason main.cxx picks it: the text grid is 28 rows of
+    // 8 lines and nothing paints below it. The netbin shows no wallpaper at all,
+    // so here the surplus lines were pure back-plane.
+    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
+    border_use_black();
     text_map_init();
 
     static MultiPad pads;
@@ -272,9 +276,16 @@ int main(void) {
     // reset of the same global.
     g_menu_backing_depth = 0;
 
+    /* Straight onto the wire the first time: with a saved default number there is
+       nothing to type, so auto-dial it instead of parking the player on the dial
+       page. online_mode() does the actual dialing from g_dialnum. After it returns
+       -- hang-up, no carrier, session end -- the dial page opens so the number can
+       be changed or redialed. */
+    bool auto_dial = valid_dialnum(g_dialnum);
     for (;;) {
         menu_clear();
-        netbin_dial_page();
+        if (!auto_dial) netbin_dial_page();
+        auto_dial = false;
         online_mode();
     }
     return 0;

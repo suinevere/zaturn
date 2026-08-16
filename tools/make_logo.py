@@ -78,14 +78,12 @@ CAP_H = 76                     # the strokes that step out of it
 
 # Reference pixels per target pixel when sampling stones. NOT the letter's own
 # scale -- see the docstring. Bigger is fewer, larger stones.
-STONE_SCALE = 2.5
+STONE_SCALE = 2.4
 
-# Letters touch. The reference's do more than touch -- its letterforms
-# interlock, and the whole word carries one stroke round the outside -- and
-# setting these flush is as near as seven letters get to it in 304 pixels. It
-# also buys the width back: the letters are fat here because the tracking is
-# not eating it.
-TRACK = 0
+# Letters are set a joint apart. Flush was too tight to read: what separates
+# them in the reference is not air but the shaded side face of each one, and
+# with those in (see SHADE) three pixels is enough.
+TRACK = 6
 
 # Palette indices. 0 is VDP2 transparency and 1, 2 and 15 belong to the console
 # font (see the module docstring), so the art starts at 3.
@@ -275,7 +273,7 @@ def trace():
 # coordinate that the stroke's own top-left corner samples from.
 FROM_BAR_TOP = (35, 30)         # the Z's top bar
 FROM_BAR_FOOT = (35, 196)       # the Z's bottom bar
-FROM_STEM = (352, 44)           # the R's left stem
+FROM_STEM = (286, 58)           # the O's right-hand pier, clear of the door
 FROM_STEM2 = (505, 28)          # the K's stem
 FROM_DIAG_DOWN_LEFT = (62, 80)  # the Z's diagonal
 FROM_DIAG_DOWN_RIGHT = (543, 146)   # the K's lower arm
@@ -288,43 +286,70 @@ FROM_FIELD = (404, 60)          # the R's bowl, for the wall between the strokes
 #
 # Strokes are laid in order and a later one wins the overlap, so a stem laid
 # after a bar cuts its own joint against it.
+# The side faces, and the reason the reference does not read as flat brickwork.
+# Its letters are slabs with depth: the face you look at carries the masonry and
+# the side you can see round the edge of it is SOLID -- no stones, no joints, a
+# plain black plane. The R's left side is one such face and so is the Z's right
+# edge, and once you see it in one letter it is in all of them.
+#
+# Which side shows follows from where the light is. The word is lit from behind
+# and set round a curve, so a letter to the left of centre turns its right-hand
+# side toward you and a letter to the right of centre turns its left -- the two
+# outermost letters show the most of it and the middle of the word shows almost
+# none. That is exactly the pattern in the reference: a wide plain band down the
+# Z's right edge, a wide one down the R's left, and the door between them with
+# hardly any.
+#
+# Each entry is the polygon of that face in glyph-local pixels. It is not laid
+# as another stroke -- it is INTERSECTED with the letter already built, so it
+# can only ever darken masonry that is there and never add silhouette.
+SHADE = {
+    "Z": [(35, -8), (44, -8), (44, 84), (37, 84)],
+    "-": [(11, 22), (13, 22), (13, 52), (11, 52)],
+    "A": [(37, 26), (42, 30), (44, 84), (39, 84)],
+    "T": [(30, -8), (33, -8), (33, 84), (30, 84)],
+    "U": [(0, -8), (3, -8), (3, 84), (0, 84)],
+    "R": [(0, -8), (10, -8), (8, 84), (0, 84)],
+    "N": [(0, -8), (12, -8), (10, 84), (0, 84)],
+}
+
 GLYPHS = {
     # A chevron. The top bar's left end rises out of the cap line, the diagonal
     # is one lean slab off the bar's right end, and the foot drops below the
     # baseline -- the reference Z's own moves.
-    "Z": (52, [
-        ([(0, -4), (52, 1), (52, 21), (0, 27)], FROM_BAR_TOP),
-        ([(34, 14), (52, 17), (21, 62), (0, 58)], FROM_DIAG_DOWN_LEFT),
-        ([(0, 52), (52, 56), (52, 76), (0, 80)], FROM_BAR_FOOT),
+    "Z": (44, [
+        ([(0, -4), (44, 1), (44, 21), (0, 27)], FROM_BAR_TOP),
+        ([(29, 14), (44, 17), (17, 62), (0, 58)], FROM_DIAG_DOWN_LEFT),
+        ([(0, 52), (44, 56), (44, 76), (0, 80)], FROM_BAR_FOOT),
     ]),
 
-    "-": (14, [
-        ([(0, 30), (14, 27), (14, 43), (0, 47)], FROM_FIELD),
+    "-": (13, [
+        ([(0, 30), (13, 27), (13, 43), (0, 47)], FROM_FIELD),
     ]),
 
     # Solid from the apex down through the crossbar. A counter up there would be
     # nine pixels across before the rings ate their eight, and the reference
     # keeps its counters small and low for the same reason.
     "A": (44, [
-        ([(13, 0), (31, -2), (36, 34), (7, 34)], FROM_STEM),
-        ([(4, 26), (38, 28), (41, 50), (2, 48)], FROM_BAR_TOP),
-        ([(2, 42), (20, 42), (13, 78), (-2, 76)], FROM_DIAG_DOWN_LEFT),
-        ([(24, 42), (42, 42), (45, 76), (30, 78)], FROM_DIAG_DOWN_RIGHT),
+        ([(12, 0), (29, -2), (34, 34), (6, 34)], FROM_STEM),
+        ([(4, 26), (36, 28), (38, 50), (2, 48)], FROM_BAR_TOP),
+        ([(2, 42), (15, 42), (9, 78), (-3, 76)], FROM_DIAG_DOWN_LEFT),
+        ([(26, 42), (39, 42), (44, 76), (31, 78)], FROM_DIAG_DOWN_RIGHT),
     ]),
 
     # The bar oversails the stem at both ends and steps down to the right, which
     # keeps the top of the word moving across a letter that is otherwise a post.
-    "T": (40, [
-        ([(0, -3), (40, 2), (40, 22), (0, 25)], FROM_BAR_TOP),
-        ([(12, 16), (29, 18), (31, 78), (10, 76)], FROM_STEM2),
+    "T": (33, [
+        ([(0, -3), (33, 2), (33, 22), (0, 25)], FROM_BAR_TOP),
+        ([(10, 16), (23, 18), (25, 78), (8, 76)], FROM_STEM2),
     ]),
 
     # Piers off different stems of the reference, so the two sides of the
     # counter are not each other's reflection.
-    "U": (42, [
-        ([(0, -1), (14, 2), (13, 64), (0, 62)], FROM_STEM),
-        ([(28, 2), (42, -2), (42, 62), (29, 64)], FROM_STEM2),
-        ([(0, 54), (42, 57), (42, 76), (0, 79)], FROM_BAR_FOOT),
+    "U": (40, [
+        ([(0, -1), (11, 2), (10, 64), (0, 62)], FROM_STEM),
+        ([(29, 2), (40, -2), (40, 62), (30, 64)], FROM_STEM2),
+        ([(0, 54), (40, 57), (40, 76), (0, 79)], FROM_BAR_FOOT),
     ]),
 
     # Drawn after the reference's own R: a stem, a bowl of three short strokes
@@ -332,21 +357,21 @@ GLYPHS = {
     # it on its own slope. Every stroke overlaps its neighbour by most of a
     # course -- abutting them leaves the leg standing on nothing, because the
     # two get different stones and the joint between them cuts right through.
-    "R": (50, [
-        ([(0, -2), (15, 1), (16, 78), (0, 75)], FROM_STEM),
-        ([(9, -1), (50, 3), (50, 17), (9, 15)], FROM_BAR_TOP),
-        ([(35, 11), (50, 14), (50, 39), (35, 42)], FROM_STEM2),
-        ([(9, 34), (50, 37), (49, 55), (9, 52)], FROM_BAR_FOOT),
-        ([(22, 47), (42, 45), (50, 77), (34, 79)], FROM_DIAG_DOWN_RIGHT),
+    "R": (44, [
+        ([(0, -2), (13, 1), (14, 78), (0, 75)], FROM_STEM),
+        ([(8, -1), (44, 3), (44, 17), (8, 15)], FROM_BAR_TOP),
+        ([(31, 11), (44, 14), (44, 39), (31, 42)], FROM_STEM2),
+        ([(8, 34), (44, 37), (43, 55), (8, 52)], FROM_BAR_FOOT),
+        ([(19, 47), (37, 45), (44, 77), (30, 79)], FROM_DIAG_DOWN_RIGHT),
     ]),
 
     # The diagonal runs out into the right-hand pier about two-thirds down and
     # below that the two are one piece of wall, which is what the reference's K
     # does where its arms meet its stem.
-    "N": (48, [
-        ([(0, -2), (13, 1), (13, 78), (0, 75)], FROM_STEM),
-        ([(35, 1), (48, -5), (48, 75), (35, 78)], FROM_STEM2),
-        ([(9, -2), (24, 0), (48, 76), (33, 78)], FROM_DIAG_DOWN_RIGHT),
+    "N": (42, [
+        ([(0, -2), (11, 1), (11, 78), (0, 75)], FROM_STEM),
+        ([(31, 1), (42, -5), (42, 75), (31, 78)], FROM_STEM2),
+        ([(8, -2), (21, 0), (42, 76), (29, 78)], FROM_DIAG_DOWN_RIGHT),
     ]),
 }
 
@@ -414,15 +439,17 @@ def place_glyphs():
     """
     ----------------------
     | place_glyphs
-    | Description: Lays the word out centred on the canvas and returns both the
-    |   stone map and the mask of the letterforms themselves.
+    | Description: Lays the word out centred on the canvas and returns one map
+    |   of stone numbers over the whole thing.
     |
-    |   The two are not the same thing, and that is the whole design: the stones
-    |   go on to fill a solid wall, while the letterform mask is what gets
-    |   incised into it.
+    |   Each letter is built in its own patch first, because the shaded side
+    |   face has to be cut out of the finished letter rather than laid alongside
+    |   it -- see SHADE. It is given a single stone number of its own, so no
+    |   joint is ever drawn inside it and one is always drawn where it meets the
+    |   masonry.
     | Author: suinevere
-    | Dependencies: numpy, stroke_stones
-    | Globals: GLYPHS, WORD, TRACK, CAP_TOP, WIDTH, HEIGHT
+    | Dependencies: numpy, PIL, stroke_stones
+    | Globals: GLYPHS, SHADE, WORD, TRACK, CAP_TOP, WIDTH, HEIGHT
     | Params: N/A
     | Returns: (owner, letters) -- the stone map and the letterform mask
     ----------------------
@@ -434,18 +461,34 @@ def place_glyphs():
     base = 0
     for ch in WORD:
         w = GLYPHS[ch][0]
+        layers = []
         for poly, src in GLYPHS[ch][1]:
-            got, top = stroke_stones(poly, src, w, base)
+            got, gtop = stroke_stones(poly, src, w, base)
             base += 400
-            y0 = CAP_TOP + top
-            gh, gw = got.shape
-            y1, x1 = min(HEIGHT, y0 + gh), min(WIDTH, pen + gw)
-            if y0 >= y1 or pen >= x1:
-                continue
+            layers.append((got, gtop))
+
+        top = min(t for _g, t in layers)
+        bot = max(t + g.shape[0] for g, t in layers)
+        patch = np.zeros((bot - top, w), np.int32)
+        for got, gtop in layers:
+            sl = patch[gtop - top:gtop - top + got.shape[0]]
+            sl[got > 0] = got[got > 0]
+
+        face = Image.new("L", (w, bot - top), 0)
+        ImageDraw.Draw(face).polygon(
+            [(x, y - top) for x, y in SHADE[ch]], fill=1)
+        base += 400
+        patch[np.array(face).astype(bool) & (patch > 0)] = base
+
+        y0 = CAP_TOP + top
+        ph, pw = patch.shape
+        y1, x1 = min(HEIGHT, y0 + ph), min(WIDTH, pen + pw)
+        if y0 < y1 and pen < x1:
             dst = owner[max(y0, 0):y1, max(pen, 0):x1]
-            sub = got[max(-y0, 0):y1 - y0, max(-pen, 0):x1 - pen]
+            sub = patch[max(-y0, 0):y1 - y0, max(-pen, 0):x1 - pen]
             dst[sub > 0] = sub[sub > 0]
         pen += w + TRACK
+        base += 400
 
     return owner, owner > 0
 

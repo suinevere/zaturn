@@ -116,10 +116,11 @@ def glyph_origin(ch):
 
 # One point well inside each counter, in glyph-local coordinates. Every one of
 # them is only a few pixels wide once the channel and the stroke have both grown
-# inwards -- four pixels a side, eight off the width -- so widening a stroke or
-# deepening a bar by two closes one without changing anything the eye would
-# flag. They are probed by coordinate for that reason.
-COUNTERS = (("A", 22, 62), ("U", 20, 30), ("R", 24, 26), ("N", 20, 60))
+# inwards -- four pixels a side, eight off the width -- so narrowing a letter by
+# two closes one without changing anything the eye would flag in the preview.
+# The A's went shut exactly that way when the letters were rebalanced to make
+# room for the shaded faces, and it read as a solid wedge.
+COUNTERS = (("A", 20, 68), ("U", 20, 34), ("R", 21, 24), ("N", 19, 68))
 
 
 def test_counters_stay_open():
@@ -129,6 +130,44 @@ def test_counters_stay_open():
         ox, oy = glyph_origin(ch)
         check(px[oy + ly, ox + lx] == make_logo.TRANS,
               "the %s's counter is still open at local (%d, %d)" % (ch, lx, ly))
+
+
+def test_every_letter_shows_a_shaded_side_face():
+    print("test_every_letter_shows_a_shaded_side_face")
+    from PIL import Image, ImageDraw
+
+    px = np.array(make_logo.render())
+    own = owner()
+
+    # The side faces are what stop this reading as flat brickwork: solid black,
+    # no joint anywhere inside them, one per letter. They are cut OUT of the
+    # letter rather than added to it, so a polygon that drifts off the letterform
+    # leaves no face at all and changes nothing else -- silent in the preview.
+    for ch in make_logo.WORD:
+        ox, oy = glyph_origin(ch)
+        w = make_logo.GLYPHS[ch][0]
+        cut = Image.new("L", (make_logo.WIDTH, make_logo.HEIGHT), 0)
+        ImageDraw.Draw(cut).polygon(
+            [(ox + x, oy + y) for x, y in make_logo.SHADE[ch]], fill=1)
+        area = np.array(cut).astype(bool) & (own > 0)
+
+        # More than one piece is fine and expected -- the Z's right edge is the
+        # end of two separate bars, so its face is in two. What must hold is
+        # that no piece of it has a joint drawn inside.
+        ids = [i for i in np.unique(own[area]).tolist() if i]
+        # Sized against the letter, not against the cap height: the hyphen is
+        # a thirteenth of the Z's width and its face is small in proportion.
+        want = max(24, w * make_logo.CAP_H // 40)
+        check(bool(ids) and area.sum() >= want,
+              "the %s has a face of a useful size (%d px, wanted %d, %d piece(s))"
+              % (ch, int(area.sum()), want, len(ids)))
+        # Eroded first: the joint where the face meets the masonry is drawn
+        # half on each side, so the face's own rim is legitimately white. What
+        # would be wrong is a joint running through the middle of it.
+        face = make_logo.erode(np.isin(own, ids), make_logo.MORTAR_W)
+        check(not (face & (px == make_logo.WHITE)).any(),
+              "the %s's face carries no joints through it (%d px)"
+              % (ch, int(face.sum())))
 
 
 def test_strokes_are_not_pinched():
@@ -295,6 +334,7 @@ def main():
               test_every_stroke_samples_inside_the_reference,
               test_no_piece_of_a_letter_is_left_floating,
               test_counters_stay_open,
+              test_every_letter_shows_a_shaded_side_face,
               test_strokes_are_not_pinched,
               test_render_stays_inside_the_free_palette_entries,
               test_render_is_deterministic,

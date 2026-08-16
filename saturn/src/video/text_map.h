@@ -94,6 +94,28 @@ void text_print_str(int x, int y, const char *s);
 void text_print_hl(int x, int y, const char *s);
 
 /*----------------------
+ | text_put_cells
+ | Description: Writes a run of raw VDP2 character numbers into one row of the
+ |   shadow, for the callers that draw pictures on the text layer rather than
+ |   text -- the title logo (title_logo.h) is the one that exists. Unlike
+ |   text_print_str these are absolute character numbers, NOT characters: the
+ |   font's own tiles start at 640 and the whole block below that is free (see
+ |   TEXT_FONT_TILES in text_map.cxx), which is where such a picture's tiles
+ |   live. Only the palette bank is or'd in.
+ |
+ |   The cells still go through the shadow and the vblank flush like everything
+ |   else, so a picture cannot tear against the beam; whoever owns the tiles has
+ |   to have them in VRAM before the flush that first names them.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_shadow, g_dirty_top, g_dirty_bottom
+ | Params: x -- left cell column; y -- cell row; chars -- the character numbers;
+ |   n -- how many
+ | Returns: N/A
+ ----------------------*/
+void text_put_cells(int x, int y, const unsigned short *chars, int n);
+
+/*----------------------
  | text_clear_line
  | Description: Blanks TEXT_CLEAR_COLS cells of one row in the shadow.
  | Author: suinevere

@@ -5,7 +5,7 @@
  | Author: suinevere
  | Dependencies: app_state.h, display.h, menu.h, soft_reset.h, game_catalog.h
  |   (the Z3 directory record cd_restore_z3 re-applies), online.h, boot_music.h,
- |   sound/music.h, text_map.h, bg_dim.h, SRL
+ |   sound/music.h, text_map.h, title_logo.h, bg_dim.h, SRL
  ----------------------*/
 #include "title.h"
 #include "bg_dim.h"
@@ -21,6 +21,7 @@
 #include "online.h"
 #include <srl.hpp>
 #include "text_map.h"
+#include "title_logo.h"
 
 #include "boot_music.h"
 
@@ -53,16 +54,30 @@ static bool       g_root_dir_valid = false;
 extern GfsDirTbl g_z3_tbl;
 
 /*----------------------
- | title_draw_art
- | Description: Draws the title screen text art.
+ | TITLE_LOGO_X / TITLE_LOGO_Y
+ | Description: Where the masonry logo's top-left cell sits. The logo is
+ |   TITLE_LOGO_COLS cells wide on a 40-column screen, so the column is what
+ |   centres it; the row leaves the copyright line and the prompt where they
+ |   already were.
  | Author: suinevere
- | Dependencies: SRL
+ ----------------------*/
+#define TITLE_LOGO_X ((40 - TITLE_LOGO_COLS) / 2)
+#define TITLE_LOGO_Y 4
+
+/*----------------------
+ | title_draw_art
+ | Description: Draws the title screen art: the Z-ATURN masonry logo over
+ |   whatever room picture NBG0 is holding, and the credit line under it. The
+ |   logo is tiles on the text layer rather than a picture of its own -- see
+ |   title_logo.h for why, and for the palette that constrains it.
+ | Author: suinevere
+ | Dependencies: title_logo.h, text_map.h
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void title_draw_art(void) {
-    text_print(13, 12, "Z - A T U R N");
+    title_logo_draw(TITLE_LOGO_X, TITLE_LOGO_Y);
     text_print(4, 15, "Saturn port (c) 2026 by Suinevere");
 }
 

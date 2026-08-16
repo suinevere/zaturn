@@ -16,9 +16,11 @@ extern "C" {
 
 /*----------------------
  | title_draw_art
- | Description: Draws the title screen text art (Z-ATURN and copyright).
+ | Description: Draws the title screen art: the Z-ATURN masonry logo (black
+ |   brick with white mortar drawn through it, see title_logo.h) laid over the
+ |   room picture on NBG0, and the copyright line under it.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: title_logo.h, SRL
  | Globals: N/A
  | Params: N/A
  | Returns: N/A

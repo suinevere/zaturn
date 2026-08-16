@@ -214,6 +214,27 @@ extern "C" void text_print_hl(int x, int y, const char *s)
     }
 }
 
+extern "C" void text_put_cells(int x, int y, const unsigned short *chars, int n)
+{
+    if (y < 0 || y >= TEXT_ROWS || x >= TEXT_COLS || chars == nullptr) return;
+
+    uint16_t *row = g_shadow[y];
+
+    for (int i = 0; i < n; i++)
+    {
+        const int c = x + i;
+        if (c < 0) continue;
+        if (c >= TEXT_COLS) break;
+
+        uint16_t word = (uint16_t) chars[i] | TEXT_COLOR_BANK;
+        if (row[c] != word)
+        {
+            row[c] = word;
+            mark_dirty(y);
+        }
+    }
+}
+
 extern "C" void text_clear_line(int y)
 {
     if (y < 0 || y >= TEXT_ROWS) return;

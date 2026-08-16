@@ -1,12 +1,13 @@
 /*----------------------
  | title_logo.h
  | Description: The Z-ATURN masonry logo that overlays the title screen, in the
- |   style of the ZORK cover lettering kept at tools/assets/logo/zork-logo.png:
- |   solid black letters with the mortar drawn THROUGH them as white lines, the
- |   word ringed in a thick white outline and that outline ringed again in a thin
- |   black keyline. Fat strokes, small counters, stones of markedly unequal size
- |   on courses that wander, and a cap line the letters step out of rather than
- |   sit on.
+ |   style of the ZORK cover lettering kept at tools/assets/logo/zork-logo.png.
+ |   The stones are that reference's own: tools/make_logo.py traces the picture
+ |   and samples its masonry into these letterforms, rather than drawing bricks,
+ |   because the character of the thing is in stones no two of which are the same
+ |   size or shape. Solid black letters with the joints cut THROUGH them in
+ |   white, a white channel round the word and a black stroke as heavy as the
+ |   mortar outside that -- all three weights measured off the reference.
  |
  |   It is not a picture on NBG0. The title screen spends that layer on a room
  |   photograph, so the logo rides the text layer instead -- 8x8 4bpp character
@@ -39,7 +40,7 @@ extern "C" {
  | Author: suinevere
  ----------------------*/
 #define TITLE_LOGO_COLS 38
-#define TITLE_LOGO_ROWS 10
+#define TITLE_LOGO_ROWS 12
 
 /*----------------------
  | title_logo_install

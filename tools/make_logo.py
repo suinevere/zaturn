@@ -1,32 +1,42 @@
 #!/usr/bin/env python3
 """Draw the Z-ATURN masonry title logo and emit it as VDP2 text-layer tiles.
 
-The logo restates the ZORK cover lettering in tools/assets/logo/zork-logo.png.
-Six things make that lettering what it is, and all six are built here:
+The ZORK cover lettering is not letters with holes in them. It is ONE SLAB OF
+WALL with the word incised into it: measure the traced reference and the whole
+four-letter mass encloses sixteen holes, none bigger than about thirty pixels
+square on a 630 by 250 word -- the O's counter is packed with a portcullis, the
+R's is packed with stone, and the K's arms are divided from its stem by a drawn
+line and not by a gap. Every attempt at this that starts from outlined letters
+with open counters comes out as ordinary lettering with a brick fill, which is
+the one thing the reference is not. So the word is built here as a solid wall,
+and the letterforms are cut into it as joints.
 
-  * Solid black letters with the mortar drawn THROUGH them as white lines. The
-    brickwork is line art over black, not a rendering of stone. Two colours.
-  * A thick white outline round the word and a thin black keyline outside that.
-  * Very fat strokes and small counters. The reference's letters are nearly as
-    thick as they are open.
-  * Stones of markedly unequal size -- one slab worth four of its neighbours --
-    with the joints staggered course to course and hardly one of them plumb.
-  * The courses of a diagonal running WITH the diagonal rather than across it.
-  * A silhouette that steps. The cap line is not a straight edge: the courses
-    wander, blocks stand above and below them, the outer letters throw spurs
-    past the word's corners, and no two letters sit at quite the same height.
+The stones are not invented either. tools/assets/logo/zork-logo.png is traced
+at build time into a map of its stones, and every stone in Z-ATURN is one of
+them, sampled out of the reference and cut to a stroke here. Their character --
+no two the same size, hardly an edge parallel to another, joints that kink --
+is what a table of hand-placed quads cannot hold, and is most of what the eye
+recognises.
 
-The letters are set nearly touching, at a track narrow enough that the white
-outlines of neighbours merge and fill it. So the word carries ONE keyline the
-whole way round, exactly as the reference does, and the boundary between two
-letters reads as a joint in the wall rather than as a gap -- which is what the
-reference gets by interlocking its letterforms, and seven letters across 304
-pixels cannot.
+The reference is two inks on paper, and measuring it settles the three line
+weights that matter. On its 250-pixel cap height the outer stroke is about six
+pixels, the paper channel inside that stroke about six, and the joints between
+stones about six: all the same. Scaled to this cap height they are two pixels
+each -- so the black stroke round the word is as heavy as the mortar, which is
+what gives the reference its weight and is the thing freehand attempts get
+wrong first.
+
+How big a stone is, though, is NOT the reference's business. Its stones are
+drawn for a letter 250 pixels tall; sampled at their true relative size onto a
+letter 76 pixels tall they come out at thirteen pixels with a two-pixel joint
+between every pair, and the letter reads as a dense block. STONE_SCALE is the
+knob for that, and it is set so about eight stones cover a letter -- the same
+stones, the same shapes, laid bigger.
 
 It does NOT go on the disc as a picture. The title screen already spends NBG0
 on a room photograph, so the logo rides the text layer (NBG3) instead: it is
 cut into 8x8 4bpp cells, written into the free character block below the SGL
-font, and printed as pattern names. Transparent outside the keyline, so the
+font, and printed as pattern names. Transparent outside the stroke, so the
 photograph shows through around the word, and it fades with the rest of the
 title because NBG3 is what the screen-wide fade already drives.
 
@@ -46,59 +56,36 @@ Outputs:
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
+import numpy as np
+from PIL import Image, ImageDraw
 
 REPO = Path(__file__).resolve().parent.parent
+REF_PATH = REPO / "tools" / "assets" / "logo" / "zork-logo.png"
 INC_PATH = REPO / "saturn" / "src" / "video" / "title_logo.inc"
 PREVIEW_PATH = REPO / "tools" / "assets" / "logo" / "zaturn_logo.png"
 
 CELL = 8                       # VDP2 cell size, both axes
-CELLS_W, CELLS_H = 38, 10      # the logo's footprint on the 40x28 text grid
+CELLS_W, CELLS_H = 38, 12      # the logo's footprint on the 40x28 text grid
 WIDTH, HEIGHT = CELLS_W * CELL, CELLS_H * CELL
 
-# The line weights, in the proportions the reference draws them at: mortar and
-# outline about the same, the keyline half that.
-MORTAR_W = 2                   # white joint between two blocks
-OUTLINE_W = 2                  # white ring round the whole word
-KEYLINE_W = 1                  # black ring outside that
+# All three the same, because the reference's are: see the module docstring.
+MORTAR_W = 2                   # joint between two stones, in paper
+CHANNEL_W = 2                  # paper between the wall and the stroke
+STROKE_W = 2                   # the black stroke round the word
 
-# Both rings grow inwards as well as out, so a counter loses
-# 2*(OUTLINE_W + KEYLINE_W) of its width before any of it shows. Every counter
-# below is drawn wide enough to survive that; anything narrower would close.
-RINGS = OUTLINE_W + KEYLINE_W
+CAP_TOP = 12                   # room above the cap line for the rings and for
+CAP_H = 76                     # the strokes that step out of it
 
-CAP_TOP = RINGS + 8            # room above the cap line for the spurs and the
-                               # ride that step out of it, plus the rings
-CAP_H = 62                     # cap height in pixels
+# Reference pixels per target pixel when sampling stones. NOT the letter's own
+# scale -- see the docstring. Bigger is fewer, larger stones.
+STONE_SCALE = 2.5
 
-# How far each letter sits off the common cap line. The reference's do not share
-# one: its O hangs below the Z and its K rides above the R, and that is most of
-# what keeps four letters of near-identical weight from running together into a
-# band. Seven need it more, not less -- with every cap on one line the bars of
-# T, U, R and N read as a single lintel with legs under it.
-#
-# Kept inside +1 and -3, which is what the canvas has spare once the rings and
-# the spurs above the cap line have taken theirs.
-RIDE = {"Z": 0, "-": 0, "A": 1, "T": -3, "U": 1, "R": -1, "N": -3}
-
-# Letters are set this far apart. The gap is narrower than two outlines, so the
-# outlines meet inside it and fill it solid white: the word ends up under one
-# keyline, and a letter boundary reads as a fat joint. Widen this past
-# 2*OUTLINE_W and the keyline creeps in between the letters and breaks the word
-# into seven separately-ringed pieces.
-TRACK = 4
-
-# The five courses, as the inclusive row range a block on that course occupies.
-# Every glyph is built on these, so the courses run level right across the word
-# the way they would in a wall -- letters whose bars sat between courses would
-# read as separate pieces of masonry standing next to each other.
-#
-# Five and not six, and unequal: shallow at the cap and the baseline, deep
-# through the middle, which is the reference's own pattern. Six courses of
-# twelve-pixel stones with a two-pixel joint between every pair of them is
-# more line than stone at the size this is actually seen -- 304 pixels across
-# on a television -- and the word stopped reading before the wall did.
-CY = [(0, 9), (10, 23), (24, 37), (38, 49), (50, 61)]
+# Letters touch. The reference's do more than touch -- its letterforms
+# interlock, and the whole word carries one stroke round the outside -- and
+# setting these flush is as near as seven letters get to it in 304 pixels. It
+# also buys the width back: the letters are fat here because the tracking is
+# not eating it.
+TRACK = 0
 
 # Palette indices. 0 is VDP2 transparency and 1, 2 and 15 belong to the console
 # font (see the module docstring), so the art starts at 3.
@@ -111,451 +98,476 @@ PALETTE = {
 }
 
 
-LEVEL = (0, 0, 0, 0)
-
-
-def block(c, x0, x1, d=LEVEL):
+def shift(m, dy, dx):
     """
     ----------------------
-    | block
-    | Description: One upright block: course `c` between two inclusive
-    |   glyph-local columns, with each of its four corners free to sit off the
-    |   course line.
-    |
-    |   The four offsets are the difference between masonry and graph paper.
-    |   Level top and bottom on every stone rules the wall into a grid however
-    |   the vertical joints are staggered; the reference has no such line in it,
-    |   its courses wander a couple of pixels a stone. The same offsets, used
-    |   larger, are what steps the cap line and the baseline in and out.
+    | shift
+    | Description: Translates an array by whole pixels, filling the vacated edge
+    |   with zeros. The building block for dilate and erode.
     | Author: suinevere
-    | Dependencies: N/A
-    | Globals: CY
-    | Params: c -- course index; x0, x1 -- inclusive columns; d -- (top-left,
-    |   top-right, bottom-right, bottom-left) offsets, negative being upward
-    | Returns: the block as a four-point polygon
-    ----------------------
-    """
-    y0, y1 = CY[c]
-    return [(x0, y0 + d[0]), (x1, y0 + d[1]),
-            (x1, y1 + d[2]), (x0, y1 + d[3])]
-
-
-def span(c0, c1, x0, x1, d=LEVEL):
-    """
-    ----------------------
-    | span
-    | Description: One block running from course c0 to course c1, for the stones
-    |   that are two courses deep.
-    |
-    |   A wall gets its texture from the stones being different sizes, and the
-    |   reference's are markedly so -- one stone of the O's stem is worth two of
-    |   its neighbours. A few of these among the single-course blocks is what
-    |   stops the courses reading as ruled lines.
-    | Author: suinevere
-    | Dependencies: N/A
-    | Globals: CY
-    | Params: c0, c1 -- first and last course; x0, x1 -- inclusive columns; d --
-    |   corner offsets, as for block
-    | Returns: the block as a four-point polygon
-    ----------------------
-    """
-    y0 = CY[c0][0]
-    y1 = CY[c1][1]
-    return [(x0, y0 + d[0]), (x1, y0 + d[1]),
-            (x1, y1 + d[2]), (x0, y1 + d[3])]
-
-
-def slope(c, tx0, tx1, bx0, bx1):
-    """
-    ----------------------
-    | slope
-    | Description: One block cut to fit a diagonal: course `c` again, but with
-    |   its top and bottom edges at different columns, so a diagonal stroke is a
-    |   stack of stones leaning with it rather than a staircase of upright ones.
-    |   This is the single biggest thing the reference does that a grid of
-    |   rectangles cannot: its Z is bricked ALONG the bar, not across it.
-    |
-    |   Two of these side by side must OVERLAP by a column, not abut. A sloped
-    |   edge lands between pixels, and the rasteriser is free to round the left
-    |   block's edge down while rounding the right one's up -- which opens a
-    |   one-pixel hole straight through the letter, a third of the way down,
-    |   where nothing about the numbers suggests one. The later block wins the
-    |   overlap, so the joint still ends up a pixel wide.
-    | Author: suinevere
-    | Dependencies: N/A
-    | Globals: CY
-    | Params: c -- course index; tx0, tx1 -- inclusive columns at the top; bx0,
-    |   bx1 -- inclusive columns at the bottom
-    | Returns: the block as a four-point polygon
-    ----------------------
-    """
-    y0, y1 = CY[c]
-    return [(tx0, y0), (tx1, y0), (bx1, y1), (bx0, y1)]
-
-
-def wedge(c, tx0, tx1, bx):
-    """
-    ----------------------
-    | wedge
-    | Description: The triangular offcut left where a diagonal runs out into a
-    |   stem: full width at the top of course `c`, closing to a point at the
-    |   bottom. Without it the letter keeps a notch out of its outer edge that
-    |   the outline then traces, and the notch reads as damage rather than as
-    |   the corner it is.
-    | Author: suinevere
-    | Dependencies: N/A
-    | Globals: CY
-    | Params: c -- course index; tx0, tx1 -- inclusive columns at the top; bx --
-    |   the column the wedge closes to
-    | Returns: the block as a three-point polygon
-    ----------------------
-    """
-    y0, y1 = CY[c]
-    return [(tx0, y0), (tx1, y0), (bx, y1)]
-
-
-def free(x0, y0, x1, y1):
-    """
-    ----------------------
-    | free
-    | Description: One block placed off the course ladder entirely, for the
-    |   hyphen -- which sits between two courses because that is where the
-    |   middle of the cap height falls.
-    | Author: suinevere
-    | Dependencies: N/A
+    | Dependencies: numpy
     | Globals: N/A
-    | Params: x0, y0, x1, y1 -- inclusive glyph-local bounds
-    | Returns: the block as a four-point polygon
+    | Params: m -- the array; dy, dx -- the translation
+    | Returns: the translated array
     ----------------------
     """
-    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    o = np.zeros_like(m)
+    ys = slice(max(dy, 0), m.shape[0] + min(dy, 0))
+    yd = slice(max(-dy, 0), m.shape[0] + min(-dy, 0))
+    xs = slice(max(dx, 0), m.shape[1] + min(dx, 0))
+    xd = slice(max(-dx, 0), m.shape[1] + min(-dx, 0))
+    o[ys, xs] = m[yd, xd]
+    return o
 
 
-def bar(c, cuts, *corners, **kw):
+def dilate(m, n=1):
     """
     ----------------------
-    | bar
-    | Description: A whole course of blocks across one horizontal stroke, given
-    |   the columns the joints fall on. The last value is exclusive, so the
-    |   blocks run edge to edge with nothing left over.
-    |
-    |   `lean` tilts the joints: one value per cut, the number of columns that
-    |   joint moves by between the top of the course and the bottom. Barely a
-    |   joint in the reference is plumb, and a bar of upright blocks is the one
-    |   place the eye is quickest to notice it -- the outer two values stay zero
-    |   so the letter's own edges do not move.
-    |
-    |   Two neighbours must be given the SAME corner offset where they meet, or
-    |   the wandering course opens a notch between them that the outline pass
-    |   then paints white, straight across the stroke.
+    | dilate
+    | Description: Grows a boolean mask by n pixels, four-connected.
     | Author: suinevere
-    | Dependencies: N/A
-    | Globals: CY, LEVEL
-    | Params: c -- course index; cuts -- joint columns, left to right; corners --
-    |   one corner-offset tuple per block, in order; kw -- lean, one column
-    |   offset per cut
-    | Returns: a list of polygons
+    | Dependencies: shift
+    | Globals: N/A
+    | Params: m -- the mask; n -- pixels to grow by
+    | Returns: the grown mask
     ----------------------
     """
-    lean = kw.get("lean", (0,) * len(cuts))
-    last = len(cuts) - 2
-    y0, y1 = CY[c]
-    out = []
-    for i in range(len(cuts) - 1):
-        d = corners[i] if i < len(corners) else LEVEL
-        # Every stone but the last runs a column INTO its right-hand neighbour.
-        # A leaning joint lands between pixels, and the rasteriser is free to
-        # round the left stone's edge one way and the right stone's the other,
-        # which strands a pixel of background inside the wall. The neighbour is
-        # drawn afterwards and wins the overlap, so the joint does not move.
-        tx0, tx1 = cuts[i], cuts[i + 1] - (1 if i == last else 0)
-        out.append([(tx0, y0 + d[0]), (tx1, y0 + d[1]),
-                    (tx1 + lean[i + 1], y1 + d[2]), (tx0 + lean[i], y1 + d[3])])
-    return out
+    for _ in range(n):
+        m = m | shift(m, 1, 0) | shift(m, -1, 0) | shift(m, 0, 1) | shift(m, 0, -1)
+    return m
 
 
-# Every glyph is (width, blocks). The blocks ARE the letter -- there is no
-# separate outline they are fitted into. Joints are not drawn here either: the
-# blocks are laid touching, and draw_bricks cuts the white line back through the
-# wall wherever two of them meet, which is what leaves a block flush with the
-# letter's edge where it meets nothing.
+def erode(m, n=1):
+    """
+    ----------------------
+    | erode
+    | Description: Shrinks a boolean mask by n pixels, four-connected.
+    | Author: suinevere
+    | Dependencies: shift
+    | Globals: N/A
+    | Params: m -- the mask; n -- pixels to shrink by
+    | Returns: the shrunken mask
+    ----------------------
+    """
+    for _ in range(n):
+        m = m & shift(m, 1, 0) & shift(m, -1, 0) & shift(m, 0, 1) & shift(m, 0, -1)
+    return m
+
+
+def label(m):
+    """
+    ----------------------
+    | label
+    | Description: Numbers the four-connected regions of a boolean mask, from 1.
+    | Author: suinevere
+    | Dependencies: numpy
+    | Globals: N/A
+    | Params: m -- the mask
+    | Returns: (labels, count)
+    ----------------------
+    """
+    h, w = m.shape
+    lab = np.zeros((h, w), np.int32)
+    cur = 0
+    for sy in range(h):
+        for sx in range(w):
+            if not m[sy, sx] or lab[sy, sx]:
+                continue
+            cur += 1
+            st = [(sy, sx)]
+            lab[sy, sx] = cur
+            while st:
+                y, x = st.pop()
+                for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                    if 0 <= ny < h and 0 <= nx < w and m[ny, nx] and not lab[ny, nx]:
+                        lab[ny, nx] = cur
+                        st.append((ny, nx))
+    return lab, cur
+
+
+def grow_labels(lab, into, n):
+    """
+    ----------------------
+    | grow_labels
+    | Description: Spreads a label image outward into a mask, so pixels that
+    |   were shaved off a region -- or that fell in a joint -- are given back to
+    |   the nearest region that claims them.
+    | Author: suinevere
+    | Dependencies: shift
+    | Globals: N/A
+    | Params: lab -- the label image; into -- where labels may spread; n -- how
+    |   many pixels to spread by
+    | Returns: the spread label image
+    ----------------------
+    """
+    for _ in range(n):
+        nxt = lab.copy()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            sh = shift(lab, dy, dx)
+            take = (nxt == 0) & (sh > 0) & into
+            nxt[take] = sh[take]
+        lab = nxt
+    return lab
+
+
+_TRACE = None
+
+
+def trace():
+    """
+    ----------------------
+    | trace
+    | Description: Reads the ZORK reference and separates it into the map of
+    |   stones this logo is built out of, plus the letterform they make up.
+    |
+    |   The reference is two inks: black, and the paper it is printed on. So the
+    |   black is BOTH the stones and the stroke drawn round the whole word, and
+    |   the paper is BOTH the background and every joint. The stroke is peeled
+    |   off by distance rather than by connectivity -- it is about six pixels
+    |   thick and the stones stand another six back from it behind the channel,
+    |   so black within eight pixels of the background is stroke and nothing
+    |   else. Peeling it as "the ink region that touches the background" instead
+    |   loses whichever stones happen to touch the stroke, which cost the Z a
+    |   third of its masonry.
+    |
+    |   The stones are then eroded before they are numbered, so that a joint
+    |   thinned to nothing by the printing does not weld two of them together,
+    |   and grown back afterwards.
+    | Author: suinevere
+    | Dependencies: PIL, numpy, REF_PATH
+    | Globals: _TRACE
+    | Params: N/A
+    | Returns: (stones, form) -- the numbered stone map and the letterform mask,
+    |   both at the reference's own resolution
+    ----------------------
+    """
+    global _TRACE
+    if _TRACE is not None:
+        return _TRACE
+
+    grey = np.array(Image.open(REF_PATH).convert("L")).astype(int)
+    ink = grey < 128
+
+    paper, _ = label(~ink)
+    background = paper == paper[0, 0]
+
+    stones = ink & ~dilate(background, 8)
+    lab, _ = label(erode(stones, 2))
+    lab = grow_labels(lab, stones, 4)
+    lab[~stones] = 0
+
+    ids, counts = np.unique(lab[lab > 0], return_counts=True)
+    for i, c in zip(ids, counts):
+        if c < 60:                      # printing crumbs, not stones
+            lab[lab == i] = 0
+
+    # Closing by more than a joint's width recovers the silhouette the stones
+    # make up, joints and all, which is the letterform the outline follows.
+    form = erode(dilate(lab > 0, 5), 5)
+    _TRACE = (lab, form)
+    return _TRACE
+
+
+# Where in the reference to take stones from, by the kind of stroke they have to
+# fill. A bar wants stones out of a bar and a diagonal wants stones out of a
+# diagonal: the reference's courses run along its strokes, and sampling a
+# diagonal out of a bar lays them across it instead. Each is the reference
+# coordinate that the stroke's own top-left corner samples from.
+FROM_BAR_TOP = (35, 30)         # the Z's top bar
+FROM_BAR_FOOT = (35, 196)       # the Z's bottom bar
+FROM_STEM = (352, 44)           # the R's left stem
+FROM_STEM2 = (505, 28)          # the K's stem
+FROM_DIAG_DOWN_LEFT = (62, 80)  # the Z's diagonal
+FROM_DIAG_DOWN_RIGHT = (543, 146)   # the K's lower arm
+FROM_FIELD = (404, 60)          # the R's bowl, for the wall between the strokes
+
+# Every other letter is a set of strokes: a polygon in glyph-local target
+# pixels, and the reference corner its stones come from. Cap height is CAP_H and
+# a stroke may run outside that -- the reference's letters step over their own
+# cap line and this is where that comes from.
 #
-# The joint columns are staggered course to course on purpose. Blocks stacked
-# with their joints in line are a stack, not a bond, and the eye reads the seam
-# before it reads the letter.
-#
-# The corner offsets follow one rule, and holes appear the moment it is broken:
-# where a stroke carries on past a block, that block's edge is pushed INTO the
-# neighbour, never away from it. A course that wanders upward at its underside
-# while the stem beneath it starts on the course line leaves a row of stray
-# pixels that the outline then paints white, straight across the letter.
-BRICKS = {
-    # A chevron, and the widest letter's worth of jaggedness: the top-left
-    # corner rises well out of the cap line and the bottom-right drops back
-    # inside the baseline, which is what stops the Z reading as a rectangle with
-    # a stripe through it. The diagonal is bricked ALONG its own slope -- three
-    # slabs leaning with it, not a staircase of upright stones.
-    "Z": (42,
-          bar(0, (0, 14, 28, 42),
-              (-6, -5, -1, 1), (-5, -3, 1, -1), (-3, -2, 2, 1),
-              lean=(0, 3, -2, 0))
-          + [slope(1, 26, 41, 18, 33),
-             slope(2, 18, 26, 10, 18), slope(2, 25, 33, 17, 25),
-             slope(3, 10, 25, 4, 19)]
-          + bar(4, (0, 14, 28, 42),
-                (0, -1, 1, 3), (-1, 1, 2, 1), (1, 0, -5, 2),
-                lean=(0, -3, 2, 0))),
+# Strokes are laid in order and a later one wins the overlap, so a stem laid
+# after a bar cuts its own joint against it.
+GLYPHS = {
+    # A chevron. The top bar's left end rises out of the cap line, the diagonal
+    # is one lean slab off the bar's right end, and the foot drops below the
+    # baseline -- the reference Z's own moves.
+    "Z": (52, [
+        ([(0, -4), (52, 1), (52, 21), (0, 27)], FROM_BAR_TOP),
+        ([(34, 14), (52, 17), (21, 62), (0, 58)], FROM_DIAG_DOWN_LEFT),
+        ([(0, 52), (52, 56), (52, 76), (0, 80)], FROM_BAR_FOOT),
+    ]),
 
-    # Off the course ladder: the middle of the cap height falls between courses
-    # 1 and 2, and a hyphen sitting on either would read as a dropped brick.
-    "-": (16, [free(0, 24, 8, 38), free(9, 25, 15, 39)]),
+    "-": (14, [
+        ([(0, 30), (14, 27), (14, 43), (0, 47)], FROM_FIELD),
+    ]),
 
     # Solid from the apex down through the crossbar. A counter up there would be
-    # six pixels across before the rings ate their six, and the reference's own
-    # letters keep their counters small and low for the same reason -- what says
-    # "A" here is the splay of the legs and the white joint running up under the
-    # apex, not a hole. Every stone is cut to the splay, so nothing in the letter
-    # is square.
-    "A": (50,
-          [slope(0, 18, 31, 15, 34),
-           slope(1, 15, 34, 11, 38),
-           slope(2, 11, 24, 7, 23), slope(2, 23, 38, 22, 42),
-           slope(3, 7, 18, 3, 14), slope(3, 34, 42, 37, 45),
-           slope(4, 3, 14, 0, 11), slope(4, 37, 45, 41, 49)]),
+    # nine pixels across before the rings ate their eight, and the reference
+    # keeps its counters small and low for the same reason.
+    "A": (44, [
+        ([(13, 0), (31, -2), (36, 34), (7, 34)], FROM_STEM),
+        ([(4, 26), (38, 28), (41, 50), (2, 48)], FROM_BAR_TOP),
+        ([(2, 42), (20, 42), (13, 78), (-2, 76)], FROM_DIAG_DOWN_LEFT),
+        ([(24, 42), (42, 42), (45, 76), (30, 78)], FROM_DIAG_DOWN_RIGHT),
+    ]),
 
-    # The bar is pulled inside the letter box at both ends, so the cap line
-    # breaks either side of it instead of running on into its neighbours, and it
-    # steps down to the right. Under it the stem is one slab twenty-eight pixels
-    # deep -- the biggest stone in the word, against the smallest in the foot.
-    "T": (36,
-          bar(0, (1, 12, 24, 35),
-              (-4, -3, -1, 1), (-3, -1, 2, -1), (-1, 3, -1, 2),
-              lean=(0, 2, -3, 0))
-          + [span(1, 2, 11, 24, (-2, -1, 2, 3)),
-             block(3, 11, 24, (-1, -2, 2, 1))]
-          + bar(4, (9, 18, 27), (0, -1, 1, 2), (-1, 0, 2, 1),
-                lean=(0, 3, 0))),
+    # The bar oversails the stem at both ends and steps down to the right, which
+    # keeps the top of the word moving across a letter that is otherwise a post.
+    "T": (40, [
+        ([(0, -3), (40, 2), (40, 22), (0, 25)], FROM_BAR_TOP),
+        ([(12, 16), (29, 18), (31, 78), (10, 76)], FROM_STEM2),
+    ]),
 
-    # Piers of unequal bricking -- the left runs small, slab, single and the
-    # right single, single, slab -- so the two sides of the counter are not each
-    # other's reflection.
-    "U": (40,
-          [block(0, 0, 11, (0, -2, 2, 3)), span(1, 2, 0, 11, (-2, -1, 3, 2)),
-           block(3, 0, 11, (-1, -2, 2, 3)),
-           block(0, 28, 39, (-4, -3, 2, 3)), block(1, 28, 39, (-2, -1, 3, 2)),
-           span(2, 3, 28, 39, (-2, -2, 2, 1))]
-          + bar(4, (0, 14, 27, 40),
-                (-1, 1, 2, 3), (1, -2, 1, 2), (-2, -1, -1, 1),
-                lean=(0, -2, 3, 0))),
+    # Piers off different stems of the reference, so the two sides of the
+    # counter are not each other's reflection.
+    "U": (42, [
+        ([(0, -1), (14, 2), (13, 64), (0, 62)], FROM_STEM),
+        ([(28, 2), (42, -2), (42, 62), (29, 64)], FROM_STEM2),
+        ([(0, 54), (42, 57), (42, 76), (0, 79)], FROM_BAR_FOOT),
+    ]),
 
-    # The bowl takes two of the five courses. One was enough to draw an R and
-    # not enough to read as one: shut to eleven pixels by the rings, its counter
-    # became a nick in a post, and with U, R and N standing six near-identical
-    # piers in a row the word turned into URURN. The bowl is what tells them
-    # apart, so it gets the height. The leg is one stone hung off the bar that
-    # closes it and cut to its own slope, the way the reference hangs the R's.
-    "R": (44,
-          bar(0, (0, 15, 30, 44),
-              (0, -1, 2, 1), (-1, -2, 1, 2), (-3, -3, 2, 1),
-              lean=(0, 3, -2, 0))
-          + [block(1, 0, 12, (-2, -1, 3, 2)), block(1, 31, 43, (-1, -2, 3, 2)),
-             block(2, 0, 12, (-2, -1, 3, 2)), block(2, 31, 43, (-2, -2, 2, 2))]
-          + bar(3, (0, 16, 31, 44),
-                (-2, -1, 2, 3), (-1, 0, 2, 2), (0, -2, 2, 2),
-                lean=(0, -3, 2, 0))
-          + [block(4, 0, 12, (-1, -2, 0, 2)), slope(4, 24, 36, 30, 42)]),
+    # Drawn after the reference's own R: a stem, a bowl of three short strokes
+    # round a counter that is small and high, and a leg kicking out from under
+    # it on its own slope. Every stroke overlaps its neighbour by most of a
+    # course -- abutting them leaves the leg standing on nothing, because the
+    # two get different stones and the joint between them cuts right through.
+    "R": (50, [
+        ([(0, -2), (15, 1), (16, 78), (0, 75)], FROM_STEM),
+        ([(9, -1), (50, 3), (50, 17), (9, 15)], FROM_BAR_TOP),
+        ([(35, 11), (50, 14), (50, 39), (35, 42)], FROM_STEM2),
+        ([(9, 34), (50, 37), (49, 55), (9, 52)], FROM_BAR_FOOT),
+        ([(22, 47), (42, 45), (50, 77), (34, 79)], FROM_DIAG_DOWN_RIGHT),
+    ]),
 
-    # The diagonal runs out into the right-hand stem from the third course down,
-    # and below that the two are one piece of wall -- so they are laid as one,
-    # each course a stone cut to the slope plus the offcut beside it. Laying a
-    # stem block behind the diagonal instead leaves the stem as a wedge that
-    # thins to nothing by the baseline. The top-right corner carries the spur
-    # that answers the Z's.
-    "N": (44,
-          [block(0, 0, 10, (-1, -2, 2, 1)), span(1, 2, 0, 10, (-2, -1, 3, 2)),
-           block(3, 0, 10, (-1, -2, 2, 1)), block(4, 0, 10, (-2, -2, -3, 1)),
-           block(0, 33, 43, (-5, -4, 3, 2)), block(1, 33, 43, (-2, -1, 3, 2))]
-          + [slope(0, 11, 21, 13, 24),
-             slope(1, 13, 24, 18, 30),
-             slope(2, 18, 30, 24, 36), slope(2, 30, 43, 36, 43),
-             slope(3, 24, 36, 29, 41), slope(3, 36, 43, 41, 43),
-             slope(4, 29, 41, 33, 43), wedge(4, 41, 43, 43)]),
+    # The diagonal runs out into the right-hand pier about two-thirds down and
+    # below that the two are one piece of wall, which is what the reference's K
+    # does where its arms meet its stem.
+    "N": (48, [
+        ([(0, -2), (13, 1), (13, 78), (0, 75)], FROM_STEM),
+        ([(35, 1), (48, -5), (48, 75), (35, 78)], FROM_STEM2),
+        ([(9, -2), (24, 0), (48, 76), (33, 78)], FROM_DIAG_DOWN_RIGHT),
+    ]),
 }
 
 WORD = "Z-ATURN"
 
 
-def place_bricks():
+def stroke_stones(poly, src, w, base):
     """
     ----------------------
-    | place_bricks
-    | Description: Lays the word out centred on the canvas and returns every
-    |   block in canvas coordinates.
+    | stroke_stones
+    | Description: Fills one stroke of a letter with masonry sampled out of the
+    |   reference: the polygon says what shape the stroke is, and src says which
+    |   corner of the reference the stones inside it are taken from.
+    |
+    |   Pixels the reference had a joint under come back as zero. They are not
+    |   left as joints -- at this scale the reference's six-pixel joints sample
+    |   down to one or two and come out ragged -- so they are given to whichever
+    |   stone is nearest and the joints are re-cut to MORTAR_W later. What the
+    |   reference supplies is WHERE the joints fall and what shape the stones
+    |   are; the width of the line is drawn fresh.
     | Author: suinevere
-    | Dependencies: N/A
-    | Globals: BRICKS, WORD, RIDE, TRACK, CAP_TOP, WIDTH
-    | Params: N/A
-    | Returns: a list of polygons
+    | Dependencies: numpy, PIL, trace
+    | Globals: SCALE, CAP_H
+    | Params: poly -- the stroke, in glyph-local pixels; src -- the reference
+    |   corner to sample from; w -- the glyph's width; base -- what to add to
+    |   every stone number so this stroke's stones are nobody else's
+    | Returns: an int array, w wide and the glyph's full height, holding stone
+    |   numbers and zero outside the stroke
     ----------------------
     """
-    widths = [BRICKS[c][0] for c in WORD]
-    pen = (WIDTH - sum(widths) - TRACK * (len(WORD) - 1)) // 2
+    ref, _form = trace()
+    rh, rw = ref.shape
 
-    placed = []
-    for ch, w in zip(WORD, widths):
-        top = CAP_TOP + RIDE[ch]
-        for poly in BRICKS[ch][1]:
-            placed.append([(pen + x, y + top) for x, y in poly])
+    ys = [p[1] for p in poly]
+    top, bot = min(ys), max(ys)
+    h = bot - top + 1
+
+    cut = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(cut).polygon([(x, y - top) for x, y in poly], fill=1)
+    inside = np.array(cut).astype(bool)
+
+    # src is the reference corner the STROKE's own top-left samples from, not
+    # the glyph's -- a stroke that starts two-thirds of the way down a letter
+    # would otherwise read two-thirds of the way down the reference from src as
+    # well, which for the feet ran clean off the bottom of it and came back
+    # empty.
+    ty, tx = np.mgrid[0:h, 0:w]
+    ry = np.clip((src[1] + ty * STONE_SCALE).astype(int), 0, rh - 1)
+    rx = np.clip((src[0] + tx * STONE_SCALE).astype(int), 0, rw - 1)
+
+    got = np.where(inside, ref[ry, rx], 0)
+    # Generously, and then checked: a source window that runs off the edge of
+    # the reference samples bare paper, and the stroke comes back with a hole
+    # through it that detaches whatever hangs below. That is not visible in the
+    # preview as anything but a letter quietly missing a leg.
+    got = grow_labels(got, inside, max(h, w))
+    if (inside & (got == 0)).any():
+        raise ValueError("stroke at %r sampled outside the reference's stones"
+                         % (src,))
+    got[got > 0] += base
+    return got, top
+
+
+def place_glyphs():
+    """
+    ----------------------
+    | place_glyphs
+    | Description: Lays the word out centred on the canvas and returns both the
+    |   stone map and the mask of the letterforms themselves.
+    |
+    |   The two are not the same thing, and that is the whole design: the stones
+    |   go on to fill a solid wall, while the letterform mask is what gets
+    |   incised into it.
+    | Author: suinevere
+    | Dependencies: numpy, stroke_stones
+    | Globals: GLYPHS, WORD, TRACK, CAP_TOP, WIDTH, HEIGHT
+    | Params: N/A
+    | Returns: (owner, letters) -- the stone map and the letterform mask
+    ----------------------
+    """
+    total = sum(GLYPHS[c][0] for c in WORD) + TRACK * (len(WORD) - 1)
+    pen = (WIDTH - total) // 2
+
+    owner = np.zeros((HEIGHT, WIDTH), np.int32)
+    base = 0
+    for ch in WORD:
+        w = GLYPHS[ch][0]
+        for poly, src in GLYPHS[ch][1]:
+            got, top = stroke_stones(poly, src, w, base)
+            base += 400
+            y0 = CAP_TOP + top
+            gh, gw = got.shape
+            y1, x1 = min(HEIGHT, y0 + gh), min(WIDTH, pen + gw)
+            if y0 >= y1 or pen >= x1:
+                continue
+            dst = owner[max(y0, 0):y1, max(pen, 0):x1]
+            sub = got[max(-y0, 0):y1 - y0, max(-pen, 0):x1 - pen]
+            dst[sub > 0] = sub[sub > 0]
         pen += w + TRACK
 
-    return placed
+    return owner, owner > 0
 
 
-def rasterise(blocks):
+def renumber(owner):
     """
     ----------------------
-    | rasterise
-    | Description: Paints every block into one 'L' image holding its index plus
-    |   one, so a pixel says which block owns it and zero means no stone. One
-    |   image rather than a mask each, because the joints are cut by comparing a
-    |   pixel's owner against its neighbour's.
+    | renumber
+    | Description: Re-numbers the stone map so every CONTIGUOUS piece of stone
+    |   is its own stone, then folds the specks away.
+    |
+    |   Both halves matter. A stone the reference used twice, or one a stroke's
+    |   polygon cut into two pieces, would otherwise share a number across the
+    |   letter and get no joint drawn between the pieces. And scaling down by
+    |   three and a bit leaves slivers a pixel or two across along every cut
+    |   edge, which draw as mortar dashes rather than as stones; each is given to
+    |   whichever neighbour it touches most.
     | Author: suinevere
-    | Dependencies: PIL
-    | Globals: WIDTH, HEIGHT
-    | Params: blocks -- the placed polygons; at most 255 of them
-    | Returns: the owner image
-    ----------------------
-    """
-    if len(blocks) > 255:
-        raise ValueError("more blocks than an 8-bit owner map can hold")
-    owner = Image.new("L", (WIDTH, HEIGHT), 0)
-    draw = ImageDraw.Draw(owner)
-    for i, poly in enumerate(blocks):
-        draw.polygon(poly, fill=i + 1)
-    return owner
-
-
-def grow(img, n):
-    """
-    ----------------------
-    | grow
-    | Description: Dilates a black-and-white mask by n pixels, square-cornered.
-    |   Square rather than round because the reference's outline turns its
-    |   corners square, and at this size a rounded one just looks eroded.
-    | Author: suinevere
-    | Dependencies: PIL
+    | Dependencies: numpy, label, grow_labels
     | Globals: N/A
-    | Params: img -- an 'L' mask, 255 where set; n -- pixels to grow by
-    | Returns: the grown mask
+    | Params: owner -- the stone map
+    | Returns: the re-numbered map
     ----------------------
     """
-    for _ in range(n):
-        img = img.filter(ImageFilter.MaxFilter(3))
-    return img
+    solid = owner > 0
+    out = np.zeros_like(owner)
+    nxt = 0
+    for v in np.unique(owner[solid]):
+        piece, n = label(owner == v)
+        piece[piece > 0] += nxt
+        out[piece > 0] = piece[piece > 0]
+        nxt += n
+
+    ids, counts = np.unique(out[out > 0], return_counts=True)
+    doomed = ids[counts < 14]
+    if len(doomed):
+        out[np.isin(out, doomed)] = 0
+        out = grow_labels(out, solid, 8)
+    return out
 
 
-def draw_rings(px, solid):
+def draw_mortar(px, owner):
+    """
+    ----------------------
+    | draw_mortar
+    | Description: Fills the letters solid black, then cuts the joints back
+    |   through them in paper wherever one stone meets another.
+    |
+    |   The joint is a line drawn THROUGH the wall, not a gap left between two
+    |   drawn stones, which is what the reference does and is the whole character
+    |   of it. MORTAR_W is shared between the two stones either side, so each
+    |   gives up half and the joint stays centred on the seam.
+    | Author: suinevere
+    | Dependencies: numpy
+    | Globals: BLACK, WHITE, MORTAR_W
+    | Params: px -- the index buffer; owner -- the stone map
+    | Returns: N/A
+    ----------------------
+    """
+    solid = owner > 0
+    px[solid] = BLACK
+
+    reach = MORTAR_W // 2
+    seam = np.zeros_like(solid)
+    for dy in range(-reach, reach + 1):
+        for dx in range(-reach, reach + 1):
+            if not dy and not dx:
+                continue
+            other = shift(owner, dy, dx)
+            seam |= solid & (other > 0) & (other != owner)
+    px[seam] = WHITE
+
+
+def draw_rings(px, owner):
     """
     ----------------------
     | draw_rings
-    | Description: Lays the two rings the reference draws round the word: a
-    |   thick white outline hugging the letters, and a thin black keyline
-    |   outside that.
+    | Description: Lays the two things the reference draws round its letters: a
+    |   channel of bare paper hugging them, and the black stroke outside that.
     |
-    |   The keyline is not decoration. The outline is white and the title screen
-    |   behind it is a photograph, much of which is pale -- without a dark edge
-    |   the outline dissolves into the picture and the letters lose their shape.
-    |   Painted outermost first so the white ring writes over its inner edge.
+    |   The stroke is not a keyline. It is as heavy as the mortar -- measured off
+    |   the reference, all three weights are the same -- and it is what holds the
+    |   word together over a photograph: the channel is white and much of a room
+    |   picture is pale, so without the stroke the channel dissolves into the
+    |   picture and the letters lose their shape. Painted outermost first so the
+    |   channel writes over its inner edge.
     | Author: suinevere
-    | Dependencies: PIL
-    | Globals: BLACK, WHITE, OUTLINE_W, KEYLINE_W
-    | Params: px -- index buffer; solid -- the letterform mask
+    | Dependencies: dilate
+    | Globals: BLACK, WHITE, CHANNEL_W, STROKE_W
+    | Params: px -- the index buffer; owner -- the stone map
     | Returns: N/A
     ----------------------
     """
-    outer = grow(solid, OUTLINE_W + KEYLINE_W).load()
-    white = grow(solid, OUTLINE_W).load()
-    s = solid.load()
-    for y in range(HEIGHT):
-        for x in range(WIDTH):
-            if s[x, y]:
-                continue
-            if white[x, y]:
-                px[x, y] = WHITE
-            elif outer[x, y]:
-                px[x, y] = BLACK
-
-
-def draw_bricks(px, own, solid):
-    """
-    ----------------------
-    | draw_bricks
-    | Description: Fills the letters solid black, then cuts the mortar back
-    |   through them in white wherever one block meets another.
-    |
-    |   The joint is drawn as a line through the wall rather than as a gap
-    |   between two drawn stones, which is what the reference does and is the
-    |   whole character of it: the brickwork is white line art over black, not a
-    |   picture of stone. MORTAR_W is shared between the two blocks either side,
-    |   so each gives up half of it and the joint stays centred on the seam.
-    | Author: suinevere
-    | Dependencies: N/A
-    | Globals: BLACK, WHITE, MORTAR_W, WIDTH, HEIGHT
-    | Params: px -- index buffer; own -- owner pixel access; solid -- the
-    |   letterform mask
-    | Returns: N/A
-    ----------------------
-    """
-    s = solid.load()
-    reach = MORTAR_W // 2
-    for y in range(HEIGHT):
-        for x in range(WIDTH):
-            if s[x, y]:
-                px[x, y] = BLACK
-
-    for y in range(HEIGHT):
-        for x in range(WIDTH):
-            if not s[x, y]:
-                continue
-            mine = own[x, y]
-            joint = False
-            for dy in range(-reach, reach + 1):
-                for dx in range(-reach, reach + 1):
-                    nx, ny = x + dx, y + dy
-                    if not (0 <= nx < WIDTH and 0 <= ny < HEIGHT):
-                        continue
-                    if own[nx, ny] and own[nx, ny] != mine:
-                        joint = True
-                        break
-                if joint:
-                    break
-            if joint:
-                px[x, y] = WHITE
+    solid = owner > 0
+    outer = dilate(solid, CHANNEL_W + STROKE_W)
+    channel = dilate(solid, CHANNEL_W)
+    px[outer & ~solid] = BLACK
+    px[channel & ~solid] = WHITE
 
 
 def render():
     """
     ----------------------
     | render
-    | Description: Builds the whole logo as a WIDTH x HEIGHT buffer of palette
-    |   indices: the keyline and outline rings, then the black letters with the
-    |   white mortar cut through them.
+    | Description: Builds the whole logo as a HEIGHT x WIDTH buffer of palette
+    |   indices: the stroke and the channel round the wall, the black stones
+    |   with the paper joints cut through them, and the word incised into it.
     | Author: suinevere
-    | Dependencies: PIL
+    | Dependencies: numpy, PIL
     | Globals: N/A
     | Params: N/A
     | Returns: a PIL 'P' image whose pixel values are palette indices
     ----------------------
     """
-    img = Image.new("P", (WIDTH, HEIGHT), TRANS)
-    px = img.load()
+    strokes, _letters = place_glyphs()
+    owner = renumber(strokes)
 
-    owner = rasterise(place_bricks())
-    solid = owner.point([0] + [255] * 255)
+    px = np.full((HEIGHT, WIDTH), TRANS, np.uint8)
+    draw_rings(px, owner)
+    draw_mortar(px, owner)
 
-    draw_rings(px, solid)
-    draw_bricks(px, owner.load(), solid)
-
+    img = Image.fromarray(px, "P")
     flat = [0] * 768
     for idx, (r, g, b) in PALETTE.items():
         flat[idx * 3:idx * 3 + 3] = [r, g, b]
@@ -671,13 +683,10 @@ def main(argv):
     img = render()
 
     PREVIEW_PATH.parent.mkdir(parents=True, exist_ok=True)
-    # Over mid-grey rather than white or black: the logo's own keyline and its
+    # Over mid-grey rather than white or black: the logo's own stroke and its
     # transparent surround both have to be visible in the preview.
     backdrop = Image.new("RGB", (WIDTH, HEIGHT), (72, 76, 84))
     rgb = img.convert("RGB")
-    # From the raw indices, not img.point(): point() on a 'P' image keeps the
-    # palette, so converting its result to 'L' would grade by colour instead of
-    # by index and the transparent surround would not come out as zero.
     alpha = Image.frombytes("L", (WIDTH, HEIGHT),
                             bytes(0 if v == TRANS else 255
                                   for v in img.tobytes()))

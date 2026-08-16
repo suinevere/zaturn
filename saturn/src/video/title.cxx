@@ -57,12 +57,13 @@ extern GfsDirTbl g_z3_tbl;
  | TITLE_LOGO_X / TITLE_LOGO_Y
  | Description: Where the masonry logo's top-left cell sits. The logo is
  |   TITLE_LOGO_COLS cells wide on a 40-column screen, so the column is what
- |   centres it; the row leaves the copyright line and the prompt where they
- |   already were.
+ |   centres it. The row is as high as the screen allows: the logo is
+ |   TITLE_LOGO_ROWS deep and the credit line sits under it, which is why that
+ |   moved down a row when the art grew.
  | Author: suinevere
  ----------------------*/
 #define TITLE_LOGO_X ((40 - TITLE_LOGO_COLS) / 2)
-#define TITLE_LOGO_Y 4
+#define TITLE_LOGO_Y 3
 
 /*----------------------
  | title_draw_art
@@ -78,7 +79,7 @@ extern GfsDirTbl g_z3_tbl;
  ----------------------*/
 void title_draw_art(void) {
     title_logo_draw(TITLE_LOGO_X, TITLE_LOGO_Y);
-    text_print(4, 15, "Saturn port (c) 2026 by Suinevere");
+    text_print(4, 16, "Saturn port (c) 2026 by Suinevere");
 }
 
 /*----------------------

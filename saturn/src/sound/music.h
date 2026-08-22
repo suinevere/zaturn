@@ -1,21 +1,19 @@
 /*----------------------
  | music.h
- | Description: The music engine's interface: the text categories, mix modes, and
- |   the track bounds; the tunable data-table accessors (music_data.c); the
- |   platform-independent engine (music.c); the pure classifiers exposed for
- |   tests; and the Saturn CD-DA backend (music_cdda.cxx). Every CD-DA track the
- |   client plays -- the title and menu track as much as the in-game one -- goes
- |   through this engine, so the MUSIC_DYN_LOOPS cycle rule holds in the menus and
- |   in Sound Options too, not only at the prompt.
+ | Description: The music engine's interface: mix modes and the track bounds;
+ |   the tunable data-table accessor (music_data.c); the platform-independent
+ |   engine (music.c); and the Saturn CD-DA backend (music_cdda.cxx). Every
+ |   CD-DA track the client plays -- the title and menu track as much as the
+ |   in-game one -- goes through this engine, so the MUSIC_DYN_LOOPS cycle
+ |   rule holds in the menus and in Sound Options too, not only at the prompt.
  |
- |   The category is named for where it comes from (the text on screen) rather
- |   than what it drives, because it now drives two things: the CD-DA track, and
- |   the background picture. The display subscribes via music_set_category_fn
- |   rather than re-deriving the mood from the same text, so a picture cannot end
- |   up describing a mood the music has already left. The TC_* names and the
- |   text_* classifiers are that shared vocabulary; the music_* names either side
- |   of them (music_category_pool, music_category_track) are the part that is
- |   genuinely about tracks.
+ |   The category argument music_category_pool and music_category_track take
+ |   is a scene's music category (scene/scene_map.h) rather than anything this
+ |   header defines; music.h stopped owning that vocabulary once room mood
+ |   moved from a text classifier to authored scenes. The display subscribes
+ |   to category changes via music_set_category_fn rather than re-deriving the
+ |   mood on its own clock, so a picture cannot end up describing a mood the
+ |   music has already left.
  | Author: suinevere
  | Dependencies: none
  ----------------------*/
@@ -27,56 +25,26 @@ extern "C" {
 #endif
 
 /*----------------------
- | TEXT_NUM_CATEGORIES / TC_* / MIX_* / MUSIC_TRACK_MIN / MUSIC_TRACK_MAX
- | Description: The text categories (TC_NEUTRAL..TC_TRIUMPH) and their count -- the
- |   mood read off the screen, which selects both the track and the background
- |   picture; the Audio Mix modes from Sound Options; and the track bounds.
- |   TC_NEUTRAL..TC_PLACE_LAST are places, classified from the room's text and
- |   memoized per room; TC_DANGER and TC_TRIUMPH are moments, scanned from each
- |   turn's text, and carry no picture of their own. MUSIC_TRACK_MAX is
- |   the ceiling for Sequential/Random and the override clamp -- a fixed offer, not
- |   a detected count (playing a missing track is a harmless no-op); the Sound
- |   Options track selector instead lists the disc's real tracks from
- |   music_cdda_audio_tracks().
+ | MIX_* / MUSIC_TRACK_MIN / MUSIC_TRACK_MAX
+ | Description: The Audio Mix modes from Sound Options, and the track bounds.
+ |   MUSIC_TRACK_MAX is the ceiling for Sequential/Random and the override
+ |   clamp -- a fixed offer, not a detected count (playing a missing track is
+ |   a harmless no-op); the Sound Options track selector instead lists the
+ |   disc's real tracks from music_cdda_audio_tracks().
  | Author: suinevere
  ----------------------*/
-#define TEXT_NUM_CATEGORIES 15
-enum {
-    TC_NEUTRAL = 0, TC_WILDERNESS, TC_UNDERGROUND, TC_WATER, TC_NAUTICAL,
-    TC_TOWN, TC_DUNGEON, TC_DESERT, TC_MAGIC, TC_SCIFI, TC_HORROR,
-    TC_MYSTERY, TC_HOUSE, TC_DANGER, TC_TRIUMPH
-};
-
-/*----------------------
- | TC_PLACE_LAST
- | Description: The last category a room can classify as, so the two event
- |   categories after it are excluded by construction rather than by everyone
- |   remembering to stop before them.
- |
- |   Worth a name because it has already moved once. TC_HOUSE was appended at the
- |   END of the places rather than slotted next to TC_TOWN where it reads more
- |   naturally, deliberately: the category index is the row index of
- |   music_data.c's CATEGORY_POOL and display.c's CATEGORY_IMAGE, and inserting in
- |   the middle would have silently repointed every table row after TC_TOWN.
- |   Appending costs one out-of-order enum entry and shifts nothing.
- | Author: suinevere
- ----------------------*/
-#define TC_PLACE_LAST TC_HOUSE
 enum { MIX_DYNAMIC = 0, MIX_OVERRIDE = 1, MIX_SEQUENTIAL = 2, MIX_RANDOM = 3 };
 #define MUSIC_TRACK_MIN 2
 #define MUSIC_TRACK_MAX 33
 
 /*----------------------
- | data-table accessors (music_data.c)
- | Description: music_category_pool returns a category's track pool (*out)
- |   and size; text_game_room_category returns a game's authored room category, or
- |   -1 if none. Named rather than numbered because the numbers shifted when
- |   TC_HOUSE was added, and this line read "cats 1..11" for a while afterwards.
+ | music_category_pool (music_data.c)
+ | Description: Returns a category's track pool (*out) and size. Named rather
+ |   than numbered because the numbers shifted when TC_HOUSE was added, and
+ |   this line read "cats 1..11" for a while afterwards.
  | Author: suinevere
  ----------------------*/
 int music_category_pool(int category, const unsigned char** out);
-int text_game_room_category(unsigned int release, const char* serial,
-                             unsigned int room);
 
 /*----------------------
  | music_play_fn / MUSIC_DYN_LOOPS

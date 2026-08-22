@@ -3,10 +3,10 @@
    music_note_output overflow behavior now that event_scan -- not a room
    classifier -- is what reads the accumulated turn text.
 
-   Room classification itself (text_classify_room, its keyword tables, title
-   weighting, per-game fallback/genre) moved out of music's flow entirely; it
-   is covered by test/room_class_test.c against saturn/src/classify, which
-   this file no longer depends on.
+   The keyword-based room classifier this engine used to read moods from is
+   gone entirely, along with its own test coverage; room mood now comes from
+   the authored scene tables in saturn/src/scene, which this file does not
+   depend on.
 
    Build:
      gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/mt \
@@ -42,21 +42,21 @@ int main(void) {
     /* --- data tables: the three surviving pools --- */
     {
         const unsigned char* p;
-        int n = music_category_pool(POOL_NEUTRAL, &p);
+        int n = music_track_pool(POOL_NEUTRAL, &p);
         CHECK(n == 11);
         int has30 = 0; for (int i = 0; i < n; i++) { CHECK(p[i] >= 2 && p[i] <= 32); if (p[i] == 30) has30 = 1; }
         CHECK(has30);
 
-        n = music_category_pool(EV_DANGER, &p);
+        n = music_track_pool(EV_DANGER, &p);
         CHECK(n > 0);
         for (int i = 0; i < n; i++) CHECK(p[i] >= 2 && p[i] <= 32);
 
-        n = music_category_pool(EV_TRIUMPH, &p);
+        n = music_track_pool(EV_TRIUMPH, &p);
         CHECK(n > 0);
         for (int i = 0; i < n; i++) CHECK(p[i] >= 2 && p[i] <= 32);
 
-        CHECK(music_category_pool(-1, &p) == 0);
-        CHECK(music_category_pool(POOL_NEUTRAL + 1, &p) == 0);   /* one past the last valid selector */
+        CHECK(music_track_pool(-1, &p) == 0);
+        CHECK(music_track_pool(POOL_NEUTRAL + 1, &p) == 0);   /* one past the last valid selector */
     }
 
     /* --- event scan: whole-word, case-insensitive, first match over the turn --- */
@@ -69,7 +69,7 @@ int main(void) {
     music_seed(12345);
     for (int t = 0; t < 50; t++) {
         int tr = music_category_track(EV_TRIUMPH);
-        const unsigned char* p; int n = music_category_pool(EV_TRIUMPH, &p);
+        const unsigned char* p; int n = music_track_pool(EV_TRIUMPH, &p);
         int member = 0; for (int i = 0; i < n; i++) if (p[i] == tr) member = 1;
         CHECK(member);
     }

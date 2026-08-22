@@ -7,7 +7,7 @@
  |   in-game one -- goes through this engine, so the MUSIC_DYN_LOOPS cycle
  |   rule holds in the menus and in Sound Options too, not only at the prompt.
  |
- |   The category argument music_category_pool and music_category_track take
+ |   The category argument music_track_pool and music_category_track take
  |   is a scene's music category (scene/scene_map.h) rather than anything this
  |   header defines; music.h stopped owning that vocabulary once room mood
  |   moved from a text classifier to authored scenes. The display subscribes
@@ -38,13 +38,13 @@ enum { MIX_DYNAMIC = 0, MIX_OVERRIDE = 1, MIX_SEQUENTIAL = 2, MIX_RANDOM = 3 };
 #define MUSIC_TRACK_MAX 33
 
 /*----------------------
- | music_category_pool (music_data.c)
- | Description: Returns a category's track pool (*out) and size. Named rather
- |   than numbered because the numbers shifted when TC_HOUSE was added, and
- |   this line read "cats 1..11" for a while afterwards.
+ | music_track_pool (music_data.c)
+ | Description: Returns a pool's track list (*out) and size. `category` is a
+ |   pool selector -- EV_DANGER, EV_TRIUMPH, or the neutral fallback one past
+ |   the last EV_* id -- not a room mood; see music_data.c's own comment.
  | Author: suinevere
  ----------------------*/
-int music_category_pool(int category, const unsigned char** out);
+int music_track_pool(int category, const unsigned char** out);
 
 /*----------------------
  | music_play_fn / MUSIC_DYN_LOOPS
@@ -115,16 +115,6 @@ void music_on_turn(unsigned int room);
  | Author: suinevere
  ----------------------*/
 int music_track_from_mask(unsigned long mask, unsigned int r);
-
-/*----------------------
- | music_note_room_title
- | Description: Hands the engine the room name the interpreter decoded from the
- |   location object, to be used as the title for the next classification instead
- |   of the first line of printed text; call it before music_on_turn. Passing NULL
- |   or "" falls back to that first line.
- | Author: suinevere
- ----------------------*/
-void music_note_room_title(const char* title);
 
 /*----------------------
  | music_transition_active / music_transition_flush

@@ -73,13 +73,13 @@ static unsigned int rng_next_pub(void) { return rng_next(); }
  | music_category_track
  | Description: Picks a uniformly random track from a pool.
  | Author: suinevere
- | Dependencies: music.h (music_category_pool)
+ | Dependencies: music.h (music_track_pool)
  | Globals: g_rng (via rng_next)
  | Params: category -- EV_DANGER, EV_TRIUMPH, or MUSIC_POOL_NEUTRAL
  | Returns: a track number from the pool, or 0 if the pool is empty
  ----------------------*/
 int music_category_track(int category) {
-    const unsigned char* p; int n = music_category_pool(category, &p);
+    const unsigned char* p; int n = music_track_pool(category, &p);
     if (n <= 0) return 0;
     return p[rng_next() % (unsigned)n];
 }
@@ -110,21 +110,6 @@ int music_track_from_mask(unsigned long mask, unsigned int r) {
     }
     return 0;
 }
-
-/*----------------------
- | music_note_room_title
- | Description: Retired along with the text classifier. Scenes are looked up
- |   by room object number now (scene_of_room), so a room's name carries no
- |   classification signal to weight -- this is a no-op kept only so callers
- |   written for the old flow (main.cxx, mojozork.c, the host tests) still
- |   link without change.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: title -- unused
- | Returns: N/A
- ----------------------*/
-void music_note_room_title(const char* title) { (void) title; }
 
 /*----------------------
  | MUSIC_TEXT_MAX
@@ -406,13 +391,13 @@ static void play_dyn(int track, int pass) {
  |   possibly re-rolling it. Falls back to any long track if the only long option
  |   is the current one, then to any track at all.
  | Author: suinevere
- | Dependencies: music.h (music_category_pool)
+ | Dependencies: music.h (music_track_pool)
  | Globals: g_active_track (read)
  | Params: cat -- EV_DANGER, EV_TRIUMPH, or MUSIC_POOL_NEUTRAL
  | Returns: a track number, or 0 if the pool is empty
  ----------------------*/
 static int pick_prefer_long(int cat) {
-    const unsigned char* p; int n = music_category_pool(cat, &p);
+    const unsigned char* p; int n = music_track_pool(cat, &p);
     if (n <= 0) return 0;
     int longs[64], m = 0;
     for (int i = 0; i < n && m < 64; i++)
@@ -606,8 +591,7 @@ void music_reset(void) {
     g_phase = MP_IDLE; g_fade_i = 0;
     // Nothing to announce: notify_cat only fires for CAT_KIND_SCENE, and there
     // is no active scene right after a reset, so the subscriber hears nothing
-    // and holds whatever picture it is already showing -- the same role
-    // TC_NEUTRAL's silence played before scenes existed.
+    // and holds whatever picture it is already showing.
     notify_cat(CAT_KIND_NONE, -1);
     if (g_play) g_play(0, 0);
 }

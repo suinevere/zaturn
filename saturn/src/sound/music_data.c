@@ -7,7 +7,7 @@
  |   scene/game_tracks.inc, generated from the authored scene corpus rather
  |   than hand-picked per category.
  | Author: suinevere
- | Dependencies: music.h (music_category_pool's declaration), event_scan.h
+ | Dependencies: music.h (music_track_pool's declaration), event_scan.h
  |   (EVENT_N, EV_*)
  ----------------------*/
 #include "music.h"
@@ -27,7 +27,7 @@ static const unsigned char P_TRIUMPH[] = {4,5,6,9,10,11,12,16,22,24,25,28,29,30}
 
 /*----------------------
  | MUSIC_POOL_NEUTRAL / CATEGORY_POOL
- | Description: music_category_pool's "category" is now a pool selector, not a
+ | Description: music_track_pool's "category" is now a pool selector, not a
  |   text category: EV_DANGER and EV_TRIUMPH pick the event pools directly,
  |   and MUSIC_POOL_NEUTRAL -- one past the last EV_* id, so it can never be
  |   mistaken for one -- picks the neutral fallback. music.c defines the
@@ -43,7 +43,7 @@ static const struct { const unsigned char* p; unsigned char n; } CATEGORY_POOL[E
 #undef POOL
 
 /*----------------------
- | music_category_pool
+ | music_track_pool
  | Description: Returns a pool and its length, or an empty result for an
  |   out-of-range selector.
  | Author: suinevere
@@ -53,7 +53,7 @@ static const struct { const unsigned char* p; unsigned char n; } CATEGORY_POOL[E
  |   receives the pool pointer (may be NULL)
  | Returns: the pool length (0 when out of range)
  ----------------------*/
-int music_category_pool(int category, const unsigned char** out) {
+int music_track_pool(int category, const unsigned char** out) {
     int n = (int)(sizeof CATEGORY_POOL / sizeof CATEGORY_POOL[0]);
     if (category < 0 || category >= n) { if (out) *out = 0; return 0; }
     if (out) *out = CATEGORY_POOL[category].p;

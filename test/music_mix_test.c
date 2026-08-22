@@ -36,7 +36,7 @@ static int isplaying(void) { return playing; }
 static int short_set[64];
 static int isshort(int t) { return (t >= 0 && t < 64) ? short_set[t] : 0; }
 static int in_pool(int cat, int tr) {
-    const unsigned char* p; int n = music_category_pool(cat, &p);
+    const unsigned char* p; int n = music_track_pool(cat, &p);
     for (int i = 0; i < n; i++) if (p[i] == tr) return 1;
     return 0;
 }
@@ -171,7 +171,7 @@ int main(void) {
     /* --- A pool with only one long track has nowhere to cycle to, so loop-end
            re-issues that same track rather than dropping onto a short one. --- */
     music_set_mix(MIX_DYNAMIC, 10); music_reset(); music_set_debounce_frames(0);
-    { const unsigned char* p; int n = music_category_pool(POOL_NEUTRAL, &p);
+    { const unsigned char* p; int n = music_track_pool(POOL_NEUTRAL, &p);
       for (int i = 0; i < n; i++) short_set[p[i]] = 1;
       short_set[p[n-1]] = 0;   /* exactly one long track */
     }

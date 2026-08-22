@@ -171,11 +171,12 @@ void display_defaults(DisplayState *d);
 
 /*----------------------
  | display_slot_make / display_slot_valid
- | Description: A slot is a category and a 1-based index encoded together
- |   (cat * 100 + index) rather than a position in a scanned list, so it names a
+ | Description: A slot is a scene and a 1-based index encoded together
+ |   (scene * 100 + index) rather than a position in a scanned list, so it names a
  |   picture without ever reading the disc. make builds one from the pair, refusing
- |   an index the category does not carry; valid answers whether a slot (however it
- |   was built, including DISP_IMAGE_NONE) names a picture this disc actually has.
+ |   an index the scene does not carry in the running game; valid answers whether a
+ |   slot (however it was built, including DISP_IMAGE_NONE) names a picture the
+ |   running game actually has.
  | Author: suinevere
  ----------------------*/
 int display_slot_make(int cat, int index);
@@ -183,9 +184,9 @@ int display_slot_valid(int slot);
 
 /*----------------------
  | display_image_count / display_bg_count
- | Description: image_count is how many pictures the disc carries in total, summed
- |   from every category's pool; bg_count is DISP_BG_COLOR_N (the Background row is
- |   colors only).
+ | Description: image_count is how many pictures the running game carries in
+ |   total, summed from every scene's pool (0 when no game is selected); bg_count
+ |   is DISP_BG_COLOR_N (the Background row is colors only).
  | Author: suinevere
  ----------------------*/
 int display_image_count(void);
@@ -201,88 +202,81 @@ int display_bg_count(void);
 const char *display_image_file(int slot);
 
 /*----------------------
- | display_category_image
- | Description: The picture a text category shows, as an on-disc filename, or NULL
- |   for "keep whatever is showing". Returns a filename rather than a slot so
- |   display_set_dynamic_category can resolve it with display_image_slot the same
- |   way it would resolve any other disc path. NULL comes back for the two
- |   turn-text event categories (TC_DANGER, TC_TRIUMPH): those are moments, not
- |   places, so the music shifts for them while the wallpaper holds on the room's
- |   own picture instead of flicking away and back. Scoped to the category's
- |   active genre band (see display_set_art_band); a category with no pictures
- |   in that band draws from its neutral band instead.
+ | display_scene_image
+ | Description: The picture a scene shows in the running game, as an on-disc
+ |   filename, or NULL for "keep whatever is showing". Returns a filename
+ |   rather than a slot so display_set_dynamic_category can resolve it with
+ |   display_image_slot the same way it would resolve any other disc path.
+ |   NULL also comes back when no game is selected, or the scene carries no
+ |   pictures in this game.
  | Author: suinevere
  ----------------------*/
-const char *display_category_image(int cat);
+const char *display_scene_image(int scene);
 
 /*----------------------
- | display_category_image_count / display_rotate_dynamic_category
- | Description: image_count is how many pictures a category can draw on from its
- |   active genre band (0 for the two event categories; a category with none in
- |   that band counts its neutral band instead -- see display_set_art_band).
- |   rotate moves that category to a different one of them and makes it current
- |   -- what the engine asks for after MUSIC_ROTATE_ROOMS rooms of one unbroken
- |   mood, so a long stretch in one category does not sit on one picture. A
- |   category with fewer than two pictures in its active band holds what it has,
- |   which is also how a pool of one behaves: the rotation becomes a no-op rather
- |   than a flicker back to the same image.
+ | display_scene_image_count / display_rotate_scene
+ | Description: image_count is how many pictures a scene can draw on in the
+ |   running game (0 when no game is selected, or the scene is unauthored for
+ |   it). rotate moves that scene to a different one of them and makes it
+ |   current -- what the engine asks for after MUSIC_ROTATE_ROOMS rooms of one
+ |   unbroken mood, so a long stretch in one scene does not sit on one
+ |   picture. A scene with fewer than two pictures holds what it has, which is
+ |   also how a pool of one behaves: the rotation becomes a no-op rather than
+ |   a flicker back to the same image.
  | Author: suinevere
  ----------------------*/
-int  display_category_image_count(int cat);
-void display_rotate_dynamic_category(int cat);
+int  display_scene_image_count(int scene);
+void display_rotate_scene(int scene);
 
 /*----------------------
- | display_shuffle_category
- | Description: Points a category's pool at an arbitrary one of its pictures
- |   from its active genre band, chosen by `r` (reduced modulo the band's
- |   width, not the category's whole pool; any value is legal, and a category
- |   with no pictures in that band -- including its neutral fallback -- is a
- |   no-op). Unlike display_rotate_dynamic_category it does not change what is
- |   currently on screen -- follow it with display_set_dynamic_category if the
- |   new pick should become the showing slot. The title screen uses it so the
- |   house behind Z-ATURN differs from boot to boot.
+ | display_shuffle_scene
+ | Description: Points a scene's pool at an arbitrary one of its pictures,
+ |   chosen by `r` (reduced modulo the scene's count in the running game; any
+ |   value is legal, and a scene with no pictures is a no-op). Unlike
+ |   display_rotate_scene it does not change what is currently on screen --
+ |   follow it with display_set_dynamic_category if the new pick should
+ |   become the showing slot. The title screen uses it so the house behind
+ |   Z-ATURN differs from boot to boot.
  | Author: suinevere
  ----------------------*/
-void display_shuffle_category(int cat, unsigned int r);
+void display_shuffle_scene(int scene, unsigned int r);
 
 /*----------------------
- | display_set_art_band
- | Description: Which genre band every category draws from until told
- |   otherwise. The caller maps the classifier's genre mask to a band, so the
- |   display model gains no dependency on classification. A band a category
- |   has no pictures in falls back to the neutral band, so setting one is
- |   always safe. Re-seats every category's rotor to its new effective band's
- |   base whenever the band actually changes, so a rotor left mid-band from
- |   before the switch cannot surface a picture from the wrong band on a read
- |   path that does not rotate or shuffle first. A no-op when the requested
- |   band already matches the current one, so calling this ahead of every
- |   rotation (as Task 6 does) does not reset an in-progress rotation.
+ | display_set_game
+ | Description: Selects the folder (GAME_DIR) and scene ranges (GAME_SCENE)
+ |   every later resolve uses. Re-seats every scene's rotor to its new range's
+ |   start whenever the running game actually changes, so a rotor left over
+ |   from a different game cannot surface the wrong game's picture on a read
+ |   path that does not rotate or shuffle first. A no-op when game_index
+ |   already names the current game, so calling this ahead of every room
+ |   change does not reset an in-progress rotation. Any value outside
+ |   0..GAME_N-1 -- including every negative one -- means "no game selected",
+ |   which every scene accessor treats as "nothing."
  | Author: suinevere
  ----------------------*/
-void display_set_art_band(int band);
+void display_set_game(int game_index);
 
 /*----------------------
  | display_next_in_band
- | Description: The next absolute 0-based index inside a band, wrapping --
- |   the arithmetic display_rotate_dynamic_category walks with. If cur falls
- |   outside [base, base+count), it snaps to base rather than wrapping from
- |   where it happens to sit; that path is load-bearing, not defensive
- |   padding -- it is what a game hitting mid-play when its genre resolves
- |   underneath g_cat_rot lands on: the old band's index, snapped into the
- |   new one.
+ | Description: The next absolute 0-based index inside a range, wrapping --
+ |   the arithmetic display_rotate_scene walks with. If cur falls outside
+ |   [base, base+count), it snaps to base rather than wrapping from where it
+ |   happens to sit; that path is load-bearing, not defensive padding -- it
+ |   is what a rotor left over from a different game's range lands on: the
+ |   old range's index, snapped into the new one.
  | Author: suinevere
  ----------------------*/
 int display_next_in_band(int cur, int base, int count);
 
 /*----------------------
  | display_set_dynamic_category / display_dynamic_slot
- | Description: set_dynamic_category resolves a text category to an image slot and
- |   remembers it, ignoring any category with no art so the wallpaper holds;
+ | Description: set_dynamic_category resolves a scene to an image slot and
+ |   remembers it, ignoring any scene with no art so the wallpaper holds;
  |   dynamic_slot returns that slot. It stores the resolved SLOT rather than the
- |   raw category so "keep current" is never a transient answer: cycling onto
- |   Dynamic during a TC_DANGER moment would otherwise have no current picture to
+ |   raw scene so "keep current" is never a transient answer: cycling onto
+ |   Dynamic during a scene-less moment would otherwise have no current picture to
  |   keep and would land on no wallpaper at all. DISP_IMAGE_NONE comes back only
- |   on a disc with no art.
+ |   when no game is selected, or the running game carries no art.
  | Author: suinevere
  ----------------------*/
 void display_set_dynamic_category(int cat);

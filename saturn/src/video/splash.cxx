@@ -54,7 +54,7 @@
  |   brightness for a flat 420 frames so that the whole splash came to ten seconds,
  |   which was the length it had back when it covered the background-art decode.
  |   That was ten seconds of the machine visibly doing nothing. It covers real work
- |   again now -- the typeahead trie and display_preload_categories() both run at
+ |   again now -- the typeahead trie and title_preload_art() both run at
  |   peak brightness -- so the screen lasts as long as the load does and not a field
  |   longer.
  | Author: suinevere
@@ -220,7 +220,7 @@ void splash_show(void) {
 
     if (!skipped) {
         preload_game_catalog();
-        display_preload_categories(SPLASH_PRELOAD_SLOTS);
+        title_preload_art(SPLASH_PRELOAD_SLOTS);
     }
 
     // Down from wherever the ramp got to, so a skip two frames in is a two-frame

@@ -235,8 +235,8 @@ void display_rotate_scene(int scene);
  |   value is legal, and a scene with no pictures is a no-op). Unlike
  |   display_rotate_scene it does not change what is currently on screen --
  |   follow it with display_set_dynamic_category if the new pick should
- |   become the showing slot. The title screen uses it so the house behind
- |   Z-ATURN differs from boot to boot.
+ |   become the showing slot. display_warm_cache_scenes (title.cxx) uses it
+ |   to pick which of a scene's pictures gets cached at game start.
  | Author: suinevere
  ----------------------*/
 void display_shuffle_scene(int scene, unsigned int r);

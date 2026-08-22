@@ -3,15 +3,18 @@
  | Description: Title screen, background art, TGA loading and its Low Work RAM
  |   cache, CD directory juggling, and the boot sequence random seed.
  | Author: suinevere
- | Dependencies: app_state.h, display.h, menu.h, soft_reset.h, game_catalog.h
- |   (the Z3 directory record cd_restore_z3 re-applies), online.h, boot_music.h,
- |   sound/music.h, text_map.h, bg_dim.h, SRL
+ | Dependencies: app_state.h, display.h, scene/scene_map.h, scene/title_art.inc,
+ |   menu.h, soft_reset.h, game_catalog.h (the Z3 directory record
+ |   cd_restore_z3 re-applies), online.h, boot_music.h, sound/music.h,
+ |   text_map.h, bg_dim.h, SRL
  ----------------------*/
 #include "title.h"
 #include "bg_dim.h"
 #include "app_state.h"
 #include "display.h"
-#include "sound/music.h"   /* TC_*: the categories the preload walks */
+#include "scene/scene_map.h"   /* SCENE_N: the scenes the game-start warm walks */
+#include "scene/title_art.inc" /* TITLE_ART_N: the shared title-folder picture count */
+#include "sound/music.h"       /* music_start_menu */
 #include "menu.h"
 #include "console_view.h"
 #include "input.h"
@@ -300,7 +303,7 @@ struct TgaImage {
  |   below came from.
  |
  |   Only one reserve is needed, because the cache is now filled at a moment when
- |   nothing else is still owed: display_warm_cache_random runs at game start with
+ |   nothing else is still owed: display_warm_cache_scenes runs at game start with
  |   both cues freed AND the trie already built (main.cxx builds it first, precisely
  |   so this reading is honest). TGA_CACHE_FLOOR is therefore just the save scratch
  |   plus a margin, and the free-space check spends everything else on pictures.
@@ -421,9 +424,10 @@ static void tga_image_free(TgaImage *img) {
  | Author: suinevere
  | Dependencies: SRL, cd_enter_mood, cd_enter_root
  | Globals: N/A
- | Params: file -- the mood-relative path from display_image_file/
- |   display_category_image, e.g. "HORROR/07.TGA", or a bare /TGA filename like
- |   "SUINE.TGA"; low -- true to allocate in Low Work RAM (ignored when reusing);
+ | Params: file -- the folder-relative path from display_image_file/
+ |   display_scene_image or title_art_file, e.g. "ZORK1/07.TGA" or
+ |   "TITLE/01.TGA", or a bare /TGA filename like "SUINE.TGA"; low -- true to
+ |   allocate in Low Work RAM (ignored when reusing);
  |   limit -- most bytes the pixel plane may take; out -- filled on success, Cap
  |   read on entry and preserved
  | Returns: true on success; on failure out is left blank (allocating mode, nothing
@@ -695,50 +699,79 @@ static const TgaImage *tga_cache_admit(const char *file) {
 }
 
 /*----------------------
- | CATEGORY_ORDER / CATEGORY_ORDER_N
- | Description: Every text category that carries art, TC_HOUSE first because it is
- |   the title screen's own. Shared by the two cache fills so neither can drift out
- |   of step with the categories music.c can actually announce.
+ | title_art_file
+ | Description: The disc path for the shared title picture at 1-based `index`
+ |   ("TITLE/01.TGA"..), or NULL when index is out of 1..TITLE_ART_N -- which
+ |   includes every index while TITLE_ART_N is 0, since no source images exist
+ |   yet. TITLE is a flat, gapless folder addressed by literal filename rather
+ |   than routed through display.c's scene machinery: the title screen has no
+ |   room, no scene and no game to suit.
  | Author: suinevere
+ | Dependencies: scene/title_art.inc (TITLE_ART_N)
+ | Globals: N/A
+ | Params: index -- 1..TITLE_ART_N
+ | Returns: the disc path, or NULL
  ----------------------*/
-static const int CATEGORY_ORDER[] = {
-    TC_HOUSE, TC_WILDERNESS, TC_UNDERGROUND, TC_WATER, TC_NAUTICAL, TC_TOWN,
-    TC_DUNGEON, TC_DESERT, TC_MAGIC, TC_SCIFI, TC_HORROR, TC_MYSTERY
-};
-#define CATEGORY_ORDER_N ((int) (sizeof(CATEGORY_ORDER) / sizeof(CATEGORY_ORDER[0])))
+const char *title_art_file(int index) {
+    static char buf[16];
+    if (index < 1 || index > TITLE_ART_N) return nullptr;
+    buf[0] = 'T'; buf[1] = 'I'; buf[2] = 'T'; buf[3] = 'L'; buf[4] = 'E'; buf[5] = '/';
+    buf[6] = (char) ('0' + index / 10);
+    buf[7] = (char) ('0' + index % 10);
+    buf[8] = '.'; buf[9] = 'T'; buf[10] = 'G'; buf[11] = 'A';
+    buf[12] = '\0';
+    return buf;
+}
 
 /*----------------------
- | display_preload_categories
- | Description: Fills cache slots with one picture per text category, stopping the
+ | title_art_random
+ | Description: One of the shared title pictures, chosen by `seed` reduced
+ |   modulo TITLE_ART_N -- the boot's own pick, separate from the preload
+ |   walk below. NULL when TITLE_ART_N is 0, which the caller must treat as
+ |   "no wallpaper" rather than read a nonexistent file.
+ | Author: suinevere
+ | Dependencies: title_art_file
+ | Globals: N/A
+ | Params: seed -- any value; reduced modulo TITLE_ART_N
+ | Returns: the disc path, or NULL
+ ----------------------*/
+const char *title_art_random(unsigned int seed) {
+    const unsigned int n = (unsigned int) TITLE_ART_N;
+    if (n == 0u) return nullptr;
+    return title_art_file((int) (seed % n) + 1);
+}
+
+/*----------------------
+ | title_preload_art
+ | Description: Fills cache slots with the shared TITLE/ pictures, stopping the
  |   moment the cache will not grow any further.
  |
- |   Stopping rather than continuing is the whole point. tga_cache_admit falls back
- |   to evicting once the cache is full, so walking all twelve categories into eight
- |   slots would read twelve pictures off the disc to keep the last eight -- four
- |   reads spent on pictures thrown away before the splash even ends. Watching
- |   g_cache_count is what tells the two apart: unchanged means it evicted.
+ |   Stopping rather than continuing is the whole point. tga_cache_admit falls
+ |   back to evicting once the cache is full, so walking every picture into a
+ |   smaller cache would read pictures off the disc only to throw the earliest
+ |   ones away before the splash even ends. Watching g_cache_count is what
+ |   tells the two apart: unchanged means it evicted.
  |
- |   TC_HOUSE goes first because it is the picture the title screen shows on the
- |   very next frame, so caching it is what makes the title appear without a read.
- |   How many of the rest get in is decided by Low Work RAM, not by this loop, and
- |   max_slots is what keeps that number small on purpose. This runs with the jingle
- |   resident and before the game's typeahead trie exists, so the free space it can
- |   see is not the free space that will be left; filling the cache properly is
- |   display_warm_cache_random's job, at game start, where the reading is honest.
+ |   Runs at BOOT, before any game is selected -- splash.cxx and title_and_seed
+ |   below both call it, with the jingle resident and before any game's
+ |   typeahead trie exists, so the free space it can see is not the free space
+ |   that will be left; filling the cache for actual gameplay is
+ |   display_warm_cache_scenes's job, at game start, where the reading is
+ |   honest. A no-op at TITLE_ART_N 0.
  | Author: suinevere
- | Dependencies: display.h (display_category_image), sound/music.h (TC_*), SRL
+ | Dependencies: title_art_file, SRL
  | Globals: g_cache_count
  | Params: max_slots -- stop after taking this many fresh slots; 0 or less for as
  |   many as Low Work RAM allows
  | Returns: N/A
  ----------------------*/
-void display_preload_categories(int max_slots) {
+void title_preload_art(int max_slots) {
     int taken = 0;
-    for (int i = 0; i < CATEGORY_ORDER_N; i++) {
+    for (int i = 1; i <= TITLE_ART_N; i++) {
         if (g_cache_count >= TGA_CACHE_SLOTS) break;
         if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
         if (max_slots > 0 && taken >= max_slots) break;
-        const char *file = display_category_image(CATEGORY_ORDER[i]);
+        const char *file = title_art_file(i);
         if (file == nullptr) continue;
         if (tga_cache_find(file) != nullptr) continue;
         const int before = g_cache_count;
@@ -779,9 +812,11 @@ void title_bg_cache_release(void) {
 }
 
 /*----------------------
- | display_warm_cache_random
+ | display_warm_cache_scenes
  | Description: Fills the art cache to its budget at game start, one randomly chosen
- |   picture from each category, the categories themselves taken in a random order.
+ |   picture from each of the CURRENT GAME's scenes, the scenes themselves taken in
+ |   a random order. Runs where display_set_game has already selected the running
+ |   story, unlike title_preload_art above, which runs at boot with no game chosen.
  |
  |   This is where the cache is meant to be filled. Every other claimant on Low Work
  |   RAM has either taken its space or given it back by the time this runs: the
@@ -790,43 +825,41 @@ void title_bg_cache_release(void) {
  |   already accounted for. The free-space figure is therefore honest and every slot
  |   the zone can actually spare goes to pictures.
  |
- |   Random, and random per category rather than a random pick over all art, because
+ |   Random, and random per scene rather than a random pick over all art, because
  |   the cache is only useful when what is in it is what gets asked for. Shuffling
- |   the category first means the picture cached IS the one that mood will show for
+ |   the scene first means the picture cached IS the one that scene will show for
  |   the rest of the session -- a random picture from the whole disc would be a cache
- |   entry nothing ever requests. TC_HOUSE is left unshuffled: main() already chose
- |   its picture for this boot and pointed the menu's Dynamic slot at it, and moving
- |   it here would leave those two disagreeing.
+ |   entry nothing ever requests.
  |
  |   Reads the disc once per slot it takes. It must therefore be called with the loading
  |   screen still up and CD-DA not yet started -- reading is inaudible there, and it
  |   is the last chance before music_start puts the head to work.
  | Author: suinevere
- | Dependencies: display.h (display_shuffle_category, display_category_image),
- |   sound/music.h (TC_*), SRL
+ | Dependencies: display.h (display_shuffle_scene, display_scene_image),
+ |   scene/scene_map.h (SCENE_N), SRL
  | Globals: g_cache_count
- | Params: seed -- stirs both the category order and the pick within each
+ | Params: seed -- stirs both the scene order and the pick within each
  | Returns: N/A
  ----------------------*/
-void display_warm_cache_random(unsigned int seed) {
-    int order[CATEGORY_ORDER_N];
-    for (int i = 0; i < CATEGORY_ORDER_N; i++) order[i] = CATEGORY_ORDER[i];
+void display_warm_cache_scenes(unsigned int seed) {
+    int order[SCENE_N];
+    for (int i = 0; i < SCENE_N; i++) order[i] = i;
 
     unsigned int r = seed | 1u;
-    for (int i = CATEGORY_ORDER_N - 1; i > 0; i--) {
+    for (int i = SCENE_N - 1; i > 0; i--) {
         r = r * 1103515245u + 12345u;
         int j = (int) ((r >> 16) % (unsigned int) (i + 1));
         int t = order[i]; order[i] = order[j]; order[j] = t;
     }
 
-    for (int i = 0; i < CATEGORY_ORDER_N; i++) {
+    for (int i = 0; i < SCENE_N; i++) {
         if (g_cache_count >= TGA_CACHE_SLOTS) break;
         if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
 
         r = r * 1103515245u + 12345u;
-        if (order[i] != TC_HOUSE) display_shuffle_category(order[i], r);
+        display_shuffle_scene(order[i], r);
 
-        const char *file = display_category_image(order[i]);
+        const char *file = display_scene_image(order[i]);
         if (file == nullptr) continue;
         if (tga_cache_find(file) != nullptr) continue;
         const int before = g_cache_count;
@@ -1292,7 +1325,7 @@ int title_and_seed(void) {
     menu_sync();
 
     preload_game_catalog();
-    display_preload_categories(0);
+    title_preload_art(0);
     title_drain_input();
 
     text_print(8, 18, "Press any button to begin");

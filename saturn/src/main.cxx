@@ -13,8 +13,8 @@
  | Author: suinevere
  | Dependencies: app_state.h, console.h, console_view.h, display.h, options.h,
  |   menu.h, menu_pages.h, save_ui.h, title.h, game_catalog.h, online.h,
- |   soft_reset.h, saturn_glue.h, saturn_backup.h, sound.h, music.h, input.h,
- |   SRL/GFS/SGL.
+ |   soft_reset.h, saturn_glue.h, saturn_backup.h, sound.h, music.h,
+ |   scene/scene_map.h, input.h, SRL/GFS/SGL.
  ----------------------*/
 
 #include <srl.hpp>
@@ -28,7 +28,6 @@ extern "C" {
 #include "saturn_glue.h"
 #include "sound.h"
 #include "music.h"
-#include "room_class.h"
 }
 #include "app_state.h"
 #include "input.h"
@@ -43,6 +42,7 @@ extern "C" {
 #include "game_catalog.h"
 #include "loading_screen.h"
 #include "online.h"
+#include "scene/scene_map.h"
 
 using namespace SRL::Types;
 
@@ -89,32 +89,12 @@ using namespace SRL::Types;
 #define STORY_READ_CHUNK (2048 * 8)
 
 /*----------------------
- | art_band_of_genre
- | Description: The display art band a classifier genre mask selects. Kept
- |   here rather than in display.c so the display model never includes
- |   room_class.h. An unresolved genre is band 0, the neutral band, which is
- |   the same answer as "this game has no period art".
- | Author: suinevere
- | Dependencies: room_class.h
- | Globals: N/A
- | Params: genre -- GN_FANTASY, GN_SCIFI, GN_MODERN or 0
- | Returns: 0..3, matching display.c's ART_BAND_* order
- ----------------------*/
-static int art_band_of_genre(unsigned char genre) {
-    if (genre == GN_FANTASY) return 1;
-    if (genre == GN_SCIFI)   return 2;
-    if (genre == GN_MODERN)  return 3;
-    return 0;
-}
-
-/*----------------------
  | on_text_category
- | Description: The background art's half of a text-category change. Moves the
- |   Dynamic palette's picture to the new mood's art and repaints. A category
- |   with no art of its own -- TC_DANGER, TC_TRIUMPH -- leaves
- |   display_set_dynamic_category's stored slot alone, so this re-requests the
- |   picture already showing and title_bg_show short-circuits: the wallpaper holds
- |   without a special case here.
+ | Description: The background art's half of a scene change. Moves the
+ |   Dynamic palette's picture to the new scene's art and repaints. A scene
+ |   with no art of its own leaves display_set_dynamic_category's stored slot
+ |   alone, so this re-requests the picture already showing and title_bg_show
+ |   short-circuits: the wallpaper holds without a special case here.
  |
  |   Goes through display_apply rather than title_bg_show directly, so a picture
  |   that fails to load takes the same colour-preset fallback every other display
@@ -128,22 +108,25 @@ static int art_band_of_genre(unsigned char genre) {
  |   moment the transition ends. Menus are excluded -- the console is not the
  |   visible view there, and clearing would take the menu's own rows with it.
  |
- |   May read the disc. Only a handful of the thirty-seven pictures are held in Low
- |   Work RAM at once (TGA_CACHE_SLOTS in title.cxx), so a mood the player has not
+ |   May read the disc. Only a handful of the shipped pictures are held in Low
+ |   Work RAM at once (TGA_CACHE_SLOTS in title.cxx), so a scene the player has not
  |   been in lately costs one read, and a read stops CD-DA. That is survivable only
  |   because of WHERE this is called from: the engine fires it at the bottom of the
  |   transition fade, with the screen black and the outgoing track about to be
  |   replaced by play_dyn anyway (see commit_pending in sound/music.c). Calling it
  |   from anywhere else -- mid-turn, or on a frame where the picture is visible --
  |   would put an audible gap in the middle of whatever is playing.
+ |
+ |   The engine guarantees events (danger/triumph) are never announced through
+ |   this callback, so `cat` is always a scene index -- see music.h's
+ |   set_category_fn note.
  | Author: suinevere
  | Dependencies: display.h, options.h
  | Globals: g_display
- | Params: cat -- the TC_* category now sounding
+ | Params: cat -- the SC_* scene now sounding
  | Returns: N/A
  ----------------------*/
 static void on_text_category(int cat) {
-    display_set_art_band(art_band_of_genre(room_class_genre()));
     display_set_dynamic_category(cat);
     if (g_in_game) {
         for (int r = 0; r < console_height(); r++) text_clear_line(r);
@@ -157,23 +140,22 @@ static void on_text_category(int cat) {
 
 /*----------------------
  | on_text_rotate
- | Description: The art's half of a same-category rotation. The mood has not
+ | Description: The art's half of a same-scene rotation. The scene has not
  |   changed -- the player has simply walked MUSIC_ROTATE_ROOMS rooms of it -- so
- |   this moves to a different picture within that category rather than resolving
- |   the category afresh, which would hand back the one already showing.
+ |   this moves to a different picture within that scene rather than resolving
+ |   the scene afresh, which would hand back the one already showing.
  |
- |   A category with fewer than two pictures holds what it has, so the track
+ |   A scene with fewer than two pictures holds what it has, so the track
  |   rotates underneath an unchanged wallpaper. That is the intended degradation,
  |   not a gap: with one picture there is nothing truthful to change to.
  | Author: suinevere
  | Dependencies: display.h, options.h
  | Globals: g_display
- | Params: cat -- the TC_* category being rotated within
+ | Params: cat -- the SC_* scene being rotated within
  | Returns: N/A
  ----------------------*/
 static void on_text_rotate(int cat) {
-    display_set_art_band(art_band_of_genre(room_class_genre()));
-    display_rotate_dynamic_category(cat);
+    display_rotate_scene(cat);
     if (g_display.palette != DISP_PAL_DYNAMIC) return;
     int slot = display_dynamic_slot();
     if (slot == DISP_IMAGE_NONE || slot == g_display.image) return;
@@ -266,7 +248,8 @@ static void game_intro_reveal(void) { menu_fade_in_ex(TITLE_FADE_FRAMES, music_f
 /*----------------------
  | boot_entropy
  | Description: A number that differs from one run to the next, read off the
- |   Saturn's real-time clock. Used to vary the title screen's house picture.
+ |   Saturn's real-time clock. Used to vary the title screen's picture (see
+ |   title_art_random).
  |
  |   The RTC rather than the frame counter, because at this point in the boot there
  |   is no frame counter worth reading -- title_and_seed's is generated by the
@@ -383,6 +366,8 @@ int main(void) {
     g_z3_dir_valid = false;
     g_menu_backing_depth = 0;
     g_in_game = false;
+    display_set_game(-1);   // no game is selected at the title/menu; a longjmp
+                             // back here does not otherwise clear the last game
     slScrWindowModeNbg0(0);
     title_bg_fade_arm();     // a reset chord can fire mid-ramp, so overwrite any held
                              // offset -- with black, not with clear: nothing between
@@ -399,29 +384,23 @@ int main(void) {
 
     for (int r = 0; r <= 28; r++) text_clear_line(r);
 
-    // A different house behind the title each time it is reached -- cold boot or
-    // soft-reset return, since boot_entropy re-reads the clock either way. The
-    // Dynamic slot is moved with it so the menu underneath resolves TC_HOUSE to the
-    // same picture: without that, the wallpaper would jump to a different house the
-    // moment the title faded out and display_apply ran.
-    //
-    // Ahead of the splash rather than after it, because the splash is what warms
-    // the art cache (display_preload_categories) and TC_HOUSE is the first picture
-    // it takes. Shuffling afterwards would preload one house and then show another.
-    display_set_art_band(0);
-    display_shuffle_category(TC_HOUSE, boot_entropy());
-    display_set_dynamic_category(TC_HOUSE);
-    if (g_display.palette == DISP_PAL_DYNAMIC) {
-        int slot = display_dynamic_slot();
-        if (slot != DISP_IMAGE_NONE) g_display.image = slot;
-    }
-
+    // No game is selected at the title, so g_display's own Dynamic resolution
+    // (display_dynamic_slot) correctly has nothing to show -- the menu behind the
+    // title gets a plain colour preset from display_defaults instead. The title
+    // screen's own wallpaper is a different one of the shared TITLE/ pictures each
+    // time it is reached -- cold boot or soft-reset return, since boot_entropy
+    // re-reads the clock either way -- shown directly through title_bg_show rather
+    // than through the scene machinery above: the title has no room, no scene and
+    // no game to route it through.
     splash_show();                // does the boot's CD reads, under its own logo
 
     text_set_color(DISP_RGB555(0xFF, 0xFF, 0xFF));
     title_bg_fade_arm();          // black out first, so the title is composed unseen
 
-    title_bg_show(display_category_image(TC_HOUSE));
+    const char *title_file = title_art_random(boot_entropy());
+    if (title_file != nullptr) title_bg_show(title_file);
+    else                        title_bg_hide();   // no title art shipped: no stale
+                                                    // picture left over from a game
 
     // The backend goes in here rather than at game start, because the menu track
     // below is the engine's now too -- that is what makes it obey the cycle rule
@@ -597,6 +576,12 @@ int main(void) {
     // two overlap.
     loading_screen_end();
 
+    // Selected before the trie or the art below: display_warm_cache_scenes walks
+    // the CURRENT GAME's scenes and needs g_game already pointed at this story.
+    const unsigned int game_release = (unsigned int)((story[2] << 8) | story[3]);
+    const char        *game_serial  = (const char*) (story + 0x12);
+    display_set_game(scene_game_index(game_release, game_serial));
+
     // The trie first and the art second, in that order and not the other way. Both
     // want Low Work RAM and both are sized against whatever is free when they run,
     // so whichever goes first gets an honest reading and the other has to be
@@ -607,11 +592,11 @@ int main(void) {
     // PCM cues have been freed and CD-DA has not started, so these are the last
     // reads on this path that cost nothing audible -- every one not taken here is
     // taken later at a mood change, over a playing track.
-    display_warm_cache_random((unsigned int) seed);
+    display_warm_cache_scenes((unsigned int) seed);
 
     {
         music_set_level(g_music_level);
-        music_set_game((unsigned int)((story[2] << 8) | story[3]), (const char*) (story + 0x12));
+        music_set_game(game_release, game_serial);
         music_seed((unsigned int) seed);
         music_reset();
         music_set_mix(g_mix_mode, g_sel_track);

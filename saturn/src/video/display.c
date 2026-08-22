@@ -255,9 +255,8 @@ static unsigned char g_scene_rot[SCENE_N];
  |   game validates against that game's own GAME_SCENE row at best by
  |   coincidence and would otherwise surface the wrong game's picture,
  |   silently. A no-op when game_index already names the current game, so a
- |   caller that calls this ahead of every room change (as
- |   display_set_art_band used to be) does not reset an in-progress
- |   rotation. Any index outside 0..GAME_N-1, including every negative one,
+ |   caller that calls this ahead of every room change does not reset an
+ |   in-progress rotation. Any index outside 0..GAME_N-1, including every negative one,
  |   normalizes to "no game selected" -- the one answer every later scene
  |   accessor treats as "nothing."
  | Author: suinevere
@@ -535,12 +534,13 @@ int display_scene_image_count(int scene) {
  |   showing slot -- it only moves where the pool is pointing, so the caller
  |   decides whether and when that becomes visible.
  |
- |   Exists for the title screen, which wants a different house each time it is
- |   reached rather than the same one every boot. Kept here rather than done by
- |   the caller because g_scene_rot is what display_scene_image reads, and a
- |   caller picking its own filename would leave the pool pointing somewhere
- |   else -- the menu behind the title would then resolve the scene to a
- |   different picture and jump the moment the title faded out.
+ |   Exists for display_warm_cache_scenes (title.cxx), which wants a random pick
+ |   from each scene rather than the scene's own current rotor position when it
+ |   warms the art cache at game start. Kept here rather than done by the caller
+ |   because g_scene_rot is what display_scene_image reads, and a caller picking
+ |   its own filename would leave the pool pointing somewhere else -- a later
+ |   read of the same scene would then resolve to a different picture than the
+ |   one just cached.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_game, g_scene_rot, GAME_SCENE

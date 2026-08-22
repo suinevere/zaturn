@@ -231,10 +231,26 @@ int  title_bg_dim_get(void);
 int title_and_seed(void);
 
 /*----------------------
- | display_preload_categories
- | Description: Warms the background-art cache with one picture per text category,
- |   in an order that puts the title screen's own picture first, and stops as soon
- |   as Low Work RAM will not spare another slot.
+ | title_art_file / title_art_random
+ | Description: The shared TITLE/ folder's pictures, addressed by literal
+ |   filename rather than routed through display.c's scene machinery -- the
+ |   title screen has no room, no scene and no game to suit. title_art_file
+ |   is the disc path for one 1-based index (1..TITLE_ART_N), or NULL out of
+ |   range; title_art_random is the boot's pick, reduced from `seed` modulo
+ |   TITLE_ART_N, and NULL when TITLE_ART_N is 0 -- no source images exist
+ |   yet, and the caller must show no wallpaper rather than read a
+ |   nonexistent file.
+ | Author: suinevere
+ ----------------------*/
+const char *title_art_file(int index);
+const char *title_art_random(unsigned int seed);
+
+/*----------------------
+ | title_preload_art
+ | Description: Warms the background-art cache with the shared TITLE/
+ |   pictures, in order starting from index 1, and stops as soon as Low Work
+ |   RAM will not spare another slot. Runs at BOOT, before any game is
+ |   selected. A no-op at TITLE_ART_N 0.
  |
  |   Reads the disc, so it must be called somewhere a stalled drive does not
  |   matter. The splash is that place: its jingle plays from RAM rather than CD-DA,
@@ -242,22 +258,24 @@ int title_and_seed(void);
  |   is for. Safe to call more than once -- pictures already held are skipped.
  | Author: suinevere
  ----------------------*/
-void display_preload_categories(int max_slots);
+void title_preload_art(int max_slots);
 
 /*----------------------
- | display_warm_cache_random
+ | display_warm_cache_scenes
  | Description: Fills the background-art cache to its budget with one randomly
- |   chosen picture per category, categories visited in a random order, stopping
- |   when Low Work RAM will not spare another slot.
+ |   chosen picture per scene of the CURRENT GAME, scenes visited in a random
+ |   order, stopping when Low Work RAM will not spare another slot. Runs at
+ |   GAME START, after display_set_game has selected the running story --
+ |   unlike title_preload_art, which runs at boot with no game chosen yet.
  |
  |   Call at game start, with the loading screen still up and before music_start:
- |   it reads the disc up to eight times, and that is the last window where reading
+ |   it reads the disc up to nine times, and that is the last window where reading
  |   is inaudible. This is the fill that matters -- the splash's is a token one taken
- |   around the still-resident jingle. Shuffles each category as it goes, so the
- |   picture cached is the one that mood will actually show.
+ |   around the still-resident jingle. Shuffles each scene as it goes, so the
+ |   picture cached is the one that scene will actually show.
  | Author: suinevere
  ----------------------*/
-void display_warm_cache_random(unsigned int seed);
+void display_warm_cache_scenes(unsigned int seed);
 
 /*----------------------
  | title_bg_cache_release

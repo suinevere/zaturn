@@ -1,0 +1,122 @@
+[
+ {
+  "description": null,
+  "obj": 12,
+  "objs": [
+   12
+  ],
+  "title": "drawing room"
+ },
+ {
+  "description": null,
+  "obj": 25,
+  "objs": [
+   25
+  ],
+  "title": "Vivien's entrance"
+ },
+ {
+  "description": null,
+  "obj": 31,
+  "objs": [
+   31
+  ],
+  "title": "Ian's entrance"
+ },
+ {
+  "description": null,
+  "obj": 38,
+  "objs": [
+   38
+  ],
+  "title": "limbo"
+ },
+ {
+  "description": null,
+  "obj": 70,
+  "objs": [
+   70
+  ],
+  "title": "your entrance"
+ },
+ {
+  "description": null,
+  "obj": 73,
+  "objs": [
+   73
+  ],
+  "title": "Wendish's entrance"
+ },
+ {
+  "description": "The game room has a billiard table and card table, with various chairs and standing ash trays. On the wall are a cue rack, gun rack, and mounted heads of a rhino and a cape buffalo.",
+  "obj": 96,
+  "objs": [
+   96
+  ],
+  "title": "game room"
+ },
+ {
+  "description": null,
+  "obj": 114,
+  "objs": [
+   114
+  ],
+  "title": "lumber room"
+ },
+ {
+  "description": null,
+  "obj": 131,
+  "objs": [
+   131
+  ],
+  "title": "gallery"
+ },
+ {
+  "description": null,
+  "obj": 141,
+  "objs": [
+   141
+  ],
+  "title": "dead end"
+ },
+ {
+  "description": null,
+  "obj": 154,
+  "objs": [
+   154
+  ],
+  "title": "drawing-room entrance"
+ },
+ {
+  "description": null,
+  "obj": 179,
+  "objs": [
+   179
+  ],
+  "title": "Iris's entrance"
+ },
+ {
+  "description": null,
+  "obj": 224,
+  "objs": [
+   224
+  ],
+  "title": "Hyde's entrance"
+ },
+ {
+  "description": null,
+  "obj": 228,
+  "objs": [
+   228
+  ],
+  "title": "midpoint"
+ },
+ {
+  "description": null,
+  "obj": 246,
+  "objs": [
+   246
+  ],
+  "title": "junction"
+ }
+]

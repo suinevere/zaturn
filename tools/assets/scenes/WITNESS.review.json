@@ -1,0 +1,82 @@
+[
+ {
+  "description": "This room is a well-equipped workshop. Besides the usual sort of tools, the place is full of mechanical and electrical parts and supplies: switches, relays, spools of colored wire, and so on. One wall holds the main electric board and a home-made junction box with more wires going in and out than you can shake a stick at. The only door is the one you came in.",
+  "obj": 96,
+  "objs": [
+   96
+  ],
+  "title": "workshop"
+ },
+ {
+  "description": null,
+  "obj": 102,
+  "objs": [
+   102
+  ],
+  "title": "garage"
+ },
+ {
+  "description": null,
+  "obj": 130,
+  "objs": [
+   130
+  ],
+  "title": "entry"
+ },
+ {
+  "description": null,
+  "obj": 135,
+  "objs": [
+   135
+  ],
+  "title": "butler's room"
+ },
+ {
+  "description": "This is a separate room for a toilet only.",
+  "obj": 176,
+  "objs": [
+   176
+  ],
+  "title": "toilet room"
+ },
+ {
+  "description": "This is a separate room, completely lined with tile, for bathing in the Japanese style. On one side is a shower head and drain, where you could wash away surface dirt. On the other side is a deep tub, to be filled with steaming water up to your neck. Potted plants give the room a tropical air. A window looks over the rock garden outside, and a door leads west.",
+  "obj": 180,
+  "objs": [
+   180
+  ],
+  "title": "tub room"
+ },
+ {
+  "description": "You are on a neatly manicured lawn, east of Monica's bedroom. The lawn extends east to the edge of the woods. From here you can go to a rock garden in the north or the entrance to Linder's office in the south. There's a door into the house, and a window.",
+  "obj": 205,
+  "objs": [
+   205
+  ],
+  "title": "back yard"
+ },
+ {
+  "description": null,
+  "obj": 219,
+  "objs": [
+   219
+  ],
+  "title": "side yard"
+ },
+ {
+  "description": null,
+  "obj": 221,
+  "objs": [
+   221
+  ],
+  "title": "limbo"
+ },
+ {
+  "description": "You are in the front yard of the Linder property. Most of the space is occupied by a kitchen garden full of vegetables and herbs. A wooden fence surrounds the yard on the west and north sides. To the east is the house, with a French door and two windows. To the south is a gate that leads to the front porch.",
+  "obj": 237,
+  "objs": [
+   237
+  ],
+  "title": "front yard"
+ }
+]

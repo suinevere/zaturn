@@ -1,0 +1,188 @@
+[
+ {
+  "description": "You're standing in front of the house where you spent many of your summers as a youngster. The old place is not as big as it seemed to you then, but it is still quite large. Stone pathways wind east and west around the house, and a larger main walkway leads north.",
+  "obj": 2,
+  "objs": [
+   2
+  ],
+  "title": "South Junction"
+ },
+ {
+  "description": "You are swimming in a shallow inlet, whose waters are much calmer than in the open ocean to the north. A sandy beach lies to the east and the mouth of a dark cave gapes open to the south.",
+  "obj": 10,
+  "objs": [
+   10
+  ],
+  "title": "Inlet"
+ },
+ {
+  "description": null,
+  "obj": 15,
+  "objs": [
+   15
+  ],
+  "title": "Prop Vault"
+ },
+ {
+  "description": "You're inside the chimney. You can see a couple of holes here in the chimney where bricks used to be. The chimney continues upward and downward.",
+  "obj": 24,
+  "objs": [
+   24,
+   50,
+   91
+  ],
+  "title": "In the Chimney"
+ },
+ {
+  "description": "This is the southwestern corner of a large backyard whose main feature is an elaborate garden. The stone walkway splits in three directions here: north, along the perimeter of the garden; south, around the side of the house; and east, where the walkway ends at the foot of a couple of steps.",
+  "obj": 31,
+  "objs": [
+   31
+  ],
+  "title": "Southwest Junction"
+ },
+ {
+  "description": null,
+  "obj": 38,
+  "objs": [
+   38
+  ],
+  "title": "Work Room"
+ },
+ {
+  "description": "You're doing your best to keep your balance here on the roof. During a fierce storm you can see Linda Ronstadt's house wash into the ocean from here. A chimney juts up from the roof here and there is another chimney to the east, near the end of the roof.",
+  "obj": 47,
+  "objs": [
+   47
+  ],
+  "title": "West End of Roof"
+ },
+ {
+  "description": null,
+  "obj": 60,
+  "objs": [
+   60
+  ],
+  "title": "Patio"
+ },
+ {
+  "description": "This cramped area is just big enough for one person and all the equipment. A thick glass window overlooks the screening room to the north.",
+  "obj": 70,
+  "objs": [
+   70
+  ],
+  "title": "Projection Booth"
+ },
+ {
+  "description": null,
+  "obj": 84,
+  "objs": [
+   84
+  ],
+  "title": "Ladies' Room"
+ },
+ {
+  "description": null,
+  "obj": 90,
+  "objs": [
+   90
+  ],
+  "title": "Bomb Shelter"
+ },
+ {
+  "description": "In this corner of the backyard you can make out the enormous hedge, which is part of the estate's hedge maze. The stone walkway splits in three directions here: north, along the dark and towering hedge; south, past the fragrant and inviting garden; and east, where the walkway cuts a straight and narrow path between the hedge and the garden.",
+  "obj": 93,
+  "objs": [
+   93
+  ],
+  "title": "Northwest Junction"
+ },
+ {
+  "description": "This was your favorite room as a child. Each summer Uncle Buddy would have props and models from his various movies brought here for the amusement of his numerous guests. There is a scale model of downtown Tokyo here. Doorways lead south, east and west. There is a door to the north.",
+  "obj": 97,
+  "objs": [
+   97
+  ],
+  "title": "Game Room"
+ },
+ {
+  "description": "In this corner of the backyard you can make out the enormous hedge, which is part of the estate's hedge maze. The stone walkway splits in three directions here: north, along the dark and towering hedge; south, past the fragrant and inviting garden; and west, where the walkway cuts a straight and narrow path between the hedge and the garden. A slightly worn path in the grass heads east.",
+  "obj": 99,
+  "objs": [
+   99
+  ],
+  "title": "Northeast Junction"
+ },
+ {
+  "description": "This is the east end of the roof. A chimney juts up from the roof here and there is another chimney off to the west, near the end of the roof.",
+  "obj": 121,
+  "objs": [
+   121
+  ],
+  "title": "East End of Roof"
+ },
+ {
+  "description": null,
+  "obj": 125,
+  "objs": [
+   125
+  ],
+  "title": "Surface of Pool"
+ },
+ {
+  "description": "This is the southeastern corner of a large backyard whose main feature is an elaborate garden. The stone walkway splits in three directions here: north, along the perimeter of the garden; south, around the side of the house; and west, where the walkway ends at a couple of steps leading up.",
+  "obj": 156,
+  "objs": [
+   156
+  ],
+  "title": "Southeast Junction"
+ },
+ {
+  "description": null,
+  "obj": 169,
+  "objs": [
+   169
+  ],
+  "title": "Men's Room"
+ },
+ {
+  "description": "This is a spare bedroom where guests would stay if they couldn't drive home after one of the parties. The bed is big and fluffy and all the furniture is padded well. Uncle Buddy put two brass handles on the floor so guests would have something to hang onto when the room began to spin. A doorway leads north.",
+  "obj": 189,
+  "objs": [
+   189
+  ],
+  "title": "Guest Room"
+ },
+ {
+  "description": null,
+  "obj": 204,
+  "objs": [
+   204
+  ],
+  "title": "Underwater"
+ },
+ {
+  "description": null,
+  "obj": 219,
+  "objs": [
+   219
+  ],
+  "title": "Cannon Emplacement"
+ },
+ {
+  "description": null,
+  "obj": 223,
+  "objs": [
+   223
+  ],
+  "title": "Fireplace"
+ },
+ {
+  "description": "This is the screening room where Uncle Buddy died. He had a massive heart attack while viewing the final cut of his first horror musical, \"A Corpse Line.\" The film was never released and no one knows what happened to the only full-length version, worth a fortune today. Rumor has it that as he was dying he proclaimed \"A Corpse Line\" to be his masterwork of horror. Other rumors say the film was so bad that, if it had been released and he hadn't died, someone would have killed him. Several rows of plush theatre-like seats face a movie screen. Doorways lead south and west.",
+  "obj": 238,
+  "objs": [
+   238
+  ],
+  "title": "Screening Room"
+ }
+]

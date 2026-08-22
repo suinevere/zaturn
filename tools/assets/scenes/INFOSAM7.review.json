@@ -1,0 +1,179 @@
+[
+ {
+  "description": null,
+  "obj": 2,
+  "objs": [
+   2
+  ],
+  "title": "Up a Tree"
+ },
+ {
+  "description": null,
+  "obj": 33,
+  "objs": [
+   33
+  ],
+  "title": "The Wabe"
+ },
+ {
+  "description": null,
+  "obj": 51,
+  "objs": [
+   51
+  ],
+  "title": "Long Water"
+ },
+ {
+  "description": "You're at the bottom of an open grave, surrounded by six-foot walls of dirt.",
+  "obj": 62,
+  "objs": [
+   62
+  ],
+  "title": "Open Grave"
+ },
+ {
+  "description": null,
+  "obj": 69,
+  "objs": [
+   69
+  ],
+  "title": "Lancaster Gate"
+ },
+ {
+  "description": null,
+  "obj": 73,
+  "objs": [
+   73
+  ],
+  "title": "Twilight Glen"
+ },
+ {
+  "description": null,
+  "obj": 82,
+  "objs": [
+   82
+  ],
+  "title": "Palace Gate"
+ },
+ {
+  "description": null,
+  "obj": 87,
+  "objs": [
+   87
+  ],
+  "title": "Outside Cottage"
+ },
+ {
+  "description": null,
+  "obj": 88,
+  "objs": [
+   88
+  ],
+  "title": "Flower Walk"
+ },
+ {
+  "description": null,
+  "obj": 89,
+  "objs": [
+   89
+  ],
+  "title": "Hilltop"
+ },
+ {
+  "description": "This is an art gallery. Most of the paintings have been stolen by vandals with exceptional taste. The vandals left through either the north or west exits.",
+  "obj": 99,
+  "objs": [
+   99
+  ],
+  "title": "Gallery"
+ },
+ {
+  "description": "This is a small room with passages to the east and south and a forbidding hole leading west. Bloodstains and deep scratches (perhaps made by an axe) mar the walls.",
+  "obj": 100,
+  "objs": [
+   100
+  ],
+  "title": "The Troll Room"
+ },
+ {
+  "description": "You are on a small, rocky beach on the continuation of the Frigid River past the Falls. The beach is narrow due to the presence of the White Cliffs. The river canyon opens here and sunlight shines in from above. A rainbow crosses over the falls to the east and a narrow path continues to the southwest.",
+  "obj": 101,
+  "objs": [
+   101
+  ],
+  "title": "End of Rainbow"
+ },
+ {
+  "description": "You are in a small clearing on a well marked forest path that extends to the east and west.",
+  "obj": 102,
+  "objs": [
+   102,
+   123
+  ],
+  "title": "Clearing"
+ },
+ {
+  "description": null,
+  "obj": 112,
+  "objs": [
+   112
+  ],
+  "title": "Black Lion Gate"
+ },
+ {
+  "description": null,
+  "obj": 116,
+  "objs": [
+   116
+  ],
+  "title": "Lancaster Walk"
+ },
+ {
+  "description": null,
+  "obj": 141,
+  "objs": [
+   141
+  ],
+  "title": "Spooky Copse"
+ },
+ {
+  "description": null,
+  "obj": 144,
+  "objs": [
+   144
+  ],
+  "title": "Wading"
+ },
+ {
+  "description": "This appears to have been an artist's studio. The walls and floors are splattered with paints of 69 different colors. Strangely enough, nothing of value is hanging here. At the south end of the room is an open door (also covered with paint). A dark and narrow chimney leads up from a fireplace; although you might be able to get up it, it seems unlikely you could get back down.",
+  "obj": 168,
+  "objs": [
+   168
+  ],
+  "title": "Studio"
+ },
+ {
+  "description": "You're in a creepy corner of the Festeron Cemetery, surrounded by silent tombstones. An iron gate opens to the east, and a narrow lane wanders north.",
+  "obj": 170,
+  "objs": [
+   170
+  ],
+  "title": "Creepy Corner"
+ },
+ {
+  "description": null,
+  "obj": 177,
+  "objs": [
+   177
+  ],
+  "title": "Inverness Terrace"
+ },
+ {
+  "description": null,
+  "obj": 191,
+  "objs": [
+   191
+  ],
+  "title": "Outside Cemetery"
+ }
+]

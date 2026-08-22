@@ -1,0 +1,147 @@
+[
+ {
+  "description": "This room in the high tower appears to be a map room, with hundreds of ancient maps covering the walls. A huge globe, made of gold, sits on a pedestal in the center of the room. Through the tower windows can be seen a vast forest stretching out to the northeast and the sea, covered in fog, to the east and south. Stairs to the south lead to the bottom of the tower.",
+  "obj": 23,
+  "objs": [
+   23
+  ],
+  "title": "Map Room"
+ },
+ {
+  "description": "You are in a thick forest shading into a deep and miasmic swamp. The ground is very wet and boggy here, and footing is treacherous. Lily pads cover the surface of the water, and frogs abound. Things look drier to the west.",
+  "obj": 32,
+  "objs": [
+   32
+  ],
+  "title": "Swamp"
+ },
+ {
+  "description": "You stand at a point of decision on a road which makes a wide fork to the northeast and southeast, circling the base of the Lonely Mountain, which looms high overhead to the east. A very long and winding road starts here and stretches out of sight to the west through low, smoky hills.",
+  "obj": 42,
+  "objs": [
+   42
+  ],
+  "title": "Fork"
+ },
+ {
+  "description": "This is a circular room with no floor. There are exits east and west. A crude drawing of stairsteps graces the ceiling. Downward is only darkness.",
+  "obj": 47,
+  "objs": [
+   47,
+   160
+  ],
+  "title": "Winding Stair"
+ },
+ {
+  "description": "This small open area stands at the old north gate of the castle, now badly rusted. Through the gate, a forest can be seen. To the west, a hall glows with light, and to the south, the dark castle can be reentered. A narrow passage to the east leads to the base of the northeast tower.",
+  "obj": 64,
+  "objs": [
+   64
+  ],
+  "title": "North Gate"
+ },
+ {
+  "description": null,
+  "obj": 101,
+  "objs": [
+   101
+  ],
+  "title": "Outside Gate"
+ },
+ {
+  "description": "This fabulous room commands a magnificent view of the Lonely Mountain which lies to the north and west. The room itself is filled with beautiful chests and cabinets which once contained precious jewels and other objets d'art. These are empty. Winding stone stairs lead down to the base of the tower.",
+  "obj": 123,
+  "objs": [
+   123
+  ],
+  "title": "Jewel Room"
+ },
+ {
+  "description": null,
+  "obj": 129,
+  "objs": [
+   129
+  ],
+  "title": "Gallery"
+ },
+ {
+  "description": "The trail makes a hairpin turn here, swinging out to the northwest and northeast, where it enters a small village. Low, smoky hills stretch out to the west and south.",
+  "obj": 140,
+  "objs": [
+   140
+  ],
+  "title": "Loop"
+ },
+ {
+  "description": "This is a meadow near the sea. There is a smell of salt in the air. Only heather and thistles grow here. To the north is a gate leading into the castle. A narrow path to the southeast leads to the shore of the Sea.",
+  "obj": 143,
+  "objs": [
+   143
+  ],
+  "title": "Meadow"
+ },
+ {
+  "description": null,
+  "obj": 161,
+  "objs": [
+   161
+  ],
+  "title": "Guarded Door"
+ },
+ {
+  "description": "This is the control room for all the machinery nearby. The controls are all magical, of course. The walls are covered by blinking lights and shifting displays, interspersed with arcane dials and glowing buttons. It's all very mysterious looking. The exit, to the northwest, leads into a room with machinery which would surely crush you if you were to attempt to enter it.",
+  "obj": 171,
+  "objs": [
+   171
+  ],
+  "title": "Control Room"
+ },
+ {
+  "description": "You are at a fork in the road where paths to the northwest and southwest girdle the base of the Lonely Mountain and a smaller path winds its way to the east.",
+  "obj": 189,
+  "objs": [
+   189
+  ],
+  "title": "Eastern Fork"
+ },
+ {
+  "description": "You are south of an old wooden shack, apparently deserted. The trail extends from northeast to southwest here, circling the Lonely Mountain, which lies to the southeast.",
+  "obj": 227,
+  "objs": [
+   227
+  ],
+  "title": "Outside of Shack"
+ },
+ {
+  "description": null,
+  "obj": 243,
+  "objs": [
+   243
+  ],
+  "title": "Inside Gate"
+ },
+ {
+  "description": "The inside of the shack is a shambles. An overturned table and bench, and a few broken windows remain. An oven is the only fixture that's even recognizable. The door is to the south.",
+  "obj": 244,
+  "objs": [
+   244
+  ],
+  "title": "Inside Shack"
+ },
+ {
+  "description": null,
+  "obj": 246,
+  "objs": [
+   246
+  ],
+  "title": "South Gate"
+ },
+ {
+  "description": "The corridor widens here to form a large hall. To the north and south are small passages, and to the east is what appears to be an enormous spiral staircase. A passage to the west leads into a courtyard. The walls here are scarred and black, and a strange heaviness hangs in the air.",
+  "obj": 247,
+  "objs": [
+   247
+  ],
+  "title": "Junction"
+ }
+]

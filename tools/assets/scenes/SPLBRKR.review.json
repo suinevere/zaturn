@@ -1,0 +1,58 @@
+[
+ {
+  "description": null,
+  "obj": 14,
+  "objs": [
+   14
+  ],
+  "title": "rezrov spell"
+ },
+ {
+  "description": null,
+  "obj": 35,
+  "objs": [
+   35
+  ],
+  "title": "lesoch spell"
+ },
+ {
+  "description": null,
+  "obj": 150,
+  "objs": [
+   150
+  ],
+  "title": "frotz spell"
+ },
+ {
+  "description": null,
+  "obj": 178,
+  "objs": [
+   178
+  ],
+  "title": "yomin spell"
+ },
+ {
+  "description": null,
+  "obj": 204,
+  "objs": [
+   204
+  ],
+  "title": "gnusto spell"
+ },
+ {
+  "description": null,
+  "obj": 229,
+  "objs": [
+   229
+  ],
+  "title": "malyon spell"
+ },
+ {
+  "description": null,
+  "obj": 240,
+  "objs": [
+   240
+  ],
+  "title": "jindak spell"
+ }
+]

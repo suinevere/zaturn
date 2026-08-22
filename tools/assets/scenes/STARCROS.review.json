@@ -1,0 +1,303 @@
+[
+ {
+  "description": null,
+  "obj": 3,
+  "objs": [
+   3
+  ],
+  "title": "Control Bubble Entrance"
+ },
+ {
+  "description": "You are floating near and clinging to a large crystalline bubble covering the aft end of the axis of rotation of the artifact. There is no weight here. Small knobs resembling handholds cover the bubble; you could use them to climb back down. Far away at the fore end of the axis you can see another bubble very similar to this one.",
+  "obj": 4,
+  "objs": [
+   4
+  ],
+  "title": "On Drive Bubble"
+ },
+ {
+  "description": "You are climbing a gigantic tree, one that would make the largest sequoia blush with envy. Fortunately the bark is rough and climbing is easy. The gravity lessens as you near the axis of rotation, which also helps.",
+  "obj": 5,
+  "objs": [
+   5
+  ],
+  "title": "Up a Tree"
+ },
+ {
+  "description": "This nook is your spartan living quarters, containing only a bunk and a bureau. The only exit is to starboard.",
+  "obj": 10,
+  "objs": [
+   10
+  ],
+  "title": "Living Quarters"
+ },
+ {
+  "description": "This was the control room of the ship which originally carried the now-primitive aliens to the artifact. The control panel was obviously destroyed by a fire or explosion long ago, although the lights here still glow dimly.\nOutside you can see the surface of the artifact. Gazing longingly at that view are the empty eyesockets of a skeleton; the skeleton of an aliens weasel. It is dressed in the shreds of a space suit and sitting in the control couch. Scattered around the couch are fresh offerings of fruit and vegetables.",
+  "obj": 15,
+  "objs": [
+   15
+  ],
+  "title": "Control Room"
+ },
+ {
+  "description": "This is the garage for Maintenance Mice. There are several stalls in which non-functional mice are rusting away. Other stalls are empty. There is a chute into which trash could be dumped, and a large bin nearby. A maintenance-mouse-sized door is in the forward wall.",
+  "obj": 16,
+  "objs": [
+   16
+  ],
+  "title": "Garage"
+ },
+ {
+  "description": "The ring corridor here has an exit forward to a large open area. There is fresh dirt scattered about, and an acrid smell.",
+  "obj": 19,
+  "objs": [
+   19
+  ],
+  "title": "Room on Ring Two"
+ },
+ {
+  "description": "You are floating at the axis of rotation of the cylinder. There is grassland \"below.\" There is no gravity here.",
+  "obj": 27,
+  "objs": [
+   27,
+   63,
+   112
+  ],
+  "title": "Floating in Air"
+ },
+ {
+  "description": "You are within a huge bubble, transparent from this side. The interior is crisscrossed with wire webbing, so that an agile creature could move around using only the wires. Objects are stuck in the wires in various out-of-reach places. The whole impression is of a rather untidy spiderweb. The connection to the artifact is at the forward end of the sphere.",
+  "obj": 35,
+  "objs": [
+   35
+  ],
+  "title": "Spherical Ship"
+ },
+ {
+  "description": "You are in a primeval forest, near the base of a giant tree. The trunk is thick, perhaps 40 meters in diameter, and the height is incredible. The forest is dense, so you can't see exactly how tall it is, but extending all the way to the axis isn't out of the question. The bark is so rough that climbing would be no problem.",
+  "obj": 44,
+  "objs": [
+   44
+  ],
+  "title": "Base of Tree"
+ },
+ {
+  "description": "This is a port-to-starboard corridor lined with small cages. The bars of the cages are bands of force, detectable only by the slight shimmer they produce in the air, and are non-working on most of the cages. A few cages are still on, and contain the dried up carcasses of strange animals.",
+  "obj": 46,
+  "objs": [
+   46
+  ],
+  "title": "Zoo"
+ },
+ {
+  "description": "This was once the cargo hold of a spaceship, and is filled with fetishes of wood and clay, totems in the shape of strange beasts, and a great deal of withered fruit and grain. Openings lead fore and aft, and the umbilical tube is to starboard. There is dim illumination from ancient glow bulbs.",
+  "obj": 54,
+  "objs": [
+   54
+  ],
+  "title": "Cargo Hold"
+ },
+ {
+  "description": "This is a series of plastic bubbles connecting the blue airlock with a spherical spaceship docked aft of here. The bubbles are made of a thick material which is nonetheless transparent.",
+  "obj": 55,
+  "objs": [
+   55
+  ],
+  "title": "Bubbles"
+ },
+ {
+  "description": "You are in a plastic umbilical about two meters in diameter which connects the green airlock to starboard with a spaceship about ten meters to port. The plastic is cloudy, obscuring your view of the outside.",
+  "obj": 64,
+  "objs": [
+   64
+  ],
+  "title": "Umbilical"
+ },
+ {
+  "description": "You are standing on the floor of an enormous cylinder, kilometers in length and hundreds of meters across. Above you and all around is revealed a micro-geography of trees, grassland, and manufactured structures. The cylinder is divided into various bands, of which this is approximately the central one. Things cling to the floor (or ceiling) above you, as each band continues all the way around the cylinder. \nYou are in the midst of a grassy plain, a sort of savannah with warm breezes and tall grasses. An exit leads down to the outer deck. Looking forward, a metal floor circles the cylinder, and extends all the way to the forward end of the cylinder, which is a sheer metal wall with a crystal bubble at the axis. Looking aft, the grassland becomes more and more densely forested. The aft end of the cylinder is totally obscured by impossibly tall trees. A herd of creatures not unlike unicorns crops grass in the distance.",
+  "obj": 77,
+  "objs": [
+   77,
+   225
+  ],
+  "title": "Grassland"
+ },
+ {
+  "description": "At this point the corridor is twisted and the walls are half-melted. Titanic energies have been used here, apparently to blast through an armored hatch that shielded the area to port. There is little left of the hatch now, and the way is open.",
+  "obj": 90,
+  "objs": [
+   90
+  ],
+  "title": "Melted Spot"
+ },
+ {
+  "description": "You are at the fore end of the cylinder. A smooth, unscalable wall extends up all around the circumference. At the axis, high above, is a clear bubble. From this distance you can't see into it, but it's about 100 meters in diameter.",
+  "obj": 99,
+  "objs": [
+   99,
+   190
+  ],
+  "title": "Fore End"
+ },
+ {
+  "description": null,
+  "obj": 102,
+  "objs": [
+   102
+  ],
+  "title": "Nesting Cage"
+ },
+ {
+  "description": "A passage leads aft from this point on the ring corridor.",
+  "obj": 115,
+  "objs": [
+   115
+  ],
+  "title": "Room on Ring One"
+ },
+ {
+  "description": "The floor of the cylinder is bare metal here, merging into grassland aft and eventually running into a sheer wall at the forward end of the artifact.",
+  "obj": 134,
+  "objs": [
+   134,
+   224
+  ],
+  "title": "Metal Floor"
+ },
+ {
+  "description": null,
+  "obj": 136,
+  "objs": [
+   136
+  ],
+  "title": "Drive Bubble Entrance"
+ },
+ {
+  "description": null,
+  "obj": 137,
+  "objs": [
+   137
+  ],
+  "title": "Computer Room"
+ },
+ {
+  "description": "You are among the blackened and twisted metal left by a huge explosion. The tentacle housings have been destroyed. To starboard is the airlock dome.",
+  "obj": 143,
+  "objs": [
+   143
+  ],
+  "title": "Among Debris"
+ },
+ {
+  "description": null,
+  "obj": 148,
+  "objs": [
+   148
+  ],
+  "title": "Repair Room"
+ },
+ {
+  "description": "Once a guard room or barracks, this room is now dusty and unused. The only exit is back the way you came. A large door that may have led to the engine room is fused shut, as if by enormous heat.",
+  "obj": 149,
+  "objs": [
+   149
+  ],
+  "title": "Guard Room"
+ },
+ {
+  "description": "This burrow is deep within the warren and the aliens seem to avoid it. An exit to port leads back into the warren. The walls are covered with crude but vibrant paintings depicting a huge spider, a gigantic mouse, man-sized lizards, and in the center, a being in a space suit. You realize that this room is the center of the green hall's junction with the ring corridor. In fact, a ladder leads down to the green airlock.",
+  "obj": 152,
+  "objs": [
+   152
+  ],
+  "title": "Center of the Warren"
+ },
+ {
+  "description": null,
+  "obj": 153,
+  "objs": [
+   153
+  ],
+  "title": "Observatory"
+ },
+ {
+  "description": "You are at the top of a giant tree, just below a huge crystalline bubble full of machinery and controls which lies at the axis of rotation at the aft end of the cylinder. Out of reach above you is a hatch which leads into the bubble. Beside the hatch is a silver slot. Gravity has almost disappeared here as you near the axis.",
+  "obj": 159,
+  "objs": [
+   159
+  ],
+  "title": "Top of Tree"
+ },
+ {
+  "description": null,
+  "obj": 197,
+  "objs": [
+   197
+  ],
+  "title": "Outside Ship"
+ },
+ {
+  "description": null,
+  "obj": 202,
+  "objs": [
+   202
+  ],
+  "title": "Bridge"
+ },
+ {
+  "description": "You are floating outside a 100 meter crystal bubble which protrudes from the fore end of the cylinder. Inside, you can make out shadowy mechanisms and odd constructions. There are odd knobs of some sort which you could use to pull yourself down the bubble. At the other end of the cylinder you can see the drive bubble in the midst of enormous trees.",
+  "obj": 207,
+  "objs": [
+   207
+  ],
+  "title": "On Control Bubble"
+ },
+ {
+  "description": "This cage was apparently forced by its inhabitants before the general deterioration of the zoo equipment. The force projectors are ripped out of their mountings and smashed against the bulkhead, and the whole cage is scratched and dented as though many enraged creatures pounded on it violently for many weeks. There is a somewhat chewed sign to one side of the cage.",
+  "obj": 208,
+  "objs": [
+   208
+  ],
+  "title": "Broken Cage"
+ },
+ {
+  "description": "You are between the red and blue halls on a ring corridor. The corridor looks damaged to port. The illumination dims to starboard.",
+  "obj": 211,
+  "objs": [
+   211
+  ],
+  "title": "Room on Ring Four"
+ },
+ {
+  "description": "This is an earth and reed burrow within the warren. There are many aliens here, going about their business. The younger ones stare at you and make funny noises. There are passages all over the place, and a constant traffic in and out.",
+  "obj": 216,
+  "objs": [
+   216
+  ],
+  "title": "In the Warren"
+ },
+ {
+  "description": null,
+  "obj": 223,
+  "objs": [
+   223
+  ],
+  "title": "Control Bubble"
+ },
+ {
+  "description": null,
+  "obj": 226,
+  "objs": [
+   226
+  ],
+  "title": "Drive Bubble"
+ },
+ {
+  "description": "The amount of damage done to this cage is impressive. The creatures imprisoned here didn't like it one bit, and whoever put them here obviously underestimated their nastiness.",
+  "obj": 230,
+  "objs": [
+   230
+  ],
+  "title": "Inside Grue Cage"
+ }
+]

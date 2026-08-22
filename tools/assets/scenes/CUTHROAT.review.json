@@ -1,0 +1,104 @@
+[
+ {
+  "description": null,
+  "obj": 56,
+  "objs": [
+   56
+  ],
+  "title": "Underwater"
+ },
+ {
+  "description": null,
+  "obj": 61,
+  "objs": [
+   61,
+   80
+  ],
+  "title": "Crew's Quarters"
+ },
+ {
+  "description": null,
+  "obj": 66,
+  "objs": [
+   66,
+   87
+  ],
+  "title": "Wheelhouse"
+ },
+ {
+  "description": "You are at Point Lookout, a small, high cliff that affords a spectacular view of the sea. The cliff bottom is dangerous, so the only safe path is the northwest footpath back to the Ocean Road.",
+  "obj": 99,
+  "objs": [
+   99
+  ],
+  "title": "Point Lookout"
+ },
+ {
+  "description": "You are in Mariners' Trust, the Island's bank. In it are a table and a teller's window. You can see the safe beyond, and it looks pretty empty.",
+  "obj": 101,
+  "objs": [
+   101
+  ],
+  "title": "Mariners' Trust"
+ },
+ {
+  "description": "This is The Shanty, a tavern which serves the locals. A wooden bar travels the length of the place, and behind it is a mirror so dirty, it offers no reflection. Round tables occupy the floor. The smell of cooking food permeates the place.",
+  "obj": 112,
+  "objs": [
+   112
+  ],
+  "title": "The Shanty"
+ },
+ {
+  "description": "This is Outfitters International, a store that specializes in marine supplies. There is a long, high counter separating the supplies and the front area. To the north is the Wharf Road.",
+  "obj": 131,
+  "objs": [
+   131
+  ],
+  "title": "Outfitters Int'l"
+ },
+ {
+  "description": "You are standing on the former site of the Outfitters International warehouse, which burned down a few months back. To the north is the Wharf Road and an alley is to the south.",
+  "obj": 132,
+  "objs": [
+   132
+  ],
+  "title": "Vacant Lot"
+ },
+ {
+  "description": "You are in the McGinty Salvage office, a concern whose main business is salvaging wrecks. The place is a mess, and the floor is littered with chewed-on cigar stubs. To the north lies the Wharf Road. You can't help feeling uncomfortable here.",
+  "obj": 135,
+  "objs": [
+   135
+  ],
+  "title": "McGinty Salvage"
+ },
+ {
+  "description": "You're at the east end of an east/west alley. The back door of The Shanty is to the north, and an overgrown field is to the south. Narrow paths to the northeast and southeast lead to the Ocean Road.",
+  "obj": 148,
+  "objs": [
+   148,
+   149,
+   150,
+   152,
+   153
+  ],
+  "title": "Back Alley"
+ },
+ {
+  "description": "You're in your room in the Red Boar Inn. It's sparsely furnished, but comfortable enough. To the north is the door, and there's a closet without a door to the west.",
+  "obj": 183,
+  "objs": [
+   183
+  ],
+  "title": "Your Room"
+ },
+ {
+  "description": "This is the lobby of the Red Boar Inn, a place with the charm of a two-dollar flophouse. The Wharf Road is outside, to the north, and a stairway leads up to the rooms to the south.",
+  "obj": 190,
+  "objs": [
+   190
+  ],
+  "title": "Red Boar Inn"
+ }
+]

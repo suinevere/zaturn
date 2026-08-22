@@ -1,0 +1,98 @@
+[
+ {
+  "description": "This room contains the bare essentials for a guest room: bed, tables, and a chair. A window looks out toward the east.",
+  "obj": 173,
+  "objs": [
+   173
+  ],
+  "title": "Guest Room"
+ },
+ {
+  "description": "You are at the corner of two halls, one a short hallway to the west ending with a set of doors, and the other a long hall leading south toward the front door. To the north are swinging double doors leading into the kitchen.",
+  "obj": 198,
+  "objs": [
+   198
+  ],
+  "title": "Corner"
+ },
+ {
+  "description": null,
+  "obj": 214,
+  "objs": [
+   214
+  ],
+  "title": "Mrs. Rourke's Room"
+ },
+ {
+  "description": "This idyllic spot lies on a jut of land well north of the house and is surrounded on three sides by lake shore. Its charm includes the sweet smell of roses blown on a southwest breeze from the rose garden and by the sound of the leaves rustling in the orchard to the southeast.",
+  "obj": 222,
+  "objs": [
+   222
+  ],
+  "title": "North Lawn"
+ },
+ {
+  "description": null,
+  "obj": 228,
+  "objs": [
+   228
+  ],
+  "title": "Among the Roses"
+ },
+ {
+  "description": "You are now between the shed and the lake, a position invisible from the house or the adjacent lawns. There are no windows here, but you can easily enter the shed via the door around the corner.",
+  "obj": 232,
+  "objs": [
+   232
+  ],
+  "title": "Behind the Shed"
+ },
+ {
+  "description": "This small garden shed is filled with implements of gardening and lawn care. Shelves filled with various tools line the walls and a filthy window looks out on the lawn.",
+  "obj": 233,
+  "objs": [
+   233
+  ],
+  "title": "Shed"
+ },
+ {
+  "description": "You are on a neatly manicured lawn, east of the house, which extends north and east to the shore of a lake. To the northwest is a peaceful orchard, and toward the south another wide lawn. Southeast, beside the lake, is a small shed with a solitary dirty window.",
+  "obj": 238,
+  "objs": [
+   238
+  ],
+  "title": "East Lawn"
+ },
+ {
+  "description": "This is a sprawling lawn west of the Robner house. To the west and north is the lake shore. To the northeast is a rose garden, and to the south another wide lawn.",
+  "obj": 240,
+  "objs": [
+   240
+  ],
+  "title": "West Lawn"
+ },
+ {
+  "description": "You are in front of the Robner house just east of the front door. A small window, closed and securely locked, is the only thing of note here. To the northeast is the east side of the house.",
+  "obj": 242,
+  "objs": [
+   242
+  ],
+  "title": "East of Front Door"
+ },
+ {
+  "description": "You are in front of the Robner house just west of the front door. To the north is a large bay window through which can be seen part of the living room. To the northwest is the west side of the house.",
+  "obj": 244,
+  "objs": [
+   244
+  ],
+  "title": "West of Front Door"
+ },
+ {
+  "description": "You are on a wide lawn just north of the entrance to the Robner estate. Directly north at the end of a pebbled path is the Robner house, flanked to the northeast and northwest by a vast expanse of well-kept lawn. Beyond the house can be seen the lakefront.",
+  "obj": 249,
+  "objs": [
+   249
+  ],
+  "title": "South Lawn"
+ }
+]

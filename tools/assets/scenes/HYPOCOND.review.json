@@ -1,0 +1,67 @@
+[
+ {
+  "description": "You are lying in bed, immersed in comfy, blue and green pastel quilts, contemplating the term 'boredom.'",
+  "obj": 6,
+  "objs": [
+   6
+  ],
+  "title": "In Bed"
+ },
+ {
+  "description": "This hollowed-out area must be a sleeping room for the inhabitant of this dwelling. A round mattress, stuffed with goose down, occupies most of the floor, leaving space to climb down the ladder, or exit the premises through a wide knothole on the east wall, through which sunlight pours in.",
+  "obj": 17,
+  "objs": [
+   17,
+   42
+  ],
+  "title": "In the Tree"
+ },
+ {
+  "description": "The view from here is spectacular. The forest around you is composed of hundreds of tall, magnificent oaks, their abundant leaves rippling with the warm breeze. It seems that no end to the forest is in sight, although you can make out a thin, winding trail running north and south past the tree in which you stand.",
+  "obj": 19,
+  "objs": [
+   19
+  ],
+  "title": "Near the Tree Top"
+ },
+ {
+  "description": "You stand, quivering ever so slightly, on a wide, sturdy branch, fifty feet or so above the ground, where a path runs past the tree. Although the trees branches are numerous, you fear that a descent might be difficult. It may be easier to climb upward, however, as notches have been cut in the side of the tree, forming a ladder of sorts. To the west, you may reenter the tree through the wide knothole.",
+  "obj": 20,
+  "objs": [
+   20
+  ],
+  "title": "Out on a Limb"
+ },
+ {
+  "description": null,
+  "obj": 72,
+  "objs": [
+   72
+  ],
+  "title": "Hazy Room"
+ },
+ {
+  "description": "You are in the seldom-used guest room. In sharp contrast with what you are used to, everything seems to be in its proper, orderly place. A double bed is neatly made, and there is plenty of wood, stacked neatly, to the side of a wide fireplace. A door on the north wall, through which you entered, is closed.",
+  "obj": 78,
+  "objs": [
+   78
+  ],
+  "title": "Guest Room"
+ },
+ {
+  "description": "You are sitting quite still, peering out of the fireplace. As you sit here, you can't help feeling uneasy, as if someone were behind you, watching and waiting. You glance back once, but see nothing unusual, except that the nature of the rear wall of the fireplace seems to be quite odd-looking.",
+  "obj": 79,
+  "objs": [
+   79
+  ],
+  "title": "In the Fireplace"
+ },
+ {
+  "description": "You stand in a room amidst several bins loaded high with stored goods, apparently saved for an unpleasant drought or lengthy winter. A rickety wooden ladder leads upward through a hole in the ceiling, through which a little light streams in.",
+  "obj": 80,
+  "objs": [
+   80
+  ],
+  "title": "Store Room"
+ }
+]

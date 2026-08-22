@@ -1,0 +1,394 @@
+[
+ {
+  "description": null,
+  "obj": 18,
+  "objs": [
+   18
+  ],
+  "title": "Room of White Mist"
+ },
+ {
+  "description": null,
+  "obj": 19,
+  "objs": [
+   19
+  ],
+  "title": "Room of Blue Mist"
+ },
+ {
+  "description": null,
+  "obj": 21,
+  "objs": [
+   21
+  ],
+  "title": "Room of Red Mist"
+ },
+ {
+  "description": null,
+  "obj": 100,
+  "objs": [
+   100
+  ],
+  "title": "Tiny Room"
+ },
+ {
+  "description": null,
+  "obj": 103,
+  "objs": [
+   103
+  ],
+  "title": "Dreary Room"
+ },
+ {
+  "description": "This is a large rectangular room. The east and west walls were used for storing safety deposit boxes, but all have been carefully removed by evil persons. To the east, west, and south of the room are large doorways. The northern \"wall\" of the room is a shimmering curtain of light. In the center of the room is a large stone cube, about 10 feet on a side. Engraved on the side of the cube is some lettering.",
+  "obj": 107,
+  "objs": [
+   107
+  ],
+  "title": "Safety Depository"
+ },
+ {
+  "description": "This room was used by holders of safety deposit boxes to view their contents. On the north side of the room is a sign which says\n\n\"Remain here while the teller retrieves your safety deposit box. When you are finished, leave the box, and exit to the south. Safety deposit boxes cannot be removed from this room!\n\nThank You for Banking at the Zork!\" ",
+  "obj": 110,
+  "objs": [
+   110
+  ],
+  "title": "East Viewing Room"
+ },
+ {
+  "description": "This room was used by holders of safety deposit boxes to view their contents. On the north side of the room is a sign which says\n\n\"Remain here while the teller retrieves your safety deposit box. When you are finished, leave the box, and exit to the south. Safety deposit boxes cannot be removed from this room!\n\nThank You for Banking at the Zork!\" ",
+  "obj": 111,
+  "objs": [
+   111
+  ],
+  "title": "West Viewing Room"
+ },
+ {
+  "description": null,
+  "obj": 112,
+  "objs": [
+   112
+  ],
+  "title": "East Teller's Room"
+ },
+ {
+  "description": null,
+  "obj": 113,
+  "objs": [
+   113
+  ],
+  "title": "West Teller's Room"
+ },
+ {
+  "description": "This is the entrance hall of the Bank of Zork, the largest banking institution of the Great Underground Empire. A partial account of its history is in \"The Lives of the Twelve Flatheads,\" in the chapter on J. Pierpont Flathead. A more detailed history (albeit less objective) may be found in Flathead's outrageous autobiography \"I'm Rich and You Aren't - So There!\". Most of the furniture has been ravaged by passing scavengers. All that remains are two signs at the northwest and northeast corners of the room, which say\n\n    <--  VIEWING ROOMS  -->\n\nThe way out (ornate but tasteful) is to the east. ",
+  "obj": 114,
+  "objs": [
+   114
+  ],
+  "title": "Bank Entrance"
+ },
+ {
+  "description": "This is a large room, one half of which is depressed. Salty water flows from a large leak in the ceiling. The only exit is to the west.",
+  "obj": 115,
+  "objs": [
+   115
+  ],
+  "title": "Pool Room"
+ },
+ {
+  "description": "This is an enormous room, in the center of which are four wooden posts delineating a rectangular area, above which is what appears to be a wooden roof. In fact, all objects in this room appear to be abnormally large. To the east is a passageway. There are large gaping chasms to the west and northwest.",
+  "obj": 116,
+  "objs": [
+   116
+  ],
+  "title": "Posts Room"
+ },
+ {
+  "description": "This is a small room containing a large oblong table, no doubt set for afternoon tea. It is clear from the objects on the table that the users were indeed mad. In the eastern corner of the room is a small hole (no more than four inches high). There are passageways leading away to the west and the northwest.",
+  "obj": 117,
+  "objs": [
+   117
+  ],
+  "title": "Tea Room"
+ },
+ {
+  "description": "This is a damp circular room, whose walls are made of brick and mortar. The roof of this room is not visible, but there appear to be some etchings on the walls. There is a passageway to the west.",
+  "obj": 118,
+  "objs": [
+   118
+  ],
+  "title": "Circular Room"
+ },
+ {
+  "description": "You are at the top of the well. Well done. There are etchings on the side of the well. There is a small crack across the floor at the entrance to a room on the east, but it can be crossed easily.",
+  "obj": 119,
+  "objs": [
+   119
+  ],
+  "title": "Top of Well"
+ },
+ {
+  "description": "This is a large room full of assorted heavy machinery, whirring noisily. The room smells of burned resistors. Along one wall are three buttons which are, respectively, round, triangular, and square. Naturally, above these buttons are instructions written in EBCDIC. A large sign in English above all the buttons says\n       \"DANGER -- HIGH VOLTAGE\"\nThere are exits to the west and the south.",
+  "obj": 122,
+  "objs": [
+   122
+  ],
+  "title": "Machine Room"
+ },
+ {
+  "description": null,
+  "obj": 123,
+  "objs": [
+   123
+  ],
+  "title": "Low Room"
+ },
+ {
+  "description": "This is a small room, whose walls are formed by an old lava flow. There are exits here to the east and the south.",
+  "obj": 124,
+  "objs": [
+   124
+  ],
+  "title": "Lava Room"
+ },
+ {
+  "description": null,
+  "obj": 125,
+  "objs": [
+   125
+  ],
+  "title": "Dusty Room"
+ },
+ {
+  "description": "This is a former broom closet. The exits are to the east and west.",
+  "obj": 135,
+  "objs": [
+   135
+  ],
+  "title": "Pearl Room"
+ },
+ {
+  "description": null,
+  "obj": 137,
+  "objs": [
+   137
+  ],
+  "title": "Riddle Room"
+ },
+ {
+  "description": null,
+  "obj": 138,
+  "objs": [
+   138
+  ],
+  "title": "Carousel Room"
+ },
+ {
+  "description": null,
+  "obj": 139,
+  "objs": [
+   139
+  ],
+  "title": "Wizard's Quarters"
+ },
+ {
+  "description": "The floor here seems to be made of sand, but it is hard to see anything else.",
+  "obj": 142,
+  "objs": [
+   142
+  ],
+  "title": "Murky Room"
+ },
+ {
+  "description": "Here a dark hallway turns a corner. To the south is a dark room, to the east is fitful light.",
+  "obj": 145,
+  "objs": [
+   145
+  ],
+  "title": "Aquarium Room"
+ },
+ {
+  "description": "In this room, inscribed on the floor, is a great pentagram drawn with black chalk. In its center is a black circle.",
+  "obj": 147,
+  "objs": [
+   147
+  ],
+  "title": "Pentagram Room"
+ },
+ {
+  "description": "This is the Wizard's trophy room, filled with memorabilia of various sorts. On one wall is the Wizard's D. T. (Doctor of Thaumaturgy) degree from GUE Tech. Several old magic wands are mounted on a wand rack. A collection of dull and nicked swords testify to the fate of many foolhardy adventurers. Small bottles contain discarded homunculi (a few preserved in alcohol). There is a stuffed owl on a perch.",
+  "obj": 156,
+  "objs": [
+   156
+  ],
+  "title": "Trophy Room"
+ },
+ {
+  "description": "This room is the Wizard's workroom. A hall continues east and west, and a larger room lies to the south. There are many shelves and racks on the walls, but the Wizard's workbench dominates the room. It is made of dark, heavy wood bound with iron. The workbench is stained from many years of use, and is deeply gouged as though some huge clawed animal was imprisoned on it. There are burn marks and even notes written in a crabbed hand. Many arcane items are scattered about the bench; alembics, mortar and pestle, small knives of various sizes, odd scraps of vellum, wax candles, and much more. In the center of a relatively clear area of the bench are affixed three stands - ruby, sapphire, and diamond - which form a triangle.",
+  "obj": 164,
+  "objs": [
+   164
+  ],
+  "title": "Wizard's Workroom"
+ },
+ {
+  "description": "This is the workshop of the Wizard of Frobozz.",
+  "obj": 165,
+  "objs": [
+   165
+  ],
+  "title": "Wizard's Workshop"
+ },
+ {
+  "description": null,
+  "obj": 167,
+  "objs": [
+   167
+  ],
+  "title": "Guarded Room"
+ },
+ {
+  "description": "This is the entrance to a huge crypt or tomb. A marble stairway leads up from a gateway arch.",
+  "obj": 177,
+  "objs": [
+   177
+  ],
+  "title": "Cerberus Room"
+ },
+ {
+  "description": "A small room with oddly angled walls and passages in all directions.",
+  "obj": 178,
+  "objs": [
+   178,
+   179,
+   180,
+   181,
+   182,
+   183,
+   184,
+   185,
+   187
+  ],
+  "title": "Oddly-angled Room"
+ },
+ {
+  "description": "This room looks like it was once a kennel for a very large dog (some of the bones would fit a dinosaur). It apparently hasn't been used for a long time, as the dust is fairly thick all over. The only exit is northeast.",
+  "obj": 192,
+  "objs": [
+   192
+  ],
+  "title": "Kennel"
+ },
+ {
+  "description": null,
+  "obj": 195,
+  "objs": [
+   195
+  ],
+  "title": "Menhir Room"
+ },
+ {
+  "description": "This is a small chamber carved out of the rock at the end of a short crawl. On the wall is crudely chiseled the number \"8\".",
+  "obj": 196,
+  "objs": [
+   196
+  ],
+  "title": "Room 8"
+ },
+ {
+  "description": "You are in a tight chimney of solidified lava. It extends up at least another hundred feet and down to a large room far below. A large crack opens to the south, probably the result of a shift in the rock strata.",
+  "obj": 199,
+  "objs": [
+   199
+  ],
+  "title": "Lava Tube"
+ },
+ {
+  "description": null,
+  "obj": 200,
+  "objs": [
+   200
+  ],
+  "title": "Ice Room"
+ },
+ {
+  "description": "The room is cool and damp. The air is misty. A twisty path from the southeast splits here toward a wide northerly stone bridge, and a narrow westerly tunnel. It is from the latter that the mist and chill seem to originate.",
+  "obj": 201,
+  "objs": [
+   201
+  ],
+  "title": "Cool Room"
+ },
+ {
+  "description": "This is the middle of a ruined but still impressive stone bridge spanning a deep chasm. Water flows far beneath. A paved path leads north into a large open space. To the south, the path leads into a misty tunnel.",
+  "obj": 202,
+  "objs": [
+   202
+  ],
+  "title": "Stone Bridge"
+ },
+ {
+  "description": "A path leads east-west through a room decorated with beautiful frescoes of someone battling dragons and rescuing fair maidens. It is hard to tell who is doing this as those parts of the frescoes have been blackened and cracked by intense heat.",
+  "obj": 203,
+  "objs": [
+   203
+  ],
+  "title": "Fresco Room"
+ },
+ {
+  "description": "You are in the dragon's lair, where the rock walls are scarred by flame. A blackened doorway leads to the south.",
+  "obj": 210,
+  "objs": [
+   210
+  ],
+  "title": "Dragon's Lair"
+ },
+ {
+  "description": "The room is a large cavern full of broken stone. The walls are scorched and there are deep scratches on the floor. A sooty dry smell is very strong here. A paved path winds from a large passage to the west, through the room, and across a huge stone bridge to the south. To the east a small crack is visible. A dark and smokey tunnel leads north.",
+  "obj": 211,
+  "objs": [
+   211
+  ],
+  "title": "Dragon Room"
+ },
+ {
+  "description": "You are fording the stream at a deep but not impossible spot. The water is very cold. The walls of the ravine rise to east and west. There is a small ledge along the north wall of the ravine. To the south is the entrance to a well-constructed but somewhat ruined hall.",
+  "obj": 214,
+  "objs": [
+   214
+  ],
+  "title": "Deep Ford"
+ },
+ {
+  "description": "This is the southern end of a formal garden. Hedges hide the cavern walls and mosses provide dim illumination. Fantastically shaped hedges and bushes are arrayed with geometric precision. They have not recently been clipped, but you can discern creatures in the shapes of the bushes: There is a dragon, a unicorn, a great serpent, a huge misshapen dog, and several human figures. On the west side of the garden the path leads through a rose arbor into a tunnel.",
+  "obj": 218,
+  "objs": [
+   218
+  ],
+  "title": "Topiary"
+ },
+ {
+  "description": "This is a gazebo in the midst of a formal garden. It is cool and restful here. A tea table adorns the center of the gazebo.",
+  "obj": 220,
+  "objs": [
+   220
+  ],
+  "title": "Gazebo"
+ },
+ {
+  "description": "You are standing on a crude but sturdy wooden foot bridge crossing a deep ravine. The path runs north and south from here.",
+  "obj": 228,
+  "objs": [
+   228
+  ],
+  "title": "Foot Bridge"
+ },
+ {
+  "description": "You are inside an ancient barrow hidden deep within a dark forest. The barrow opens into a narrow tunnel at its southern end. You can see a faint glow at the far end.",
+  "obj": 231,
+  "objs": [
+   231
+  ],
+  "title": "Inside the Barrow"
+ }
+]

@@ -1,0 +1,122 @@
+[
+ {
+  "description": null,
+  "obj": 55,
+  "objs": [
+   55
+  ],
+  "title": "south walkway"
+ },
+ {
+  "description": null,
+  "obj": 58,
+  "objs": [
+   58
+  ],
+  "title": "west walkway"
+ },
+ {
+  "description": null,
+  "obj": 60,
+  "objs": [
+   60
+  ],
+  "title": "north walkway"
+ },
+ {
+  "description": null,
+  "obj": 68,
+  "objs": [
+   68
+  ],
+  "title": "west part"
+ },
+ {
+  "description": null,
+  "obj": 74,
+  "objs": [
+   74
+  ],
+  "title": "south part"
+ },
+ {
+  "description": null,
+  "obj": 75,
+  "objs": [
+   75
+  ],
+  "title": "limbo"
+ },
+ {
+  "description": null,
+  "obj": 89,
+  "objs": [
+   89
+  ],
+  "title": "east part"
+ },
+ {
+  "description": null,
+  "obj": 92,
+  "objs": [
+   92
+  ],
+  "title": "north part"
+ },
+ {
+  "description": null,
+  "obj": 122,
+  "objs": [
+   122
+  ],
+  "title": "dome center"
+ },
+ {
+  "description": null,
+  "obj": 143,
+  "objs": [
+   143
+  ],
+  "title": "comm center"
+ },
+ {
+  "description": null,
+  "obj": 148,
+  "objs": [
+   148
+  ],
+  "title": "workshop"
+ },
+ {
+  "description": null,
+  "obj": 158,
+  "objs": [
+   158
+  ],
+  "title": "male dorm"
+ },
+ {
+  "description": null,
+  "obj": 161,
+  "objs": [
+   161
+  ],
+  "title": "female dorm"
+ },
+ {
+  "description": null,
+  "obj": 169,
+  "objs": [
+   169
+  ],
+  "title": "reception area"
+ },
+ {
+  "description": "This is your revolutionary new Ultramarine Bioceptor, named the SCIMITAR.",
+  "obj": 254,
+  "objs": [
+   254
+  ],
+  "title": "SCIMITAR"
+ }
+]

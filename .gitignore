@@ -57,3 +57,9 @@ tools/assets/candidates/
 # Local secrets -- never commit
 tools/.env
 .env
+
+# Working art curation state. Local only; the committed record is
+# art_manifest.snapshot.json, written at promote time by art_status.py --snapshot.
+tools/assets/art_manifest.json
+tools/assets/art_manifest.json.bak*
+tools/assets/art_manifest.json.reverted-*

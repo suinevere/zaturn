@@ -251,7 +251,7 @@
     "page_url": "https://pixabay.com/photos/attic-pise-old-attic-tile-112270/",
     "phash": "d1370ff04e4af80d",
     "phrase": "cosy attic",
-    "status": "accepted",
+    "status": "candidate",
     "verdict": "pass"
   },
   "1128815": {
@@ -2869,7 +2869,7 @@
     "page_url": "https://pixabay.com/photos/snow-winter-mountains-house-home-3373432/",
     "phash": "8c1362acd3617aaf",
     "phrase": "cosy cottage",
-    "status": "accepted",
+    "status": "candidate",
     "verdict": "pass"
   },
   "3374201": {
@@ -2886,7 +2886,7 @@
     "page_url": "https://pixabay.com/photos/cabin-lake-sunrise-landscape-3374201/",
     "phash": "c0d7b10a37e7349c",
     "phrase": "cosy cottage",
-    "status": "accepted",
+    "status": "candidate",
     "verdict": "pass"
   },
   "3379083": {
@@ -3515,7 +3515,7 @@
     "page_url": "https://pixabay.com/photos/closet-hdr-expired-old-monastery-426386/",
     "phash": "a5d55a4ad25a9758",
     "phrase": "cosy closet",
-    "status": "accepted",
+    "status": "candidate",
     "verdict": "pass"
   },
   "426389": {
@@ -4824,7 +4824,7 @@
     "page_url": "https://pixabay.com/photos/room-attic-old-old-room-space-5772311/",
     "phash": "96663649699c366d",
     "phrase": "cosy attic",
-    "status": "accepted",
+    "status": "candidate",
     "verdict": "pass"
   },
   "581131": {
@@ -6286,7 +6286,7 @@
     "page_url": "https://pixabay.com/photos/window-curtains-side-decoration-8313576/",
     "phash": "999a64d9d9706933",
     "phrase": "cosy attic",
-    "status": "accepted",
+    "status": "candidate",
     "verdict": "pass"
   },
   "8315886": {

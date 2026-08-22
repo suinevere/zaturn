@@ -103,6 +103,16 @@ void music_note_output(const char* str, unsigned int len);
 void music_on_turn(unsigned int room);
 
 /*----------------------
+ | music_track_from_mask
+ | Description: The r-th set bit of a scene's track mask (scene/scene_map.h's
+ |   scene_track_mask), as a CD-DA track number. r is reduced modulo the
+ |   number of set bits, so any value is legal and an empty mask answers 0
+ |   rather than dividing by zero.
+ | Author: suinevere
+ ----------------------*/
+int music_track_from_mask(unsigned long mask, unsigned int r);
+
+/*----------------------
  | music_note_room_title
  | Description: Hands the engine the room name the interpreter decoded from the
  |   location object, to be used as the title for the next classification instead

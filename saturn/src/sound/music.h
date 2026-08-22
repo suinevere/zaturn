@@ -82,14 +82,18 @@ typedef void (*music_play_fn)(int track, int loop);
  |   state machine per frame; set_isplaying/set_isshort install the drive-state
  |   callbacks; set_debounce_frames tunes the room-switch debounce.
  |
- |   set_category_fn subscribes to the active text category, which is how the
- |   background art follows the room without re-deriving the mood from the same
- |   text on its own clock. set_rotate_fn is its sibling for the case the category
- |   does NOT change: after MUSIC_ROTATE_ROOMS rooms of one mood the engine moves
- |   to another track in that same category, and the art is expected to move with
- |   it. They are separate calls rather than one with a flag because the client
- |   does genuinely different work -- resolve a new mood's picture, versus pick a
- |   different picture for the mood it is already in. set_fade_fn / set_fade_frames add a ramp that brackets
+ |   set_category_fn subscribes to the active SCENE, which is how the
+ |   background art follows the room without re-deriving the mood on its own
+ |   clock. The contract is scene-only: the callback fires with an SC_* value
+ |   and nothing else -- an event (danger/triumph) taking over the track never
+ |   reaches it, because an event carries no picture and the subscriber is
+ |   expected to hold whatever it is already showing while one plays. set_rotate_fn
+ |   is set_category_fn's sibling for the case the scene does NOT change: after
+ |   MUSIC_ROTATE_ROOMS rooms of one mood the engine moves to another track in
+ |   that same scene, and the art is expected to move with it -- same scene-only
+ |   contract. They are separate calls rather than one with a flag because the
+ |   client does genuinely different work -- resolve a new mood's picture, versus
+ |   pick a different picture for the mood it is already in. set_fade_fn / set_fade_frames add a ramp that brackets
  |   a Dynamic commit: a commit issues a fresh play, so the audio has to be down
  |   before it happens and come up after, and one counter driving both the picture
  |   and the volume is what keeps them in step. set_fade_frames(0) is the default
@@ -149,8 +153,8 @@ void music_set_isshort(int (*fn)(int track));          /* backend: 1 = track pla
 void music_set_pausefns(void (*pause_fn)(void), void (*resume_fn)(void));
 void music_set_duckfns(void (*duck_fn)(void), void (*unduck_fn)(void));
 void music_set_debounce_frames(int n);                 /* room-switch debounce length */
-void music_set_category_fn(void (*fn)(int cat));       /* announce category changes */
-void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-category rotations */
+void music_set_category_fn(void (*fn)(int cat));       /* announce the active SCENE only; events are silent */
+void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-scene rotations; also scene-only */
 void music_set_fade_fn(void (*fn)(int level));         /* 0 = black/quiet, 255 = normal */
 void music_set_fade_frames(int n);                     /* ramp length; 0 = instant commit */
 

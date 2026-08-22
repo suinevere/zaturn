@@ -216,24 +216,30 @@ void music_set_debounce_frames(int n) { g_debounce_frames = (n < 0) ? 0 : n; }
 /*----------------------
  | g_cat_fn / music_set_category_fn / notify_cat
  | Description: The category-change subscriber and the one place that calls it.
- |   The active category is the only thing that decides which track sounds, and it
- |   is now also what decides which picture shows; publishing it here rather than
- |   letting the client re-derive it from the same text keeps the two on one
- |   event, so a picture cannot end up describing a mood the music has already
- |   left. Optional: with nothing installed the engine behaves exactly as it did
- |   before, which is what the pre-existing host tests assume.
+ |   The callback's contract is scene-only: it announces the active SCENE, for
+ |   choosing a background picture, and nothing else. notify_cat takes the kind
+ |   alongside the value and fires g_cat_fn only when kind is CAT_KIND_SCENE --
+ |   an event taking over the track (CAT_KIND_EVENT) is deliberately silent to
+ |   the subscriber, which holds whatever picture it is already showing. Events
+ |   carry no picture of their own, and passing one through as a bare int would
+ |   be indistinguishable from a real scene on the other end (see CAT_KIND_*).
+ |   Suppressing it here, in the one place that knows events have no picture,
+ |   is simpler than pushing that policy onto every subscriber. Optional: with
+ |   nothing installed the engine behaves exactly as it did before, which is
+ |   what the pre-existing host tests assume.
  | Author: suinevere
  ----------------------*/
 static void (*g_cat_fn)(int) = 0;
 void music_set_category_fn(void (*fn)(int cat)) { g_cat_fn = fn; }
-static void notify_cat(int cat) { if (g_cat_fn) g_cat_fn(cat); }
+static void notify_cat(int kind, int cat) { if (kind == CAT_KIND_SCENE && g_cat_fn) g_cat_fn(cat); }
 
 /*----------------------
  | g_rot_fn / music_set_rotate_fn / notify_rotate / g_same_cat_rooms
  | Description: The same-category rotation subscriber, and the room counter that
  |   triggers it. g_same_cat_rooms counts rooms entered since the last commit
  |   while the mood held; at MUSIC_ROTATE_ROOMS the engine cycles to another track
- |   in the category it is already in and tells the art to follow.
+ |   in the category it is already in and tells the art to follow. Same
+ |   scene-only contract as notify_cat: fires only when kind is CAT_KIND_SCENE.
  |
  |   This is a separate signal from notify_cat because the client's job differs:
  |   on a category change it resolves that mood's picture, on a rotation it has to
@@ -244,7 +250,7 @@ static void notify_cat(int cat) { if (g_cat_fn) g_cat_fn(cat); }
 static void (*g_rot_fn)(int) = 0;
 static int g_same_cat_rooms = 0;
 void music_set_rotate_fn(void (*fn)(int cat)) { g_rot_fn = fn; }
-static void notify_rotate(int cat) { if (g_rot_fn) g_rot_fn(cat); }
+static void notify_rotate(int kind, int cat) { if (kind == CAT_KIND_SCENE && g_rot_fn) g_rot_fn(cat); }
 
 /*----------------------
  | g_paused / g_pause_fn / g_resume_fn / music_set_pausefns
@@ -511,8 +517,8 @@ static void commit_pending(void) {
     g_active_cat = g_pending_cat;
     g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0; g_pending_rotate = 0;
     g_same_cat_rooms = 0;          // the walk that earned this rotation is spent
-    if (rotate) notify_rotate(g_active_cat);
-    else        notify_cat(g_active_cat);
+    if (rotate) notify_rotate(g_active_kind, g_active_cat);
+    else        notify_cat(g_active_kind, g_active_cat);
     play_dyn(t, 1);
 }
 
@@ -598,10 +604,11 @@ void music_reset(void) {
     g_hold_kind = HOLD_NONE;
     if (g_phase != MP_IDLE) fade_emit(255);   // mid-ramp: nothing else would lift it
     g_phase = MP_IDLE; g_fade_i = 0;
-    // Announce "nothing" so the track comes off whatever the last room set. -1 is
-    // not a valid SC_* or EV_* id, so a subscriber reads it as "no scene, hold the
-    // picture" -- the same role TC_NEUTRAL played before scenes existed.
-    notify_cat(-1);
+    // Nothing to announce: notify_cat only fires for CAT_KIND_SCENE, and there
+    // is no active scene right after a reset, so the subscriber hears nothing
+    // and holds whatever picture it is already showing -- the same role
+    // TC_NEUTRAL's silence played before scenes existed.
+    notify_cat(CAT_KIND_NONE, -1);
     if (g_play) g_play(0, 0);
 }
 
@@ -724,7 +731,7 @@ void music_start_menu(void) {
         case MIX_DYNAMIC: default:
             if (g_active_track == 0) {
                 g_active_kind = CAT_KIND_NONE; g_active_cat = -1;
-                notify_cat(-1);
+                notify_cat(CAT_KIND_NONE, -1);   // no scene: subscriber hears nothing
             }
             play_dyn(g_override_track, 1);
             break;
@@ -893,7 +900,7 @@ void music_on_turn(unsigned int obj) {
            just changed. */
         if (g_active_track == 0) {
             g_active_kind = target_kind; g_active_cat = target; g_same_cat_rooms = 0;
-            notify_cat(target); play_dyn(pick_dynamic_track(target_kind, target), 1);
+            notify_cat(target_kind, target); play_dyn(pick_dynamic_track(target_kind, target), 1);
         } else if (target != g_pending_cat || target_kind != g_pending_kind || g_pending_rotate) {
             g_pending_kind   = target_kind;
             g_pending_cat    = target;

@@ -25,13 +25,15 @@
    music.h's public surface. */
 #define POOL_NEUTRAL EVENT_N
 
-/* --- engine harness for the music_note_output overflow tests below: the
-   buffer's content can only be observed by driving a turn to a category
-   announcement, so these mirror the pattern used across the music test
-   suites rather than adding a getter that would exist only for tests. --- */
+/* --- engine harness for the music_note_output overflow tests below. The
+   category callback fires only for a scene (music_set_category_fn's
+   scene-only contract, see music.h), so an event's arrival can no longer be
+   observed that way -- it has to be read off the track the backend was
+   asked to play instead. --- */
 static int g_ov_cats[4], g_ov_ncat;
 static void ov_rec_cat(int c) { if (g_ov_ncat < 4) g_ov_cats[g_ov_ncat++] = c; }
-static void ov_play(int t, int loop) { (void) t; (void) loop; }
+static int  g_ov_track;
+static void ov_play(int t, int loop) { (void) loop; g_ov_track = t; }
 static int  ov_isplaying(void) { return 1; }
 
 int main(void) {
@@ -80,12 +82,17 @@ int main(void) {
     /* --- music_note_output keeps the NEWEST bytes on overflow, not the oldest ---
        Feed a danger keyword near the front of a chunk that alone blows past
        MUSIC_TEXT_MAX, pad past the limit with keyword-free filler across
-       several calls, then close with a triumph keyword. If the buffer kept
+       several calls, then close with NO keyword at all. If the buffer kept
        the oldest bytes (the pre-fix behavior) "monster" would still be in
-       there and EV_DANGER would win; keeping the newest drops it and
-       EV_TRIUMPH wins on "gold"/"jewel" alone. An unmapped game/room is used
-       throughout -- this is entirely an event_scan question, independent of
-       any authored scene. */
+       there, event_scan would still fire on it, and the engine would issue a
+       play; keeping the newest drops "monster" entirely, so with no event and
+       no authored scene (an unmapped game/room) nothing plays at all -- the
+       track stays exactly what music_reset left it, 0.
+
+       Track rather than category here because the category callback is
+       scene-only (see music.h's music_set_category_fn contract) and would
+       stay silent either way; a leaked "monster" is only visible in whether
+       the backend was ever asked to play. */
     {
         char pad[600];
         int i;
@@ -98,18 +105,18 @@ int main(void) {
         music_set_game(0, "000000");
         music_reset();
 
-        g_ov_ncat = 0;
+        g_ov_ncat = 0; g_ov_track = 0;
         music_note_output("A monster lunges from the shadows. ", 36);
         music_note_output(pad, 599);
-        music_note_output("A pile of gold and a jewel gleam here.", 39);
+        music_note_output("Nothing else happens here.", 27);
         music_on_turn(500);
-        CHECK(g_ov_ncat == 1);
-        CHECK(g_ov_cats[0] == EV_TRIUMPH);   /* gold/jewel survived */
-        CHECK(g_ov_cats[0] != EV_DANGER);    /* monster did not */
+        CHECK(g_ov_track == 0);   /* "monster" did not survive the trim */
+        CHECK(g_ov_ncat == 0);    /* no scene either, on an unmapped room */
     }
 
     /* --- a short turn (well under MUSIC_TEXT_MAX) scans exactly as before --
-       the non-overflow append path is untouched by the fix. --- */
+       the non-overflow append path is untouched by the fix, so the same
+       keyword now unpadded is detected and does play. --- */
     {
         music_set_backend(ov_play);
         music_set_isplaying(ov_isplaying);
@@ -117,11 +124,11 @@ int main(void) {
         music_set_game(0, "000000");
         music_reset();
 
-        g_ov_ncat = 0;
+        g_ov_ncat = 0; g_ov_track = 0;
         music_note_output("A troll blocks the passage!", 28);
         music_on_turn(600);
-        CHECK(g_ov_ncat == 1);
-        CHECK(g_ov_cats[0] == EV_DANGER);
+        CHECK(g_ov_track != 0);   /* the danger event WAS detected this time */
+        CHECK(g_ov_ncat == 0);    /* still no scene, still silent */
     }
 
     printf(fails ? "\n%d FAILURES\n" : "\nALL PASS\n", fails);

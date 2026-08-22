@@ -97,6 +97,44 @@ def test_every_hinted_scene_is_a_real_scene():
             assert scene in scene_server.vocab.SCENE_INDEX, (mood, scene)
 
 
+def test_hints_are_scoped_to_the_same_story_no_cross_game_bleed(tmp_path):
+    """"Kitchen" recurs across two different games with two different blessed
+    moods. Each game must show only its own hint, never the other's -- the
+    whole reason load_hints keys by (serial, title) instead of title alone."""
+    scenes = tmp_path / "tools" / "assets" / "scenes"
+    scenes.mkdir(parents=True)
+    (scenes / "ZORK1.json").write_text(json.dumps({}))
+    (scenes / "ZORK1.review.json").write_text(json.dumps([
+        {"obj": 1, "objs": [1], "title": "Kitchen", "description": None},
+    ]))
+    (scenes / "ZORK2.json").write_text(json.dumps({}))
+    (scenes / "ZORK2.review.json").write_text(json.dumps([
+        {"obj": 1, "objs": [1], "title": "Kitchen", "description": None},
+    ]))
+
+    rooms = tmp_path / "tools" / "assets" / "rooms"
+    rooms.mkdir(parents=True)
+    (rooms / "ZORK1.json").write_text(json.dumps({"serial": "AAAAAA"}))
+    (rooms / "ZORK2.json").write_text(json.dumps({"serial": "BBBBBB"}))
+
+    (tmp_path / "tools" / "assets" / "blessed_moods.json").write_text(json.dumps({
+        "AAAAAA": {"kitchen": "HOUSE"},
+        "BBBBBB": {"kitchen": "UNDRGRND"},
+    }))
+
+    a = scene_server.create_app(tmp_path)
+    a.config["TESTING"] = True
+    c = a.test_client()
+
+    r1 = c.get("/game/ZORK1")
+    assert b"(was HOUSE)" in r1.data
+    assert b"(was UNDRGRND)" not in r1.data
+
+    r2 = c.get("/game/ZORK2")
+    assert b"(was UNDRGRND)" in r2.data
+    assert b"(was HOUSE)" not in r2.data
+
+
 def test_skip_removes_the_group_from_the_queue_without_blessing_anything(app, tmp_path):
     c = app.test_client()
     r = c.post("/skip", json={"story": "ZORK1", "obj": 7})

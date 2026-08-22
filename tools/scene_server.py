@@ -11,26 +11,18 @@ Description: The human half of the tagging pipeline, in the shape of
     kind of state this project has lost before, and a crash must cost at most
     the one decision in flight.
 Author: suinevere
-Dependencies: flask, json, pathlib, re, sys, scene_vocab, art_nouns
+Dependencies: flask, json, pathlib, sys, scene_vocab
 Globals: N/A
 """
 import json
 import pathlib
-import re
 import sys
 
 from flask import Flask, jsonify, render_template_string, request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-import art_nouns
 import scene_vocab as vocab
-
-TC_NAMES = (
-    "NEUTRAL", "TC_WILDERNESS", "TC_UNDERGROUND", "TC_WATER", "TC_NAUTICAL",
-    "TC_TOWN", "TC_DUNGEON", "TC_DESERT", "TC_MAGIC", "TC_SCIFI", "TC_HORROR",
-    "TC_MYSTERY", "TC_HOUSE", "TC_DANGER", "TC_TRIUMPH",
-)
 
 """MOOD_TO_SCENES
 
@@ -55,44 +47,41 @@ MOOD_TO_SCENES = {
     "HOUSE": ("PARLOR", "KITCHEN", "BEDROOM", "BATHROOM", "HOUSE_EXT"),
 }
 
-_BLESSED_ROW = re.compile(r"^\s*(\d+),\s*/\*\s*(\d+):\s*(.+?)\s*\*/\s*,?\s*$")
-
-
 def load_hints(root):
-    """Read the retired mood classifier's blessed corpus as a title hint.
+    """Read the retired mood classifier's blessed judgments as a title hint.
 
-    Description: Parses test/corpus/blessed.inc, keyed by (serial, title) --
-        135 of the corpus's 801 unique titles recur across more than one
-        story release ("Kitchen", "Maze", "Dead End", "Closet"...), so a
-        title-only hint borrows the wrong game's mood routinely, and it is
-        worst exactly where it matters most: 390 rooms library-wide have no
-        description, and for those the title plus this hint is the whole
-        basis for a decision. Scoping to the same story means a room with no
-        same-story hint shows none at all, which is correct: a wrong hint
-        is worse than no hint. A missing corpus (as in every test fixture)
-        degrades to no hints at all.
+    Description: Parses tools/assets/blessed_moods.json, a one-time extraction
+        of the deleted test/corpus/blessed.inc (recovered from git history at
+        commit cd97b35 -- the .inc itself was a generated test oracle for a
+        test that is correctly gone, but its 855 hand-blessed room->mood
+        judgments are still the reviewer's only lead on 390 rooms library-wide
+        that have no captured description). Keyed by (serial, title): 135 of
+        the corpus's 801 unique titles recur across more than one story
+        release ("Kitchen", "Maze", "Dead End", "Closet"...), so a title-only
+        hint borrows the wrong game's mood routinely, and it is worst exactly
+        where it matters most, since a room with no description has the title
+        plus this hint as its whole basis for a decision. Scoping to the same
+        story means a room with no same-story hint shows none at all, which is
+        correct: a wrong hint is worse than no hint. A missing or unreadable
+        JSON (as in every test fixture) degrades to no hints at all.
     Author: suinevere
-    Dependencies: pathlib, re
-    Globals: TC_NAMES, _BLESSED_ROW
+    Dependencies: pathlib, json
+    Globals: N/A
     Params: root -- repo root
     Returns: dict mapping (serial, lowercased room title) to a TC_* mood
         folder name
     """
-    path = pathlib.Path(root) / "test" / "corpus" / "blessed.inc"
+    path = pathlib.Path(root) / "tools" / "assets" / "blessed_moods.json"
     if not path.exists():
         return {}
+    try:
+        by_serial = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
     hints = {}
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        m = _BLESSED_ROW.match(line)
-        if not m:
-            continue
-        idx = int(m.group(1))
-        if idx >= len(TC_NAMES):
-            continue
-        folder = art_nouns.TC_TO_FOLDER.get(TC_NAMES[idx])
-        if folder is None:
-            continue
-        hints[(m.group(2), m.group(3).strip().lower())] = folder
+    for serial, titles in by_serial.items():
+        for title, folder in titles.items():
+            hints[(serial, title)] = folder
     return hints
 
 

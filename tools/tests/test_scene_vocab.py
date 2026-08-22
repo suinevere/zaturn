@@ -1,4 +1,3 @@
-# tools/tests/test_scene_vocab.py
 """The vocabulary is a table index, so order and membership are load-bearing."""
 import sys
 from pathlib import Path
@@ -84,3 +83,15 @@ def test_engine_room_still_resolves_but_engineering_does_not():
     assert v.scene_for_title("Engineering Building") is None
     assert v.scene_for_title("Engineering Lab") == "LAB"
     assert v.scene_for_title("Engineering Office") == "OFFICE"
+
+
+def test_no_rule_is_shadowed_by_an_earlier_one():
+    """A rule is dead if an earlier rule's pattern is a substring of its own:
+    every title containing the later pattern also contains the earlier one,
+    so the earlier rule always wins and the later can never fire."""
+    patterns = [p for p, _ in v.RULES]
+    dead = [(i, p, j, q)
+            for i, p in enumerate(patterns)
+            for j, q in enumerate(patterns[:i])
+            if q in p]
+    assert not dead, f"shadowed rules: {dead}"

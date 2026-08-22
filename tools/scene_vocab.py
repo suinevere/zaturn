@@ -68,6 +68,7 @@ RULES = (
     ("tomb", "CRYPT"),
     ("village", "VILLAGE"), ("town", "VILLAGE"), ("plaza", "VILLAGE"),
     ("square", "VILLAGE"),
+    ("forecastle", "SHIP_EXT"),
     ("castle", "CASTLE"), ("fortress", "CASTLE"), ("tower", "CASTLE"),
     ("ruin", "CASTLE"),
     ("wharf", "DOCK"), ("dock", "DOCK"), ("pier", "DOCK"),
@@ -89,7 +90,7 @@ RULES = (
     ("auditorium", "THEATER"), ("stage", "THEATER"),
     ("cathedral", "TEMPLE"), ("chapel", "TEMPLE"), ("church", "TEMPLE"),
     ("temple", "TEMPLE"), ("shrine", "TEMPLE"), ("altar", "TEMPLE"),
-    ("forecastle", "SHIP_EXT"), ("deck", "SHIP_EXT"),
+    ("deck", "SHIP_EXT"),
     ("stateroom", "SHIP_INT"), ("cabin", "SHIP_INT"), ("berth", "SHIP_INT"),
     ("engine room", "SHIP_INT"), ("boiler", "SHIP_INT"), ("reactor", "SHIP_INT"),
     ("bridge", None),
@@ -133,18 +134,18 @@ FETCH_NOUNS = {
 
 
 def scene_for_title(title):
-    """/*----------------------
-     | scene_for_title
-     | Description: The scene a room title names, or None when no rule matches.
-     |   First match in RULES wins, so ordering is the priority mechanism. A rule
-     |   whose scene is None is an explicit refusal -- "Dead End" names a shape,
-     |   and matching it early stops "end" like patterns claiming it later.
-     | Author: suinevere
-     | Dependencies: N/A
-     | Globals: RULES
-     | Params: title -- a room's short name
-     | Returns: a scene name, or None
-     ----------------------*/"""
+    """The scene a room title names, or None when no rule matches.
+
+    Description: First match in RULES wins, so ordering is the priority
+        mechanism. A rule whose scene is None is an explicit refusal --
+        "Dead End" names a shape, and matching it early stops "end" like
+        patterns claiming it later.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: RULES
+    Params: title -- a room's short name
+    Returns: a scene name, or None
+    """
     t = title.lower()
     for pattern, scene in RULES:
         if pattern in t:

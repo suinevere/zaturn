@@ -91,8 +91,8 @@ RULES = (
     ("temple", "TEMPLE"), ("shrine", "TEMPLE"), ("altar", "TEMPLE"),
     ("forecastle", "SHIP_EXT"), ("deck", "SHIP_EXT"),
     ("stateroom", "SHIP_INT"), ("cabin", "SHIP_INT"), ("berth", "SHIP_INT"),
-    ("engine", "SHIP_INT"), ("boiler", "SHIP_INT"), ("reactor", "SHIP_INT"),
-    ("bridge", "SHIP_INT"),
+    ("engine room", "SHIP_INT"), ("boiler", "SHIP_INT"), ("reactor", "SHIP_INT"),
+    ("bridge", None),
     ("airlock", "SPACE"), ("orbit", "SPACE"), ("space", "SPACE"),
 )
 

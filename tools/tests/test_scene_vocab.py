@@ -72,3 +72,15 @@ def test_fetch_nouns_carry_no_dead_adjectives():
     for name, nouns in v.FETCH_NOUNS.items():
         for n in nouns:
             assert n not in dead, f"{name}: {n} scored 0 in 589d6c5"
+
+
+def test_physical_bridges_refuse_rather_than_guess():
+    for t in ("Stone Bridge", "Drawbridge", "Foot Bridge", "North of Bridge", "Bridge"):
+        assert v.scene_for_title(t) is None, t
+
+
+def test_engine_room_still_resolves_but_engineering_does_not():
+    assert v.scene_for_title("Engine Room") == "SHIP_INT"
+    assert v.scene_for_title("Engineering Building") is None
+    assert v.scene_for_title("Engineering Lab") == "LAB"
+    assert v.scene_for_title("Engineering Office") == "OFFICE"

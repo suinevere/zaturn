@@ -1,0 +1,90 @@
+"""The review loop: show a refusal, take a verdict, never lose one."""
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools"))
+
+import scene_server
+
+
+@pytest.fixture
+def app(tmp_path):
+    scenes = tmp_path / "tools" / "assets" / "scenes"
+    scenes.mkdir(parents=True)
+    (scenes / "ZORK1.json").write_text(json.dumps({"1": "FOREST"}))
+    (scenes / "ZORK1.review.json").write_text(json.dumps([
+        {"obj": 7, "objs": [7, 8], "title": "Maze", "description": "Twisty."},
+        {"obj": 9, "objs": [9], "title": "Cube", "description": None},
+    ]))
+    a = scene_server.create_app(tmp_path)
+    a.config["TESTING"] = True
+    return a
+
+
+def test_index_lists_games_with_outstanding_reviews(app):
+    r = app.test_client().get("/")
+    assert r.status_code == 200
+    assert b"ZORK1" in r.data
+
+
+def test_game_page_shows_title_and_description(app):
+    r = app.test_client().get("/game/ZORK1")
+    assert b"Maze" in r.data
+    assert b"Twisty." in r.data
+
+
+def test_game_page_offers_every_scene(app):
+    r = app.test_client().get("/game/ZORK1")
+    for name in ("FOREST", "MAZE", "SHIP_INT", "SPACE"):
+        assert name.encode() in r.data
+
+
+def test_verdict_writes_every_object_in_the_group(app, tmp_path):
+    c = app.test_client()
+    c.post("/verdict", json={"story": "ZORK1", "obj": 7, "scene": "MAZE"})
+    blessed = json.loads(
+        (tmp_path / "tools" / "assets" / "scenes" / "ZORK1.json").read_text())
+    assert blessed["7"] == "MAZE"
+    assert blessed["8"] == "MAZE"
+
+
+def test_verdict_removes_the_group_from_the_queue(app, tmp_path):
+    c = app.test_client()
+    c.post("/verdict", json={"story": "ZORK1", "obj": 7, "scene": "MAZE"})
+    review = json.loads(
+        (tmp_path / "tools" / "assets" / "scenes" / "ZORK1.review.json").read_text())
+    assert [g["obj"] for g in review] == [9]
+
+
+def test_verdict_rejects_a_scene_outside_the_vocabulary(app):
+    r = app.test_client().post("/verdict",
+                               json={"story": "ZORK1", "obj": 7, "scene": "NOPE"})
+    assert r.status_code == 400
+
+
+def test_existing_verdicts_are_never_dropped(app, tmp_path):
+    c = app.test_client()
+    c.post("/verdict", json={"story": "ZORK1", "obj": 9, "scene": "CAVE"})
+    blessed = json.loads(
+        (tmp_path / "tools" / "assets" / "scenes" / "ZORK1.json").read_text())
+    assert blessed["1"] == "FOREST"
+
+
+def test_a_verdict_on_a_group_writes_every_object_not_just_the_handle(app, tmp_path):
+    """A group of 3 objects must produce 3 blessed entries from one POST."""
+    scenes = tmp_path / "tools" / "assets" / "scenes"
+    (scenes / "ZORK1.review.json").write_text(json.dumps([
+        {"obj": 5, "objs": [5, 6, 7], "title": "Twisty Passages",
+         "description": None},
+    ]))
+    c = app.test_client()
+    r = c.post("/verdict", json={"story": "ZORK1", "obj": 5, "scene": "MAZE"})
+    assert r.status_code == 200
+    blessed = json.loads((scenes / "ZORK1.json").read_text())
+    assert blessed["5"] == "MAZE"
+    assert blessed["6"] == "MAZE"
+    assert blessed["7"] == "MAZE"

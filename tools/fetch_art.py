@@ -1,9 +1,9 @@
 """Fetch, crop and score background candidates from Pixabay.
 
 Description: Walks the query plan, asks Pixabay for each phrase, crops every hit
-    to 320x224, scores it, and writes the survivors under
-    <out>/<MOOD>/<DONOR>/<noun>/. The path is the query's provenance: any picture
-    on the disc can be traced back to the adjective and noun that found it.
+    to 320x224, scores it, and writes the survivors under <out>/<SCENE>/<noun>/.
+    The path is the query's provenance: any picture on the disc can be traced
+    back to the scene and noun that found it.
 
     Every failure degrades. No key, no network, a dead query or an image that will
     not decode all print and continue, because a run that aborts on hit 400 of 1200
@@ -12,7 +12,8 @@ Description: Walks the query plan, asks Pixabay for each phrase, crops every hit
     Nothing here decides what ships. Surviving the metric gate only earns a place
     in the review server (tools/art_server.py); a human accepts or rejects there.
 Author: suinevere
-Dependencies: requests, PIL, art_metrics, art_queries, art_nouns, art_status
+Dependencies: requests, PIL, art_metrics, art_queries, art_nouns, art_status,
+    scene_vocab
 Globals: ENDPOINT, LICENCE
 """
 import json
@@ -30,6 +31,7 @@ import art_metrics
 import art_nouns
 import art_queries
 import art_status
+import scene_vocab as vocab
 
 ENDPOINT = "https://pixabay.com/api/"
 LICENCE = "Pixabay Content License"
@@ -73,14 +75,15 @@ def save_manifest(path, data):
         fh.write("\n")
 
 
-def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None):
-    """Fetch and gate every query in the plan, stopping each mood at its own budget.
+def harvest(plan, fetcher, out_dir, manifest, per_scene_budget, total_budget=None):
+    """Fetch and gate every query in the plan, stopping each scene at its own budget.
 
-    Description: The budget is per mood, not global -- moods sort alphabetically
-        and a shared counter let an early one (DESERT) starve every mood after
-        it. `total_budget` is an optional ceiling across the whole run, for a
-        small first calibration batch; the per-mood cap is what keeps every
-        mood represented and stays in force regardless of it.
+    Description: The budget is per scene, not global -- scenes sort
+        alphabetically and a shared counter let an early one starve every
+        scene after it. `total_budget` is an optional ceiling across the
+        whole run, for a small first calibration batch; the per-scene cap is
+        what keeps every scene represented and stays in force regardless of
+        it.
 
         A Pixabay id already in the manifest is skipped without a download,
         which is what makes a re-run cheap and a partial run resumable.
@@ -93,21 +96,21 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
     Author: suinevere
     Dependencies: PIL, art_metrics, art_status
     Globals: LICENCE
-    Params: plan -- mood -> [Query]; fetcher -- an object with .search/.download,
+    Params: plan -- scene -> [Query]; fetcher -- an object with .search/.download,
         and optionally .source/.licence;
         out_dir -- where surviving PNGs go; manifest -- mutated in place;
-        per_mood_budget -- stop each mood after this many survivors;
-        total_budget -- optional ceiling across all moods combined; None means
-            only the per-mood caps apply
+        per_scene_budget -- stop each scene after this many survivors;
+        total_budget -- optional ceiling across all scenes combined; None
+            means only the per-scene caps apply
     Returns: the list of surviving Candidate
     """
     out_dir = Path(out_dir)
     kept = []
 
-    for mood in sorted(plan):
-        mood_kept = 0
-        for query in plan[mood]:
-            if mood_kept >= per_mood_budget:
+    for scene in sorted(plan):
+        scene_kept = 0
+        for query in plan[scene]:
+            if scene_kept >= per_scene_budget:
                 break
             if total_budget is not None and len(kept) >= total_budget:
                 return kept
@@ -118,7 +121,7 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
                 continue
 
             for hit in hits:
-                if mood_kept >= per_mood_budget:
+                if scene_kept >= per_scene_budget:
                     break
                 if total_budget is not None and len(kept) >= total_budget:
                     return kept
@@ -137,7 +140,7 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
                 record = {
                     "id": hit["id"], "page_url": hit["page_url"],
                     "image_url": hit["image_url"], "phrase": query.phrase,
-                    "mood": query.mood, "donor": query.donor, "noun": query.noun,
+                    "scene": query.scene, "noun": query.noun,
                     "source": getattr(fetcher, "source", "pixabay"),
                     "licence": getattr(fetcher, "licence", LICENCE),
                     "fetched": date.today().isoformat(),
@@ -156,13 +159,13 @@ def harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None
                 if call != "pass":
                     continue
 
-                dest = out_dir / query.mood / query.donor / query.noun
+                dest = out_dir / query.scene / query.noun
                 dest.mkdir(parents=True, exist_ok=True)
                 path = dest / f"{hit['id']}.png"
                 art_metrics.crop(im).save(path, "PNG")
                 record["phash"] = _phash(path)
                 kept.append(Candidate(query, hit, scores, call, record["phash"], path))
-                mood_kept += 1
+                scene_kept += 1
 
     return kept
 
@@ -440,22 +443,22 @@ def load_dotenv_into_environ(path=None, env=None):
         env.setdefault(key, value)
 
 
-def _resolve_mood_filter(raw):
-    """Validate a comma-separated --mood argument against the canonical mood set.
+def _resolve_scene_filter(raw):
+    """Validate a comma-separated --scene argument against the scene vocabulary.
 
-    Description: Matches each name case-insensitively against art_nouns.MOODS,
-        the twelve exact folder spellings; anything else is reported by the
-        caller and dropped rather than raising, so one typo does not sink an
-        otherwise valid run. Order is preserved and duplicates collapsed, but
-        neither is load-bearing for the caller, which only filters a dict by
+    Description: Matches each name case-insensitively against
+        scene_vocab.SCENE_INDEX; anything else is reported by the caller and
+        dropped rather than raising, so one typo does not sink an otherwise
+        valid run. Order is preserved and duplicates collapsed, but neither
+        is load-bearing for the caller, which only filters a dict by
         membership.
     Author: suinevere
-    Dependencies: art_nouns
+    Dependencies: scene_vocab
     Globals: N/A
-    Params: raw -- the --mood argument's raw string, e.g. "SCIFI,TOWN" or "scifi"
+    Params: raw -- the --scene argument's raw string, e.g. "FOREST,CAVE" or "cave"
     Returns: (valid, invalid) -- valid is a deduplicated list of canonical
-        mood names; invalid is the list of names (as typed) that matched
-        nothing in art_nouns.MOODS
+        scene names; invalid is the list of names (as typed) that matched
+        nothing in scene_vocab.SCENE_INDEX
     """
     valid = []
     invalid = []
@@ -465,13 +468,35 @@ def _resolve_mood_filter(raw):
         if not name:
             continue
         canonical = name.upper()
-        if canonical in art_nouns.MOODS:
+        if canonical in vocab.SCENE_INDEX:
             if canonical not in seen:
                 valid.append(canonical)
                 seen.add(canonical)
         else:
             invalid.append(name)
     return valid, invalid
+
+
+def _scenes_for_game(repo, game):
+    """The distinct scenes one game's blessed rooms actually use.
+
+    Description: Reads tools/assets/scenes/<game>.json (the blessed
+        object->scene verdicts gen_scene_tables.py also reads) and collects
+        its distinct scene values. Lets --game narrow a fetch run to only
+        the scenes a story actually needs, the same shopping list Task 15's
+        brief builds by hand from this same file. A game with no blessed
+        scenes file yet degrades to an empty list rather than raising.
+    Author: suinevere
+    Dependencies: json, pathlib
+    Globals: N/A
+    Params: repo -- repo root; game -- a story stem, e.g. "ZORK1"
+    Returns: a sorted list of scene names, possibly empty
+    """
+    path = Path(repo) / "tools" / "assets" / "scenes" / f"{game}.json"
+    if not path.exists():
+        return []
+    blessed = json.loads(path.read_text(encoding="utf-8"))
+    return sorted(set(blessed.values()))
 
 
 def reset_rejected(manifest):
@@ -499,21 +524,21 @@ def reset_rejected(manifest):
 
 
 def main(argv):
-    """Run a harvest against the shipped vocabulary.
+    """Run a harvest against the scene vocabulary.
 
-    Description: Defaults to 99 survivors per mood -- matching both the
-        vocabulary's own "target" and make_tga.convert_tree's per-mood cap --
-        and no overall ceiling, so a default run can fetch up to 99 * len(MOODS)
-        candidates across the twelve moods. Reads PIXABAY_API_KEY and
-        UNSPLASH_ID from tools/.env when not already exported, so an
-        explicit export still wins over the file.
+    Description: Defaults to 99 survivors per scene -- matching the disc's
+        1..99 per-game index cap -- and no overall ceiling, so a default run
+        can fetch up to 99 * len(scene_vocab.SCENES) candidates across every
+        scene. Reads PIXABAY_API_KEY and UNSPLASH_ID from tools/.env when
+        not already exported, so an explicit export still wins over the
+        file.
 
         `--source pixabay|unsplash|both` picks which fetcher(s) run;
         default "pixabay" so every existing invocation's behaviour is
         unchanged. `--budget N` caps the Unsplash fetcher's own request
         count (search calls plus download pings) at N; default 50, the
         owner's stated hourly quota. Both flags are pulled out of argv
-        before the positional per_mood_budget/total_budget are read, so
+        before the positional per_scene_budget/total_budget are read, so
         their position in argv does not matter.
 
         `--reset-rejected` bypasses all of that: it drops every
@@ -522,20 +547,26 @@ def main(argv):
         followed by an ordinary run that re-downloads and re-scores what it
         just freed.
 
-        `--mood NAME[,NAME...]` restricts the plan handed to harvest() to
-        those moods only, checked case-insensitively against art_nouns.MOODS
-        before any fetcher is built. An unknown name is reported and
-        dropped, not fatal; if every named mood is unknown, the run prints
-        the twelve valid names and returns 0 without building a fetcher or
-        fetching anything -- the everything-degrades rule. Absent, every
-        mood in the vocabulary is planned, exactly as before this flag
-        existed.
+        `--scene NAME[,NAME...]` restricts the plan handed to harvest() to
+        those scenes only, checked case-insensitively against
+        scene_vocab.SCENE_INDEX before any fetcher is built. An unknown name
+        is reported and dropped, not fatal; if every named scene is unknown,
+        the run prints the valid names and returns 0 without building a
+        fetcher or fetching anything -- the everything-degrades rule.
+        Absent, every scene in the vocabulary is planned.
+
+        `--game STEM` narrows the same way, but to one story's own scenes
+        (read from tools/assets/scenes/<STEM>.json) rather than a
+        hand-typed list -- a fetch run naturally targets one game's scene
+        set, since art now ships per game. Combined with `--scene`, the
+        final selection is their intersection; a game with no blessed
+        scenes file yet reports so and returns 0.
     Author: suinevere
-    Dependencies: art_queries, art_nouns, art_status
+    Dependencies: art_queries, art_nouns, art_status, scene_vocab
     Globals: DOTENV_PATH
-    Params: argv -- [] | [per_mood_budget] | [per_mood_budget, total_budget],
-        with an optional "--reset-rejected" flag, "--source X", "--budget N"
-        and "--mood NAME[,NAME...]" anywhere in argv
+    Params: argv -- [] | [per_scene_budget] | [per_scene_budget, total_budget],
+        with an optional "--reset-rejected" flag, "--source X", "--budget N",
+        "--scene NAME[,NAME...]" and "--game STEM" anywhere in argv
     Returns: 0 always; failures are reported, not raised
     """
     repo = Path(__file__).resolve().parents[1]
@@ -562,17 +593,32 @@ def main(argv):
         budget = int(argv[i + 1])
         del argv[i:i + 2]
 
-    selected_moods = None
-    if "--mood" in argv:
-        i = argv.index("--mood")
-        mood_arg = argv[i + 1]
+    selected_scenes = None
+    if "--scene" in argv:
+        i = argv.index("--scene")
+        scene_arg = argv[i + 1]
         del argv[i:i + 2]
-        selected_moods, unknown_moods = _resolve_mood_filter(mood_arg)
-        for bad in unknown_moods:
-            print(f"  {bad}: not a known mood, ignoring")
-        if not selected_moods:
-            print("  no valid --mood names given; choose one or more of: "
-                  + ", ".join(art_nouns.MOODS))
+        selected_scenes, unknown_scenes = _resolve_scene_filter(scene_arg)
+        for bad in unknown_scenes:
+            print(f"  {bad}: not a known scene, ignoring")
+        if not selected_scenes:
+            print("  no valid --scene names given; choose one or more of: "
+                  + ", ".join(vocab.SCENES))
+            return 0
+
+    if "--game" in argv:
+        i = argv.index("--game")
+        game = argv[i + 1]
+        del argv[i:i + 2]
+        game_scenes = set(_scenes_for_game(repo, game))
+        if not game_scenes:
+            print(f"  {game}: no blessed scenes file, nothing to fetch")
+            return 0
+        selected_scenes = (sorted(game_scenes & set(selected_scenes))
+                            if selected_scenes is not None
+                            else sorted(game_scenes))
+        if not selected_scenes:
+            print(f"  {game}'s scenes and --scene do not overlap; nothing to fetch")
             return 0
 
     load_dotenv_into_environ()
@@ -601,15 +647,12 @@ def main(argv):
     if not fetchers:
         return 0
 
-    per_mood_budget = int(argv[0]) if argv else 99
+    per_scene_budget = int(argv[0]) if argv else 99
     total_budget = int(argv[1]) if len(argv) > 1 else None
-    vocab = art_queries.load(repo / "tools" / "assets" / "art_queries.json")
-    nouns = art_nouns.nouns_by_mood(
-        (repo / "saturn" / "src" / "classify" / "room_class_data.c").read_text())
-    plan = art_queries.build(vocab, nouns)
-    if selected_moods is not None:
-        plan = {mood: queries for mood, queries in plan.items()
-                if mood in selected_moods}
+    scenes = selected_scenes if selected_scenes is not None else list(vocab.SCENES)
+    nouns = {scene: art_nouns.nouns_for_scene(scene) for scene in scenes}
+    nouns = {scene: words for scene, words in nouns.items() if words}
+    plan = art_queries.build(nouns)
 
     manifest = load_manifest(manifest_path)
     kept = []
@@ -617,15 +660,15 @@ def main(argv):
         for fetcher in fetchers:
             kept.extend(harvest(plan, fetcher,
                                 repo / "tools" / "assets" / "candidates",
-                                manifest, per_mood_budget, total_budget))
+                                manifest, per_scene_budget, total_budget))
             report = getattr(fetcher, "report", None)
             if report is not None:
                 report()
     finally:
         save_manifest(manifest_path, manifest)
-    by_mood = Counter(c.query.mood for c in kept)
-    for mood in sorted(by_mood):
-        print(f"  {mood}: {by_mood[mood]}")
+    by_scene = Counter(c.query.scene for c in kept)
+    for scene in sorted(by_scene):
+        print(f"  {scene}: {by_scene[scene]}")
     print(f"  {len(kept)} candidates written; {len(manifest)} images known")
     return 0
 

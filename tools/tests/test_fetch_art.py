@@ -8,9 +8,9 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import art_nouns
 import art_status
 import fetch_art
+import scene_vocab as vocab
 from art_queries import Query
 
 
@@ -94,19 +94,19 @@ class PingRaisesSession:
         return self.responses.pop(0)
 
 
-PLAN = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "dark hallway"),
-                   Query("HORROR", "EXTRA", "morgue", "dark", "dark morgue")]}
+PLAN = {"HORROR": [Query("HORROR", "hallway", "dark hallway"),
+                   Query("HORROR", "morgue", "dark morgue")]}
 
 PLAN2 = {
-    "DESERT": [Query("DESERT", "DESERT", "oasis", "arid", "arid oasis"),
-              Query("DESERT", "DESERT", "mesa", "arid", "arid mesa")],
-    "TOWN":   [Query("TOWN", "TOWN", "alleyway", "quiet", "quiet alleyway")],
+    "DESERT": [Query("DESERT", "oasis", "arid oasis"),
+              Query("DESERT", "mesa", "arid mesa")],
+    "TOWN":   [Query("TOWN", "alleyway", "quiet alleyway")],
 }
 
 
 def test_harvest_writes_one_png_per_surviving_candidate(tmp_path):
     f = StubFetcher()
-    got = fetch_art.harvest(PLAN, f, tmp_path, {}, per_mood_budget=99)
+    got = fetch_art.harvest(PLAN, f, tmp_path, {}, per_scene_budget=99)
     assert len(got) == 4
     for c in got:
         assert c.path.exists()
@@ -114,16 +114,16 @@ def test_harvest_writes_one_png_per_surviving_candidate(tmp_path):
 
 
 def test_provenance_lands_in_the_folder_path(tmp_path):
-    got = fetch_art.harvest(PLAN, StubFetcher(), tmp_path, {}, per_mood_budget=99)
+    got = fetch_art.harvest(PLAN, StubFetcher(), tmp_path, {}, per_scene_budget=99)
     rel = sorted(str(c.path.relative_to(tmp_path)).replace("\\", "/") for c in got)
-    assert rel[0].startswith("HORROR/EXTRA/morgue/")
-    assert rel[-1].startswith("HORROR/HOUSE/hallway/")
+    assert rel[0].startswith("HORROR/hallway/")
+    assert rel[-1].startswith("HORROR/morgue/")
 
 
 def test_rejected_candidates_are_recorded_but_not_written(tmp_path):
     f = StubFetcher(value=252)
     manifest = {}
-    got = fetch_art.harvest(PLAN, f, tmp_path, manifest, per_mood_budget=99)
+    got = fetch_art.harvest(PLAN, f, tmp_path, manifest, per_scene_budget=99)
     assert got == []
     assert len(manifest) == 4
     assert all(r["verdict"] == "bright" for r in manifest.values())
@@ -136,32 +136,32 @@ def test_rejected_candidates_are_recorded_but_not_written(tmp_path):
 def test_an_already_seen_id_is_not_downloaded_twice(tmp_path):
     f = StubFetcher()
     manifest = {}
-    fetch_art.harvest(PLAN, f, tmp_path, manifest, per_mood_budget=99)
+    fetch_art.harvest(PLAN, f, tmp_path, manifest, per_scene_budget=99)
     before = f.downloads
-    fetch_art.harvest(PLAN, f, tmp_path, manifest, per_mood_budget=99)
+    fetch_art.harvest(PLAN, f, tmp_path, manifest, per_scene_budget=99)
     assert f.downloads == before, "a known id must not be fetched again"
 
 
 def test_budget_stops_the_run(tmp_path):
     f = StubFetcher()
-    got = fetch_art.harvest(PLAN, f, tmp_path, {}, per_mood_budget=1)
+    got = fetch_art.harvest(PLAN, f, tmp_path, {}, per_scene_budget=1)
     assert len(got) == 1
 
 
-def test_budget_is_per_mood_not_global(tmp_path):
+def test_budget_is_per_scene_not_global(tmp_path):
     """DESERT sorts before TOWN; a global counter would let DESERT alone
     exhaust the budget and leave TOWN with nothing -- the bug this pins."""
     f = StubFetcher(per_phrase=2)
-    got = fetch_art.harvest(PLAN2, f, tmp_path, {}, per_mood_budget=1)
-    by_mood = {}
+    got = fetch_art.harvest(PLAN2, f, tmp_path, {}, per_scene_budget=1)
+    by_scene = {}
     for c in got:
-        by_mood[c.query.mood] = by_mood.get(c.query.mood, 0) + 1
-    assert by_mood == {"DESERT": 1, "TOWN": 1}
+        by_scene[c.query.scene] = by_scene.get(c.query.scene, 0) + 1
+    assert by_scene == {"DESERT": 1, "TOWN": 1}
 
 
-def test_total_budget_caps_the_whole_run_across_moods(tmp_path):
+def test_total_budget_caps_the_whole_run_across_scenes(tmp_path):
     f = StubFetcher(per_phrase=2)
-    got = fetch_art.harvest(PLAN2, f, tmp_path, {}, per_mood_budget=99,
+    got = fetch_art.harvest(PLAN2, f, tmp_path, {}, per_scene_budget=99,
                             total_budget=1)
     assert len(got) == 1
 
@@ -174,7 +174,7 @@ def test_a_download_failure_skips_that_hit_and_continues(tmp_path):
                 raise IOError("connection reset")
             return png_bytes(70)
 
-    got = fetch_art.harvest(PLAN, Flaky(), tmp_path, {}, per_mood_budget=99)
+    got = fetch_art.harvest(PLAN, Flaky(), tmp_path, {}, per_scene_budget=99)
     assert len(got) == 3
 
 
@@ -229,9 +229,9 @@ def test_no_api_key_is_reported_not_raised(monkeypatch, capsys, tmp_path):
 
 
 def test_main_runs_the_real_chain_with_a_stubbed_fetcher(monkeypatch, capsys, tmp_path):
-    """Exercises load -> nouns_by_mood -> build -> harvest against the real
-    shipped vocabulary and classifier table, with only the network layer
-    (PixabayFetcher itself) stubbed out."""
+    """Exercises nouns_for_scene -> build -> harvest against the real
+    shipped scene vocabulary, with only the network layer (PixabayFetcher
+    itself) stubbed out."""
     monkeypatch.setenv("PIXABAY_API_KEY", "test-key")
     monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
     saved = {}
@@ -246,7 +246,7 @@ def test_main_runs_the_real_chain_with_a_stubbed_fetcher(monkeypatch, capsys, tm
 
     assert fetch_art.main(["1"]) == 0
     assert saved["data"], "the chain must reach harvest and write manifest entries"
-    assert all("mood" in r and "phrase" in r for r in saved["data"].values())
+    assert all("scene" in r and "phrase" in r for r in saved["data"].values())
     assert any(r["status"] == art_status.CANDIDATE for r in saved["data"].values())
     out = capsys.readouterr().out
     assert "candidates written" in out
@@ -409,9 +409,9 @@ def test_harvest_records_unsplash_source_licence_author_fields(tmp_path):
         FakeResponse(200, content=png_bytes(70)),
     ])
     f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
-    plan = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "dark hallway")]}
+    plan = {"HORROR": [Query("HORROR", "hallway", "dark hallway")]}
     manifest = {}
-    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_mood_budget=99)
+    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_scene_budget=99)
     assert len(got) == 1
     rec = manifest["u1"]
     assert rec["source"] == "unsplash"
@@ -430,10 +430,10 @@ def test_harvest_continues_cleanly_when_unsplash_budget_runs_out(tmp_path):
     session = FakeSession([FakeResponse(200, payload),
                            FakeResponse(200, content=png_bytes(70))])
     f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=1)
-    plan = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "one"),
-                       Query("HORROR", "EXTRA", "morgue", "dark", "two")]}
+    plan = {"HORROR": [Query("HORROR", "hallway", "one"),
+                       Query("HORROR", "morgue", "two")]}
     manifest = {}
-    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_mood_budget=99)
+    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_scene_budget=99)
     assert len(got) == 1, "the second query's search must degrade, not crash the run"
     assert f.used == 1
     assert f.skipped == 1
@@ -447,9 +447,9 @@ def test_harvest_records_pixabay_source_field_via_real_fetcher(tmp_path):
     session = FakeSession([FakeResponse(200, payload),
                            FakeResponse(200, content=png_bytes(70))])
     f = fetch_art.PixabayFetcher("key-fake", session=session, pause=0)
-    plan = {"HORROR": [Query("HORROR", "HOUSE", "hallway", "dark", "dark hallway")]}
+    plan = {"HORROR": [Query("HORROR", "hallway", "dark hallway")]}
     manifest = {}
-    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_mood_budget=99)
+    got = fetch_art.harvest(plan, f, tmp_path, manifest, per_scene_budget=99)
     assert len(got) == 1
     assert manifest["501"]["source"] == "pixabay"
     assert manifest["501"]["licence"] == fetch_art.LICENCE
@@ -476,30 +476,30 @@ def test_main_budget_flag_is_parsed_without_disturbing_positional_args(monkeypat
     monkeypatch.setattr(fetch_art, "PixabayFetcher",
                         lambda key: StubFetcher(per_phrase=1, value=70))
 
-    def fake_harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None):
-        seen_budget["per_mood_budget"] = per_mood_budget
+    def fake_harvest(plan, fetcher, out_dir, manifest, per_scene_budget, total_budget=None):
+        seen_budget["per_scene_budget"] = per_scene_budget
         return []
 
     monkeypatch.setattr(fetch_art, "harvest", fake_harvest)
     assert fetch_art.main(["3", "--budget", "10"]) == 0
-    assert seen_budget["per_mood_budget"] == 3, \
-        "--budget must not shift the positional per_mood_budget argument"
+    assert seen_budget["per_scene_budget"] == 3, \
+        "--budget must not shift the positional per_scene_budget argument"
 
 
-def _stub_main_for_mood_capture(monkeypatch, tmp_path, seen):
+def _stub_main_for_scene_capture(monkeypatch, tmp_path, seen):
     """Wire main() so the plan reaching harvest() is captured, not fetched.
 
-    Description: Shared rigging for the --mood tests below -- a real
+    Description: Shared rigging for the --scene tests below -- a real
         PixabayFetcher key so main() proceeds past the key check, and a
-        fake harvest() that records the mood keys (and each mood's own
-        query set, whose phrases are disjoint mood to mood, so a passing
-        assertion cannot be a coincidence -- two moods can and do reach
+        fake harvest() that records the scene keys (and each scene's own
+        query set, whose phrases are disjoint scene to scene, so a passing
+        assertion cannot be a coincidence -- two scenes can and do reach
         equal noun counts) instead of touching the network.
     Author: suinevere
     Dependencies: N/A
     Globals: N/A
     Params: monkeypatch -- pytest fixture; tmp_path -- pytest fixture;
-        seen -- dict this function fills with "moods" and "counts"
+        seen -- dict this function fills with "scenes" and "counts"
     Returns: N/A
     """
     monkeypatch.setenv("PIXABAY_API_KEY", "test-key-fake")
@@ -509,78 +509,113 @@ def _stub_main_for_mood_capture(monkeypatch, tmp_path, seen):
     monkeypatch.setattr(fetch_art, "PixabayFetcher",
                         lambda key: StubFetcher(per_phrase=1, value=70))
 
-    def fake_harvest(plan, fetcher, out_dir, manifest, per_mood_budget, total_budget=None):
-        seen["moods"] = sorted(plan)
-        seen["counts"] = {mood: len(queries) for mood, queries in plan.items()}
-        seen["phrases"] = {mood: {q.phrase for q in queries}
-                           for mood, queries in plan.items()}
+    def fake_harvest(plan, fetcher, out_dir, manifest, per_scene_budget, total_budget=None):
+        seen["scenes"] = sorted(plan)
+        seen["counts"] = {scene: len(queries) for scene, queries in plan.items()}
+        seen["phrases"] = {scene: {q.phrase for q in queries}
+                           for scene, queries in plan.items()}
         return []
 
     monkeypatch.setattr(fetch_art, "harvest", fake_harvest)
 
 
-def test_main_mood_flag_restricts_the_plan_to_the_named_mood(monkeypatch, tmp_path):
+def test_main_scene_flag_restricts_the_plan_to_the_named_scene(monkeypatch, tmp_path):
     seen = {}
-    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--mood", "SCIFI"]) == 0
-    assert seen["moods"] == ["SCIFI"], \
-        "every other mood must be entirely unqueried, not just budget-starved"
-    assert seen["counts"]["SCIFI"] > 0
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--scene", "DESERT"]) == 0
+    assert seen["scenes"] == ["DESERT"], \
+        "every other scene must be entirely unqueried, not just budget-starved"
+    assert seen["counts"]["DESERT"] > 0
 
 
-def test_main_mood_flag_accepts_multiple_comma_separated_moods(monkeypatch, tmp_path):
+def test_main_scene_flag_accepts_multiple_comma_separated_scenes(monkeypatch, tmp_path):
     seen = {}
-    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--mood", "SCIFI,TOWN"]) == 0
-    assert seen["moods"] == ["SCIFI", "TOWN"]
-    assert not seen["phrases"]["SCIFI"] & seen["phrases"]["TOWN"], \
-        "SCIFI and TOWN must draw from genuinely different vocabularies, " \
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--scene", "DESERT,CAVE"]) == 0
+    assert seen["scenes"] == ["CAVE", "DESERT"]
+    assert not seen["phrases"]["DESERT"] & seen["phrases"]["CAVE"], \
+        "DESERT and CAVE must draw from genuinely different vocabularies, " \
         "so this assertion cannot pass by fixture coincidence. Disjoint " \
-        "phrases, not unequal counts: two moods can hold equal noun counts."
+        "phrases, not unequal counts: two scenes can hold equal noun counts."
 
 
-def test_main_mood_flag_is_case_insensitive(monkeypatch, tmp_path):
+def test_main_scene_flag_is_case_insensitive(monkeypatch, tmp_path):
     seen = {}
-    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--mood", "scifi"]) == 0
-    assert seen["moods"] == ["SCIFI"]
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--scene", "desert"]) == 0
+    assert seen["scenes"] == ["DESERT"]
 
 
-def test_main_mood_flag_reports_an_unknown_mood_but_still_runs_the_known_ones(
+def test_main_scene_flag_reports_an_unknown_scene_but_still_runs_the_known_ones(
         monkeypatch, tmp_path, capsys):
     seen = {}
-    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--mood", "SCIFI,NOTAMOOD"]) == 0
-    assert seen["moods"] == ["SCIFI"]
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--scene", "DESERT,NOTASCENE"]) == 0
+    assert seen["scenes"] == ["DESERT"]
     out = capsys.readouterr().out
-    assert "NOTAMOOD" in out
+    assert "NOTASCENE" in out
 
 
-def test_main_mood_flag_all_unknown_prints_the_valid_list_and_fetches_nothing(
+def test_main_scene_flag_all_unknown_prints_the_valid_list_and_fetches_nothing(
         monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("PIXABAY_API_KEY", "test-key-fake")
     monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
 
     def fail_if_called(*args, **kwargs):
-        raise AssertionError("an all-unknown --mood must not reach harvest")
+        raise AssertionError("an all-unknown --scene must not reach harvest")
 
     monkeypatch.setattr(fetch_art, "PixabayFetcher", fail_if_called)
     monkeypatch.setattr(fetch_art, "harvest", fail_if_called)
 
-    assert fetch_art.main(["--mood", "NOTAMOOD,ALSOFAKE"]) == 0
+    assert fetch_art.main(["--scene", "NOTASCENE,ALSOFAKE"]) == 0
     out = capsys.readouterr().out
-    for mood in art_nouns.MOODS:
-        assert mood in out, f"the everything-degrades message must name {mood}"
+    for scene in vocab.SCENES:
+        assert scene in out, f"the everything-degrades message must name {scene}"
 
 
-def test_main_without_mood_flag_plans_all_twelve_moods_as_before(monkeypatch, tmp_path):
+def test_main_without_scene_flag_plans_every_scene_as_before(monkeypatch, tmp_path):
     seen = {}
-    _stub_main_for_mood_capture(monkeypatch, tmp_path, seen)
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
     assert fetch_art.main([]) == 0
-    assert seen["moods"] == sorted(art_nouns.MOODS)
+    assert seen["scenes"] == sorted(vocab.SCENES)
     assert len(set(seen["counts"].values())) > 1, \
-        "the real vocabulary's per-mood query counts differ; a flattened " \
+        "the real vocabulary's per-scene query counts differ; a flattened " \
         "fixture would defeat the point of asserting against them"
+
+
+def test_main_game_flag_restricts_the_plan_to_that_game_own_scenes(monkeypatch, tmp_path):
+    seen = {}
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
+    assert fetch_art.main(["--game", "ZORK1"]) == 0
+    expected = fetch_art._scenes_for_game(
+        Path(__file__).resolve().parents[2], "ZORK1")
+    assert seen["scenes"] == sorted(expected)
+    assert seen["scenes"], "ZORK1 has a real blessed scenes file with real scenes"
+
+
+def test_main_game_flag_and_scene_flag_intersect(monkeypatch, tmp_path):
+    seen = {}
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
+    game_scenes = fetch_art._scenes_for_game(
+        Path(__file__).resolve().parents[2], "ZORK1")
+    one = game_scenes[0]
+    assert fetch_art.main(["--game", "ZORK1", "--scene", one]) == 0
+    assert seen["scenes"] == [one]
+
+
+def test_main_game_flag_unknown_game_is_reported_and_fetches_nothing(
+        monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("PIXABAY_API_KEY", "test-key-fake")
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("an unknown --game must not reach harvest")
+
+    monkeypatch.setattr(fetch_art, "PixabayFetcher", fail_if_called)
+    monkeypatch.setattr(fetch_art, "harvest", fail_if_called)
+
+    assert fetch_art.main(["--game", "NOTAGAME"]) == 0
+    assert "NOTAGAME" in capsys.readouterr().out
 
 
 def test_dotenv_key_found_in_file_when_environment_is_empty(tmp_path):

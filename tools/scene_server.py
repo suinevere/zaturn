@@ -55,21 +55,28 @@ MOOD_TO_SCENES = {
     "HOUSE": ("PARLOR", "KITCHEN", "BEDROOM", "BATHROOM", "HOUSE_EXT"),
 }
 
-_BLESSED_ROW = re.compile(r"^\s*(\d+),\s*/\*\s*\d+:\s*(.+?)\s*\*/\s*,?\s*$")
+_BLESSED_ROW = re.compile(r"^\s*(\d+),\s*/\*\s*(\d+):\s*(.+?)\s*\*/\s*,?\s*$")
 
 
 def load_hints(root):
     """Read the retired mood classifier's blessed corpus as a title hint.
 
-    Description: Parses test/corpus/blessed.inc, keyed by title alone --
-        the same title in a different story is the same kind of room often
-        enough to be worth a hint, and it is only ever a hint. A missing
-        corpus (as in every test fixture) degrades to no hints at all.
+    Description: Parses test/corpus/blessed.inc, keyed by (serial, title) --
+        135 of the corpus's 801 unique titles recur across more than one
+        story release ("Kitchen", "Maze", "Dead End", "Closet"...), so a
+        title-only hint borrows the wrong game's mood routinely, and it is
+        worst exactly where it matters most: 390 rooms library-wide have no
+        description, and for those the title plus this hint is the whole
+        basis for a decision. Scoping to the same story means a room with no
+        same-story hint shows none at all, which is correct: a wrong hint
+        is worse than no hint. A missing corpus (as in every test fixture)
+        degrades to no hints at all.
     Author: suinevere
     Dependencies: pathlib, re
     Globals: TC_NAMES, _BLESSED_ROW
     Params: root -- repo root
-    Returns: dict mapping lowercased room title to a TC_* mood folder name
+    Returns: dict mapping (serial, lowercased room title) to a TC_* mood
+        folder name
     """
     path = pathlib.Path(root) / "test" / "corpus" / "blessed.inc"
     if not path.exists():
@@ -85,8 +92,32 @@ def load_hints(root):
         folder = art_nouns.TC_TO_FOLDER.get(TC_NAMES[idx])
         if folder is None:
             continue
-        hints[m.group(2).strip().lower()] = folder
+        hints[(m.group(2), m.group(3).strip().lower())] = folder
     return hints
+
+
+def load_serial(root, stem):
+    """Look up a story's Z-machine serial from its captured room data.
+
+    Description: blessed.inc keys its rows by serial, not by story stem, so
+        scoping a hint to "the same game" means resolving stem -> serial
+        first. Reads tools/assets/rooms/<stem>.json, which gen_scene_tables.py
+        already established carries a "serial" field alongside "release".
+        Missing or unreadable degrades to None, which hint_for (in
+        create_app) treats as "no hint available" rather than an error.
+    Author: suinevere
+    Dependencies: pathlib, json
+    Globals: N/A
+    Params: root -- repo root; stem -- a story stem, e.g. "ZORK1"
+    Returns: the serial string, or None
+    """
+    path = pathlib.Path(root) / "tools" / "assets" / "rooms" / f"{stem}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("serial")
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 PAGE = """<!doctype html><title>{{ stem }} — scenes</title>
@@ -152,12 +183,21 @@ def create_app(repo=None):
     root = pathlib.Path(repo) if repo else pathlib.Path(__file__).resolve().parent.parent
     scenes_dir = root / "tools" / "assets" / "scenes"
     hints = load_hints(root)
+    serials = {}
     app = Flask(__name__)
 
-    def hint_for(group):
+    def serial_for(stem):
+        if stem not in serials:
+            serials[stem] = load_serial(root, stem)
+        return serials[stem]
+
+    def hint_for(stem, group):
         if group is None:
             return None, ()
-        mood = hints.get(group["title"].strip().lower())
+        serial = serial_for(stem)
+        if serial is None:
+            return None, ()
+        mood = hints.get((serial, group["title"].strip().lower()))
         return mood, MOOD_TO_SCENES.get(mood, ())
 
     def load(stem):
@@ -195,7 +235,7 @@ def create_app(repo=None):
     def game(stem):
         _, review = load(stem)
         group = review[0] if review else None
-        hint_mood, hint_scenes = hint_for(group)
+        hint_mood, hint_scenes = hint_for(stem, group)
         return render_template_string(PAGE, stem=stem, scenes=vocab.SCENES,
                                       group=group, left=len(review),
                                       hint_mood=hint_mood, hint_scenes=hint_scenes)
@@ -209,7 +249,7 @@ def create_app(repo=None):
         if group is None:
             return jsonify(error="unknown group"), 404
         next_group = review[0] if review else None
-        hint_mood, hint_scenes = hint_for(next_group)
+        hint_mood, hint_scenes = hint_for(d["story"], next_group)
         return jsonify(group=next_group, left=len(review),
                        hint_mood=hint_mood, hint_scenes=hint_scenes)
 
@@ -220,7 +260,7 @@ def create_app(repo=None):
         if group is None:
             return jsonify(error="unknown group"), 404
         next_group = review[0] if review else None
-        hint_mood, hint_scenes = hint_for(next_group)
+        hint_mood, hint_scenes = hint_for(d["story"], next_group)
         return jsonify(group=next_group, left=len(review),
                        hint_mood=hint_mood, hint_scenes=hint_scenes)
 

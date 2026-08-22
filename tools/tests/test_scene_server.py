@@ -88,3 +88,22 @@ def test_a_verdict_on_a_group_writes_every_object_not_just_the_handle(app, tmp_p
     assert blessed["5"] == "MAZE"
     assert blessed["6"] == "MAZE"
     assert blessed["7"] == "MAZE"
+
+
+def test_every_hinted_scene_is_a_real_scene():
+    """MOOD_TO_SCENES is hand-picked, not derived; guard it against vocab drift."""
+    for mood, scenes in scene_server.MOOD_TO_SCENES.items():
+        for scene in scenes:
+            assert scene in scene_server.vocab.SCENE_INDEX, (mood, scene)
+
+
+def test_skip_removes_the_group_from_the_queue_without_blessing_anything(app, tmp_path):
+    c = app.test_client()
+    r = c.post("/skip", json={"story": "ZORK1", "obj": 7})
+    assert r.status_code == 200
+    review = json.loads(
+        (tmp_path / "tools" / "assets" / "scenes" / "ZORK1.review.json").read_text())
+    assert [g["obj"] for g in review] == [9]
+    blessed = json.loads(
+        (tmp_path / "tools" / "assets" / "scenes" / "ZORK1.json").read_text())
+    assert blessed == {"1": "FOREST"}

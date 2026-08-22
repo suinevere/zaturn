@@ -6,361 +6,433 @@
   {
    "description": "You're near the rear entrance of a house, to the south. Trails enter the jungle to the east and the west.",
    "obj": 6,
+   "source": "static",
    "title": "Back Door"
   },
   {
    "description": null,
    "obj": 7,
+   "source": null,
    "title": "Looks Can Be Deceiving"
   },
   {
    "description": "A solitary black circle is the only break in an vaste expanse of whiteness extending to the horizon. Like a dark speck in a sea of white, or a huge piece of typing paper with but a single period typed upon it, this black circle seems to have been placed here entirely as an opportunity for some silly literary allusions. To avoid the danger of accidentally typing an \"L\" and having to read them again, follow the faint trails to the north or east.",
    "obj": 14,
+   "source": "static",
    "title": "Allusion Room"
   },
   {
    "description": null,
    "obj": 17,
+   "source": null,
    "title": "Catacombs"
   },
   {
    "description": "This tiny dock is the maritime entrance to the once-famous Wattz-Upp section of Mars. East of the dock is a wide, north-south canal; you can hear a gurgling sound to the west. There's a chill in the air; you might be approaching the south polar cap.",
    "obj": 25,
+   "source": "static",
    "title": "Wattz-Upp Dock"
   },
   {
    "description": null,
    "obj": 26,
+   "source": null,
    "title": "Vizicomm Booth"
   },
   {
    "description": null,
    "obj": 29,
+   "source": null,
    "title": "Lawn"
   },
   {
    "description": "No living creature can even guess how long this storehouse has sat amidst the catacombs, undisturbed by man or by time, untouched by wars and weather, a silent witness to the passing eons, the rise and fall of empires, the births and deaths of countless billions, its only visitor the dark waters of a Martian canal.",
    "obj": 31,
+   "source": "static",
    "title": "Forgotten Storehouse"
   },
   {
    "description": "You suddenly find yourself longing for the slime pits of Venus or the sandstorms of Mars. This particular section of Cleveland has exits to the northeast and south.",
    "obj": 32,
+   "source": "static",
    "title": "Cleveland"
   },
   {
    "description": null,
    "obj": 37,
+   "source": null,
    "title": "Laundry Room"
   },
   {
    "description": "This tattered tent, home to the deceased robots, provides meager protection against the cold polar winds. You can exit to the south.",
    "obj": 42,
+   "source": "static",
    "title": "Inside the Tent"
   },
   {
    "description": null,
    "obj": 50,
+   "source": null,
    "title": "Cell"
   },
   {
-   "description": null,
+   "description": "An undistinguished bar, yet the social center of Upper Sandusky. The front door is almost lost amidst the hazy maze of neon that shrouds the grimy glass of the south wall. Doors marked \"Ladies\" and \"Gents\" lead, respectively, northeast and northwest.",
    "obj": 61,
+   "source": "runtime",
    "title": "Joe's Bar"
   },
   {
    "description": null,
    "obj": 62,
+   "source": null,
    "title": "In Space"
   },
   {
    "description": null,
    "obj": 65,
+   "source": null,
    "title": "Spawning Ground"
   },
   {
    "description": null,
    "obj": 68,
+   "source": null,
    "title": "Ladies' Room"
   },
   {
    "description": "This rickety home is so petite that the entire first floor is only one location in this story. When you tire of this floor, you can go east, southwest, or up.",
    "obj": 70,
+   "source": "static",
    "title": "Teensy-Weensy House"
   },
   {
    "description": "You are standing near the front stoop of a very large igloo. Its door is flanked by a faded sign and a barred window. Paths lead north, north and north.",
    "obj": 74,
+   "source": "static",
    "title": "South Pole"
   },
   {
    "description": "As with all Martian civilization, this once-fashionable shopping center has fallen upon hard times; the only store to have endured the fifteen-millenia recession lies to the south. The canal is still as visible as it was when scheming marketeers misnamed the mall generations ago -- in other words, not at all. A path leads east, and a dune to the west seems mountable.",
    "obj": 77,
+   "source": "static",
    "title": "Canalview Mall"
   },
   {
    "description": "As you wander amidst these towering dunes of red Martian sand, you notice three distinct pathways: north, east, and west.",
    "obj": 80,
+   "source": "static",
    "title": "Martian Desert"
   },
   {
    "description": null,
    "obj": 82,
+   "source": null,
    "title": "Jungle"
   },
   {
    "description": "This dock, on the south shore of the canal, is named after Don Donald, the first resident of Mars. There are no paths leading inland, but a tall dune to the south is less steep than the others.",
    "obj": 84,
+   "source": "static",
    "title": "Donald Dock"
   },
   {
    "description": "These twisted trees and elegant footbridges are even more beautiful than the gardens of the most lavish Fu Manchu films. Paths from the north, southeast, and west meet at a large well of hand-carved stone in the center of the garden.",
    "obj": 89,
+   "source": "static",
    "title": "Oriental Garden"
   },
   {
    "description": null,
    "obj": 92,
+   "source": null,
    "title": "Roof"
   },
   {
    "description": "A slender tower protrudes magnificently above the palace grounds. A stair winds up into the tower and an oriental garden spreads out to the northwest.",
    "obj": 93,
+   "source": "static",
    "title": "Base of Tower"
   },
   {
    "description": "This is the southern terminus of the canal. Far below this dock, teleportation machinery transports massive quantities of water back to the head of the canal in the equatorial region of Mars. It's quite chilly, and the dock is covered with a sheet of ice. To the south, as far as you can see, is the bleak whiteness of the southern ice cap.",
    "obj": 99,
+   "source": "static",
    "title": "Icy Dock"
   },
   {
    "description": null,
    "obj": 100,
+   "source": null,
    "title": "Hold"
   },
   {
    "description": "This tiny dock, partly buried by drifting sand, extends south into the canal. A break in the sand forms a trail to the north.",
    "obj": 101,
+   "source": "static",
    "title": "Baby Dock"
   },
   {
    "description": null,
    "obj": 102,
+   "source": null,
    "title": "Rocky Clifftop"
   },
   {
    "description": "To the north: the entrance to a plasticoid house, the only type of structure that lasts more than three minutes in the volatile Venusian biosphere. To the south and east: paths into the jungle.",
    "obj": 104,
+   "source": "static",
    "title": "Front Door"
   },
   {
    "description": "Damp walls of brick rise to a point of light far above. A black circle is visible just below the surface of the water.",
    "obj": 105,
+   "source": "static",
    "title": "Well Bottom"
   },
   {
    "description": null,
    "obj": 111,
+   "source": null,
    "title": "Clearing"
   },
   {
    "description": null,
    "obj": 112,
+   "source": null,
    "title": "At Main Hatch"
   },
   {
    "description": null,
    "obj": 119,
+   "source": null,
    "title": "Long Corridor"
   },
   {
    "description": null,
    "obj": 120,
+   "source": null,
    "title": "Observation Room"
   },
   {
    "description": null,
    "obj": 124,
+   "source": null,
    "title": "Oasis"
   },
   {
    "description": "This store is in good shape only relative to the other shops in the mall; for example, the last time it was vacuumed, humans were just inventing writing. The dust nearly covers the proprietor, who sits forlornly in the corner beneath a faded sign. An exit is barely visible through the dust to the north.",
    "obj": 126,
+   "source": "static",
    "title": "Exit Shop"
   },
   {
    "description": "A shaft of sunlight penetrates the stained glass windows and glistens off a large reflecting pool, filling this huge entry hall with a seductive pattern of tantalizing colors. Gleaming marble pillars rise majestically from the pool to support a towering, arched roof. You are on a branching pathway suspended above the pool, leading toward shadowy archways in every direction.",
    "obj": 129,
+   "source": "static",
    "title": "Main Hall of Palace"
   },
   {
    "description": null,
    "obj": 130,
+   "source": null,
    "title": "Laboratory"
   },
   {
    "description": null,
    "obj": 137,
+   "source": null,
    "title": "Inner Harem"
   },
   {
    "description": null,
    "obj": 145,
+   "source": null,
    "title": "Fork, Of Sorts"
   },
   {
    "description": "The second floor of the house has an open window overlooking the street and a stair leading down.",
    "obj": 147,
+   "source": "static",
    "title": "Bedroom"
   },
   {
    "description": "This dock, which extends north into a broad canal, is crafted of fine woods from across the solar system: hickory wood from the forests of Earth, and dickory wood from the jungles of Venus. A path leads south.",
    "obj": 149,
+   "source": "static",
    "title": "Hickory & Dickory Dock"
   },
   {
    "description": null,
    "obj": 159,
+   "source": null,
    "title": "Closet"
   },
   {
    "description": null,
    "obj": 160,
+   "source": null,
    "title": "Gents' Room"
   },
   {
    "description": null,
    "obj": 161,
+   "source": null,
    "title": "End of Hallway"
   },
   {
    "description": "From this vantage, you can see the canal curving south, a bit downstream from here. Just after this bend, two docks flank the canal: an opulent dock on the east bank, and a dilapidated one on the closer shore.\n   You could slide down the dune to the north or the east.",
    "obj": 163,
+   "source": "static",
    "title": "Dunetop"
   },
   {
    "description": "This dock is in remarkably good shape, considering that it hasn't been painted in fifteen thousand years. A wide canal, flowing south, lies to the east, and an opening between the dunes leads west.",
    "obj": 164,
+   "source": "static",
    "title": "Abandoned Dock"
   },
   {
    "description": null,
    "obj": 165,
+   "source": null,
    "title": "Other Cell"
   },
   {
    "description": "By standing erect at the parapet of this mighty tower, you command an exciting view. Below, gardens and courtyards intermingle with the palace buildings, forming a fertile oasis in the Martian desert. Off to the west, docks straddle a deep canal. On the far shore, sand dunes lap at crumbling buildings. On the top step of a winding stair is a black circle.",
    "obj": 169,
+   "source": "static",
    "title": "Minaret"
   },
   {
    "description": "No, not a typo. \"Dessert\" refers to the fifty foot Martian Cream Pie here. A mirage, of course. People hopelessly lost in the desert often see strange mirages, such as cream pies, lakes, or trails to the northwest and southeast.",
    "obj": 172,
+   "source": "static",
    "title": "Martian Dessert"
   },
   {
    "description": "This spot is much like the rest of the catacombs, except that a ladder leads up into the darkness.",
    "obj": 182,
+   "source": "static",
    "title": "Ladder Room"
   },
   {
    "description": null,
    "obj": 188,
+   "source": null,
    "title": "Ruined Castle"
   },
   {
    "description": null,
    "obj": 189,
+   "source": null,
    "title": "Penguin Park"
   },
   {
    "description": "If I owned a pier on a major Martian canal, I'd want it to look just like this one -- handsome, well-proportioned, and amply endowed with jade and ivory. I could probably live without the alabaster stair which leads up at the end of the dock, to the east.",
    "obj": 191,
+   "source": "static",
    "title": "My Kinda Dock!"
   },
   {
    "description": null,
    "obj": 194,
+   "source": null,
    "title": "Ruined Castle"
   },
   {
    "description": "This is the campsite of a family of nomadic robotic gypsies. A ragged tent is pitched on the north side of the camp, and trails lead northwest and south.",
    "obj": 197,
+   "source": "static",
    "title": "Gypsy Camp"
   },
   {
    "description": null,
    "obj": 198,
+   "source": null,
    "title": "Ruined Castle"
   },
   {
    "description": null,
    "obj": 199,
+   "source": null,
    "title": "Cramped Space"
   },
   {
    "description": null,
    "obj": 201,
+   "source": null,
    "title": "Royal Docks"
   },
   {
    "description": null,
    "obj": 204,
+   "source": null,
    "title": "Martian Canal"
   },
   {
    "description": null,
    "obj": 210,
+   "source": null,
    "title": "Orphanage Foyer"
   },
   {
    "description": null,
    "obj": 211,
+   "source": null,
    "title": "Stable"
   },
   {
    "description": "Generations of Sultans and Sultanesses are entombed here, along with their vast wealth, their favorite servants, and some form of transportation to the next world. For example, one Sultan lies amidst mountains of rubies, surrounded by a fleet of dirigibles.",
    "obj": 213,
+   "source": "static",
    "title": "Burial Chamber"
   },
   {
    "description": "You are in a tiny basin, protected by dunes from the fierce Martian winds. The dunes are impassable, except to the south.",
    "obj": 215,
+   "source": "static",
    "title": "Among the Dunes"
   },
   {
    "description": null,
    "obj": 216,
+   "source": null,
    "title": "Edge of Polar Ice Cap"
   },
   {
    "description": null,
    "obj": 217,
+   "source": null,
    "title": "Throne Room"
   },
   {
    "description": "This is the main cabin of a fashionable passenger ship, with exits to the \"east\" and \"south.\"",
    "obj": 218,
+   "source": "static",
    "title": "Space Yacht"
   },
   {
    "description": "This is a moist cellar. Soft light trickles down the stairway.",
    "obj": 221,
+   "source": "static",
    "title": "Basement"
   },
   {
    "description": null,
    "obj": 223,
+   "source": null,
    "title": "Harem"
   },
   {
    "description": null,
    "obj": 226,
+   "source": null,
    "title": "Audience Chamber"
   },
   {
    "description": null,
    "obj": 227,
+   "source": null,
    "title": "Garden"
   }
  ],

@@ -6,256 +6,307 @@
   {
    "description": null,
    "obj": 6,
+   "source": null,
    "title": "Lighthouse"
   },
   {
    "description": null,
    "obj": 10,
+   "source": null,
    "title": "Theater Lobby"
   },
   {
    "description": null,
    "obj": 20,
+   "source": null,
    "title": "Lake Edge"
   },
   {
    "description": null,
    "obj": 22,
+   "source": null,
    "title": "Cliff Edge"
   },
   {
    "description": null,
    "obj": 44,
+   "source": null,
    "title": "Rotary South"
   },
   {
    "description": null,
    "obj": 49,
+   "source": null,
    "title": "Park"
   },
   {
    "description": "You are standing in an open field west of a white house, with a boarded front door.",
    "obj": 51,
+   "source": "static",
    "title": "West of House"
   },
   {
    "description": null,
    "obj": 57,
+   "source": null,
    "title": "Open Grave"
   },
   {
    "description": null,
    "obj": 62,
+   "source": null,
    "title": "Rotary North"
   },
   {
    "description": null,
    "obj": 66,
+   "source": null,
    "title": "Underground"
   },
   {
    "description": null,
    "obj": 68,
+   "source": null,
    "title": "Twilight Glen"
   },
   {
    "description": null,
    "obj": 69,
+   "source": null,
    "title": "Underground"
   },
   {
    "description": null,
    "obj": 80,
+   "source": null,
    "title": "South of Bridge"
   },
   {
    "description": null,
    "obj": 84,
+   "source": null,
    "title": "Wharf's End"
   },
   {
    "description": null,
    "obj": 86,
+   "source": null,
    "title": "Video Arcade"
   },
   {
    "description": null,
    "obj": 90,
+   "source": null,
    "title": "Jail Cell"
   },
   {
-   "description": null,
+   "description": "You're outside the cottage of Miss Voss, the town librarian. The road turns north toward the village, and bends upward to the summit of Post Office Hill. As you approach the cottage you are greeted by the tiniest poodle you've ever seen in your entire life. It charges across the street, yapping angrily and showing its sharp little teeth. You can smell the poodle's hot breath as it yaps. What next?",
    "obj": 94,
+   "source": "runtime",
    "title": "Outside Cottage"
   },
   {
-   "description": null,
+   "description": "You're on a hilltop overlooking the seaside village of Festeron. To the south stands the Festeron Post Office. It's a little brick building with a neatly-trimmed lawn. The Post Office door stands invitingly open. Roads run down the hill to the east and west. There's a signpost nearby. Somebody inside the Post Office is calling you. What next?",
    "obj": 95,
+   "source": "runtime",
    "title": "Hilltop"
   },
   {
    "description": "You're lost in a thick cloud of fog.",
    "obj": 101,
+   "source": "static",
    "title": "Fog"
   },
   {
    "description": null,
    "obj": 102,
+   "source": null,
    "title": "River Outlet"
   },
   {
    "description": null,
    "obj": 116,
+   "source": null,
    "title": "Bridge"
   },
   {
    "description": null,
    "obj": 127,
+   "source": null,
    "title": "Grue's Nest"
   },
   {
    "description": null,
    "obj": 132,
+   "source": null,
    "title": "Misty Island"
   },
   {
    "description": null,
    "obj": 134,
+   "source": null,
    "title": "Lookout Hill"
   },
   {
    "description": null,
    "obj": 138,
+   "source": null,
    "title": "Laboratory"
   },
   {
    "description": null,
    "obj": 139,
+   "source": null,
    "title": "Underground"
   },
   {
    "description": null,
    "obj": 141,
+   "source": null,
    "title": "Torture Chamber"
   },
   {
    "description": null,
    "obj": 143,
+   "source": null,
    "title": "Fuzziness"
   },
   {
    "description": null,
    "obj": 144,
+   "source": null,
    "title": "Rotary East"
   },
   {
    "description": null,
    "obj": 149,
+   "source": null,
    "title": "Cottage"
   },
   {
    "description": null,
    "obj": 152,
+   "source": null,
    "title": "Tidal Pool"
   },
   {
    "description": null,
    "obj": 156,
+   "source": null,
    "title": "Pleasure Wharf"
   },
   {
    "description": null,
    "obj": 162,
+   "source": null,
    "title": "North of Bridge"
   },
   {
-   "description": null,
+   "description": "This is the lobby of the Festeron Post Office. The walls are lined with small, private mailboxes and wanted posters. A service counter runs along the entire length of the room. Your boss, Mr. Crisp, is behind the service counter reading other people's postcards. Mr. Crisp hides the postcards away as you enter. \"Where have you been?\" he barks angrily. \"Daydreaming again, eh? I've been looking everywhere for you!\" (Your score just went up by 1 point! Your total score is 1 out of 100.) What next?",
    "obj": 166,
+   "source": "runtime",
    "title": "Post Office"
   },
   {
    "description": null,
    "obj": 177,
+   "source": null,
    "title": "Cliff Bottom"
   },
   {
    "description": null,
    "obj": 183,
+   "source": null,
    "title": "Spooky Copse"
   },
   {
    "description": null,
    "obj": 187,
+   "source": null,
    "title": "Circulation Desk"
   },
   {
    "description": null,
    "obj": 203,
+   "source": null,
    "title": "Museum"
   },
   {
    "description": null,
    "obj": 206,
+   "source": null,
    "title": "Police Station"
   },
   {
    "description": null,
    "obj": 220,
+   "source": null,
    "title": "Underground"
   },
   {
    "description": null,
    "obj": 222,
+   "source": null,
    "title": "Creepy Corner"
   },
   {
    "description": null,
    "obj": 226,
+   "source": null,
    "title": "Rocky Path"
   },
   {
    "description": null,
    "obj": 232,
+   "source": null,
    "title": "Throne Room"
   },
   {
    "description": null,
    "obj": 236,
+   "source": null,
    "title": "Rotary West"
   },
   {
    "description": null,
    "obj": 237,
+   "source": null,
    "title": "Church"
   },
   {
    "description": null,
    "obj": 238,
+   "source": null,
    "title": "Round Chamber"
   },
   {
    "description": null,
    "obj": 239,
+   "source": null,
    "title": "Vestibule"
   },
   {
    "description": null,
    "obj": 240,
+   "source": null,
    "title": "Inside Theater"
   },
   {
    "description": null,
    "obj": 242,
+   "source": null,
    "title": "Magick Shoppe"
   },
   {
    "description": null,
    "obj": 245,
+   "source": null,
    "title": "Steep Trail"
   },
   {
-   "description": null,
+   "description": "You're standing next to an open iron gate that leads west into the Festeron Cemetery. A road runs east to the top of Post Office Hill.",
    "obj": 246,
+   "source": "runtime",
    "title": "Outside Cemetery"
   }
  ],

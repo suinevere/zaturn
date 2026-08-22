@@ -6,251 +6,301 @@
   {
    "description": null,
    "obj": 164,
+   "source": null,
    "title": "George's Bedroom"
   },
   {
    "description": null,
    "obj": 166,
+   "source": null,
    "title": "George's Bathroom"
   },
   {
    "description": null,
    "obj": 167,
+   "source": null,
    "title": "Dunbar's Bedroom"
   },
   {
    "description": null,
    "obj": 168,
+   "source": null,
    "title": "Dunbar's Bathroom"
   },
   {
    "description": "This large closet has many shelves containing various cleaning equipment and supplies.",
    "obj": 169,
+   "source": "static",
    "title": "Closet"
   },
   {
    "description": "The hall ends here. To the south is a walk-in closet.",
    "obj": 170,
+   "source": "static",
    "title": "End of South Hall"
   },
   {
    "description": null,
    "obj": 172,
+   "source": null,
    "title": "South Upstairs Hall"
   },
   {
    "description": "This room contains the bare essentials for a guest room: bed, tables, and a chair. A window looks out toward the east.",
    "obj": 173,
+   "source": "static",
    "title": "Guest Room"
   },
   {
    "description": "This is the end of a short north-south hallway. To the east is a small room.",
    "obj": 174,
+   "source": "static",
    "title": "North Upstairs Hall"
   },
   {
    "description": null,
    "obj": 175,
+   "source": null,
    "title": "Bedroom Balcony"
   },
   {
    "description": "This is Mr. and Mrs. Robner's private bathroom, accessible only from the bedroom through a door to the west. On one wall is a mirror over a long counter containing two sinks, and in addition to the usual bathroom fixtures is a jacuzzi. Hanging plants give the room an almost tropical atmosphere.",
    "obj": 176,
+   "source": "static",
    "title": "Master Bathroom"
   },
   {
    "description": null,
    "obj": 178,
+   "source": null,
    "title": "Master Bedroom"
   },
   {
    "description": null,
    "obj": 180,
+   "source": null,
    "title": "Hidden Closet"
   },
   {
    "description": "The closet is rather shallow and has some shelves full of assorted linens, towels, and uninteresting toilet articles.",
    "obj": 181,
+   "source": "static",
    "title": "Upstairs Closet"
   },
   {
    "description": null,
    "obj": 182,
+   "source": null,
    "title": "Library Balcony"
   },
   {
    "description": null,
    "obj": 185,
+   "source": null,
    "title": "Library"
   },
   {
    "description": null,
    "obj": 187,
+   "source": null,
    "title": "End of Hallway"
   },
   {
    "description": null,
    "obj": 189,
+   "source": null,
    "title": "Hallway"
   },
   {
    "description": "This is approximately the middle of the corridor, a convenient place for a closet full of linens. Stairs to the east and a window to the west are about equidistant. The closet, to the north, is open and rather shallow.",
    "obj": 190,
+   "source": "static",
    "title": "Hallway"
   },
   {
    "description": null,
    "obj": 193,
+   "source": null,
    "title": "Hallway"
   },
   {
    "description": "You are at the top of the staircase where short hallways run north and south and a corridor the length of the house heads west.",
    "obj": 194,
+   "source": "static",
    "title": "Top of Stairs"
   },
   {
    "description": "This is the pantry with shelves containing a large selection of canned and packaged foods, such as fruits, vegetables, and dry goods.",
    "obj": 195,
+   "source": "static",
    "title": "Pantry"
   },
   {
    "description": "This is the Robner kitchen, quite large and with a full complement of appliances and labor-saving devices. On one wall, a beautifully-crafted shelf unit contains rare china, a unique hand-painted family heirloom depicting scenes from Greek mythology. The china consists of many place settings of plates, teacups, and saucers. There are several cabinets which likely contain silverware, glasses, and the like. To the east is a pantry.",
    "obj": 196,
+   "source": "static",
    "title": "Kitchen"
   },
   {
    "description": "You have entered the dining room. A long table seating twelve is in the center of the room and a large trestle table is against the south wall. A large picture window to the north allows a view of the rose garden. Hanging on the wall are several cheerful paintings, including one by Seurat which appears to be an original.",
    "obj": 197,
+   "source": "static",
    "title": "Dining Room"
   },
   {
    "description": "You are at the corner of two halls, one a short hallway to the west ending with a set of doors, and the other a long hall leading south toward the front door. To the north are swinging double doors leading into the kitchen.",
    "obj": 198,
+   "source": "static",
    "title": "Corner"
   },
   {
    "description": null,
    "obj": 202,
+   "source": null,
    "title": "Living Room"
   },
   {
    "description": "You are on a landing halfway up the flight of stairs. You notice that the stairs do indeed make quite a noise when stepped upon.",
    "obj": 203,
+   "source": "static",
    "title": "Stairs"
   },
   {
    "description": "You are at the foot of the stairs to the second floor. Open archways lead west and south.",
    "obj": 204,
+   "source": "static",
    "title": "Bottom of Stairs"
   },
   {
    "description": "This is a little-used storage closet containing odds and ends of no interest whatsoever. The exit is to the north.",
    "obj": 206,
+   "source": "static",
    "title": "South Closet"
   },
   {
    "description": null,
    "obj": 210,
+   "source": null,
    "title": "Mrs. Rourke's Bathroom"
   },
   {
    "description": null,
    "obj": 214,
+   "source": null,
    "title": "Mrs. Rourke's Room"
   },
   {
    "description": null,
    "obj": 217,
+   "source": null,
    "title": "South Hallway"
   },
   {
    "description": null,
    "obj": 219,
+   "source": null,
    "title": "South Hallway"
   },
   {
    "description": "This is a hallway north of the foyer. To the west is an open doorway, and to the east is the foot of a staircase. The hall continues north.",
    "obj": 220,
+   "source": "static",
    "title": "North of Foyer"
   },
   {
    "description": null,
    "obj": 221,
+   "source": null,
    "title": "Foyer"
   },
   {
    "description": "This idyllic spot lies on a jut of land well north of the house and is surrounded on three sides by lake shore. Its charm includes the sweet smell of roses blown on a southwest breeze from the rose garden and by the sound of the leaves rustling in the orchard to the southeast.",
    "obj": 222,
+   "source": "static",
    "title": "North Lawn"
   },
   {
    "description": null,
    "obj": 223,
+   "source": null,
    "title": "In the Orchard"
   },
   {
    "description": "You are on a path at the edge of a small orchard of fruit trees which abuts the eastern side of the back of the house. The orchard is obviously intended more to display the beauty of the blossoms in spring than to produce significant amounts of fruit. The windows of the kitchen look out onto the orchard, although your view of them is blocked by the trees and a small grape arbor. To the west is a path along a rose garden, and lawns sweep out to the north and east.",
    "obj": 226,
+   "source": "static",
    "title": "Orchard Path"
   },
   {
    "description": null,
    "obj": 228,
+   "source": null,
    "title": "Among the Roses"
   },
   {
-   "description": null,
+   "description": "You are at the edge of a large rose garden, meticulously maintained by the gardener, Mr. McNabb. He is said to be exceedingly proud of this particular garden, which is the envy of the neighbors. Rows of roses are neatly arranged and the sweet fragrance of the flowers is worth a trip here in itself. An orchard to the east contains many varieties of fruit trees and wide lawns lie to the west and north. The roses themselves are to the south, filling the area between you and the back of the house.",
    "obj": 231,
+   "source": "runtime",
    "title": "Garden Path"
   },
   {
    "description": "You are now between the shed and the lake, a position invisible from the house or the adjacent lawns. There are no windows here, but you can easily enter the shed via the door around the corner.",
    "obj": 232,
+   "source": "static",
    "title": "Behind the Shed"
   },
   {
    "description": "This small garden shed is filled with implements of gardening and lawn care. Shelves filled with various tools line the walls and a filthy window looks out on the lawn.",
    "obj": 233,
+   "source": "static",
    "title": "Shed"
   },
   {
    "description": "There are no doors or windows at ground level here on the west side of the house. A beautiful rose garden, separated by a tall fence, lies to the north, and the front of the house is to your south. A large lawn bordering the lake lies to the west.",
    "obj": 234,
+   "source": "static",
    "title": "West Side of House"
   },
   {
    "description": "There are no windows or entries of any kind here at the east side of the house. To the north is the orchard, and the front lawn lies to the south. A lawn also slopes down toward the shore of a lake to the east.",
    "obj": 235,
+   "source": "static",
    "title": "East Side of House"
   },
   {
    "description": "You are on a neatly manicured lawn, east of the house, which extends north and east to the shore of a lake. To the northwest is a peaceful orchard, and toward the south another wide lawn. Southeast, beside the lake, is a small shed with a solitary dirty window.",
    "obj": 238,
+   "source": "static",
    "title": "East Lawn"
   },
   {
    "description": "This is a sprawling lawn west of the Robner house. To the west and north is the lake shore. To the northeast is a rose garden, and to the south another wide lawn.",
    "obj": 240,
+   "source": "static",
    "title": "West Lawn"
   },
   {
    "description": "You are in front of the Robner house just east of the front door. A small window, closed and securely locked, is the only thing of note here. To the northeast is the east side of the house.",
    "obj": 242,
+   "source": "static",
    "title": "East of Front Door"
   },
   {
    "description": "You are in front of the Robner house just west of the front door. To the north is a large bay window through which can be seen part of the living room. To the northwest is the west side of the house.",
    "obj": 244,
+   "source": "static",
    "title": "West of Front Door"
   },
   {
-   "description": null,
+   "description": "You are at the Robners' front door, which is closed. You can walk around the house from here to the east or west. To the south a rolling lawn leads to the entrance of the estate.",
    "obj": 246,
+   "source": "runtime",
    "title": "Front Path"
   },
   {
    "description": "You are on a wide lawn just north of the entrance to the Robner estate. Directly north at the end of a pebbled path is the Robner house, flanked to the northeast and northwest by a vast expanse of well-kept lawn. Beyond the house can be seen the lakefront.",
    "obj": 249,
+   "source": "static",
    "title": "South Lawn"
   }
  ],

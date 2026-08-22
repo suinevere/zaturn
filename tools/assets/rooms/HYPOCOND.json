@@ -6,71 +6,85 @@
   {
    "description": null,
    "obj": 1,
+   "source": null,
    "title": "Forest, on a path"
   },
   {
    "description": "You are lying in bed, immersed in comfy, blue and green pastel quilts, contemplating the term 'boredom.'",
    "obj": 6,
+   "source": "static",
    "title": "In Bed"
   },
   {
    "description": "This hollowed-out area must be a sleeping room for the inhabitant of this dwelling. A round mattress, stuffed with goose down, occupies most of the floor, leaving space to climb down the ladder, or exit the premises through a wide knothole on the east wall, through which sunlight pours in.",
    "obj": 17,
+   "source": "static",
    "title": "In the Tree"
   },
   {
    "description": "The view from here is spectacular. The forest around you is composed of hundreds of tall, magnificent oaks, their abundant leaves rippling with the warm breeze. It seems that no end to the forest is in sight, although you can make out a thin, winding trail running north and south past the tree in which you stand.",
    "obj": 19,
+   "source": "static",
    "title": "Near the Tree Top"
   },
   {
    "description": "You stand, quivering ever so slightly, on a wide, sturdy branch, fifty feet or so above the ground, where a path runs past the tree. Although the trees branches are numerous, you fear that a descent might be difficult. It may be easier to climb upward, however, as notches have been cut in the side of the tree, forming a ladder of sorts. To the west, you may reenter the tree through the wide knothole.",
    "obj": 20,
+   "source": "static",
    "title": "Out on a Limb"
   },
   {
    "description": "This cramped, but cozy area has been carved out of the inside of an aging tree. It seems to be a sort of kitchen - living room - dining area, as much so as can be expected of a closet-sized space. A chair and table are its only furnishings, although a row of cabinets lines one wall. You may climb up or down, thanks to a rickety, wooden ladder which is affixed to one wall.",
    "obj": 42,
+   "source": "static",
    "title": "In the Tree"
   },
   {
    "description": null,
    "obj": 48,
+   "source": null,
    "title": "In the Hall"
   },
   {
-   "description": null,
+   "description": "It may be a disaster area, but it's your disaster area. Like towers rising above rubble, your bed and a low-quality stereo system loom above mounds of papers, clothes, boxes, and elderly food scraps. Off to the west is your bathroom, and there is a closed door on the south wall. The television lights the room with an eerie glow. Lying abandoned near the stereo is an old, battered case. Nearby the bed, a designer telephone lies on its side. Next to it is a list of phone-numbers, printed on a yellowing piece of paper. A trash can sits neglected in one corner, a monument to futility.",
    "obj": 50,
+   "source": "runtime",
    "title": "Your Bedroom"
   },
   {
    "description": null,
    "obj": 52,
+   "source": null,
    "title": "Low Crawl"
   },
   {
    "description": "You bathroom, equipped with all of the modern efficiencies, is small but  habitable. Knowingly, you avoid looking in the mirror. The exit is to the east.",
    "obj": 63,
+   "source": "static",
    "title": "Bathroom"
   },
   {
    "description": null,
    "obj": 72,
+   "source": null,
    "title": "Hazy Room"
   },
   {
    "description": "You are in the seldom-used guest room. In sharp contrast with what you are used to, everything seems to be in its proper, orderly place. A double bed is neatly made, and there is plenty of wood, stacked neatly, to the side of a wide fireplace. A door on the north wall, through which you entered, is closed.",
    "obj": 78,
+   "source": "static",
    "title": "Guest Room"
   },
   {
    "description": "You are sitting quite still, peering out of the fireplace. As you sit here, you can't help feeling uneasy, as if someone were behind you, watching and waiting. You glance back once, but see nothing unusual, except that the nature of the rear wall of the fireplace seems to be quite odd-looking.",
    "obj": 79,
+   "source": "static",
    "title": "In the Fireplace"
   },
   {
    "description": "You stand in a room amidst several bins loaded high with stored goods, apparently saved for an unpleasant drought or lengthy winter. A rickety wooden ladder leads upward through a hole in the ceiling, through which a little light streams in.",
    "obj": 80,
+   "source": "static",
    "title": "Store Room"
   }
  ],

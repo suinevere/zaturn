@@ -6,231 +6,277 @@
   {
    "description": null,
    "obj": 2,
+   "source": null,
    "title": "Murky Room"
   },
   {
    "description": "You are in an ancient barrow which opens to the southwest.",
    "obj": 10,
+   "source": "static",
    "title": "Inside the Barrow"
   },
   {
    "description": null,
    "obj": 12,
+   "source": null,
    "title": "Narrow Ledge"
   },
   {
    "description": null,
    "obj": 24,
+   "source": null,
    "title": "Ice Room"
   },
   {
    "description": null,
    "obj": 30,
+   "source": null,
    "title": "Wide Ledge"
   },
   {
    "description": "Halls lead west and south. The Wizard's workbench dominates the room. It is stained from years of use, and is deeply gouged as though some huge clawed animal was imprisoned on it. In the center of the bench, three stands - ruby, sapphire, and diamond - form a triangle.",
    "obj": 33,
+   "source": "static",
    "title": "Wizard's Workshop"
   },
   {
    "description": "You are ankle deep in a stream. To the southwest is a dark tunnel, and to the north a dim cavern.",
    "obj": 35,
+   "source": "static",
    "title": "Shallow Ford"
   },
   {
    "description": null,
    "obj": 38,
+   "source": null,
    "title": "Dreary Room"
   },
   {
    "description": null,
    "obj": 42,
+   "source": null,
    "title": "Trophy Room"
   },
   {
    "description": null,
    "obj": 45,
+   "source": null,
    "title": "Wizard's Quarters"
   },
   {
    "description": "This is a former broom closet. A larger room lies to the north. Chiselled on the wall are the words \"Protected by the Frobozz Magic Alarm Company.\"",
    "obj": 53,
+   "source": "static",
    "title": "Dingy Closet"
   },
   {
    "description": "You are on a north-south bridge spanning a deep ravine. Water flows far beneath.",
    "obj": 54,
+   "source": "static",
    "title": "Stone Bridge"
   },
   {
    "description": "The far half of this room is depressed. The only exit is west.",
    "obj": 56,
+   "source": "static",
    "title": "Pool Room"
   },
   {
    "description": "This is the southern end of a garden, where fantastically shaped hedges are arrayed with geometric precision. Though recently untended, the bushes have clearly been shaped: There is a dragon, a unicorn, a great serpent, a huge misshapen dog, and several human figures. To the west is a tunnel.",
    "obj": 58,
+   "source": "static",
    "title": "Topiary"
   },
   {
    "description": "This room is full of assorted machinery, whirring noisily. On one wall is a triangular button labelled, \"DANGER -- HIGH VOLTAGE.\" There are exits to the south and southwest.",
    "obj": 61,
+   "source": "static",
    "title": "Machine Room"
   },
   {
    "description": "Inscribed on the floor is a great pentagram drawn with black chalk. In its center is a black circle.",
    "obj": 64,
+   "source": "static",
    "title": "Pentagram Room"
   },
   {
    "description": null,
    "obj": 76,
+   "source": null,
    "title": "Dusty Room"
   },
   {
    "description": "Before you are the earthly remains of the mighty Flatheads, twelve somewhat flat heads mounted securely on poles. There is writing carved on the crypt. To the north and south are dark doorways.",
    "obj": 79,
+   "source": "static",
    "title": "Crypt"
   },
   {
    "description": "In the center of this enormous room, four wooden posts support a huge oblong roof. To the east is a large hole; to the west a gaping chasm.",
    "obj": 82,
+   "source": "static",
    "title": "Posts Room"
   },
   {
    "description": "This was once a kennel for a large dog (some of the bones would fit a dinosaur). The only exit is northeast.",
    "obj": 85,
+   "source": "static",
    "title": "Kennel"
   },
   {
    "description": "This is a tall, damp room with brick walls. There are some etchings on the walls. A passage leads west.",
    "obj": 89,
+   "source": "static",
    "title": "Circular Room"
   },
   {
    "description": "This must have been a large library, probably for the royal family. All of the shelves have been gnawed to pieces by unfriendly gnomes. To the north is an exit.",
    "obj": 93,
+   "source": "static",
    "title": "Library"
   },
   {
    "description": null,
    "obj": 95,
+   "source": null,
    "title": "Carousel Room"
   },
   {
    "description": null,
    "obj": 98,
+   "source": null,
    "title": "Guarded Room"
   },
   {
    "description": "A path of crushed white stone winds among bushes and flower beds of this garden from south to north. Almost hidden by the shrubbery is a small white gazebo.",
    "obj": 102,
+   "source": "static",
    "title": "Formal Garden"
   },
   {
    "description": "This smooth-walled tunnel runs northeast to southwest. A faint whirring sound comes from the latter direction. Another opening, choked with leaves, leads southeast.",
    "obj": 103,
+   "source": "static",
    "title": "Dark Tunnel"
   },
   {
    "description": null,
    "obj": 104,
+   "source": null,
    "title": "Menhir Room"
   },
   {
    "description": "This is the entrance to a huge tomb. A passage leads north.",
    "obj": 105,
+   "source": "static",
    "title": "Cerberus Room"
   },
   {
    "description": "The air is cool and damp. A path from the southeast splits here; north toward a stone bridge, and west into a narrow tunnel. It is from the latter that the chill originates.",
    "obj": 111,
+   "source": "static",
    "title": "Cool Room"
   },
   {
    "description": "You are at the base of a dormant volcano. High above, light enters the cone of the volcano. The only exit is east.",
    "obj": 113,
+   "source": "static",
    "title": "Volcano Bottom"
   },
   {
    "description": null,
    "obj": 118,
+   "source": null,
    "title": "Ledge in Ravine"
   },
   {
    "description": "This is a huge limestone cavern, glowing with dim, phosphorescent light from far above. Narrow paths wind south and northeast.",
    "obj": 119,
+   "source": "static",
    "title": "Great Cavern"
   },
   {
    "description": "An oblong table here is set for afternoon tea. It is clear that the users were indeed mad. To the east is a small hole (perhaps four inches high). A doorway leads west.",
    "obj": 124,
+   "source": "static",
    "title": "Tea Room"
   },
   {
    "description": "The rock walls are scarred by flame, and a blackened doorway leads south.",
    "obj": 131,
+   "source": "static",
    "title": "Dragon's Lair"
   },
   {
    "description": "This is a small chamber carved from the western end of a short crawl. On the wall is crudely chiseled the number \"8\".",
    "obj": 133,
+   "source": "static",
    "title": "Room 8"
   },
   {
    "description": null,
    "obj": 139,
+   "source": null,
    "title": "Room of Red Mist"
   },
   {
-   "description": null,
+   "description": "You are in a huge crystalline sphere filled with thin blue mist. The mist becomes white to the west. You strain to look out through the mist... You see a dreary room with an oak door and a huge table. There is an odd glow to the mist.",
    "obj": 142,
+   "source": "runtime",
    "title": "Room of Blue Mist"
   },
   {
    "description": null,
    "obj": 143,
+   "source": null,
    "title": "Room of White Mist"
   },
   {
    "description": null,
    "obj": 145,
+   "source": null,
    "title": "Volcano By Wide Ledge"
   },
   {
    "description": null,
    "obj": 147,
+   "source": null,
    "title": "Volcano By Small Ledge"
   },
   {
    "description": "You are waist deep in a cold stream. On the northern bank, the walls rise to a small ledge. A \"whir\" comes from an opening to the south.",
    "obj": 148,
+   "source": "static",
    "title": "Deep Ford"
   },
   {
    "description": "Here a dark hallway turns a corner. To the south is a dark room, to the east is fitful light.",
    "obj": 152,
+   "source": "static",
    "title": "Aquarium Room"
   },
   {
    "description": "This is a gazebo in the midst of a formal garden. It is cool and restful here. A tea table adorns the center of the gazebo.",
    "obj": 153,
+   "source": "static",
    "title": "Gazebo"
   },
   {
    "description": null,
    "obj": 155,
+   "source": null,
    "title": "Riddle Room"
   },
   {
    "description": "You have made it to the top. Well done. There are etchings on the well. A crack runs across the floor at the doorway to the east, but it can be crossed easily. Another doorway leads northeast.",
    "obj": 156,
+   "source": "static",
    "title": "Top of Well"
   },
   {
    "description": "The walls of this large cavern are scorched and a sooty dry smell is very strong here. A stone bridge leads the south, and a smokey tunnel opens to the north. To the east is a small opening.",
    "obj": 161,
+   "source": "static",
    "title": "Dragon Room"
   }
  ],

@@ -6,341 +6,409 @@
   {
    "description": null,
    "obj": 15,
+   "source": null,
    "title": "Below Decks"
   },
   {
    "description": null,
    "obj": 17,
+   "source": null,
    "title": "Below Decks"
   },
   {
    "description": null,
    "obj": 18,
+   "source": null,
    "title": "Ocean Floor"
   },
   {
    "description": null,
    "obj": 22,
+   "source": null,
    "title": "Below Decks"
   },
   {
    "description": null,
    "obj": 27,
+   "source": null,
    "title": "Below Decks"
   },
   {
    "description": null,
    "obj": 29,
+   "source": null,
    "title": "Ocean Floor"
   },
   {
    "description": null,
    "obj": 32,
+   "source": null,
    "title": "Below Decks"
   },
   {
    "description": null,
    "obj": 37,
+   "source": null,
    "title": "Middle Deck"
   },
   {
    "description": null,
    "obj": 39,
+   "source": null,
    "title": "Middle Deck"
   },
   {
    "description": null,
    "obj": 41,
+   "source": null,
    "title": "Middle Deck"
   },
   {
    "description": null,
    "obj": 46,
+   "source": null,
    "title": "Middle Deck"
   },
   {
    "description": null,
    "obj": 49,
+   "source": null,
    "title": "Middle Deck"
   },
   {
    "description": null,
    "obj": 50,
+   "source": null,
    "title": "Top Deck"
   },
   {
    "description": null,
    "obj": 51,
+   "source": null,
    "title": "Top Deck"
   },
   {
    "description": null,
    "obj": 53,
+   "source": null,
    "title": "Top Deck"
   },
   {
    "description": "You are on the ocean floor. Sediment and seaweed wave slowly with the current.",
    "obj": 54,
+   "source": "static",
    "title": "Ocean Floor"
   },
   {
    "description": null,
    "obj": 56,
+   "source": null,
    "title": "Underwater"
   },
   {
    "description": null,
    "obj": 57,
+   "source": null,
    "title": "Engine Room"
   },
   {
    "description": "You are in the captain's cabin. A large and comfortable-looking bunk is one of the many comforts in the cabin. The forward doorway leads to the crew's lounge.",
    "obj": 58,
+   "source": "static",
    "title": "Captain's Cabin"
   },
   {
    "description": "You are in the crew's lounge, a cramped cabin with little more than a table and a few chairs. To aft is the captain's cabin, while the galley lies forward. A ladder leads into the engine room.",
    "obj": 59,
+   "source": "static",
    "title": "Lounge"
   },
   {
    "description": null,
    "obj": 60,
+   "source": null,
    "title": "Galley"
   },
   {
    "description": null,
    "obj": 61,
+   "source": null,
    "title": "Crew's Quarters"
   },
   {
    "description": null,
    "obj": 65,
+   "source": null,
    "title": "Storage Locker"
   },
   {
    "description": null,
    "obj": 66,
+   "source": null,
    "title": "Wheelhouse"
   },
   {
    "description": null,
    "obj": 67,
+   "source": null,
    "title": "Aft Deck"
   },
   {
    "description": "You are on the port side of the Night Wind. The wheelhouse is to starboard. The teak deck is very well-kept. The ocean lies off to port.",
    "obj": 68,
+   "source": "static",
    "title": "Port Deck"
   },
   {
    "description": null,
    "obj": 69,
+   "source": null,
    "title": "Starboard Deck"
   },
   {
    "description": null,
    "obj": 70,
+   "source": null,
    "title": "Fore Deck"
   },
   {
    "description": null,
    "obj": 71,
+   "source": null,
    "title": "Engine Room"
   },
   {
    "description": "You are in the captain's cabin. There is a large and comfortable-looking bunk here. The forward doorway leads to the crew's lounge.",
    "obj": 73,
+   "source": "static",
    "title": "Captain's Cabin"
   },
   {
    "description": "You are in a small, cramped cabin decorated with a table and a few chairs. To the aft is the captain's cabin, while the galley lies forward. A ladder leading down goes into the engine room.",
    "obj": 75,
+   "source": "static",
    "title": "Lounge"
   },
   {
    "description": null,
    "obj": 77,
+   "source": null,
    "title": "Galley"
   },
   {
    "description": null,
    "obj": 80,
+   "source": null,
    "title": "Crew's Quarters"
   },
   {
    "description": null,
    "obj": 86,
+   "source": null,
    "title": "Storage Locker"
   },
   {
    "description": null,
    "obj": 87,
+   "source": null,
    "title": "Wheelhouse"
   },
   {
    "description": null,
    "obj": 91,
+   "source": null,
    "title": "Aft Deck"
   },
   {
    "description": null,
    "obj": 92,
+   "source": null,
    "title": "Port Deck"
   },
   {
    "description": "The starboard side of the Mary Margaret has the wheelhouse to port. The deck is well-worn after many years of use, but still solid. The ocean is off to the other side of the rail.",
    "obj": 93,
+   "source": "static",
    "title": "Starboard Deck"
   },
   {
    "description": null,
    "obj": 95,
+   "source": null,
    "title": "Fore Deck"
   },
   {
    "description": null,
    "obj": 97,
+   "source": null,
    "title": "Wharf"
   },
   {
    "description": "The ferry to the mainland arrives here every two hours during the day. People are milling about. The Shore Road starts off to the east.",
    "obj": 98,
+   "source": "static",
    "title": "Ferry Landing"
   },
   {
    "description": "You are at Point Lookout, a small, high cliff that affords a spectacular view of the sea. The cliff bottom is dangerous, so the only safe path is the northwest footpath back to the Ocean Road.",
    "obj": 99,
+   "source": "static",
    "title": "Point Lookout"
   },
   {
    "description": "You are in Mariners' Trust, the Island's bank. In it are a table and a teller's window. You can see the safe beyond, and it looks pretty empty.",
    "obj": 101,
+   "source": "static",
    "title": "Mariners' Trust"
   },
   {
    "description": "This is The Shanty, a tavern which serves the locals. A wooden bar travels the length of the place, and behind it is a mirror so dirty, it offers no reflection. Round tables occupy the floor. The smell of cooking food permeates the place.",
    "obj": 112,
+   "source": "static",
    "title": "The Shanty"
   },
   {
    "description": "This is Outfitters International, a store that specializes in marine supplies. There is a long, high counter separating the supplies and the front area. To the north is the Wharf Road.",
    "obj": 131,
+   "source": "static",
    "title": "Outfitters Int'l"
   },
   {
    "description": "You are standing on the former site of the Outfitters International warehouse, which burned down a few months back. To the north is the Wharf Road and an alley is to the south.",
    "obj": 132,
+   "source": "static",
    "title": "Vacant Lot"
   },
   {
    "description": "You are in the McGinty Salvage office, a concern whose main business is salvaging wrecks. The place is a mess, and the floor is littered with chewed-on cigar stubs. To the north lies the Wharf Road. You can't help feeling uncomfortable here.",
    "obj": 135,
+   "source": "static",
    "title": "McGinty Salvage"
   },
   {
    "description": "You are at the top of the stairs in the Red Boar. Your room is to the south, and other rooms line the hall. The lighting in the hallway is dim and drab like the wallpaper and carpeting.",
    "obj": 147,
+   "source": "static",
    "title": "Upstairs Hallway"
   },
   {
    "description": "You're at the east end of an east/west alley. The back door of The Shanty is to the north, and an overgrown field is to the south. Narrow paths to the northeast and southeast lead to the Ocean Road.",
    "obj": 148,
+   "source": "static",
    "title": "Back Alley"
   },
   {
    "description": "You are in an alley behind Outfitters International. An abandoned field lies to the south.",
    "obj": 149,
+   "source": "static",
    "title": "Back Alley"
   },
   {
    "description": "You are in an east/west alley. To the north is a vacant lot, and an overgrown field lies to the south.",
    "obj": 150,
+   "source": "static",
    "title": "Back Alley"
   },
   {
    "description": "You are in a narrow alley. To the north is the back door of McGinty Salvage, as well as a small window. An overgrown field lies to the south.",
    "obj": 152,
+   "source": "static",
    "title": "Back Alley"
   },
   {
    "description": "You're at the west end of an east/west alley. The back entrance to the Red Boar Inn is to the north, and an overgrown field is to the south.",
    "obj": 153,
+   "source": "static",
    "title": "Back Alley"
   },
   {
    "description": null,
    "obj": 154,
+   "source": null,
    "title": "Shore Road"
   },
   {
    "description": "You are at the west end of the east/west Shore Road, with the ferry landing to the west. To the north is an impenetrable field, while the south is bordered by the ocean. You can see the mainland in the distance.",
    "obj": 156,
+   "source": "static",
    "title": "Shore Road"
   },
   {
    "description": "This is the south end of the Ocean Road. To the southeast is a small path leading up to about 100 feet above sea level. The Ocean Road heads north, and the Shore Road starts to the southwest.",
    "obj": 157,
+   "source": "static",
    "title": "Ocean Road"
   },
   {
    "description": "You are halfway along the Ocean Road, with the start of an alley off to the northwest. An empty field lies to your west, and the dangerous ocean shore lies off to your east.",
    "obj": 158,
+   "source": "static",
    "title": "Ocean Road"
   },
   {
    "description": "You are at the north end of the Ocean Road, a narrow north/south road on the east edge of the island. The Wharf Road starts to the northwest, and a back alley starts off to the southwest.",
    "obj": 159,
+   "source": "static",
    "title": "Ocean Road"
   },
   {
    "description": "You're on the east end of Wharf Road. The Ocean Road starts here and parallels the island's east edge, heading to the southeast. The Shanty is to the south.",
    "obj": 160,
+   "source": "static",
    "title": "Wharf Road"
   },
   {
    "description": "The east/west Wharf Road continues, with Outfitters International, a store which supplies ocean-going vessels, to the south.",
    "obj": 161,
+   "source": "static",
    "title": "Wharf Road"
   },
   {
    "description": "You are on the Wharf Road where the wharf starts up to the north. The former site of Outfitters International's warehouse fronts the south side of the road.",
    "obj": 162,
+   "source": "static",
    "title": "Wharf Road"
   },
   {
    "description": "You are on the Wharf Road, with the McGinty Salvage office to the south. The ocean lies to the north, its brine smell strong and refreshing.",
    "obj": 163,
+   "source": "static",
    "title": "Wharf Road"
   },
   {
    "description": "This is the end of the Wharf Road, an east/west, two-lane road that's the island's main street. Off to the east, small businesses line the south side of the street. A winding road starts to the southwest, heading toward the lighthouse. The Red Boar Inn is to the south.",
    "obj": 165,
+   "source": "static",
    "title": "Wharf Road"
   },
   {
    "description": "A winding road starts up here to the southwest. You can see the top of the lighthouse off to the northwest. The Wharf Road lies to the northeast.",
    "obj": 166,
+   "source": "static",
    "title": "Winding Road"
   },
   {
    "description": "The road branches to the northeast and northwest with the lighthouse off to the northwest. To the south is an impenetrable swamp.",
    "obj": 167,
+   "source": "static",
    "title": "Winding Road"
   },
   {
    "description": "The road ends at the lighthouse to the north, and heads back to the southeast. You can see and hear the ocean pound the shoreline.",
    "obj": 169,
+   "source": "static",
    "title": "Winding Road"
   },
   {
    "description": "You're in your room in the Red Boar Inn. It's sparsely furnished, but comfortable enough. To the north is the door, and there's a closet without a door to the west.",
    "obj": 183,
+   "source": "static",
    "title": "Your Room"
   },
   {
    "description": "This is the lobby of the Red Boar Inn, a place with the charm of a two-dollar flophouse. The Wharf Road is outside, to the north, and a stairway leads up to the rooms to the south.",
    "obj": 190,
+   "source": "static",
    "title": "Red Boar Inn"
   }
  ],

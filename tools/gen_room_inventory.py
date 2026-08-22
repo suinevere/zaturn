@@ -21,6 +21,7 @@ Globals: ROOT, Z3, OUT
 import json
 import pathlib
 import sys
+import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -30,6 +31,8 @@ import zstory
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 Z3 = ROOT / "tools" / "assets" / "Z3"
 OUT = ROOT / "tools" / "assets" / "rooms"
+SOLUTIONS = ROOT / "tools" / "typeahead" / "solutions"
+WANDER = ROOT / "tools" / "wander.txt"
 
 
 def static_rooms(story):
@@ -65,6 +68,67 @@ def static_rooms(story):
     return rows, desc_prop
 
 
+def capture_runtime(exe, story_path):
+    """{title: body} captured by driving host mojozork through this story.
+
+    Description: Runs the story's walkthrough (tools/typeahead/solutions/
+        <STEM>.WIN) when one exists, always followed by the fixed wander
+        script, exactly as gen_room_corpus.main does it. A title seen twice
+        keeps its first capture, so the walkthrough (a real, deliberate path
+        through the game) wins over the wander pass's incidental visits.
+    Author: suinevere
+    Dependencies: gen_room_corpus
+    Globals: SOLUTIONS, WANDER
+    Params: exe -- built host mojozork binary; story_path -- a .Z3 file
+    Returns: dict mapping room title to its captured body text
+    """
+    seen = {}
+    stem = story_path.stem.upper()
+    win = SOLUTIONS / f"{stem}.WIN"
+    if win.is_file() and win.stat().st_size > 0:
+        cmds = [ln.strip() for ln in win.read_text(errors="replace").splitlines()
+                if ln.strip() and not ln.strip().startswith("#")]
+        for title, body in corpus.rooms_from(corpus.run(exe, story_path, cmds)):
+            seen.setdefault(title, body)
+    wander = [ln.strip() for ln in WANDER.read_text().splitlines() if ln.strip()]
+    for title, body in corpus.rooms_from(corpus.run(exe, story_path, wander)):
+        seen.setdefault(title, body)
+    return seen
+
+
+def merge_runtime(inv, captured):
+    """Fills the descriptions the static pass could not decode, and stamps
+    every row's source.
+
+    Description: Fills descriptions the static pass could not decode from a
+        {title: text} map captured by driving the interpreter, and stamps
+        every row's source. Static wins on a collision: it is the string the
+        story actually stores, while a capture is one particular visit under
+        one particular game state.
+
+        A capture attaches to EVERY row sharing that title. Runtime output
+        carries no object number, so a duplicated title cannot be resolved
+        to one object -- and does not need to be, because rooms are
+        duplicated precisely when they are the same place repeated.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: N/A
+    Params: inv -- an inventory dict; captured -- {title: description}
+    Returns: the same dict, rows mutated in place
+    """
+    for row in inv["rooms"]:
+        if row["description"]:
+            row["source"] = "static"
+            continue
+        text = captured.get(row["title"])
+        if text:
+            row["description"] = text
+            row["source"] = "runtime"
+        else:
+            row["source"] = None
+    return inv
+
+
 def inventory_for(path):
     """One story's full inventory record, ready to serialise.
 
@@ -93,20 +157,28 @@ def main(argv):
     """Writes one JSON inventory per story into tools/assets/rooms.
 
     Description: One file per story, named after its stem, so later tasks can
-        load a single game's rooms without parsing the whole library.
+        load a single game's rooms without parsing the whole library. Static
+        decoding fills what it can; a runtime capture pass (host mojozork,
+        built once for the whole run) fills the rest, then merge_runtime
+        stamps every row's source.
     Author: suinevere
-    Dependencies: json
+    Dependencies: json, tempfile, gen_room_corpus
     Globals: Z3, OUT
     Params: argv -- unused
     Returns: 0
     """
     OUT.mkdir(parents=True, exist_ok=True)
-    for path in sorted(Z3.glob("*.Z3")):
-        d = inventory_for(path)
-        dst = OUT / (path.stem + ".json")
-        dst.write_text(json.dumps(d, indent=1, sort_keys=True) + "\n",
-                       encoding="utf-8")
-        print(f"{path.name:14} {d['count']:4} rooms")
+    with tempfile.TemporaryDirectory() as td:
+        exe = corpus.build_mojozork(pathlib.Path(td))
+        for path in sorted(Z3.glob("*.Z3")):
+            d = inventory_for(path)
+            captured = capture_runtime(exe, path)
+            merge_runtime(d, captured)
+            dst = OUT / (path.stem + ".json")
+            dst.write_text(json.dumps(d, indent=1, sort_keys=True) + "\n",
+                           encoding="utf-8")
+            n_null = sum(1 for r in d["rooms"] if r["source"] is None)
+            print(f"{path.name:14} {d['count']:4} rooms  null={n_null:3d}")
     return 0
 
 

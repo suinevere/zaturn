@@ -6,521 +6,625 @@
   {
    "description": "These cubicles are for use by any visitors or station personnel beyond the normal complement. The entire barracks seem to be unused as well as deserted. The exit lies to the south, and the barracks curve around to the east.",
    "obj": 5,
+   "source": "static",
    "title": "Auxiliary Barracks"
   },
   {
    "description": "This moderately large store sells all kinds of games and other recreational materials. There is also an in-house rec area, featuring a group of simulation booths. The \"street\" lies to the southwest.",
    "obj": 6,
+   "source": "static",
    "title": "Rec Shop"
   },
   {
    "description": "This central corridor turns northeast and northwest of here. A second corridor begins here and leads south. There are doorways to the southwest, southeast, and east.",
    "obj": 7,
+   "source": "static",
    "title": "South Junction"
   },
   {
    "description": "Outdated forms and expired files are reduced to pulp by this machinery. In addition, raw pulp is constantly being ferried into the station from nearby forest worlds. The output from this plant feeds the station's printing plant, which lies to the southeast.",
    "obj": 11,
+   "source": "static",
    "title": "Paper Recycling Plant"
   },
   {
    "description": null,
    "obj": 12,
+   "source": null,
    "title": "Level Three"
   },
   {
    "description": "Surrounding the beds of this infirmary is the finest diagnostic equipment that unlimited Stellar Patrol budgets can buy. To the east, an ID reader indicates a security door. You can leave to the west or southeast.",
    "obj": 18,
+   "source": "static",
    "title": "Sick Bay"
   },
   {
    "description": "This is a fairly comfortable two-person living quarters, significantly roomier than the barracks where most of the ship's personnel live. A door leads north and a doorway south.",
    "obj": 19,
+   "source": "static",
    "title": "Officers' Quarters B"
   },
   {
    "description": "This sixty-seat auditorium is used for lectures, certain large briefings, an occasional live entertainment, and a rare live broadcast over deep-space channels. A projection booth dominates the rear of the room. The theatre's only exit is to the north.",
    "obj": 20,
+   "source": "static",
    "title": "Theatre"
   },
   {
    "description": "This permanently-docked one-man ship serves as the office for Hizzoner the Mayor, the unofficial leader of the village. Main Street is below.",
    "obj": 22,
+   "source": "static",
    "title": "Mayor's Office"
   },
   {
    "description": "This is a fairly large conference room with north and south exits.",
    "obj": 24,
+   "source": "static",
    "title": "Meeting Room 2"
   },
   {
    "description": "This is the room where octuplet copies of forms are stored. Since it's only a hundred square meters, this room cannot hold more than a few days' worth of storage before being dumped to nanofilm. Mercifully, there is an exit to the northeast.",
    "obj": 27,
+   "source": "static",
    "title": "File Room"
   },
   {
    "description": "This is a dilapidated vessel that some seedy loan shark has moored on the south side of the alley.",
    "obj": 30,
+   "source": "static",
    "title": "Loan Shark"
   },
   {
    "description": "This shop, with exits to the northeast and southeast, sells a variety of animals. Many a lonely spacer has discovered the joys a pet can bring, and this shop features animals of both terrestrial and alien origin. A large sign advertises this month's special.",
    "obj": 31,
+   "source": "static",
    "title": "Pet Store"
   },
   {
    "description": null,
    "obj": 32,
+   "source": null,
    "title": "Docking Bay #2"
   },
   {
    "description": "This is one of the storage areas. Exits lie to the east and south.",
    "obj": 33,
+   "source": "static",
    "title": "Storage"
   },
   {
    "description": "This is a fairly comfortable two-person living quarters, significantly roomier than the barracks where most of the ship's personnel live. There's a door to the north, and an opening leads southeast.",
    "obj": 36,
+   "source": "static",
    "title": "Officers' Quarters A"
   },
   {
    "description": "This is a small office associated with the lab to the south.",
    "obj": 37,
+   "source": "static",
    "title": "Engineering Office"
   },
   {
    "description": "This cramped living area has cubicles for the dozen or so scientists and engineers working in this Sub-Module. The only exit is a gangway leading down.",
    "obj": 39,
+   "source": "static",
    "title": "Scientists' Quarters"
   },
   {
    "description": "This is the rather ordinary sanitary facility for the barracks to the north.",
    "obj": 43,
+   "source": "static",
    "title": "Auxiliary SanFac"
   },
   {
    "description": "This filthy north-south tube is quite a change from the gleaming, well-scrubbed metal of the space station.",
    "obj": 44,
+   "source": "static",
    "title": "Grimy Passage"
   },
   {
    "description": null,
    "obj": 47,
+   "source": null,
    "title": "South Connection"
   },
   {
    "description": "This is a modest prison, with three cells. The only exit is west.",
    "obj": 49,
+   "source": "static",
    "title": "Brig"
   },
   {
    "description": null,
    "obj": 51,
+   "source": null,
    "title": "Level Five"
   },
   {
    "description": null,
    "obj": 52,
+   "source": null,
    "title": "Elevator"
   },
   {
    "description": null,
    "obj": 53,
+   "source": null,
    "title": "Factory"
   },
   {
    "description": "The deck twelve corridor ends here at the entrance to the cargo bay, to starboard. A smaller entrance leads fore.",
    "obj": 54,
+   "source": "static",
    "title": "Cargo Bay Entrance"
   },
   {
    "description": "The three balls hanging by the (northeastern) entrance to this space hut indicate that a villager down on his or her luck could come here to hock some valuable possession.",
    "obj": 56,
+   "source": "static",
    "title": "Pawn Shop"
   },
   {
    "description": "This is the Station Commander's conference room. Doors point north and west.",
    "obj": 59,
+   "source": "static",
    "title": "Briefing Room"
   },
   {
    "description": null,
    "obj": 64,
+   "source": null,
    "title": "Flophouse"
   },
   {
    "description": null,
    "obj": 67,
+   "source": null,
    "title": "Station Control"
   },
   {
    "description": "This is a small office associated with the lab to the south.",
    "obj": 71,
+   "source": "static",
    "title": "Astro Office"
   },
   {
    "description": "This outdated drydock is now a messy junk yard. A huge pile of floating junk fills the center of the bubble. Passages lead upwards and west.",
    "obj": 72,
+   "source": "static",
    "title": "Junk Yard"
   },
   {
    "description": "This is the station's largest docking bay. A huge door to the east leads into the station.\n   Resting in the docking bay is a small ship of obviously alien origin. An open hatch seems to beckon you inward.",
    "obj": 76,
+   "source": "static",
    "title": "Docking Bay #1"
   },
   {
    "description": "This is a fairly large space where much of the maintenance work for the station takes place. Some repair work for visiting ships is also done here. The room is filled with all sorts of repair and fabrication machinery. A door leads south, and there's an opening to the north.",
    "obj": 86,
+   "source": "static",
    "title": "Workshop"
   },
   {
    "description": null,
    "obj": 87,
+   "source": null,
    "title": "Commander's Office"
   },
   {
    "description": null,
    "obj": 92,
+   "source": null,
    "title": "Printing Plant"
   },
   {
    "description": "This warren of tiny cubicles fills the southern half of this level, curving toward exits in the northeast and northwest corners.",
    "obj": 93,
+   "source": "static",
    "title": "Male Barracks"
   },
   {
    "description": "The Stellar Patrol has opened a recruitment office off Broadway, thus giving tacit approval to this technically nonregulation space village. Posters showing a rose-colored view of Patrol life are plastered all over the walls. A door leads south.",
    "obj": 94,
+   "source": "static",
    "title": "Recruitment Office"
   },
   {
    "description": "From your experience with tawdry, space village bars, they are crowded every millichron of the day and night. So it's quite unusual that this saloon is totally deserted. Despite the current solitude, you can almost hear the tinny music, the loud voices, the fistfights. Openings lead west and northwest, and to the east is a partially disguised exit.",
    "obj": 95,
+   "source": "static",
    "title": "Saloon"
   },
   {
    "description": "The huge galactic mining conglomerates often open field offices in these space villages, and this is one of those. Miners will haul some promising hunk of space rock into the vicinity, and then come here to sell the rights to it. You can leave to the west.",
    "obj": 97,
+   "source": "static",
    "title": "Field Office"
   },
   {
    "description": "This is a secondary weapons storage deck, but the only weapon deck on a station with no Military Sub-Module. Exit: south.",
    "obj": 99,
+   "source": "static",
    "title": "Armory"
   },
   {
    "description": null,
    "obj": 100,
+   "source": null,
    "title": "Chapel"
   },
   {
    "description": "Various biological sciences, as they relate to the environment of space, are studied in this laboratory. There is a gangway leading up, another leading down, and a door leading north.",
    "obj": 101,
+   "source": "static",
    "title": "Bio Lab"
   },
   {
    "description": "The central corridor continues around to the southeast and southwest, but another corridor joins from the north. There's a door to the east and a doorway to the northeast.",
    "obj": 104,
+   "source": "static",
    "title": "North Junction"
   },
   {
    "description": null,
    "obj": 106,
+   "source": null,
    "title": "Robot Pool"
   },
   {
-   "description": null,
+   "description": "This huge airlock is essentially a giant loading dock, where truckloads of forms arrive from various printing planets throughout the sector and are immediately distributed throughout the administrative deck. The only exit on foot is back the way you came. A spacetruck, its hatch closed, waits in the cargo bay.",
    "obj": 108,
+   "source": "runtime",
    "title": "Cargo Bay"
   },
   {
    "description": "This is the home of some kook, a proselytizer of the fringe religion which believes that humankind has angered God by venturing out into space, and the universe will end sometime next week. Next week never seems to come, but there are enough kooks in the galaxy to keep the belief going. You can exit to the south.",
    "obj": 109,
+   "source": "static",
    "title": "Missionary"
   },
   {
    "description": "You are at the top of an air shaft. Handholds lead downward, and a partially open air grate leads out of the shaft.",
    "obj": 113,
+   "source": "static",
    "title": "Top of Air Shaft"
   },
   {
    "description": null,
    "obj": 114,
+   "source": null,
    "title": "Barbershop"
   },
   {
    "description": null,
    "obj": 115,
+   "source": null,
    "title": "Shady Dan's"
   },
   {
    "description": "You are in a large, vertical air duct. Handholds lead up and down.",
    "obj": 116,
+   "source": "static",
    "title": "Air Shaft"
   },
   {
    "description": null,
    "obj": 118,
+   "source": null,
    "title": "Comm Center"
   },
   {
    "description": null,
    "obj": 124,
+   "source": null,
    "title": "Mess Hall"
   },
   {
    "description": "This is the shop for station personnel, selling everything from postcards to chewing gum at inflated prices. Exits lead west and southwest.",
    "obj": 125,
+   "source": "static",
    "title": "The PX"
   },
   {
    "description": null,
    "obj": 126,
+   "source": null,
    "title": "Dome"
   },
   {
    "description": "This is an east-west tube, widening as it gets farther from the Command Module.",
    "obj": 127,
+   "source": "static",
    "title": "Makeshift Connector"
   },
   {
    "description": "This station's library has some printed material, such as recently transmitted magazines, but primarily it is a location for reading nanofilm spools, using the spool reader here, and for accessing the main computer's data banks via a computer terminal. Strangely, the computer terminal has been removed. There's a door to the north and an exit to the west.",
    "obj": 130,
+   "source": "static",
    "title": "Library"
   },
   {
    "description": "This sprawling old cargo ship, its engines long ago cannibalized for spare parts, has been converted into a store for supplies and curios. There's an eye-catching sign on the wall. Passageways lead in many directions, and there's an opening in the floor.",
    "obj": 134,
+   "source": "static",
    "title": "Trading Post"
   },
   {
    "description": "This is the largest space in the ship, three decks tall and with the floor area of seven Rigellian buzzball fields. The only exit is fore.",
    "obj": 137,
+   "source": "static",
    "title": "Forms Storage Room"
   },
   {
    "description": null,
    "obj": 143,
+   "source": null,
    "title": "Airlock"
   },
   {
    "description": "The corridor continues around to the northwest and southwest, and an adjoining one heads east.",
    "obj": 144,
+   "source": "static",
    "title": "East Junction"
   },
   {
    "description": "This is a tiny room, smelling strongly of various synthesized opium variants. There's a sign on the wall and a door to the south.",
    "obj": 146,
+   "source": "static",
    "title": "Opium Den"
   },
   {
    "description": "This physician's bubble is owned by the village quack, known to his friends as \"Doc\" Schuster, but known to the vast majority of the villagers as Schuster the Shyster. There's a small hole in the wall, probably the opening for a disposal chute. The Doc is out, and in this case, out is northwest.",
    "obj": 148,
+   "source": "static",
    "title": "\"Doc\" Schuster's"
   },
   {
    "description": null,
    "obj": 152,
+   "source": null,
    "title": "Level Six"
   },
   {
    "description": "This is the station's smallest docking bay. You can enter the station to the east.",
    "obj": 153,
+   "source": "static",
    "title": "Docking Bay #4"
   },
   {
    "description": null,
    "obj": 157,
+   "source": null,
    "title": "Alien Ship"
   },
   {
    "description": null,
    "obj": 162,
+   "source": null,
    "title": "East Connection"
   },
   {
    "description": "This tiny control station allows access to the massive memory banks of the station's computer. Ever since the formation of the Third Galactic Union ended the great interstellar dark age, every Stellar Patrol spaceship, every Patrol space station, has been equipped with a computer bulging with the entire accumulated knowledge of mankind. Never again will humanity be permitted to slip back into the ignorance and savagery of the dark age.\n   A ladder leads up to Level Eight, and there's a call button next to the elevator shaft to the north.",
    "obj": 163,
+   "source": "static",
    "title": "Computer Control"
   },
   {
    "description": "This laboratory conducts research into various space-related physical sciences. Gangways lead up and down, and there's a door to the north.",
    "obj": 165,
+   "source": "static",
    "title": "Astro Lab"
   },
   {
    "description": "This cramped dormitory, composed of approximately twenty private cubicles, curves around the northern half of this level, with exits to the southeast and southwest.",
    "obj": 167,
+   "source": "static",
    "title": "Female Barracks"
   },
   {
    "description": "This is the place where a station's exports are prepared before transfer to the docking bays and subsequent shipment throughout the regional sector. Hanging above a large vacant section of the room is an eye-catching sign. The only exit is west.",
    "obj": 168,
+   "source": "static",
    "title": "Shipping Room"
   },
   {
    "description": "This is the primary storage room of the station, with large stockpiles of important items. For example, basic organic materials are needed to supplement the food supply due to the tiny inefficiencies of the recycling process. This is nearly the top level of the Command Module, and the ceiling curves in sharply over the supply room, which curves around to doors at the northwestern and southwestern ends.",
    "obj": 170,
+   "source": "static",
    "title": "Main Storage"
   },
   {
    "description": "This is a tiny living bubble beneath Broadway. The inhabitant, who is nowhere in sight, seems to be in the profession of reading the future for superstitious spacers.",
    "obj": 171,
+   "source": "static",
    "title": "Fortune Teller"
   },
   {
    "description": "This is a small convenience store, the main source of food and living supplies for this village, as well as a supplement supply for personnel from the space station proper. The shelves are pretty bare, and there is no one in sight. Exits lead north, east, southeast and south.",
    "obj": 174,
+   "source": "static",
    "title": "Grocery"
   },
   {
    "description": "A moderately luxurious SanFac, with a pair of bathtubs in addition to the regular fixtures. Exits lead north, northeast, and northwest.",
    "obj": 177,
+   "source": "static",
    "title": "Officers SanFac"
   },
   {
    "description": "This laboratory, which fills most of the middle level of the Sub-Module, is for the study of applications of the various space-related research that takes place on the other levels. Gangways lead up and down, and a door leads north. A connecting tube opens to the south.",
    "obj": 178,
+   "source": "static",
    "title": "Engineering Lab"
   },
   {
    "description": null,
    "obj": 179,
+   "source": null,
    "title": "Greasy Straw"
   },
   {
    "description": "These are by far the nicest living quarters on the station, with separate sleeping, changing, and working cubicles, and a private SanFac. The only exit is west.",
    "obj": 180,
+   "source": "static",
    "title": "Commander's Quarters"
   },
   {
    "description": null,
    "obj": 181,
+   "source": null,
    "title": "In Space"
   },
   {
    "description": "This shiny cylindrical corridor is the connector between the Command Module, to the south, and the Scientific Sub-Module, to the north.",
    "obj": 186,
+   "source": "static",
    "title": "Tube"
   },
   {
    "description": null,
    "obj": 192,
+   "source": null,
    "title": "Holding Tank Level"
   },
   {
    "description": "This is a crowded but otherwise typical sanitary facility, with rows of showers, toilet stalls, and sinks. There are exits both north and south.",
    "obj": 193,
+   "source": "static",
    "title": "Barracks SanFac"
   },
   {
    "description": "You are in the heart of the administrative level of the ship, the largest level of the S.P.S. Duffy or any other Stellar Patrol ship for that matter. The corridor continues starboard and a room lies aft. Beyond the door to port lies the bulk of the Duffy. Next to the door is a slot.",
    "obj": 198,
+   "source": "static",
    "title": "Deck Twelve"
   },
   {
    "description": null,
    "obj": 201,
+   "source": null,
    "title": "Warehouse"
   },
   {
    "description": "This is a small office associated with the lab to the south.",
    "obj": 204,
+   "source": "static",
    "title": "Bio Office"
   },
   {
    "description": "This is a branch office of the First Galactic Bank of Nebulon. There are doors to the north and northwest.",
    "obj": 207,
+   "source": "static",
    "title": "Bank"
   },
   {
    "description": "This small space bubble, with openings to the east and southeast, is decorated with posters of exotic locales, but it's hard to imagine that anyone in this rundown spacetown would be able to afford an interstellar pleasure jaunt.",
    "obj": 208,
+   "source": "static",
    "title": "Travel Agency"
   },
   {
    "description": "This is a medium-sized conference room with doors to the south and west.",
    "obj": 211,
+   "source": "static",
    "title": "Meeting Room 1"
   },
   {
    "description": "This is a wide but not very tall docking bay. The station entrance lies to the east.",
    "obj": 213,
+   "source": "static",
    "title": "Docking Bay #3"
   },
   {
    "description": null,
    "obj": 214,
+   "source": null,
    "title": "Level Four"
   },
   {
    "description": "There's no doubt that \"alley\" is the best word to describe this winding, garbage-strewn connector. Dark passages branch off in almost every direction, and the alley slopes upward to the northwest.",
    "obj": 215,
+   "source": "static",
    "title": "Alley"
   },
   {
    "description": "This is a room where new robots are constructed, old robots are repaired, and unused robots are stored. There's a door to the east.",
    "obj": 216,
+   "source": "static",
    "title": "Robot Shop"
   },
   {
    "description": "There is gravity here at the bottom of the elevator shaft. The elevator's not in sight; the only exit is back to the computer room to the south.",
    "obj": 220,
+   "source": "static",
    "title": "Shaft at Level Nine"
   },
   {
    "description": "This living bubble has been set up as an artist's loft. Most of the space is taken up by a large scrap sculpture floating in the center of the bubble. It is, of course, pretty impossible to tell how close the sculpture is to completion. The way out is to the east.",
    "obj": 221,
+   "source": "static",
    "title": "Studio"
   },
   {
    "description": "This large spacetube is the main thoroughfare of a space village which has sprung up here on the outskirts of the space station, which lies to the north. Rather than the bustling thoroughfare you might expect, however, there isn't a soul in sight. Openings lead up, northeast, south and west. To the southeast, the \"street\" narrows and ramps downward.",
    "obj": 224,
+   "source": "static",
    "title": "Main Street"
   },
   {
    "description": null,
    "obj": 227,
+   "source": null,
    "title": "Gym"
   },
   {
    "description": null,
    "obj": 230,
+   "source": null,
    "title": "Spacetruck"
   },
   {
    "description": "The corridor widens here as it approaches the skin of the space station at the point where a Scientific Sub-Module would connect. Sure enough, the connecting tube of a Sub-Module begins just to the north! An auto-door lies to the west. Opposite it, a doorway leads east. A junction is visible to the south.",
    "obj": 231,
+   "source": "static",
    "title": "North Connection"
   },
   {
    "description": null,
    "obj": 232,
+   "source": null,
    "title": "Casino"
   },
   {
    "description": "This is a wide, cheaply constructed space tube, narrowing to the west. There are openings off this \"street\" in virtually every direction, including one leading downward.",
    "obj": 238,
+   "source": "static",
    "title": "Broadway"
   },
   {
    "description": "The corridor, which widens off to the west, ends here. Doors lie to the east, north, south, and southwest. The door to the north must be a security door, because there's an ID reader next to it.",
    "obj": 245,
+   "source": "static",
    "title": "End of Corridor"
   },
   {
    "description": "This is a fairly comfortable two-person living quarters, significantly roomier than the barracks where most of the ship's personnel live. A doorway lies to the southwest, and there's an auto-door to the north.",
    "obj": 249,
+   "source": "static",
    "title": "Officers' Quarters C"
   },
   {
    "description": "You have reached the bottom of the air vent. Ducts too small for you to enter lead off laterally. Handholds lead upward, and the entire floor of the duct is another large grating.",
    "obj": 253,
+   "source": "static",
    "title": "Bottom of Air Shaft"
   },
   {
    "description": null,
    "obj": 255,
+   "source": null,
    "title": "Laundry"
   }
  ],

@@ -6,326 +6,391 @@
   {
    "description": "A dank and forgotten pit contains the dungeons. There is a cell to the north, and a partly blocked passage leads even deeper into the earth. It looks as if there was once a mortared stone wall blocking this passage, but it has crumbled and collapsed, reopening the tunnel.",
    "obj": 2,
+   "source": "static",
    "title": "Dungeon"
   },
   {
    "description": "This spot halfway up the Lonely Mountain is desolate of vegetation. Short, stunted trees with branches empty surround you and the air is heavy and smoke-filled.",
    "obj": 9,
+   "source": "static",
    "title": "Mountain Trail"
   },
   {
    "description": "You are in the center of a large courtyard, which surrounds you in all directions. Directly in front of you, to the east, is a large temple flanked by two smaller towers. Behind the temple can be seen the two eastern towers of the castle, shrouded in fog, and the single dark turret, black as night and sending dark streams of smoke into a lowering sky. From the temple comes a howling, haunting chant.",
    "obj": 22,
+   "source": "static",
    "title": "Courtyard"
   },
   {
    "description": "This room in the high tower appears to be a map room, with hundreds of ancient maps covering the walls. A huge globe, made of gold, sits on a pedestal in the center of the room. Through the tower windows can be seen a vast forest stretching out to the northeast and the sea, covered in fog, to the east and south. Stairs to the south lead to the bottom of the tower.",
    "obj": 23,
+   "source": "static",
    "title": "Map Room"
   },
   {
    "description": "The kitchen is dusty and disused. Old bones litter the floor, and the carving knives are rusty. A rat nest fills one of the ovens, and cobwebs are everywhere. There is some rotting food in a garbage heap in one corner.",
    "obj": 27,
+   "source": "static",
    "title": "Kitchen"
   },
   {
    "description": "You are in a thick forest shading into a deep and miasmic swamp. The ground is very wet and boggy here, and footing is treacherous. Lily pads cover the surface of the water, and frogs abound. Things look drier to the west.",
    "obj": 32,
+   "source": "static",
    "title": "Swamp"
   },
   {
    "description": "This is the altar of the temple. Acrid smoke fills the air, and a feeling of lurking evil is all around. A low droning, just at the lowest end of your perception, causes your hair to stand on end. Behind the altar is an enormous statue of a demon which reaches toward you with dripping fangs and razor-sharp talons. The fangs and talons are blood-red. In the temple below is a mass of hunched figures, chanting in hideous tones.",
    "obj": 35,
+   "source": "static",
    "title": "Sacrificial Altar"
   },
   {
    "description": "You stand at a point of decision on a road which makes a wide fork to the northeast and southeast, circling the base of the Lonely Mountain, which looms high overhead to the east. A very long and winding road starts here and stretches out of sight to the west through low, smoky hills.",
    "obj": 42,
+   "source": "static",
    "title": "Fork"
   },
   {
    "description": "This short piece of corridor continues to the north and south.",
    "obj": 43,
+   "source": "static",
    "title": "East Hall"
   },
   {
-   "description": null,
+   "description": "You are walking along the road. It wends its way through low hills, sparse forests, and occasional subsistence farms. To the west, things seem lighter and more pleasant. To the east they seem oppressive and dark. A worn sign sits beside the road here. The deserted village is to the east.",
    "obj": 45,
+   "source": "runtime",
    "title": "Long Road"
   },
   {
    "description": "This is a circular room with no floor. There are exits east and west. A crude drawing of stairsteps graces the ceiling. Downward is only darkness.",
    "obj": 47,
+   "source": "static",
    "title": "Winding Stair"
   },
   {
    "description": "This is the top of the Lonely Mountain. In olden days, mariners had named it Signal Mountain, for its glistening peak reflected the pale moonlight, providing an unmistakable landmark on unclouded nights. The bald mountain face is made of a shining substance whose nature is unknown to you. Looking to the west, low hills stretch to the horizon, and small pieces of the Long Road can be seen winding their way to distant lands. To the east, far away, can be seen a great castle at the edge of the Sea. Three turrets it has; two, old and still majestic, lie on either side of a third, cold, black as night and squat as a toad. An evil smoke seems to emanate from this tower, shrouding the others in a darkening fog. A small mountain trail leaves the peak and descends to the south into a small village far below.",
    "obj": 49,
+   "source": "static",
    "title": "Lonely Mountain"
   },
   {
    "description": null,
    "obj": 54,
+   "source": null,
    "title": "Cell"
   },
   {
    "description": "This small open area stands at the old north gate of the castle, now badly rusted. Through the gate, a forest can be seen. To the west, a hall glows with light, and to the south, the dark castle can be reentered. A narrow passage to the east leads to the base of the northeast tower.",
    "obj": 64,
+   "source": "static",
    "title": "North Gate"
   },
   {
    "description": "This dark and damp spot is at the base of the southwest tower of the castle. Two corridors lead off to the north and east. A winding staircase ascends into the tower.",
    "obj": 65,
+   "source": "static",
    "title": "Tower"
   },
   {
    "description": "This is the northern part of the large interior courtyard of the castle. The vast lawns continue from here south and west. To the southeast stands a huge temple, on either side of which are dark towers. The courtyard continues east along a narrow path.",
    "obj": 66,
+   "source": "static",
    "title": "Courtyard"
   },
   {
    "description": null,
    "obj": 70,
+   "source": null,
    "title": "Hall of Mirrors Three"
   },
   {
    "description": "This narrow promenade stretches into darkness to the south and, through an archway, toward an open area to the north.",
    "obj": 77,
+   "source": "static",
    "title": "West Hall"
   },
   {
    "description": "This is a small prison cell in the north tower of the temple. Hideous shapes can be seen through the iron-barred window in the prison door. From the temple, a bloodcurdling chant can be heard.",
    "obj": 87,
+   "source": "static",
    "title": "Cell"
   },
   {
    "description": "The trail ends here. A ruined stone foundation marks the site of the Old Lingolf House, which presumably was a monument of some sort. The trail head is off to the southwest, and a small brook flows slowly by.",
    "obj": 89,
+   "source": "static",
    "title": "Shady Brook"
   },
   {
    "description": "This is a rocky beach along a grey and lifeless sea. There is dead seaweed covering many rocks, and listless waves barely stir the flotsam and jetsam here. There are many shells, but all are broken. A narrow path to the northwest leads into a meadow.",
    "obj": 92,
+   "source": "static",
    "title": "Beach"
   },
   {
    "description": "You are in a dark forest, just north of a rusted gate. Except to the east and south, the forest is thick all around you.",
    "obj": 95,
+   "source": "static",
    "title": "Forest"
   },
   {
    "description": "The trail turns a corner here, bending out of sight to the southeast and southwest. The ground is higher here than to the south, allowing you to make out the top of the Lonely Mountain, shrouded in clouds. No path from here leads up the mountain, however.",
    "obj": 96,
+   "source": "static",
    "title": "Trail"
   },
   {
    "description": null,
    "obj": 99,
+   "source": null,
    "title": "Cell"
   },
   {
    "description": null,
    "obj": 101,
+   "source": null,
    "title": "Outside Gate"
   },
   {
    "description": "You are on the northeast side of the Lonely Mountain, walking a narrow path through rolling hills. On one side of the path is a sign and behind that, to the northeast, a winding path through the thick undergrowth. The trail continues to the southeast.",
    "obj": 102,
+   "source": "static",
    "title": "Trail Head"
   },
   {
    "description": "This small room must have been a closet of some sort. To the north is a passage leading out into a courtyard. Another exit is to the south.",
    "obj": 103,
+   "source": "static",
    "title": "Closet"
   },
   {
    "description": "The wall is cylindrical here, with exits east and west. The eastern one opens into a dark, enclosed space. The air is thick with acrid smoke, and black, greasy ashes mar the floor. The mortar and stones of the walls are stained and crumbly.",
    "obj": 105,
+   "source": "static",
    "title": "Landing"
   },
   {
    "description": "You are north of a small tower which connects with the temple to the south. A large courtyard can be seen to the west and a smaller one to the southeast.",
    "obj": 116,
+   "source": "static",
    "title": "Courtyard"
   },
   {
    "description": "This is the interior of a huge temple of primitive construction. A few flickering torches cast a sallow illumination over the altar, which, atop a row of stairs, is still drenched with the blood of human sacrifice. Behind the altar is an enormous statue of a demon which seems to reach towards you with dripping fangs and razor-sharp talons. Two open doorways lead out of the temple to the east and west, while two wooden doors stand at the north and south. A mass of hunched figures in the temple are chanting a haunting tune. They don't seem interested in your presence.",
    "obj": 122,
+   "source": "static",
    "title": "Temple"
   },
   {
    "description": "This fabulous room commands a magnificent view of the Lonely Mountain which lies to the north and west. The room itself is filled with beautiful chests and cabinets which once contained precious jewels and other objets d'art. These are empty. Winding stone stairs lead down to the base of the tower.",
    "obj": 123,
+   "source": "static",
    "title": "Jewel Room"
   },
   {
    "description": null,
    "obj": 125,
+   "source": null,
    "title": "Hall of Mirrors Two"
   },
   {
    "description": null,
    "obj": 129,
+   "source": null,
    "title": "Gallery"
   },
   {
    "description": null,
    "obj": 137,
+   "source": null,
    "title": "Banquet Hall"
   },
   {
    "description": "The trail makes a hairpin turn here, swinging out to the northwest and northeast, where it enters a small village. Low, smoky hills stretch out to the west and south.",
    "obj": 140,
+   "source": "static",
    "title": "Loop"
   },
   {
    "description": "This is the southern part of the great courtyard, which spreads out to the north and west. A narrow stretch of grass continues to the east. To the northeast stands the temple, flanked by two small towers.",
    "obj": 142,
+   "source": "static",
    "title": "Courtyard"
   },
   {
    "description": "This is a meadow near the sea. There is a smell of salt in the air. Only heather and thistles grow here. To the north is a gate leading into the castle. A narrow path to the southeast leads to the shore of the Sea.",
    "obj": 143,
+   "source": "static",
    "title": "Meadow"
   },
   {
    "description": null,
    "obj": 145,
+   "source": null,
    "title": "Engine Room"
   },
   {
    "description": "This is a library, or rather it was until it was ransacked and despoiled. Most of the contents of the room have been burned in a huge bonfire in the center of the room. Hundreds of charred and empty tubes are scattered about, as if by someone searching, so ashes are strewn about. There are rat tracks in the ashes.",
    "obj": 146,
+   "source": "static",
    "title": "Library"
   },
   {
    "description": "This is a room carved out of black basalt, eerily lit by flickering fires and the dim glow of magic.",
    "obj": 156,
+   "source": "static",
    "title": "Warlock's Tower"
   },
   {
    "description": null,
    "obj": 160,
+   "source": null,
    "title": "Winding Stair"
   },
   {
    "description": null,
    "obj": 161,
+   "source": null,
    "title": "Guarded Door"
   },
   {
    "description": "You are standing in a small courtyard between a large open hall to the east and a temple to the west. The temple is flanked to the north and south by two small towers. Paths cross the lawn to the northwest and southwest.",
    "obj": 162,
+   "source": "static",
    "title": "Courtyard"
   },
   {
    "description": "The eyrie is a round bedroom high in the tower. Narrow windows overlook the outside. A stone stairway leads down.",
    "obj": 164,
+   "source": "static",
    "title": "Bedroom"
   },
   {
    "description": "This is the control room for all the machinery nearby. The controls are all magical, of course. The walls are covered by blinking lights and shifting displays, interspersed with arcane dials and glowing buttons. It's all very mysterious looking. The exit, to the northwest, leads into a room with machinery which would surely crush you if you were to attempt to enter it.",
    "obj": 171,
+   "source": "static",
    "title": "Control Room"
   },
   {
    "description": null,
    "obj": 172,
+   "source": null,
    "title": "Hall of Mirrors One"
   },
   {
    "description": "You are on an east-west road, which wends its way through the dark, rolling hills of this land. To the west rises a high mountain, to the east stands a high castle with dark towers.",
    "obj": 173,
+   "source": "static",
    "title": "Western Road"
   },
   {
    "description": "You are at a fork in the road where paths to the northwest and southwest girdle the base of the Lonely Mountain and a smaller path winds its way to the east.",
    "obj": 189,
+   "source": "static",
    "title": "Eastern Fork"
   },
   {
    "description": "You are south of a small tower which connects with the temple to the north. A large courtyard can be seen to the west and a smaller one to the northeast.",
    "obj": 190,
+   "source": "static",
    "title": "Courtyard"
   },
   {
    "description": "This is the castle's village. Formerly, peasants lived here, going to their farm plots each day. Merchants and artisans made it a center of cultural activity. But now it's deserted. Or almost: there is smoke rising from a particularly decrepit hovel to the south. A path travels through the village from southwest to northeast, heading towards the castle, and a less-used trail heads north up the mountain.",
    "obj": 196,
+   "source": "static",
    "title": "Deserted Village"
   },
   {
    "description": "This is a circular pit of apparently infinite depth. The walls are of crudely dressed stone. No floor is visible.",
    "obj": 209,
+   "source": "static",
    "title": "Bottomless Pit"
   },
   {
    "description": "The trail here turns dry and dusty. To the northwest is the fork leading to the Long Road, and the trail continues to the southeast.",
    "obj": 212,
+   "source": "static",
    "title": "Dusty Trail"
   },
   {
    "description": null,
    "obj": 213,
+   "source": null,
    "title": "Secret Passage"
   },
   {
    "description": "This is the westernmost point in a large open courtyard. The huge entrance gate to the castle looms ominously to the west. The courtyard widens as it proceeds to the east, where a large, ivy-covered temple stands. On either side of the temple are small towers. Far beyond the temple, high above, are two large towers marking the corners of the castle. A squat dark turret hunches between them, blackening the sky around it. A small path leads into the castle to the south.",
    "obj": 217,
+   "source": "static",
    "title": "Courtyard"
   },
   {
    "description": "You are on a long pebbled path, stretching out to the north. To the south the path continues through an open arch into an open area.",
    "obj": 219,
+   "source": "static",
    "title": "Pebbled Path"
   },
   {
    "description": "This is the base of the northwest tower of the castle. A winding staircase leads up into the tower itself, and passages lead from here to the east and south.",
    "obj": 225,
+   "source": "static",
    "title": "Tower"
   },
   {
    "description": "You are south of an old wooden shack, apparently deserted. The trail extends from northeast to southwest here, circling the Lonely Mountain, which lies to the southeast.",
    "obj": 227,
+   "source": "static",
    "title": "Outside of Shack"
   },
   {
    "description": null,
    "obj": 229,
+   "source": null,
    "title": "Hall of Mirrors Four"
   },
   {
    "description": "This is the base of the southeast tower of the castle. From atop a winding staircase comes a loud crashing and screeching noise. To the west is a corridor and the southern gate of the castle.",
    "obj": 236,
+   "source": "static",
    "title": "Tower"
   },
   {
    "description": null,
    "obj": 243,
+   "source": null,
    "title": "Inside Gate"
   },
   {
    "description": "The inside of the shack is a shambles. An overturned table and bench, and a few broken windows remain. An oven is the only fixture that's even recognizable. The door is to the south.",
    "obj": 244,
+   "source": "static",
    "title": "Inside Shack"
   },
   {
    "description": null,
    "obj": 246,
+   "source": null,
    "title": "South Gate"
   },
   {
    "description": "The corridor widens here to form a large hall. To the north and south are small passages, and to the east is what appears to be an enormous spiral staircase. A passage to the west leads into a courtyard. The walls here are scarred and black, and a strange heaviness hangs in the air.",
    "obj": 247,
+   "source": "static",
    "title": "Junction"
   },
   {
    "description": "You are on a road which enters a small village to the southwest and comes to a fork to the northeast. The Lonely Mountain looms above but there is no path from here which ascends the mountain.",
    "obj": 249,
+   "source": "static",
    "title": "Village Outskirts"
   },
   {
    "description": "The damp corridor continues east and west from here. A dark and forbidding stairway leads down to the south. In addition, a narrow passage leads to the north.",
    "obj": 253,
+   "source": "static",
    "title": "South Hall"
   }
  ],

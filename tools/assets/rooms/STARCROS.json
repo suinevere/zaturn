@@ -6,431 +6,517 @@
   {
    "description": null,
    "obj": 3,
+   "source": null,
    "title": "Control Bubble Entrance"
   },
   {
    "description": "You are floating near and clinging to a large crystalline bubble covering the aft end of the axis of rotation of the artifact. There is no weight here. Small knobs resembling handholds cover the bubble; you could use them to climb back down. Far away at the fore end of the axis you can see another bubble very similar to this one.",
    "obj": 4,
+   "source": "static",
    "title": "On Drive Bubble"
   },
   {
    "description": "You are climbing a gigantic tree, one that would make the largest sequoia blush with envy. Fortunately the bark is rough and climbing is easy. The gravity lessens as you near the axis of rotation, which also helps.",
    "obj": 5,
+   "source": "static",
    "title": "Up a Tree"
   },
   {
    "description": "This nook is your spartan living quarters, containing only a bunk and a bureau. The only exit is to starboard.",
    "obj": 10,
+   "source": "static",
    "title": "Living Quarters"
   },
   {
    "description": "This was the control room of the ship which originally carried the now-primitive aliens to the artifact. The control panel was obviously destroyed by a fire or explosion long ago, although the lights here still glow dimly.\nOutside you can see the surface of the artifact. Gazing longingly at that view are the empty eyesockets of a skeleton; the skeleton of an aliens weasel. It is dressed in the shreds of a space suit and sitting in the control couch. Scattered around the couch are fresh offerings of fruit and vegetables.",
    "obj": 15,
+   "source": "static",
    "title": "Control Room"
   },
   {
    "description": "This is the garage for Maintenance Mice. There are several stalls in which non-functional mice are rusting away. Other stalls are empty. There is a chute into which trash could be dumped, and a large bin nearby. A maintenance-mouse-sized door is in the forward wall.",
    "obj": 16,
+   "source": "static",
    "title": "Garage"
   },
   {
    "description": "This is the fringe of a populated area lying to port. The corridor is filled with primitive huts, and is being used for the cultivation of grain. It seems that the inhabitants heard you coming and have fled.",
    "obj": 17,
+   "source": "static",
    "title": "Outskirts of Village"
   },
   {
    "description": "The ring corridor here has an exit forward to a large open area. There is fresh dirt scattered about, and an acrid smell.",
    "obj": 19,
+   "source": "static",
    "title": "Room on Ring Two"
   },
   {
    "description": "This is a wide room with corridors leading in four directions and a ladder down to the airlock. The lighting is poor, as though the lights were worn out. Halfway up the walls are planters full of wilted plants.",
    "obj": 20,
+   "source": "static",
    "title": "Red Hall"
   },
   {
    "description": "You are floating at the axis of rotation of the cylinder. There is grassland \"below.\" There is no gravity here.",
    "obj": 27,
+   "source": "static",
    "title": "Floating in Air"
   },
   {
    "description": "This is the aft end of the green hall, well-tended and brightly lit, where a typical ring corridor crosses.",
    "obj": 32,
+   "source": "static",
    "title": "Green Hall"
   },
   {
    "description": "A plastic umbilical leads away to port from the green airlock. There is a hook next to the airlock.",
    "obj": 33,
+   "source": "static",
    "title": "Green Dock"
   },
   {
    "description": "You are within a huge bubble, transparent from this side. The interior is crisscrossed with wire webbing, so that an agile creature could move around using only the wires. Objects are stuck in the wires in various out-of-reach places. The whole impression is of a rather untidy spiderweb. The connection to the artifact is at the forward end of the sphere.",
    "obj": 35,
+   "source": "static",
    "title": "Spherical Ship"
   },
   {
    "description": "This is an area of small trees and shrubs blending into a more imposing forest aft and into grassland forward. Strangely, there is a metal hatch cover nearby among the shrubbery.",
    "obj": 43,
+   "source": "static",
    "title": "Thin Forest"
   },
   {
    "description": "You are in a primeval forest, near the base of a giant tree. The trunk is thick, perhaps 40 meters in diameter, and the height is incredible. The forest is dense, so you can't see exactly how tall it is, but extending all the way to the axis isn't out of the question. The bark is so rough that climbing would be no problem.",
    "obj": 44,
+   "source": "static",
    "title": "Base of Tree"
   },
   {
    "description": "This is a port-to-starboard corridor lined with small cages. The bars of the cages are bands of force, detectable only by the slight shimmer they produce in the air, and are non-working on most of the cages. A few cages are still on, and contain the dried up carcasses of strange animals.",
    "obj": 46,
+   "source": "static",
    "title": "Zoo"
   },
   {
    "description": "This is the fringe of an inhabited area lying to port. The corridor is filled with cultivated plantings, although the farmers have apparently fled before you.",
    "obj": 50,
+   "source": "static",
    "title": "Outskirts of Village"
   },
   {
    "description": null,
    "obj": 51,
+   "source": null,
    "title": "Outskirts of Village"
   },
   {
    "description": "A junction between the yellow hall and a brightly-lit ring corridor. The planters have been removed.",
    "obj": 52,
+   "source": "static",
    "title": "Yellow Hall"
   },
   {
    "description": "The junction of a wide fore-aft corridor and a smaller ring corridor. There is some dirt on the floor, freshly scattered.",
    "obj": 53,
+   "source": "static",
    "title": "Blue Hall"
   },
   {
    "description": "This was once the cargo hold of a spaceship, and is filled with fetishes of wood and clay, totems in the shape of strange beasts, and a great deal of withered fruit and grain. Openings lead fore and aft, and the umbilical tube is to starboard. There is dim illumination from ancient glow bulbs.",
    "obj": 54,
+   "source": "static",
    "title": "Cargo Hold"
   },
   {
    "description": "This is a series of plastic bubbles connecting the blue airlock with a spherical spaceship docked aft of here. The bubbles are made of a thick material which is nonetheless transparent.",
    "obj": 55,
+   "source": "static",
    "title": "Bubbles"
   },
   {
    "description": "You are floating at the axis of rotation of the cylinder. There is a metal band \"below.\" There is no gravity here.",
    "obj": 63,
+   "source": "static",
    "title": "Floating in Air"
   },
   {
    "description": "You are in a plastic umbilical about two meters in diameter which connects the green airlock to starboard with a spaceship about ten meters to port. The plastic is cloudy, obscuring your view of the outside.",
    "obj": 64,
+   "source": "static",
    "title": "Umbilical"
   },
   {
    "description": "The green hall ends here at a ring corridor. The planters are well-tended.",
    "obj": 67,
+   "source": "static",
    "title": "Green Hall"
   },
   {
    "description": "The blue corridor goes no further aft, but a ring corridor leads away to port and starboard.",
    "obj": 68,
+   "source": "static",
    "title": "Blue Hall"
   },
   {
    "description": null,
    "obj": 69,
+   "source": null,
    "title": "Green Airlock"
   },
   {
    "description": "You are standing on the floor of an enormous cylinder, kilometers in length and hundreds of meters across. Above you and all around is revealed a micro-geography of trees, grassland, and manufactured structures. The cylinder is divided into various bands, of which this is approximately the central one. Things cling to the floor (or ceiling) above you, as each band continues all the way around the cylinder. \nYou are in the midst of a grassy plain, a sort of savannah with warm breezes and tall grasses. An exit leads down to the outer deck. Looking forward, a metal floor circles the cylinder, and extends all the way to the forward end of the cylinder, which is a sheer metal wall with a crystal bubble at the axis. Looking aft, the grassland becomes more and more densely forested. The aft end of the cylinder is totally obscured by impossibly tall trees. A herd of creatures not unlike unicorns crops grass in the distance.",
    "obj": 77,
+   "source": "static",
    "title": "Grassland"
   },
   {
    "description": "This is an area of small trees and shrubs blending into a more imposing forest aft and into grassland forward.",
    "obj": 78,
+   "source": "static",
    "title": "Thin Forest"
   },
   {
    "description": null,
    "obj": 80,
+   "source": null,
    "title": "Laboratory"
   },
   {
    "description": "This is the edge of an inhabited area lying to starboard. Some odd vegetables are growing here, but the inhabitants, if any, have scattered.",
    "obj": 81,
+   "source": "static",
    "title": "Outskirts of Village"
   },
   {
    "description": "At this point the corridor is twisted and the walls are half-melted. Titanic energies have been used here, apparently to blast through an armored hatch that shielded the area to port. There is little left of the hatch now, and the way is open.",
    "obj": 90,
+   "source": "static",
    "title": "Melted Spot"
   },
   {
    "description": "The yellow corridor continues fore and aft, but a well-lit passage leads starboard.",
    "obj": 91,
+   "source": "static",
    "title": "Yellow Hall"
   },
   {
    "description": "This is part of a long hall with failing lights. It intersects with another corridor at right angles. The plant boxes here are empty.",
    "obj": 92,
+   "source": "static",
    "title": "Red Hall"
   },
   {
    "description": "You are viewing this area, color-coded in blue, through the first of several transparent bubbles connecting the dock with a large spherical object tethered by silvery ropes. The blue airlock dome is behind you, and the spherical spaceship is aft of here. There is a hook by the airlock.",
    "obj": 94,
+   "source": "static",
    "title": "Blue Dock"
   },
   {
    "description": null,
    "obj": 95,
+   "source": null,
    "title": "Floating in Space"
   },
   {
    "description": "You are at the fore end of the cylinder. A smooth, unscalable wall extends up all around the circumference. At the axis, high above, is a clear bubble. From this distance you can't see into it, but it's about 100 meters in diameter.",
    "obj": 99,
+   "source": "static",
    "title": "Fore End"
   },
   {
    "description": null,
    "obj": 102,
+   "source": null,
    "title": "Nesting Cage"
   },
   {
    "description": "A ring corridor joins the blue hall here. There is an entrance (presumably for the blue docking area) below, and also a way up.",
    "obj": 105,
+   "source": "static",
    "title": "Blue Hall"
   },
   {
    "description": null,
    "obj": 106,
+   "source": null,
    "title": "Blue Airlock"
   },
   {
    "description": "You are floating at the axis of rotation of the cylinder, near the drive bubble. There are enormous trees \"below.\" There is no gravity here.",
    "obj": 112,
+   "source": "static",
    "title": "Floating in Air"
   },
   {
    "description": "A passage leads aft from this point on the ring corridor.",
    "obj": 115,
+   "source": "static",
    "title": "Room on Ring One"
   },
   {
    "description": "This is the intersection between the yellow hall and a large ring corridor. The airlock for the yellow dock is down from here. The plant boxes are empty.",
    "obj": 117,
+   "source": "static",
    "title": "Yellow Hall"
   },
   {
    "description": "Another junction, the ring corridor curving away to port and starboard. The hall is damaged and bare rock protrudes in spots.",
    "obj": 118,
+   "source": "static",
    "title": "Blue Hall"
   },
   {
    "description": null,
    "obj": 122,
+   "source": null,
    "title": "Airlock"
   },
   {
    "description": "The floor of the cylinder is bare metal here, merging into grassland aft and eventually running into a sheer wall at the forward end of the artifact.",
    "obj": 134,
+   "source": "static",
    "title": "Metal Floor"
   },
   {
    "description": "This is the forest primeval, conifers and cycads in rank profusion. Here and there huge trees thrust upward through the forest canopy. One particularly large tree is to port of here.",
    "obj": 135,
+   "source": "static",
    "title": "Dense Forest"
   },
   {
    "description": null,
    "obj": 136,
+   "source": null,
    "title": "Drive Bubble Entrance"
   },
   {
    "description": null,
    "obj": 137,
+   "source": null,
    "title": "Computer Room"
   },
   {
    "description": "This section of the hall is filled with primitive huts of various sizes. They are so close they almost form a single large warren with many entrances. The only way to continue down the corridor is through this warren. Many aliens are milling about, of all sizes and colors of fur.",
    "obj": 141,
+   "source": "static",
    "title": "Village Center"
   },
   {
    "description": null,
    "obj": 142,
+   "source": null,
    "title": "Yellow Airlock"
   },
   {
    "description": "You are among the blackened and twisted metal left by a huge explosion. The tentacle housings have been destroyed. To starboard is the airlock dome.",
    "obj": 143,
+   "source": "static",
    "title": "Among Debris"
   },
   {
    "description": "This was the armory of the artifact. A massive bulkhead has been burned away, giving free access to the weaponry. Unfortunately, it appears that the vast stock of futuristic armaments has been mostly destroyed. Gigantic projectors are scorched and shattered, strange battle armor is reduced to splinters, and wall racks for small arms are mostly empty.",
    "obj": 147,
+   "source": "static",
    "title": "Weapons Deck"
   },
   {
    "description": null,
    "obj": 148,
+   "source": null,
    "title": "Repair Room"
   },
   {
    "description": "Once a guard room or barracks, this room is now dusty and unused. The only exit is back the way you came. A large door that may have led to the engine room is fused shut, as if by enormous heat.",
    "obj": 149,
+   "source": "static",
    "title": "Guard Room"
   },
   {
    "description": "This burrow is deep within the warren and the aliens seem to avoid it. An exit to port leads back into the warren. The walls are covered with crude but vibrant paintings depicting a huge spider, a gigantic mouse, man-sized lizards, and in the center, a being in a space suit. You realize that this room is the center of the green hall's junction with the ring corridor. In fact, a ladder leads down to the green airlock.",
    "obj": 152,
+   "source": "static",
    "title": "Center of the Warren"
   },
   {
    "description": null,
    "obj": 153,
+   "source": null,
    "title": "Observatory"
   },
   {
    "description": "This is a long, dim corridor that intersects what looks like a ring corridor. The overheads are not very bright here, and the plant growth is feeble.",
    "obj": 154,
+   "source": "static",
    "title": "Red Hall"
   },
   {
    "description": "You are at the top of a giant tree, just below a huge crystalline bubble full of machinery and controls which lies at the axis of rotation at the aft end of the cylinder. Out of reach above you is a hatch which leads into the bubble. Beside the hatch is a silver slot. Gravity has almost disappeared here as you near the axis.",
    "obj": 159,
+   "source": "static",
    "title": "Top of Tree"
   },
   {
    "description": "This is near the fore end of the blue hall, where a small exit leads to port. The main corridor continues fore and aft.",
    "obj": 166,
+   "source": "static",
    "title": "Blue Hall"
   },
   {
    "description": "The red hall ends here. A smaller corridor curves away on both sides. The light is dim and the plants are stunted.",
    "obj": 167,
+   "source": "static",
    "title": "Red Hall"
   },
   {
    "description": "This is the edge of an inhabited area. Crude hovels are scattered here and there, becoming denser as you move aft.",
    "obj": 172,
+   "source": "static",
    "title": "Outskirts of Village"
   },
   {
    "description": null,
    "obj": 175,
+   "source": null,
    "title": "Red Airlock"
   },
   {
    "description": "The yellow hall ends here and a ring corridor curves away to port and starboard.",
    "obj": 183,
+   "source": "static",
    "title": "Yellow Hall"
   },
   {
    "description": "This is a wide hall whose maintenance has been neglected. The planters are untended. A ring corridor leads port and starboard.",
    "obj": 184,
+   "source": "static",
    "title": "Yellow Hall"
   },
   {
    "description": "This is the fore end of the yellow hall. The planters hold dry, dead plants. The usual ring corridor joins the main hall.",
    "obj": 185,
+   "source": "static",
    "title": "Yellow Hall"
   },
   {
    "description": "This the end of the red hall where it T's with the aft-most ring corridor. The lighting is poor and the plant boxes here are empty and battered.",
    "obj": 186,
+   "source": "static",
    "title": "Red Hall"
   },
   {
    "description": null,
    "obj": 187,
+   "source": null,
    "title": "Yellow Dock"
   },
   {
    "description": null,
    "obj": 188,
+   "source": null,
    "title": "Red Dock"
   },
   {
    "description": "You are at the forward end of the interior. A vertical wall extends up all around the circumference. At the axis, high above, is a crystal bubble. From this distance you can't discern its contents, but it's about 100 meters in diameter.",
    "obj": 190,
+   "source": "static",
    "title": "Fore End"
   },
   {
    "description": "This is the aft edge of a settled area. The corridor has a dirt floor here, and several well-used paths lead forward.",
    "obj": 193,
+   "source": "static",
    "title": "Outskirts of Village"
   },
   {
    "description": "The fore end of the blue hall meets a ring corridor here.",
    "obj": 194,
+   "source": "static",
    "title": "Blue Hall"
   },
   {
    "description": null,
    "obj": 197,
+   "source": null,
    "title": "Outside Ship"
   },
   {
    "description": "This cubicle is used for storage. The only exit is to port.",
    "obj": 198,
+   "source": "static",
    "title": "Storage"
   },
   {
    "description": null,
    "obj": 202,
+   "source": null,
    "title": "Bridge"
   },
   {
    "description": "You are floating outside a 100 meter crystal bubble which protrudes from the fore end of the cylinder. Inside, you can make out shadowy mechanisms and odd constructions. There are odd knobs of some sort which you could use to pull yourself down the bubble. At the other end of the cylinder you can see the drive bubble in the midst of enormous trees.",
    "obj": 207,
+   "source": "static",
    "title": "On Control Bubble"
   },
   {
    "description": "This cage was apparently forced by its inhabitants before the general deterioration of the zoo equipment. The force projectors are ripped out of their mountings and smashed against the bulkhead, and the whole cage is scratched and dented as though many enraged creatures pounded on it violently for many weeks. There is a somewhat chewed sign to one side of the cage.",
    "obj": 208,
+   "source": "static",
    "title": "Broken Cage"
   },
   {
    "description": "You are between the red and blue halls on a ring corridor. The corridor looks damaged to port. The illumination dims to starboard.",
    "obj": 211,
+   "source": "static",
    "title": "Room on Ring Four"
   },
   {
    "description": "A primitive village has been built here, almost choking the passage off. The village extends forward, becoming even more closely built to form a palisade built of mud and wood which completely blocks the corridor.",
    "obj": 215,
+   "source": "static",
    "title": "Village Suburbs"
   },
   {
    "description": "This is an earth and reed burrow within the warren. There are many aliens here, going about their business. The younger ones stare at you and make funny noises. There are passages all over the place, and a constant traffic in and out.",
    "obj": 216,
+   "source": "static",
    "title": "In the Warren"
   },
   {
    "description": null,
    "obj": 223,
+   "source": null,
    "title": "Control Bubble"
   },
   {
    "description": "The metal floor continues all the way around the cylinder. Aft the grassland begins, and forward the cylinder ends in a smooth vertical wall.",
    "obj": 224,
+   "source": "static",
    "title": "Metal Floor"
   },
   {
    "description": "A grassy plain circles this band of the cylinder, the vegetation merging into dense forest as you look aft, and stopping abruptly at bare metal as you look forward. The plain arches above you, giving an aerial view of the other side and the entry through which you came. The forest obscures the aft end of the cylinder. A herd of creatures not unlike unicorns crops grass nearby.",
    "obj": 225,
+   "source": "static",
    "title": "Grassland"
   },
   {
    "description": null,
    "obj": 226,
+   "source": null,
    "title": "Drive Bubble"
   },
   {
    "description": "The amount of damage done to this cage is impressive. The creatures imprisoned here didn't like it one bit, and whoever put them here obviously underestimated their nastiness.",
    "obj": 230,
+   "source": "static",
    "title": "Inside Grue Cage"
   },
   {
    "description": "The green hall joins a ring corridor here. The plants here look healthy.",
    "obj": 234,
+   "source": "static",
    "title": "Green Hall"
   }
  ],

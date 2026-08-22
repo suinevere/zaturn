@@ -6,301 +6,361 @@
   {
    "description": null,
    "obj": 83,
+   "source": null,
    "title": "Cryogenic Area"
   },
   {
    "description": null,
    "obj": 84,
+   "source": null,
    "title": "Biological Laboratory"
   },
   {
    "description": null,
    "obj": 85,
+   "source": null,
    "title": "Biology Corridor"
   },
   {
    "description": null,
    "obj": 86,
+   "source": null,
    "title": "Vehicle Debarkation Area"
   },
   {
    "description": null,
    "obj": 87,
+   "source": null,
    "title": "Alpha FC"
   },
   {
    "description": "I tagged m, bnuqthe sb",
    "obj": 88,
+   "source": "static",
    "title": "Primary Channel"
   },
   {
    "description": null,
    "obj": 89,
+   "source": null,
    "title": "Beta FC"
   },
   {
    "description": "I tagged m, bnuqthe sb",
    "obj": 90,
+   "source": "static",
    "title": "Secondary Channel"
   },
   {
    "description": null,
    "obj": 91,
+   "source": null,
    "title": "Gamma FC"
   },
   {
    "description": null,
    "obj": 92,
+   "source": null,
    "title": "East End"
   },
   {
    "description": null,
    "obj": 93,
+   "source": null,
    "title": "Cavernous Room"
   },
   {
    "description": null,
    "obj": 94,
+   "source": null,
    "title": "Transit Control Area"
   },
   {
    "description": null,
    "obj": 95,
+   "source": null,
    "title": "Hydroponics Control Area"
   },
   {
    "description": null,
    "obj": 96,
+   "source": null,
    "title": "Weather Control Area"
   },
   {
    "description": null,
    "obj": 97,
+   "source": null,
    "title": "Skywalk Gamma"
   },
   {
    "description": null,
    "obj": 98,
+   "source": null,
    "title": "Skywalk Beta"
   },
   {
    "description": "CLC jt It's Let's SCLC pm(",
    "obj": 99,
+   "source": "static",
    "title": "Skywalk Alpha"
   },
   {
    "description": null,
    "obj": 100,
+   "source": null,
    "title": "Top Passage"
   },
   {
    "description": null,
    "obj": 102,
+   "source": null,
    "title": "Short Corridor"
   },
   {
    "description": null,
    "obj": 103,
+   "source": null,
    "title": "Hallway End"
   },
   {
    "description": null,
    "obj": 104,
+   "source": null,
    "title": "Library Core"
   },
   {
    "description": null,
    "obj": 105,
+   "source": null,
    "title": "Library Entrance"
   },
   {
    "description": null,
    "obj": 106,
+   "source": null,
    "title": "Maintenance Access"
   },
   {
    "description": null,
    "obj": 107,
+   "source": null,
    "title": "Hallway Branch"
   },
   {
    "description": null,
    "obj": 108,
+   "source": null,
    "title": "Hallway Corner"
   },
   {
    "description": null,
    "obj": 109,
+   "source": null,
    "title": "Sleep Chamber"
   },
   {
    "description": null,
    "obj": 110,
+   "source": null,
    "title": "Hallway"
   },
   {
    "description": null,
    "obj": 111,
+   "source": null,
    "title": "Activities Area"
   },
   {
    "description": null,
    "obj": 112,
+   "source": null,
    "title": "Access Hallway"
   },
   {
    "description": null,
    "obj": 113,
+   "source": null,
    "title": "Beta Repair"
   },
   {
    "description": null,
    "obj": 114,
+   "source": null,
    "title": "Alpha Repair"
   },
   {
    "description": null,
    "obj": 115,
+   "source": null,
    "title": "Bending Passage"
   },
   {
    "description": null,
    "obj": 116,
+   "source": null,
    "title": "Southeast Passage"
   },
   {
    "description": null,
    "obj": 117,
+   "source": null,
    "title": "Southeast Junction"
   },
   {
    "description": null,
    "obj": 118,
+   "source": null,
    "title": "Central Core"
   },
   {
    "description": null,
    "obj": 119,
+   "source": null,
    "title": "Historical Peripheral"
   },
   {
    "description": null,
    "obj": 120,
+   "source": null,
    "title": "Technical Peripheral"
   },
   {
    "description": null,
    "obj": 121,
+   "source": null,
    "title": "Index Peripheral"
   },
   {
    "description": null,
    "obj": 122,
+   "source": null,
    "title": "Outer Library Area"
   },
   {
    "description": null,
    "obj": 123,
+   "source": null,
    "title": "Hallway Junction"
   },
   {
    "description": null,
    "obj": 124,
+   "source": null,
    "title": "Sloping Corridor"
   },
   {
    "description": null,
    "obj": 125,
+   "source": null,
    "title": "Hallway"
   },
   {
    "description": null,
    "obj": 126,
+   "source": null,
    "title": "Hallway"
   },
   {
    "description": null,
    "obj": 127,
+   "source": null,
    "title": "Small Supply Room"
   },
   {
    "description": null,
    "obj": 128,
+   "source": null,
    "title": "Sterilization Chamber"
   },
   {
    "description": null,
    "obj": 129,
+   "source": null,
    "title": "Decontamination Chamber"
   },
   {
    "description": null,
    "obj": 130,
+   "source": null,
    "title": "Dead End"
   },
   {
    "description": null,
    "obj": 131,
+   "source": null,
    "title": "Hallway T"
   },
   {
    "description": null,
    "obj": 132,
+   "source": null,
    "title": "Hydroponics Monitors"
   },
   {
    "description": null,
    "obj": 133,
+   "source": null,
    "title": "Transit Monitors"
   },
   {
    "description": null,
    "obj": 134,
+   "source": null,
    "title": "Bending Corridor"
   },
   {
    "description": null,
    "obj": 135,
+   "source": null,
    "title": "Main Supply Room"
   },
   {
    "description": null,
    "obj": 136,
+   "source": null,
    "title": "Middle Supply Room"
   },
   {
    "description": null,
    "obj": 138,
+   "source": null,
    "title": "Sub Supply Room"
   },
   {
    "description": null,
    "obj": 139,
+   "source": null,
    "title": "UD Tube"
   },
   {
    "description": null,
    "obj": 143,
+   "source": null,
    "title": "Advisory Peripheral"
   },
   {
    "description": null,
    "obj": 148,
+   "source": null,
    "title": "Entry Area"
   },
   {
    "description": null,
    "obj": 151,
+   "source": null,
    "title": "Central Chamber"
   },
   {
    "description": null,
    "obj": 154,
+   "source": null,
    "title": "Gamma Repair"
   },
   {
    "description": null,
    "obj": 157,
+   "source": null,
    "title": "Weather Monitors"
   }
  ],

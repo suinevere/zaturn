@@ -6,151 +6,181 @@
   {
    "description": null,
    "obj": 55,
+   "source": null,
    "title": "south walkway"
   },
   {
    "description": null,
    "obj": 58,
+   "source": null,
    "title": "west walkway"
   },
   {
    "description": null,
    "obj": 60,
+   "source": null,
    "title": "north walkway"
   },
   {
    "description": null,
    "obj": 65,
+   "source": null,
    "title": "lab center"
   },
   {
    "description": null,
    "obj": 68,
+   "source": null,
    "title": "west part"
   },
   {
    "description": null,
    "obj": 74,
+   "source": null,
    "title": "south part"
   },
   {
    "description": null,
    "obj": 75,
+   "source": null,
    "title": "limbo"
   },
   {
    "description": null,
    "obj": 80,
+   "source": null,
    "title": "storage closet"
   },
   {
    "description": null,
    "obj": 84,
+   "source": null,
    "title": "corridor"
   },
   {
    "description": null,
    "obj": 89,
+   "source": null,
    "title": "east part"
   },
   {
    "description": null,
    "obj": 92,
+   "source": null,
    "title": "north part"
   },
   {
    "description": null,
    "obj": 107,
+   "source": null,
    "title": "Kemp's office"
   },
   {
    "description": null,
    "obj": 122,
+   "source": null,
    "title": "dome center"
   },
   {
    "description": null,
    "obj": 132,
+   "source": null,
    "title": "Aquadome office"
   },
   {
    "description": null,
    "obj": 135,
+   "source": null,
    "title": "southeast deck"
   },
   {
    "description": null,
    "obj": 136,
+   "source": null,
    "title": "galley"
   },
   {
    "description": null,
    "obj": 143,
+   "source": null,
    "title": "comm center"
   },
   {
    "description": null,
    "obj": 146,
+   "source": null,
    "title": "northeast deck"
   },
   {
    "description": null,
    "obj": 148,
+   "source": null,
    "title": "workshop"
   },
   {
    "description": null,
    "obj": 151,
+   "source": null,
    "title": "northwest deck"
   },
   {
    "description": null,
    "obj": 158,
+   "source": null,
    "title": "male dorm"
   },
   {
    "description": null,
    "obj": 161,
+   "source": null,
    "title": "female dorm"
   },
   {
    "description": null,
    "obj": 164,
+   "source": null,
    "title": "southwest deck"
   },
   {
    "description": null,
    "obj": 169,
+   "source": null,
    "title": "reception area"
   },
   {
    "description": null,
    "obj": 172,
+   "source": null,
    "title": "docking tank entrance"
   },
   {
    "description": null,
    "obj": 176,
+   "source": null,
    "title": "docking tank"
   },
   {
    "description": null,
    "obj": 198,
+   "source": null,
    "title": "storage room"
   },
   {
    "description": null,
    "obj": 200,
+   "source": null,
    "title": "Aquadome laboratory"
   },
   {
    "description": null,
    "obj": 242,
+   "source": null,
    "title": "crawl space"
   },
   {
    "description": "This is your revolutionary new Ultramarine Bioceptor, named the SCIMITAR.",
    "obj": 254,
+   "source": "static",
    "title": "SCIMITAR"
   }
  ],

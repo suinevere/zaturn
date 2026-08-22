@@ -2,8 +2,9 @@
 """Convert PNG backgrounds into the 8bpp paletted TGAs the Saturn disc expects.
 
 Usage:
-    python tools/make_tga.py <src-dir> <dst-dir>    # batch (what the build runs)
-    python tools/make_tga.py <src.png> <dst.tga>    # single file
+    python tools/make_tga.py                          # regenerate everything
+    python tools/make_tga.py <src-dir> <dst-dir>       # batch, custom roots
+    python tools/make_tga.py <src.png> <dst.tga>       # single file
 
 Two constraints make this script necessary instead of a plain image-editor
 export:
@@ -26,18 +27,21 @@ Sources that are not exactly 320x224 are reported and skipped rather than
 aborting the run -- the build calls this on every compile and one bad file
 must not stop the rest.
 
-The source tree is one folder per mood (tools/assets/png/WILDER/, /TOWN/,
-...) and the disc keeps that shape: each mood gets its own folder under
-saturn/cd/data/TGA, holding a gapless 01.TGA..NN.TGA run. The first path
-component under the source root names the mood; anything below that is
-provenance and is flattened away. Naming disc files by position rather than
-by source filename is what lets category_art.inc synthesise a filename from
-a mood and an index instead of scanning the disc at boot -- see write_inc.
+Each game now owns a flat disc folder rather than sharing a mood folder with
+every other game (tools/assets/png/<GAME>/<SCENE>/*.png ->
+saturn/cd/data/TGA/<GAME>/01.TGA..NN.TGA): convert_game_tree converts every
+game's scenes in scene_vocab.SCENES order, assigning consecutive indices from
+1 within that game's own 1..99 range, and write_scene_inc emits GAME_DIR and
+GAME_SCENE from the result -- see game_scenes.inc's own header for what those
+tables mean to display.c. A count in that table can never name a picture the
+disc lacks, because it is only ever the count of files that actually
+converted, never the count requested.
 
-A source image that sits at the root of the source tree, not inside a mood
-folder, is not part of any mood's rotation -- SUINE.PNG (the boot splash) is
-the one that exists today. Root-level sources keep their own stem instead of
-a position: <STEM>.TGA, upper-cased, same 8.3 length rule as everything else.
+The title screen and menu need a wallpaper at boot, before any game is
+selected, so tools/assets/png/TITLE/*.png is a separate small shared folder
+outside the per-game machinery: convert_title writes it flat to
+saturn/cd/data/TGA/TITLE/01.TGA..NN.TGA and write_title_inc emits the
+TITLE_ART_N count C iterates it by.
 """
 import struct
 import sys
@@ -45,23 +49,13 @@ from pathlib import Path
 
 from PIL import Image
 
-import art_queries
+import gen_scene_tables
+import scene_vocab as vocab
 
 REPO = Path(__file__).resolve().parent.parent
 WIDTH, HEIGHT = 320, 224
 MAX_STEM = 8  # ISO9660 8.3; the build passes --norock to xorrisofs
 SOURCE_EXT = (".png", ".jpg", ".jpeg")
-
-# TC_* enum order, saturn/src/sound/music.h:45. None carries no art.
-ENUM_ORDER = [None, "WILDER", "UNDRGRND", "WATER", "NAUTICAL", "TOWN", "DUNGN",
-              "DESERT", "MAGIC", "SCIFI", "HORROR", "MYSTERY", "HOUSE",
-              None, None]
-
-# The twelve mood folders write_inc's table has a row for. Any other directory
-# under the source root is a typo, not a mood -- converting it anyway would ship
-# art onto the ISO that category_art.inc's lookup can never reach (count 0),
-# silently.
-KNOWN_MOODS = frozenset(m for m in ENUM_ORDER if m)
 
 
 def encode_tga(im):
@@ -166,174 +160,259 @@ def _convert_source(src, dst):
         return False
 
 
-"""
-----------------------
-| BANDS
-| Description: The genre bands a category's 1..99 index range is packed into,
-|   in the order display.c indexes them. Index 0 is the neutral band every
-|   game falls back to; the rest follow room_class.c's genre_slot() order.
-| Author: suinevere
-----------------------
-"""
-BANDS = ("ANY", "FANTASY", "SCIFI", "MODERN")
+def convert_game_tree(src_root, dst_root):
+    """Convert every source picture under src_root into dst_root/<GAME>/NN.TGA.
 
-
-def convert_tree(src_root, dst_root, genre_of=None):
-    """
-    ----------------------
-    | convert_tree
-    | Description: Convert every source picture under src_root into
-    |   dst_root/<MOOD>/NN.TGA, packing each mood's 1..99 range into gapless
-    |   genre bands (see BANDS) and replacing each mood's existing TGAs
-    |   first, and every root-level source (the boot splash) into
-    |   dst_root/<STEM>.TGA, likewise clearing dst_root's existing root-level
-    |   TGAs first -- a source PNG renamed or deleted must not leave its old
-    |   <STEM>.TGA behind as an orphan on the ISO. The clear is a plain
-    |   top-level glob, so it never touches a mood subfolder's own TGAs. A
-    |   source subdirectory not named for one of the twelve known moods is
-    |   reported and skipped rather than converted -- see KNOWN_MOODS.
-    | Author: suinevere
-    | Dependencies: _convert_source
-    | Globals: SOURCE_EXT, MAX_STEM, KNOWN_MOODS, BANDS
-    | Params: src_root -- source PNG tree (tools/assets/png); dst_root --
-    |   disc TGA tree (saturn/cd/data/TGA); genre_of -- callable
-    |   (mood, noun) -> "FANTASY"|"SCIFI"|"MODERN"|None; None means every
-    |   picture is neutral
-    | Returns: dict mapping mood name to a four-element list of picture
-    |   counts, one per BANDS entry
-    ----------------------
+    Description: Walks src_root/<GAME>/<SCENE>/*.png, converting each game's
+        scenes in scene_vocab.SCENES order and assigning consecutive indices
+        from 1 within that game's own 1..99 range. Because the count
+        recorded for a scene is only ever how many of its pictures actually
+        converted, a range can never name a picture the disc lacks -- the
+        property the old per-mood pipeline had, preserved here per game
+        instead. Replaces each game's existing TGAs first, so a source PNG
+        renamed or deleted leaves no stale file behind. A top-level
+        directory not matching a known game stem is reported and skipped,
+        as is a second-level directory not matching a known scene; TITLE is
+        skipped silently here because convert_title owns it.
+    Author: suinevere
+    Dependencies: gen_scene_tables, scene_vocab, _convert_source
+    Globals: SOURCE_EXT
+    Params: src_root -- source PNG tree (tools/assets/png); dst_root --
+        disc TGA tree (saturn/cd/data/TGA)
+    Returns: dict mapping game stem to {scene: count}; both the outer and
+        inner dicts are sparse -- a scene absent from the inner dict
+        converted zero pictures
     """
     src_root, dst_root = Path(src_root), Path(dst_root)
     if not src_root.is_dir():
         print(f"  skip  {src_root} does not exist -- nothing to convert")
         return {}
 
+    known_games = frozenset(stem for stem, _release, _serial in gen_scene_tables.GAMES)
     counts = {}
-    for mood in sorted({p.name for p in src_root.iterdir() if p.is_dir()}):
-        if mood not in KNOWN_MOODS:
-            print(f"  skip  {mood}: not one of the twelve known moods "
-                  f"(typo? see KNOWN_MOODS in make_tga.py)")
+    for game in sorted(p.name for p in src_root.iterdir() if p.is_dir()):
+        if game == "TITLE":
             continue
-        out_dir = dst_root / mood
+        if game not in known_games:
+            print(f"  skip  {game}: not a known game stem "
+                  f"(typo? see GAME_DIR in game_rooms.inc)")
+            continue
+
+        out_dir = dst_root / game
         out_dir.mkdir(parents=True, exist_ok=True)
         for old in out_dir.glob("*.TGA"):
             old.unlink()
 
-        sources = sorted(
-            p for p in (src_root / mood).rglob("*")
-            if p.suffix.lower() in SOURCE_EXT
-        )
-        buckets = {b: [] for b in BANDS}
-        for src in sources:
-            genre = genre_of(mood, src.parent.name) if genre_of else None
-            buckets[genre if genre in BANDS else "ANY"].append(src)
+        game_dir = src_root / game
+        for sub in sorted(p.name for p in game_dir.iterdir() if p.is_dir()):
+            if sub not in vocab.SCENE_INDEX:
+                print(f"  skip  {game}/{sub}: not one of the known scenes "
+                      f"(typo? see scene_vocab.SCENES)")
 
-        per_band, n = [], 0
-        for band in BANDS:
+        scene_counts, n = {}, 0
+        for scene in vocab.SCENES:
+            scene_dir = game_dir / scene
+            if not scene_dir.is_dir():
+                continue
+            sources = sorted(
+                p for p in scene_dir.iterdir()
+                if p.suffix.lower() in SOURCE_EXT
+            )
             made = 0
-            for src in buckets[band]:
+            for src in sources:
                 if n >= 99:
-                    print(f"  {mood}: more than 99 pictures, ignoring {src.name}")
+                    print(f"  {game}: more than 99 pictures, ignoring {src.name}")
                     continue
                 if _convert_source(src, out_dir / f"{n + 1:02d}.TGA"):
                     n += 1
                     made += 1
-            per_band.append(made)
-        counts[mood] = per_band
-        print(f"  {mood}: {n} ({', '.join(f'{b}={c}' for b, c in zip(BANDS, per_band))})")
+            if made:
+                scene_counts[scene] = made
 
-    dst_root.mkdir(parents=True, exist_ok=True)
-    for old in dst_root.glob("*.TGA"):
-        old.unlink()
-
-    root_sources = sorted(
-        p for p in src_root.iterdir()
-        if p.is_file() and p.suffix.lower() in SOURCE_EXT
-    )
-    for src in root_sources:
-        stem = src.stem.upper()
-        if len(stem) > MAX_STEM:
-            print(f"  skip  {src.name}: name over {MAX_STEM} characters "
-                  f"(ISO9660 8.3); rename it")
-            continue
-        if _convert_source(src, dst_root / f"{stem}.TGA"):
-            print(f"  {stem}: wrote")
+        counts[game] = scene_counts
+        summary = ", ".join(f"{s}={c}" for s, c in scene_counts.items())
+        print(f"  {game}: {n} ({summary})")
 
     return counts
 
 
-def write_inc(counts, path):
+def convert_title(src_root, dst_root):
+    """Convert tools/assets/png/TITLE/*.png into dst_root/TITLE/NN.TGA.
+
+    Description: The title screen and menu need a wallpaper at boot, before
+        any game is selected, so it cannot be routed through GAME_DIR /
+        GAME_SCENE -- there is no game yet to index by. TITLE is a flat,
+        gapless run addressed by literal filename in C, the same shape a
+        mood folder used to be. Clears the folder's existing TGAs first, so
+        a renamed or deleted source leaves no orphan behind. A missing
+        tools/assets/png/TITLE converts nothing and returns 0 rather than
+        raising, since the images may not exist yet.
+    Author: suinevere
+    Dependencies: _convert_source
+    Globals: SOURCE_EXT
+    Params: src_root -- source PNG tree (tools/assets/png); dst_root --
+        disc TGA tree (saturn/cd/data/TGA)
+    Returns: the number of pictures converted
     """
-    ----------------------
-    | write_inc
-    | Description: Write the generated per-category genre-band table consumed
-    |   by display.c. Each row is one category; each column is a band, holding
-    |   its 0-based base within the category's 1..99 index range and how many
-    |   pictures it carries. A band's base is the sum of the counts before it,
-    |   so an empty band still names where the next one starts.
-    | Author: suinevere
-    | Dependencies: N/A
-    | Globals: ENUM_ORDER, BANDS
-    | Params: counts -- per-mood band-count lists from convert_tree; path --
-    |   output .inc file path
-    | Returns: N/A
-    ----------------------
+    title_src = Path(src_root) / "TITLE"
+    out_dir = Path(dst_root) / "TITLE"
+    if not title_src.is_dir():
+        print("  skip  TITLE: tools/assets/png/TITLE does not exist -- "
+              "nothing to convert")
+        return 0
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob("*.TGA"):
+        old.unlink()
+
+    sources = sorted(
+        p for p in title_src.iterdir()
+        if p.is_file() and p.suffix.lower() in SOURCE_EXT
+    )
+    n = 0
+    for src in sources:
+        if n >= 99:
+            print(f"  TITLE: more than 99 pictures, ignoring {src.name}")
+            continue
+        if _convert_source(src, out_dir / f"{n + 1:02d}.TGA"):
+            n += 1
+
+    print(f"  TITLE: {n}")
+    return n
+
+
+def write_scene_inc(counts, path):
+    """Write the generated GAME_DIR / GAME_SCENE tables consumed by display.c.
+
+    Description: Row order is gen_scene_tables.GAMES (sorted by story stem)
+        -- the exact order GAME_ROOM_MAP already uses in game_rooms.inc,
+        which display.c reads by the same row index, so a mismatch would
+        make every game resolve to another game's folder. Each row's
+        {base, count} cells follow scene_vocab.SCENES order; a scene absent
+        from counts' inner dict becomes {base, 0} at whatever base the
+        scenes before it accumulated to, not a gap.
+    Author: suinevere
+    Dependencies: gen_scene_tables, scene_vocab
+    Globals: N/A
+    Params: counts -- {game_stem: {scene: count}} from convert_game_tree;
+        path -- output .inc file path
+    Returns: N/A
     """
-    rows = []
-    for mood in ENUM_ORDER:
-        per_band = [0] * len(BANDS) if mood is None else counts.get(
-            mood, [0] * len(BANDS))
+    games = gen_scene_tables.GAMES
+    dir_lines = [f'    "{stem}",' for stem, _release, _serial in games]
+
+    scene_lines = []
+    for stem, _release, _serial in games:
+        game_counts = counts.get(stem, {})
         cells, base = [], 0
-        for n in per_band:
-            cells.append(f"{{{base:2d},{n:2d}}}")
+        for scene in vocab.SCENES:
+            n = game_counts.get(scene, 0)
+            cells.append(f"{{{base},{n}}}")
             base += n
-        rows.append("    { " + ", ".join(cells) + " },")
-    path.write_text(
+        scene_lines.append("    { " + ", ".join(cells) + " },")
+
+    text = (
         "/*----------------------\n"
-        " | category_art.inc\n"
-        " | Description: Where each text category's genre bands sit inside its\n"
-        " |   1..99 index range on this disc, as {base, count} per band.\n"
-        " |   GENERATED by tools/make_tga.py -- do not edit. Row order is the\n"
-        " |   TC_* enum order in sound/music.h; column order is display.c's\n"
-        " |   ART_BAND_* order, neutral first. The three zero rows are\n"
-        " |   TC_NEUTRAL, TC_DANGER and TC_TRIUMPH, which hold whatever is\n"
-        " |   showing.\n"
+        " | game_scenes.inc\n"
+        " | Description: GENERATED FILE -- do not edit by hand; produced by\n"
+        " |   tools/make_tga.py. GAME_DIR holds each story's 8.3-safe\n"
+        " |   per-game folder name (the story stem); GAME_SCENE[game][scene]\n"
+        " |   is where that scene's pictures sit inside the game's own\n"
+        " |   1..99 index range, as {base, count} -- base is 0-based, so the\n"
+        " |   nth picture of a scene is index base + n + 1. Row order matches\n"
+        " |   GAME_ROOM_MAP in game_rooms.inc (gen_scene_tables.GAMES, sorted\n"
+        " |   by stem); column order is scene_vocab.SCENES.\n"
         " | Author: suinevere\n"
         " ----------------------*/\n"
-        "static const ArtBand CATEGORY_BAND[TEXT_NUM_CATEGORIES][ART_BAND_N] = {\n"
-        + "\n".join(rows) + "\n"
+        "static const char *const GAME_DIR[GAME_N] = {\n"
+        + "\n".join(dir_lines) + "\n"
+        "};\n"
+        "static const GameScene GAME_SCENE[GAME_N][SCENE_N] = {\n"
+        + "\n".join(scene_lines) + "\n"
         "};\n"
     )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+
+
+def write_title_inc(n, path):
+    """Write TITLE_ART_N, the picture count for the shared title-screen folder.
+
+    Description: TITLE deliberately gets no row in GAME_DIR or GAME_SCENE --
+        it is not a game -- so this is a sibling of write_scene_inc rather
+        than a row inside it. C addresses the pictures by literal filename
+        (TITLE/01.TGA..NN.TGA) and uses this constant only to iterate them.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: N/A
+    Params: n -- picture count from convert_title; path -- output .inc file
+        path
+    Returns: N/A
+    """
+    text = (
+        "/*----------------------\n"
+        " | title_art.inc\n"
+        " | Description: GENERATED FILE -- do not edit by hand; produced by\n"
+        " |   tools/make_tga.py. The picture count for the shared TITLE/\n"
+        " |   folder (saturn/cd/data/TGA/TITLE/01.TGA..NN.TGA), addressed by\n"
+        " |   literal filename since the title screen has no game to route\n"
+        " |   it through GAME_DIR/GAME_SCENE.\n"
+        " | Author: suinevere\n"
+        " ----------------------*/\n"
+        f"#define TITLE_ART_N {n}\n"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
 
 
 def main(argv):
+    """CLI entry point.
+
+    Description: With no extra arguments, regenerates the whole disc from
+        the repo's real asset tree -- every game folder under
+        tools/assets/png plus TITLE -- straight into saturn/cd/data/TGA,
+        saturn/src/scene/game_scenes.inc and saturn/src/scene/title_art.inc.
+        With two arguments where the destination does not end in .tga, runs
+        the same pipeline against a caller-chosen source and disc root (the
+        two .inc files still land at their real repo locations; a caller
+        that wants an isolated .inc calls convert_game_tree/write_scene_inc
+        directly instead, as the tests do). With two arguments where the
+        destination ends in .tga, dispatches to the single-file form.
+    Author: suinevere
+    Dependencies: convert_game_tree, convert_title, write_scene_inc,
+        write_title_inc, convert_one
+    Globals: REPO
+    Params: argv -- sys.argv: [prog] or [prog, src, dst]
+    Returns: process exit code (0 ok, 2 on bad usage)
     """
-    ----------------------
-    | main
-    | Description: CLI entry point. Dispatches to the batch form (convert_tree
-    |   plus write_inc) when the source is a directory or the destination is
-    |   not a .tga file, otherwise the single-file form (convert_one).
-    | Author: suinevere
-    | Dependencies: convert_tree, convert_one, write_inc, art_queries
-    | Globals: REPO
-    | Params: argv -- sys.argv: [prog, src, dst]
-    | Returns: process exit code (0 ok, 2 on bad usage)
-    ----------------------
-    """
+    scene_inc = REPO / "saturn" / "src" / "scene" / "game_scenes.inc"
+    title_inc = REPO / "saturn" / "src" / "scene" / "title_art.inc"
+
+    if len(argv) == 1:
+        png_root = REPO / "tools" / "assets" / "png"
+        tga_root = REPO / "saturn" / "cd" / "data" / "TGA"
+        counts = convert_game_tree(png_root, tga_root)
+        write_scene_inc(counts, scene_inc)
+        n_title = convert_title(png_root, tga_root)
+        write_title_inc(n_title, title_inc)
+        return 0
+
     if len(argv) != 3:
         print(__doc__)
         return 2
 
     src, dst = Path(argv[1]), Path(argv[2])
-    if src.is_dir() or dst.suffix.lower() != ".tga":
-        vocab = art_queries.load(REPO / "tools" / "assets" / "art_queries.json")
-        counts = convert_tree(src, dst, genre_of=lambda mood, noun: (
-            vocab.get(mood, {}).get("noun_genre", {}).get(noun)))
-        write_inc(counts, REPO / "saturn" / "src" / "video" / "category_art.inc")
+    if dst.suffix.lower() == ".tga":
+        status, message = convert_one(src, dst)
+        print(f"  {'wrote' if status == 'wrote' else 'skip '} {message}")
         return 0
 
-    status, message = convert_one(src, dst)
-    print(f"  {'wrote' if status == 'wrote' else 'skip '} {message}")
+    counts = convert_game_tree(src, dst)
+    write_scene_inc(counts, scene_inc)
+    n_title = convert_title(src, dst)
+    write_title_inc(n_title, title_inc)
     return 0
 
 

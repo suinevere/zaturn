@@ -5,6 +5,13 @@ check() raises as well as recording, so a failed assertion fails the test under
 pytest -- which is the gate this project actually runs. Recording alone made
 pytest blind to everything except exceptions. main() swallows the raise per test
 so a direct run still reaches every test rather than stopping at the first.
+
+The tree shape under test is the per-game one make_tga.py now walks
+(tools/assets/png/<GAME>/<SCENE>/*.png), not the retired per-mood one. Tests
+that need a real, known game or scene stem use ZORK1/ADVENT and FOREST/CAVE --
+the corpus these come from (gen_scene_tables.GAMES, scene_vocab.SCENES) is the
+real repo data, not a fixture, since convert_game_tree validates both against
+it and there is no injection seam.
 """
 import sys
 import tempfile
@@ -27,7 +34,7 @@ def check(cond, label):
 
 
 def gradient(w=make_tga.WIDTH, h=make_tga.HEIGHT):
-    """A deterministic multi-hue gradient — quantizing a flat color is a weak test."""
+    """A deterministic multi-hue gradient -- quantizing a flat color is a weak test."""
     im = Image.new("RGB", (w, h))
     im.putdata([((x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256)
                 for y in range(h) for x in range(w)])
@@ -111,264 +118,238 @@ def test_encode_tga_pixel_roundtrip():
     check(pixel_at(240, 168) == (255, 255, 255), "bottom-right quadrant decodes to pure white")
 
 
-def test_convert_tree_root_level_naming_and_case_insensitivity():
-    print("test_convert_tree_root_level_naming_and_case_insensitivity")
+def test_convert_game_tree_walks_scenes_in_vocabulary_order():
+    print("test_convert_game_tree_walks_scenes_in_vocabulary_order")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        src.mkdir()
-        make_png(src / "SUINE.PNG")
-        make_png(src / "cmplab.png")
-        counts = make_tga.convert_tree(src, dst)
+        (src / "ZORK1" / "FOREST").mkdir(parents=True)
+        (src / "ZORK1" / "CAVE").mkdir(parents=True)
+        make_png(src / "ZORK1" / "FOREST" / "F1.PNG")
+        make_png(src / "ZORK1" / "FOREST" / "F2.PNG")
+        make_png(src / "ZORK1" / "CAVE" / "C1.PNG")
+        counts = make_tga.convert_game_tree(src, dst)
 
-        check(counts == {}, "root-level sources are not counted toward any mood")
-        check((dst / "SUINE.TGA").exists(), "uppercase source -> SUINE.TGA")
-        check((dst / "CMPLAB.TGA").exists(), "lowercase source -> CMPLAB.TGA")
+        check(counts == {"ZORK1": {"FOREST": 2, "CAVE": 1}},
+              "one game, two scenes, counted separately")
+        check((dst / "ZORK1" / "01.TGA").exists(), "first FOREST source claims 01.TGA")
+        check((dst / "ZORK1" / "02.TGA").exists(), "second FOREST source claims 02.TGA")
+        check((dst / "ZORK1" / "03.TGA").exists(),
+              "CAVE (later in scene_vocab.SCENES) claims the next index")
+        check(not (dst / "FOREST").exists(), "output is not flattened to the root")
 
 
-def test_convert_tree_skips_offsize_but_continues():
-    print("test_convert_tree_skips_offsize_but_continues")
+def test_convert_game_tree_skips_offsize_but_continues():
+    print("test_convert_game_tree_skips_offsize_but_continues")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        (src / "WILDER").mkdir(parents=True)
-        make_png(src / "WILDER" / "ANCIENT.PNG", w=640, h=480)
-        make_png(src / "WILDER" / "CLIFF.PNG")
-        counts = make_tga.convert_tree(src, dst)
+        (src / "ZORK1" / "FOREST").mkdir(parents=True)
+        make_png(src / "ZORK1" / "FOREST" / "ANCIENT.PNG", w=640, h=480)
+        make_png(src / "ZORK1" / "FOREST" / "CLIFF.PNG")
+        counts = make_tga.convert_game_tree(src, dst)
 
-        check(counts == {"WILDER": [1, 0, 0, 0]}, "only the correctly-sized image converted")
-        check((dst / "WILDER" / "01.TGA").exists(), "the surviving image claims 01.TGA")
-        check(not (dst / "WILDER" / "02.TGA").exists(), "a skipped image leaves no gap")
+        check(counts == {"ZORK1": {"FOREST": 1}}, "only the correctly-sized image converted")
+        check((dst / "ZORK1" / "01.TGA").exists(), "the surviving image claims 01.TGA")
+        check(not (dst / "ZORK1" / "02.TGA").exists(), "a skipped image leaves no gap")
 
 
-def test_convert_tree_root_level_skips_long_stems():
-    print("test_convert_tree_root_level_skips_long_stems")
+def test_convert_game_tree_skips_unreadable_source():
+    print("test_convert_game_tree_skips_unreadable_source")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        src.mkdir()
-        make_png(src / "TYPEWRTR.png")
-        make_png(src / "TOOLONGNAME.png")
-        make_tga.convert_tree(src, dst)
+        (src / "ZORK1" / "FOREST").mkdir(parents=True)
+        make_png(src / "ZORK1" / "FOREST" / "CLIFF.PNG")
+        (src / "ZORK1" / "FOREST" / "BROKEN.png").write_bytes(b"not a real png")
+        make_tga.convert_game_tree(src, dst)
 
-        check((dst / "TYPEWRTR.TGA").exists(), "exactly 8 characters is allowed")
-        check(not (dst / "TOOLONGNAME.TGA").exists(), "over 8 characters is skipped")
-
-
-def test_convert_tree_warns_past_the_per_mood_cap():
-    print("test_convert_tree_warns_past_the_per_mood_cap")
-    import contextlib
-    import io
-
-    def run_with(n):
-        with tempfile.TemporaryDirectory() as td:
-            src, dst = Path(td) / "png", Path(td) / "tga"
-            (src / "WILDER").mkdir(parents=True)
-            for i in range(n):
-                make_png(src / "WILDER" / f"BG{i:03d}.png")
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                counts = make_tga.convert_tree(src, dst)
-            return counts, buf.getvalue()
-
-    counts99, out99 = run_with(99)
-    check(counts99 == {"WILDER": [99, 0, 0, 0]}, "exactly 99 images all convert")
-    check("ignoring" not in out99, "no warning at exactly 99 images")
-
-    counts100, out100 = run_with(100)
-    check(counts100 == {"WILDER": [99, 0, 0, 0]}, "the 100th image is not counted")
-    check("ignoring" in out100, "warning fires past 99 images in one mood")
+        check((dst / "ZORK1" / "01.TGA").exists(), "valid file produced a TGA")
+        check(not (dst / "ZORK1" / "02.TGA").exists(), "unreadable source produced no TGA")
 
 
-def test_convert_tree_skips_unreadable_source():
-    print("test_convert_tree_skips_unreadable_source")
+def test_convert_game_tree_skips_unknown_game_folder():
+    print("test_convert_game_tree_skips_unknown_game_folder")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        src.mkdir()
-        make_png(src / "CLIFF.PNG")
-        (src / "BROKEN.png").write_bytes(b"not a real png, just garbage bytes")
+        (src / "ZORK1" / "FOREST").mkdir(parents=True)
+        (src / "NOTAGAME" / "FOREST").mkdir(parents=True)
+        make_png(src / "ZORK1" / "FOREST" / "F1.PNG")
+        make_png(src / "NOTAGAME" / "FOREST" / "F1.PNG")
+        counts = make_tga.convert_game_tree(src, dst)
 
-        make_tga.convert_tree(src, dst)
-
-        check((dst / "CLIFF.TGA").exists(), "valid file produced a TGA")
-        check(not (dst / "BROKEN.TGA").exists(), "unreadable source produced no TGA")
+        check(counts == {"ZORK1": {"FOREST": 1}}, "the unknown game is skipped, not converted")
+        check(not (dst / "NOTAGAME").exists(), "no output folder for an unknown game")
 
 
-def test_convert_tree_walks_mood_folders_and_root():
-    print("test_convert_tree_walks_mood_folders_and_root")
+def test_convert_game_tree_skips_unknown_scene_folder():
+    print("test_convert_game_tree_skips_unknown_scene_folder")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        (src / "WILDER").mkdir(parents=True)
-        (src / "TOWN").mkdir(parents=True)
-        make_png(src / "WILDER" / "WILDER1.PNG")
-        make_png(src / "WILDER" / "WILDER2.PNG")
-        make_png(src / "TOWN" / "TOWN1.PNG")
-        make_png(src / "SUINE.PNG")
-        counts = make_tga.convert_tree(src, dst)
+        (src / "ZORK1" / "FOREST").mkdir(parents=True)
+        (src / "ZORK1" / "NOTASCENE").mkdir(parents=True)
+        make_png(src / "ZORK1" / "FOREST" / "F1.PNG")
+        make_png(src / "ZORK1" / "NOTASCENE" / "X1.PNG")
+        counts = make_tga.convert_game_tree(src, dst)
 
-        check(counts == {"WILDER": [2, 0, 0, 0], "TOWN": [1, 0, 0, 0]}, "every mood folder is walked")
-        check((dst / "WILDER" / "01.TGA").exists(), "first WILDER source claims 01.TGA")
-        check((dst / "WILDER" / "02.TGA").exists(), "second WILDER source claims 02.TGA")
-        check((dst / "TOWN" / "01.TGA").exists(), "TOWN gets its own 01.TGA")
-        check((dst / "SUINE.TGA").exists(), "root-level source becomes the boot splash")
-        check(not (dst / "WILDER1.TGA").exists(), "output is not flattened to the root")
+        check(counts == {"ZORK1": {"FOREST": 1}}, "the unknown scene is skipped, not converted")
+        check(sum(counts["ZORK1"].values()) == 1, "the typo'd scene contributed no pictures")
 
 
-def test_convert_tree_root_level_accepts_jpeg_sources():
-    print("test_convert_tree_root_level_accepts_jpeg_sources")
+def test_convert_game_tree_skips_title_folder():
+    print("test_convert_game_tree_skips_title_folder")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        src.mkdir()
-        gradient().save(src / "SCIFI3.jpg")
-        make_tga.convert_tree(src, dst)
+        (src / "TITLE").mkdir(parents=True)
+        make_png(src / "TITLE" / "T1.PNG")
+        counts = make_tga.convert_game_tree(src, dst)
 
-        check((dst / "SCIFI3.TGA").exists(), "JPEG source -> SCIFI3.TGA")
+        check(counts == {}, "TITLE is not a game -- convert_title owns it")
+        check(not (dst / "TITLE").exists(), "convert_game_tree writes nothing for TITLE")
 
 
-def test_convert_tree_skips_unknown_mood_folder():
-    print("test_convert_tree_skips_unknown_mood_folder")
+def test_convert_game_tree_missing_src_root_is_a_noop():
+    print("test_convert_game_tree_missing_src_root_is_a_noop")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        (src / "WILDER").mkdir(parents=True)
-        (src / "SPOOKY").mkdir(parents=True)
-        make_png(src / "WILDER" / "WILDER1.PNG")
-        make_png(src / "SPOOKY" / "SPOOKY1.PNG")
-        counts = make_tga.convert_tree(src, dst)
-
-        check(counts == {"WILDER": [1, 0, 0, 0]}, "the typo'd mood is skipped, not converted")
-        check(not (dst / "SPOOKY").exists(), "no output folder for an unknown mood")
-
-
-def test_convert_tree_missing_src_root_is_a_noop():
-    print("test_convert_tree_missing_src_root_is_a_noop")
-    with tempfile.TemporaryDirectory() as td:
-        src, dst = Path(td) / "png", Path(td) / "tga"
-        counts = make_tga.convert_tree(src, dst)
+        counts = make_tga.convert_game_tree(src, dst)
 
         check(counts == {}, "a missing source tree converts nothing")
         check(not dst.exists(), "no destination tree is created")
 
 
-def test_convert_tree_clears_stale_mood_tgas():
-    print("test_convert_tree_clears_stale_mood_tgas")
+def test_convert_game_tree_clears_stale_tgas():
+    print("test_convert_game_tree_clears_stale_tgas")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
-        (src / "WILDER").mkdir(parents=True)
-        make_png(src / "WILDER" / "WILDER1.PNG")
-        make_png(src / "WILDER" / "WILDER2.PNG")
-        make_png(src / "WILDER" / "WILDER3.PNG")
-        make_tga.convert_tree(src, dst)
-        check((dst / "WILDER" / "03.TGA").exists(), "all three sources convert on the first run")
+        (src / "ZORK1" / "FOREST").mkdir(parents=True)
+        make_png(src / "ZORK1" / "FOREST" / "F1.PNG")
+        make_png(src / "ZORK1" / "FOREST" / "F2.PNG")
+        make_png(src / "ZORK1" / "FOREST" / "F3.PNG")
+        make_tga.convert_game_tree(src, dst)
+        check((dst / "ZORK1" / "03.TGA").exists(), "all three sources convert on the first run")
 
-        (src / "WILDER" / "WILDER2.PNG").unlink()
-        (src / "WILDER" / "WILDER3.PNG").unlink()
-        counts = make_tga.convert_tree(src, dst)
+        (src / "ZORK1" / "FOREST" / "F2.PNG").unlink()
+        (src / "ZORK1" / "FOREST" / "F3.PNG").unlink()
+        counts = make_tga.convert_game_tree(src, dst)
 
-        check(counts == {"WILDER": [1, 0, 0, 0]}, "only the remaining source converts")
-        check(not (dst / "WILDER" / "02.TGA").exists(), "a stale TGA from the first run is removed")
-        check(not (dst / "WILDER" / "03.TGA").exists(), "a stale TGA from the first run is removed")
+        check(counts == {"ZORK1": {"FOREST": 1}}, "only the remaining source converts")
+        check(not (dst / "ZORK1" / "02.TGA").exists(), "a stale TGA from the first run is removed")
+        check(not (dst / "ZORK1" / "03.TGA").exists(), "a stale TGA from the first run is removed")
 
 
-def test_convert_tree_clears_stale_root_level_tgas():
-    print("test_convert_tree_clears_stale_root_level_tgas")
+def test_convert_game_tree_caps_at_99_across_scenes_not_per_scene():
+    print("test_convert_game_tree_caps_at_99_across_scenes_not_per_scene")
+    import contextlib
+    import io
+
+    with tempfile.TemporaryDirectory() as td:
+        src, dst = Path(td) / "png", Path(td) / "tga"
+        (src / "ZORK1" / "FOREST").mkdir(parents=True)
+        (src / "ZORK1" / "CAVE").mkdir(parents=True)
+        for i in range(70):
+            make_png(src / "ZORK1" / "FOREST" / f"F{i:03d}.png")
+        for i in range(50):
+            make_png(src / "ZORK1" / "CAVE" / f"C{i:03d}.png")
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            counts = make_tga.convert_game_tree(src, dst)
+
+        check(counts["ZORK1"] == {"FOREST": 70, "CAVE": 29},
+              "all 70 FOREST pictures convert, only 29 of 50 CAVE fit before 99")
+        check(sum(counts["ZORK1"].values()) == 99, "counts sum to exactly the game's cap")
+        check("ignoring" in buf.getvalue(), "warning fires past 99 pictures in one game")
+        made = list((dst / "ZORK1").glob("*.TGA"))
+        check(len(made) == 99, "exactly 99 files were actually written, not 120")
+
+
+def test_convert_title_writes_a_flat_gapless_run():
+    print("test_convert_title_writes_a_flat_gapless_run")
+    with tempfile.TemporaryDirectory() as td:
+        src, dst = Path(td) / "png", Path(td) / "tga"
+        (src / "TITLE").mkdir(parents=True)
+        make_png(src / "TITLE" / "SPLASH1.PNG")
+        make_png(src / "TITLE" / "SPLASH2.PNG")
+        n = make_tga.convert_title(src, dst)
+
+        check(n == 2, "convert_title returns the count converted")
+        check((dst / "TITLE" / "01.TGA").exists(), "first source claims 01.TGA")
+        check((dst / "TITLE" / "02.TGA").exists(), "second source claims 02.TGA")
+
+
+def test_convert_title_missing_folder_converts_nothing():
+    print("test_convert_title_missing_folder_converts_nothing")
     with tempfile.TemporaryDirectory() as td:
         src, dst = Path(td) / "png", Path(td) / "tga"
         src.mkdir()
-        make_png(src / "SUINE.PNG")
-        make_tga.convert_tree(src, dst)
-        check((dst / "SUINE.TGA").exists(), "the boot splash converts on the first run")
+        n = make_tga.convert_title(src, dst)
 
-        (src / "SUINE.PNG").unlink()
-        make_tga.convert_tree(src, dst)
-
-        check(not (dst / "SUINE.TGA").exists(), "a renamed or deleted source leaves no orphan TGA")
+        check(n == 0, "no TITLE source folder converts zero pictures")
+        check(not (dst / "TITLE").exists(), "no TITLE output folder is created")
 
 
-def test_convert_tree_packs_each_genre_band_gaplessly():
-    print("test_convert_tree_packs_each_genre_band_gaplessly")
+def test_convert_title_clears_stale_tgas():
+    print("test_convert_title_clears_stale_tgas")
+    with tempfile.TemporaryDirectory() as td:
+        src, dst = Path(td) / "png", Path(td) / "tga"
+        (src / "TITLE").mkdir(parents=True)
+        make_png(src / "TITLE" / "OLDNAME.png")
+        make_tga.convert_title(src, dst)
+        check((dst / "TITLE" / "01.TGA").exists(), "the boot splash converts on the first run")
+
+        (src / "TITLE" / "OLDNAME.png").unlink()
+        make_png(src / "TITLE" / "NEWNAME.png")
+        make_tga.convert_title(src, dst)
+
+        check((dst / "TITLE" / "01.TGA").exists(), "the replacement still claims 01.TGA")
+        check(not (dst / "TITLE" / "02.TGA").exists(), "a renamed/deleted source leaves no orphan")
+
+
+def test_write_scene_inc_emits_bases_that_follow_the_scenes_before_them():
+    print("test_write_scene_inc_emits_bases_that_follow_the_scenes_before_them")
+    import scene_vocab as vocab
+
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        src, dst = root / "png", root / "TGA"
-        plan = {"NAUTICAL": {"boat": 3, "sailing ship cabin": 2,
-                             "submarine interior": 1}}
-        for noun, count in plan["NAUTICAL"].items():
-            d = src / "NAUTICAL" / "EXTRA" / noun
-            d.mkdir(parents=True)
-            for i in range(count):
-                Image.new("RGB", (320, 224), (9 * i, 40, 80)).save(
-                    d / f"{noun.replace(' ', '')}{i}.png", "PNG")
-
-        counts = make_tga.convert_tree(src, dst, genre_of=lambda m, n: {
-            "sailing ship cabin": "FANTASY",
-            "submarine interior": "MODERN"}.get(n))
-
-        check(counts["NAUTICAL"] == [3, 2, 0, 1],
-              "three neutral, two fantasy, none scifi, one modern")
-        made = sorted(p.name for p in (dst / "NAUTICAL").glob("*.TGA"))
-        check(made == ["01.TGA", "02.TGA", "03.TGA", "04.TGA", "05.TGA",
-                       "06.TGA"],
-              "six files, gapless across the packed bands")
-
-        first = (dst / "NAUTICAL" / "01.TGA").read_bytes()
-        check(len(first) > 0, "neutral band occupies the lowest indices")
-
-
-def test_convert_tree_caps_at_99_across_bands_not_per_band():
-    print("test_convert_tree_caps_at_99_across_bands_not_per_band")
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        src, dst = root / "png", root / "TGA"
-        ANY_COUNT, FANTASY_COUNT = 70, 50
-        d_any = src / "WILDER" / "EXTRA" / "cliff"
-        d_fantasy = src / "WILDER" / "EXTRA" / "temple"
-        d_any.mkdir(parents=True)
-        d_fantasy.mkdir(parents=True)
-        for i in range(ANY_COUNT):
-            make_png(d_any / f"cliff{i:03d}.png")
-        for i in range(FANTASY_COUNT):
-            make_png(d_fantasy / f"temple{i:03d}.png")
-
-        counts = make_tga.convert_tree(
-            src, dst, genre_of=lambda m, n: {"temple": "FANTASY"}.get(n))
-
-        check(counts["WILDER"] == [70, 29, 0, 0],
-              "the cap falls inside the fantasy band: all 70 neutral, "
-              "only 29 of 50 fantasy pictures fit before 99 is reached")
-        check(sum(counts["WILDER"]) == 99,
-              "band counts sum to exactly the category cap")
-        made = list((dst / "WILDER").glob("*.TGA"))
-        check(len(made) == 99,
-              "exactly 99 files were actually written to disk, not 120 -- "
-              "a per-band cap would admit all 70 + 50 and never reject any")
-
-
-def test_write_inc_emits_bases_that_follow_the_bands_before_them():
-    print("test_write_inc_emits_bases_that_follow_the_bands_before_them")
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp) / "category_art.inc"
-        make_tga.write_inc({"NAUTICAL": [3, 2, 0, 1]}, out)
+        out = Path(tmp) / "game_scenes.inc"
+        make_tga.write_scene_inc({"ZORK1": {"FOREST": 3, "CAVE": 2}}, out)
         text = out.read_text()
 
-        check("{ 0, 3}, { 3, 2}, { 5, 0}, { 5, 1}" in text,
-              "NAUTICAL bases accumulate: 0, 3, 5, 5")
-        check("CATEGORY_ART_N" not in text,
-              "the flat count row is gone, not left beside the table")
+        forest_i = vocab.SCENES.index("FOREST")
+        cave_i = vocab.SCENES.index("CAVE")
+        check(forest_i < cave_i, "FOREST precedes CAVE in scene_vocab.SCENES")
+        check("{0,3}" in text, "FOREST's base is 0")
+        check("{3,2}" in text, "CAVE's base follows FOREST's count")
+        check('"ZORK1"' in text, "ZORK1 is one of the real, known games")
+        check("GAME_DIR[GAME_N]" in text, "the generated table names GAME_N")
+
+
+def test_write_title_inc_emits_the_define():
+    print("test_write_title_inc_emits_the_define")
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "title_art.inc"
+        make_tga.write_title_inc(7, out)
+        text = out.read_text()
+
+        check("#define TITLE_ART_N 7" in text, "TITLE_ART_N carries the given count")
+        check("GAME_DIR[GAME_N]" not in text, "TITLE never gets a row in GAME_DIR")
+        check("GAME_SCENE[GAME_N]" not in text, "TITLE never gets a row in GAME_SCENE")
 
 
 def main():
     for t in (test_encode_tga_structure,
               test_encode_tga_pixel_roundtrip,
-              test_convert_tree_root_level_naming_and_case_insensitivity,
-              test_convert_tree_walks_mood_folders_and_root,
-              test_convert_tree_skips_unknown_mood_folder,
-              test_convert_tree_root_level_accepts_jpeg_sources,
-              test_convert_tree_skips_offsize_but_continues,
-              test_convert_tree_root_level_skips_long_stems,
-              test_convert_tree_warns_past_the_per_mood_cap,
-              test_convert_tree_skips_unreadable_source,
-              test_convert_tree_missing_src_root_is_a_noop,
-              test_convert_tree_clears_stale_mood_tgas,
-              test_convert_tree_clears_stale_root_level_tgas,
-              test_convert_tree_packs_each_genre_band_gaplessly,
-              test_convert_tree_caps_at_99_across_bands_not_per_band,
-              test_write_inc_emits_bases_that_follow_the_bands_before_them):
+              test_convert_game_tree_walks_scenes_in_vocabulary_order,
+              test_convert_game_tree_skips_offsize_but_continues,
+              test_convert_game_tree_skips_unreadable_source,
+              test_convert_game_tree_skips_unknown_game_folder,
+              test_convert_game_tree_skips_unknown_scene_folder,
+              test_convert_game_tree_skips_title_folder,
+              test_convert_game_tree_missing_src_root_is_a_noop,
+              test_convert_game_tree_clears_stale_tgas,
+              test_convert_game_tree_caps_at_99_across_scenes_not_per_scene,
+              test_convert_title_writes_a_flat_gapless_run,
+              test_convert_title_missing_folder_converts_nothing,
+              test_convert_title_clears_stale_tgas,
+              test_write_scene_inc_emits_bases_that_follow_the_scenes_before_them,
+              test_write_title_inc_emits_the_define):
         try:
             t()
         except AssertionError:

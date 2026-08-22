@@ -1,16 +1,13 @@
 /*----------------------
  | game_scenes.inc
- | Description: STUB -- Task 13 regenerates this for real from converted
- |   image files. GAME_DIR holds each story's 8.3-safe per-game folder
- |   name (the story stem); GAME_SCENE[game][scene] is where that scene's
- |   pictures sit inside the game's own 1..99 index range, as {base,
- |   count} -- base is 0-based, so the nth picture of a scene is index
- |   base + n + 1. Every count is 0 (no scene has art yet) except Zork
- |   I's FOREST row, which carries a small non-zero range so a real path
- |   can be exercised before real art exists. Row order matches
- |   GAME_ROOM_MAP in game_rooms.inc (tools/gen_scene_tables.py's GAMES,
- |   sorted by stem) -- Task 13's generator overwrites this file and the
- |   indices must line up.
+ | Description: GENERATED FILE -- do not edit by hand; produced by
+ |   tools/make_tga.py. GAME_DIR holds each story's 8.3-safe
+ |   per-game folder name (the story stem); GAME_SCENE[game][scene]
+ |   is where that scene's pictures sit inside the game's own
+ |   1..99 index range, as {base, count} -- base is 0-based, so the
+ |   nth picture of a scene is index base + n + 1. Row order matches
+ |   GAME_ROOM_MAP in game_rooms.inc (gen_scene_tables.GAMES, sorted
+ |   by stem); column order is scene_vocab.SCENES.
  | Author: suinevere
  ----------------------*/
 static const char *const GAME_DIR[GAME_N] = {
@@ -75,7 +72,7 @@ static const GameScene GAME_SCENE[GAME_N][SCENE_N] = {
     { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
     { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
     { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
-    { {0,3}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
+    { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
     { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
     { {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0}, {0,0} },
 };

@@ -1,0 +1,214 @@
+{
+ "count": 41,
+ "desc_prop": 15,
+ "release": 8,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 2,
+   "title": "Up a Tree"
+  },
+  {
+   "description": "You are on a ledge about halfway up the wall of the river canyon. You can see from here that the main flow from Aragain Falls twists along a passage which it is impossible to enter. Below you is the canyon bottom. Above you is more cliff, which appears climbable.",
+   "obj": 20,
+   "title": "Rocky Ledge"
+  },
+  {
+   "description": "You are at the top of the Great Canyon on its west wall. From here there is a marvelous view of the canyon and parts of the Frigid River upstream. Across the canyon, the walls of the White Cliffs join the mighty ramparts of the Flathead Mountains to the east. Following the Canyon upstream to the north, Aragain Falls may be seen, complete with rainbow. The mighty Frigid River flows out from a great dark cavern. To the west and south can be seen an immense forest, stretching for miles around. A path leads northwest. It is possible to climb down into the canyon from here.",
+   "obj": 21,
+   "title": "Canyon View"
+  },
+  {
+   "description": null,
+   "obj": 25,
+   "title": "Kitchen"
+  },
+  {
+   "description": "This is a dimly lit forest, with large trees all around.",
+   "obj": 30,
+   "title": "Forest"
+  },
+  {
+   "description": null,
+   "obj": 32,
+   "title": "Cellar"
+  },
+  {
+   "description": null,
+   "obj": 33,
+   "title": "The Wabe"
+  },
+  {
+   "description": null,
+   "obj": 51,
+   "title": "Long Water"
+  },
+  {
+   "description": null,
+   "obj": 57,
+   "title": "Round Pond"
+  },
+  {
+   "description": "You are standing in an open field west of a white house, with a boarded front door.",
+   "obj": 58,
+   "title": "West of House"
+  },
+  {
+   "description": "You're at the bottom of an open grave, surrounded by six-foot walls of dirt.",
+   "obj": 62,
+   "title": "Open Grave"
+  },
+  {
+   "description": "You are beneath the walls of the river canyon which may be climbable here. The lesser part of the runoff of Aragain Falls flows by below. To the north is a narrow path.",
+   "obj": 65,
+   "title": "Canyon Bottom"
+  },
+  {
+   "description": null,
+   "obj": 66,
+   "title": "Living Room"
+  },
+  {
+   "description": null,
+   "obj": 69,
+   "title": "Lancaster Gate"
+  },
+  {
+   "description": null,
+   "obj": 73,
+   "title": "Twilight Glen"
+  },
+  {
+   "description": null,
+   "obj": 77,
+   "title": "Behind House"
+  },
+  {
+   "description": "This is a forest, with trees in all directions. To the east, there appears to be sunlight.",
+   "obj": 78,
+   "title": "Forest"
+  },
+  {
+   "description": null,
+   "obj": 82,
+   "title": "Palace Gate"
+  },
+  {
+   "description": null,
+   "obj": 87,
+   "title": "Outside Cottage"
+  },
+  {
+   "description": null,
+   "obj": 88,
+   "title": "Flower Walk"
+  },
+  {
+   "description": null,
+   "obj": 89,
+   "title": "Hilltop"
+  },
+  {
+   "description": "This is an art gallery. Most of the paintings have been stolen by vandals with exceptional taste. The vandals left through either the north or west exits.",
+   "obj": 99,
+   "title": "Gallery"
+  },
+  {
+   "description": "This is a small room with passages to the east and south and a forbidding hole leading west. Bloodstains and deep scratches (perhaps made by an axe) mar the walls.",
+   "obj": 100,
+   "title": "The Troll Room"
+  },
+  {
+   "description": "You are on a small, rocky beach on the continuation of the Frigid River past the Falls. The beach is narrow due to the presence of the White Cliffs. The river canyon opens here and sunlight shines in from above. A rainbow crosses over the falls to the east and a narrow path continues to the southwest.",
+   "obj": 101,
+   "title": "End of Rainbow"
+  },
+  {
+   "description": "You are in a small clearing on a well marked forest path that extends to the east and west.",
+   "obj": 102,
+   "title": "Clearing"
+  },
+  {
+   "description": "You are facing the north side of a white house. There is no door here, and all the windows are boarded up. To the north a narrow path winds through the trees.",
+   "obj": 107,
+   "title": "North of House"
+  },
+  {
+   "description": null,
+   "obj": 111,
+   "title": "Broad Walk"
+  },
+  {
+   "description": null,
+   "obj": 112,
+   "title": "Black Lion Gate"
+  },
+  {
+   "description": null,
+   "obj": 116,
+   "title": "Lancaster Walk"
+  },
+  {
+   "description": null,
+   "obj": 123,
+   "title": "Clearing"
+  },
+  {
+   "description": "The forest thins out, revealing impassable mountains.",
+   "obj": 133,
+   "title": "Forest"
+  },
+  {
+   "description": null,
+   "obj": 141,
+   "title": "Spooky Copse"
+  },
+  {
+   "description": null,
+   "obj": 144,
+   "title": "Wading"
+  },
+  {
+   "description": "You are facing the south side of a white house. There is no door here, and all the windows are boarded.",
+   "obj": 158,
+   "title": "South of House"
+  },
+  {
+   "description": "This appears to have been an artist's studio. The walls and floors are splattered with paints of 69 different colors. Strangely enough, nothing of value is hanging here. At the south end of the room is an open door (also covered with paint). A dark and narrow chimney leads up from a fireplace; although you might be able to get up it, it seems unlikely you could get back down.",
+   "obj": 168,
+   "title": "Studio"
+  },
+  {
+   "description": "This is a dimly lit forest, with large trees all around.",
+   "obj": 169,
+   "title": "Forest"
+  },
+  {
+   "description": "You're in a creepy corner of the Festeron Cemetery, surrounded by silent tombstones. An iron gate opens to the east, and a narrow lane wanders north.",
+   "obj": 170,
+   "title": "Creepy Corner"
+  },
+  {
+   "description": null,
+   "obj": 177,
+   "title": "Inverness Terrace"
+  },
+  {
+   "description": "This is a path winding through a dimly lit forest. The path heads north-south here. One particularly large tree with some low branches stands at the edge of the path.",
+   "obj": 185,
+   "title": "Forest Path"
+  },
+  {
+   "description": null,
+   "obj": 191,
+   "title": "Outside Cemetery"
+  },
+  {
+   "description": "You are on the east edge of a chasm, the bottom of which cannot be seen. A narrow passage goes north, and the path you are on continues to the east.",
+   "obj": 195,
+   "title": "East of Chasm"
+  }
+ ],
+ "serial": "870601",
+ "story": "INFOSAM7.Z3"
+}

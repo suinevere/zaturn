@@ -1,0 +1,289 @@
+{
+ "count": 56,
+ "desc_prop": 16,
+ "release": 9,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 2,
+   "title": "dungeon"
+  },
+  {
+   "description": null,
+   "obj": 7,
+   "title": "Wendish's bedroom"
+  },
+  {
+   "description": null,
+   "obj": 9,
+   "title": "driveway"
+  },
+  {
+   "description": null,
+   "obj": 11,
+   "title": "secret tomb"
+  },
+  {
+   "description": null,
+   "obj": 12,
+   "title": "drawing room"
+  },
+  {
+   "description": null,
+   "obj": 13,
+   "title": "courtyard"
+  },
+  {
+   "description": null,
+   "obj": 14,
+   "title": "library landing"
+  },
+  {
+   "description": null,
+   "obj": 25,
+   "title": "Vivien's entrance"
+  },
+  {
+   "description": null,
+   "obj": 27,
+   "title": "Jack's landing"
+  },
+  {
+   "description": null,
+   "obj": 30,
+   "title": "kitchen"
+  },
+  {
+   "description": null,
+   "obj": 31,
+   "title": "Ian's entrance"
+  },
+  {
+   "description": null,
+   "obj": 32,
+   "title": "dining room"
+  },
+  {
+   "description": null,
+   "obj": 33,
+   "title": "your bedroom"
+  },
+  {
+   "description": null,
+   "obj": 38,
+   "title": "limbo"
+  },
+  {
+   "description": "There are bedrooms to the east and west. The gallery lies south.",
+   "obj": 39,
+   "title": "east hall"
+  },
+  {
+   "description": null,
+   "obj": 40,
+   "title": "tower passage"
+  },
+  {
+   "description": null,
+   "obj": 54,
+   "title": "office"
+  },
+  {
+   "description": null,
+   "obj": 62,
+   "title": "your bathroom"
+  },
+  {
+   "description": "There are bedrooms to the east and west. The gallery lies south.",
+   "obj": 67,
+   "title": "west hall"
+  },
+  {
+   "description": null,
+   "obj": 70,
+   "title": "your entrance"
+  },
+  {
+   "description": null,
+   "obj": 73,
+   "title": "Wendish's entrance"
+  },
+  {
+   "description": null,
+   "obj": 88,
+   "title": "sitting room"
+  },
+  {
+   "description": "The game room has a billiard table and card table, with various chairs and standing ash trays. On the wall are a cue rack, gun rack, and mounted heads of a rhino and a cape buffalo.",
+   "obj": 96,
+   "title": "game room"
+  },
+  {
+   "description": null,
+   "obj": 107,
+   "title": "chapel"
+  },
+  {
+   "description": null,
+   "obj": 114,
+   "title": "lumber room"
+  },
+  {
+   "description": null,
+   "obj": 117,
+   "title": "Ian's bedroom"
+  },
+  {
+   "description": null,
+   "obj": 121,
+   "title": "secret crypt"
+  },
+  {
+   "description": null,
+   "obj": 124,
+   "title": "new great hall"
+  },
+  {
+   "description": null,
+   "obj": 126,
+   "title": "Tamara's bedroom"
+  },
+  {
+   "description": null,
+   "obj": 131,
+   "title": "gallery"
+  },
+  {
+   "description": null,
+   "obj": 132,
+   "title": "foyer"
+  },
+  {
+   "description": null,
+   "obj": 136,
+   "title": "old great hall"
+  },
+  {
+   "description": null,
+   "obj": 140,
+   "title": "fighting deck"
+  },
+  {
+   "description": null,
+   "obj": 141,
+   "title": "dead end"
+  },
+  {
+   "description": null,
+   "obj": 146,
+   "title": "library"
+  },
+  {
+   "description": null,
+   "obj": 148,
+   "title": "Vivien's bedroom"
+  },
+  {
+   "description": null,
+   "obj": 150,
+   "title": "Hyde's bedroom"
+  },
+  {
+   "description": null,
+   "obj": 151,
+   "title": "master bedroom"
+  },
+  {
+   "description": null,
+   "obj": 154,
+   "title": "drawing-room entrance"
+  },
+  {
+   "description": null,
+   "obj": 155,
+   "title": "dining passage"
+  },
+  {
+   "description": null,
+   "obj": 159,
+   "title": "Iris's bedroom"
+  },
+  {
+   "description": null,
+   "obj": 170,
+   "title": "sitting passage"
+  },
+  {
+   "description": null,
+   "obj": 177,
+   "title": "Tamara's landing"
+  },
+  {
+   "description": null,
+   "obj": 179,
+   "title": "Iris's entrance"
+  },
+  {
+   "description": "Lord Jack's private study has rich mahogany furniture and hunting prints on the walls.",
+   "obj": 183,
+   "title": "study"
+  },
+  {
+   "description": null,
+   "obj": 186,
+   "title": "path"
+  },
+  {
+   "description": null,
+   "obj": 196,
+   "title": "ground-floor corridor"
+  },
+  {
+   "description": null,
+   "obj": 222,
+   "title": "first-floor corridor"
+  },
+  {
+   "description": null,
+   "obj": 224,
+   "title": "Hyde's entrance"
+  },
+  {
+   "description": null,
+   "obj": 228,
+   "title": "midpoint"
+  },
+  {
+   "description": null,
+   "obj": 235,
+   "title": "basement"
+  },
+  {
+   "description": "Tall dark hedges surround you like walls, with walkways in all directions.",
+   "obj": 241,
+   "title": "hedge maze"
+  },
+  {
+   "description": null,
+   "obj": 243,
+   "title": "backstairs"
+  },
+  {
+   "description": null,
+   "obj": 246,
+   "title": "junction"
+  },
+  {
+   "description": null,
+   "obj": 249,
+   "title": "garden"
+  },
+  {
+   "description": null,
+   "obj": 252,
+   "title": "second-floor corridor"
+  }
+ ],
+ "serial": "861022",
+ "story": "MOONMIST.Z3"
+}

@@ -1,0 +1,349 @@
+{
+ "count": 68,
+ "desc_prop": 14,
+ "release": 34,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 2,
+   "title": "Up a Tree"
+  },
+  {
+   "description": null,
+   "obj": 7,
+   "title": "Dome Room"
+  },
+  {
+   "description": "This is a circular room with passages in all directions. Several have unfortunately been blocked by cave-ins.",
+   "obj": 11,
+   "title": "Round Room"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 14,
+   "title": "Maze"
+  },
+  {
+   "description": "You are atop the west wall of a great canyon, offering a marvelous view of the mighty Frigid River below. Across the canyon, the walls of the White Cliffs join the mighty ramparts of the Flathead Mountains. To the north, Aragain Falls may be seen, complete with rainbow. Even further upstream, the river flows out of a great dark cavern. To the west is an immense forest, stretching for miles. It seems possible to climb down into the canyon from here.",
+   "obj": 15,
+   "title": "Canyon View"
+  },
+  {
+   "description": null,
+   "obj": 18,
+   "title": "Kitchen"
+  },
+  {
+   "description": "You are on a large beach on the east shore of the river, which flows by quickly. A path runs south along the river, and a sand-filled passage leads northeast.",
+   "obj": 19,
+   "title": "Sandy Beach"
+  },
+  {
+   "description": "This small chamber appears to have been part of a coal mine. To the west and south are passages, and a steep metal slide twists downward.",
+   "obj": 20,
+   "title": "Slide Room"
+  },
+  {
+   "description": null,
+   "obj": 22,
+   "title": "Cellar"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 23,
+   "title": "Maze"
+  },
+  {
+   "description": "Standing by the temple's altar, you can see a small hole in the floor which leads into darkness. The rest of the temple is north of here.",
+   "obj": 24,
+   "title": "Altar"
+  },
+  {
+   "description": "You are on the Frigid River just below the dam. The river flows quietly here. There is a landing on the west shore.",
+   "obj": 26,
+   "title": "Frigid River"
+  },
+  {
+   "description": null,
+   "obj": 28,
+   "title": "Behind House"
+  },
+  {
+   "description": null,
+   "obj": 29,
+   "title": "Entrance to Hades"
+  },
+  {
+   "description": "The sound of rushing water is nearly unbearable here. On the both the east and west shores are beaches.",
+   "obj": 32,
+   "title": "Frigid River"
+  },
+  {
+   "description": "This is a tiny cave with entrances west and north, and a dark, forbidding staircase leading down.",
+   "obj": 33,
+   "title": "Windy Cave"
+  },
+  {
+   "description": null,
+   "obj": 34,
+   "title": "Aragain Falls"
+  },
+  {
+   "description": "This room smells strongly of coal gas. Narrow tunnels lead lead east and south.",
+   "obj": 35,
+   "title": "Gas Room"
+  },
+  {
+   "description": null,
+   "obj": 37,
+   "title": "Mirror Room"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 38,
+   "title": "Maze"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 39,
+   "title": "Maze"
+  },
+  {
+   "description": null,
+   "obj": 46,
+   "title": "West of House"
+  },
+  {
+   "description": "The walls of the river canyon may be climbable here. To the northeast is a narrow path.",
+   "obj": 52,
+   "title": "Canyon Bottom"
+  },
+  {
+   "description": null,
+   "obj": 53,
+   "title": "Living Room"
+  },
+  {
+   "description": null,
+   "obj": 56,
+   "title": "Cyclops Room"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 57,
+   "title": "Maze"
+  },
+  {
+   "description": null,
+   "obj": 60,
+   "title": "Machine Room"
+  },
+  {
+   "description": null,
+   "obj": 64,
+   "title": "Reservoir"
+  },
+  {
+   "description": "This is a crooked corridor from the north, with forks to the southwest and south.",
+   "obj": 70,
+   "title": "Twisting Passage"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 73,
+   "title": "Maze"
+  },
+  {
+   "description": null,
+   "obj": 78,
+   "title": "Temple"
+  },
+  {
+   "description": "You are at the base of the dam, which looms above you. The river Frigid begins here. Across it, to the east, cliffs form giant walls stretching north-south along the shore.",
+   "obj": 79,
+   "title": "Dam Base"
+  },
+  {
+   "description": null,
+   "obj": 85,
+   "title": "Reservoir South"
+  },
+  {
+   "description": "You are on a small, rocky beach by the Frigid River, below the falls. A rainbow crosses over the falls to the east and a narrow path continues to the southwest.",
+   "obj": 86,
+   "title": "End of Rainbow"
+  },
+  {
+   "description": "This is a small room with passages to the east, northeast and south, and a forbidding hole leading west. Bloodstains and deep scratches (perhaps made by an axe) mar the walls.",
+   "obj": 87,
+   "title": "Troll Room"
+  },
+  {
+   "description": "This is a nondescript part of a coal mine.",
+   "obj": 93,
+   "title": "Coal Mine"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 94,
+   "title": "Maze"
+  },
+  {
+   "description": "You are facing the north side of a white house. There is no door here, and all the windows are boarded up. A narrow path winds north through the trees.",
+   "obj": 96,
+   "title": "North of House"
+  },
+  {
+   "description": "You have entered the Land of the Living Dead. Thousands of lost souls can be heard weeping and moaning. In a corner are the remains of previous adventurers less fortunate than yourself. A passage exits to the north.",
+   "obj": 99,
+   "title": "Hades"
+  },
+  {
+   "description": "This is a crooked corridor from the north, with forks to the southwest and south.",
+   "obj": 101,
+   "title": "Winding Passage"
+  },
+  {
+   "description": "This is a sand-filled cave whose exit is to the southwest.",
+   "obj": 106,
+   "title": "Sandy Cave"
+  },
+  {
+   "description": "This looks like an Egyptian tomb. A stair ascends to the west.",
+   "obj": 107,
+   "title": "Egyptian Room"
+  },
+  {
+   "description": "This is a tiny cave with entrances west and north, and a dark, forbidding staircase leading down.",
+   "obj": 110,
+   "title": "Drafty Cave"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 111,
+   "title": "Maze"
+  },
+  {
+   "description": "Paths lead into the forest to the west and northwest. Also, a well-marked path extends east.",
+   "obj": 114,
+   "title": "Forest Edge"
+  },
+  {
+   "description": "The river descends here into a valley. The are no landings on either shore. In the distance a faint rumbling can be heard.",
+   "obj": 117,
+   "title": "Frigid River"
+  },
+  {
+   "description": null,
+   "obj": 119,
+   "title": "Forest Path"
+  },
+  {
+   "description": "This is a small room at the bottom of a long shaft. A heavy iron chain hangs down the shaft. To the south is a passageway and to the east a very narrow passage.",
+   "obj": 121,
+   "title": "Drafty Room"
+  },
+  {
+   "description": "This is the attic. The only exit is the stairway down.",
+   "obj": 125,
+   "title": "Attic"
+  },
+  {
+   "description": "You are at the entrance of an abandoned coal mine. Strange squeaky sounds come from the passage at the north end. You may also escape to the east.",
+   "obj": 126,
+   "title": "Mine Entrance"
+  },
+  {
+   "description": null,
+   "obj": 131,
+   "title": "Reservoir North"
+  },
+  {
+   "description": "This is a nondescript part of a coal mine.",
+   "obj": 132,
+   "title": "Coal Mine"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 134,
+   "title": "Maze"
+  },
+  {
+   "description": "At the east end of this narrow passage, a ladder leads upward. There's a strong draft from the west, where the passage narrows even further.",
+   "obj": 139,
+   "title": "Ladder Room"
+  },
+  {
+   "description": "You are facing the south side of a white house. There is no door here, and all the windows are boarded.",
+   "obj": 144,
+   "title": "South of House"
+  },
+  {
+   "description": "This is a dimly lit forest, with large trees all around.",
+   "obj": 145,
+   "title": "Forest"
+  },
+  {
+   "description": "This is a dimly lit forest, with large trees all around.",
+   "obj": 150,
+   "title": "Forest"
+  },
+  {
+   "description": null,
+   "obj": 151,
+   "title": "Mirror Room"
+  },
+  {
+   "description": null,
+   "obj": 154,
+   "title": "Grating Room"
+  },
+  {
+   "description": "This is a nondescript part of a coal mine.",
+   "obj": 156,
+   "title": "Coal Mine"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 157,
+   "title": "Maze"
+  },
+  {
+   "description": "This was once an artist's studio. The walls are splattered with paints of 69 different colors. To the west is a doorway (also covered with paint). A dark and narrow chimney leads up from a fireplace; although you might be able to get up it, it seems unlikely you could get back down.",
+   "obj": 158,
+   "title": "Studio"
+  },
+  {
+   "description": null,
+   "obj": 161,
+   "title": "Dam"
+  },
+  {
+   "description": "This was the maintenance room for Flood Control Dam #3. Apparently, the room has been ransacked, for most of the valuable equipment is gone. On one wall is a group of buttons colored yellow, brown, and red. The only doorway is southwest.",
+   "obj": 162,
+   "title": "Maintenance Room"
+  },
+  {
+   "description": "You are on a narrow strip of beach between the White Cliffs and the Frigid River. A tiny passage leads west into the cliff.",
+   "obj": 165,
+   "title": "White Cliffs Beach"
+  },
+  {
+   "description": "The only visible exit is down a staircase.",
+   "obj": 170,
+   "title": "Thief's Lair"
+  },
+  {
+   "description": null,
+   "obj": 172,
+   "title": "Bat Room"
+  },
+  {
+   "description": "In the middle this room a small shaft descends into darkness below. Above the shaft is a metal framework to which a heavy iron chain is attached. There are exits to the west and north. A foul odor can be detected from the latter direction.",
+   "obj": 178,
+   "title": "Shaft Room"
+  }
+ ],
+ "serial": "871124",
+ "story": "MZORKI2.Z3"
+}

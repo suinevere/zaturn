@@ -1,0 +1,159 @@
+{
+ "count": 30,
+ "desc_prop": 18,
+ "release": 16,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 55,
+   "title": "south walkway"
+  },
+  {
+   "description": null,
+   "obj": 58,
+   "title": "west walkway"
+  },
+  {
+   "description": null,
+   "obj": 60,
+   "title": "north walkway"
+  },
+  {
+   "description": null,
+   "obj": 65,
+   "title": "lab center"
+  },
+  {
+   "description": null,
+   "obj": 68,
+   "title": "west part"
+  },
+  {
+   "description": null,
+   "obj": 74,
+   "title": "south part"
+  },
+  {
+   "description": null,
+   "obj": 75,
+   "title": "limbo"
+  },
+  {
+   "description": null,
+   "obj": 80,
+   "title": "storage closet"
+  },
+  {
+   "description": null,
+   "obj": 84,
+   "title": "corridor"
+  },
+  {
+   "description": null,
+   "obj": 89,
+   "title": "east part"
+  },
+  {
+   "description": null,
+   "obj": 92,
+   "title": "north part"
+  },
+  {
+   "description": null,
+   "obj": 107,
+   "title": "Kemp's office"
+  },
+  {
+   "description": null,
+   "obj": 122,
+   "title": "dome center"
+  },
+  {
+   "description": null,
+   "obj": 132,
+   "title": "Aquadome office"
+  },
+  {
+   "description": null,
+   "obj": 135,
+   "title": "southeast deck"
+  },
+  {
+   "description": null,
+   "obj": 136,
+   "title": "galley"
+  },
+  {
+   "description": null,
+   "obj": 143,
+   "title": "comm center"
+  },
+  {
+   "description": null,
+   "obj": 146,
+   "title": "northeast deck"
+  },
+  {
+   "description": null,
+   "obj": 148,
+   "title": "workshop"
+  },
+  {
+   "description": null,
+   "obj": 151,
+   "title": "northwest deck"
+  },
+  {
+   "description": null,
+   "obj": 158,
+   "title": "male dorm"
+  },
+  {
+   "description": null,
+   "obj": 161,
+   "title": "female dorm"
+  },
+  {
+   "description": null,
+   "obj": 164,
+   "title": "southwest deck"
+  },
+  {
+   "description": null,
+   "obj": 169,
+   "title": "reception area"
+  },
+  {
+   "description": null,
+   "obj": 172,
+   "title": "docking tank entrance"
+  },
+  {
+   "description": null,
+   "obj": 176,
+   "title": "docking tank"
+  },
+  {
+   "description": null,
+   "obj": 198,
+   "title": "storage room"
+  },
+  {
+   "description": null,
+   "obj": 200,
+   "title": "Aquadome laboratory"
+  },
+  {
+   "description": null,
+   "obj": 242,
+   "title": "crawl space"
+  },
+  {
+   "description": "This is your revolutionary new Ultramarine Bioceptor, named the SCIMITAR.",
+   "obj": 254,
+   "title": "SCIMITAR"
+  }
+ ],
+ "serial": "850603",
+ "story": "SEASTLKR.Z3"
+}

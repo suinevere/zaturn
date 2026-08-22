@@ -1,0 +1,359 @@
+{
+ "count": 70,
+ "desc_prop": 14,
+ "release": 219,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 9,
+   "title": "Tomb"
+  },
+  {
+   "description": null,
+   "obj": 15,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": "This courtyard is a triumph of modern architecture. It is spare, cold, angular, overwhelming in size, and bears a striking resemblance to a wind tunnel whenever the breeze picks up. Right now this is true of the whole campus, though. A huge mass lurks nearby, and an almost featureless skyscraper is to the north.",
+   "obj": 16,
+   "title": "Small Courtyard"
+  },
+  {
+   "description": null,
+   "obj": 17,
+   "title": "Cinderblock Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 25,
+   "title": "Brick Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 27,
+   "title": "Basement"
+  },
+  {
+   "description": "This is a filthy kitchen. The exit is to the east. On the wall near a counter are a refrigerator and a microwave.",
+   "obj": 33,
+   "title": "Kitchen"
+  },
+  {
+   "description": "The tunnel continues west from here, becoming narrow, muddy, and forbidding. The walls no longer seem to be as finished as they were. The steam pipe and coaxial cable disappear into the ceiling at this point. The temperature has dropped considerably, as well.",
+   "obj": 34,
+   "title": "Tunnel Entrance"
+  },
+  {
+   "description": "A dimly lit stairway leads up and down from here. A corridor continues east.",
+   "obj": 35,
+   "title": "Stairway"
+  },
+  {
+   "description": null,
+   "obj": 37,
+   "title": "Concrete Box"
+  },
+  {
+   "description": "This building extends a long way south from the Infinite Corridor. It too is full of closed, locked offices.",
+   "obj": 38,
+   "title": "Engineering Building"
+  },
+  {
+   "description": "The tunnel you came through continues down, barely large enough to enter. It is made of sticky gelatinous mud that's been pushed by something into a semblance of a passage.",
+   "obj": 39,
+   "title": "Muddy Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 42,
+   "title": "Lab"
+  },
+  {
+   "description": null,
+   "obj": 47,
+   "title": "Dead Storage"
+  },
+  {
+   "description": null,
+   "obj": 51,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 65,
+   "title": "Computer Center"
+  },
+  {
+   "description": null,
+   "obj": 66,
+   "title": "Steam Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 69,
+   "title": "Inner Lair"
+  },
+  {
+   "description": "The steam tunnel is narrow here, and its construction is more archaic. It's now mostly brick, although the floor is concrete. The steam pipe and coaxial cable continue along their appointed paths. The tunnel is damp and even a little muddy.",
+   "obj": 78,
+   "title": "Steam Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 87,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 98,
+   "title": "Smith Street"
+  },
+  {
+   "description": null,
+   "obj": 99,
+   "title": "Large Chamber"
+  },
+  {
+   "description": "You are inside a large domed area. The dome contains equipment that makes it clear it is a weather observation station. For some reason, it also contains a small peach tree. Wind whistles outside, and snow blasts against the semitransparent material of the dome.",
+   "obj": 109,
+   "title": "Inside Dome"
+  },
+  {
+   "description": null,
+   "obj": 110,
+   "title": "Third Floor"
+  },
+  {
+   "description": null,
+   "obj": 117,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": "You are perched precariously on the roof of the Great Dome. A set of narrow indentations in the dome provides a dangerous route to the very tip-top of the dome.",
+   "obj": 121,
+   "title": "Roof of Great Dome"
+  },
+  {
+   "description": null,
+   "obj": 124,
+   "title": "Elevator"
+  },
+  {
+   "description": null,
+   "obj": 127,
+   "title": "Roof"
+  },
+  {
+   "description": null,
+   "obj": 131,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": "You are at the bottom of a deeply cut, smooth basalt bowl. Dimly seen shapes crowd you on all sides. Ahead, in the focus of the movement, is a rock platform.",
+   "obj": 134,
+   "title": "Basalt Bowl"
+  },
+  {
+   "description": null,
+   "obj": 136,
+   "title": "Aero Lobby"
+  },
+  {
+   "description": null,
+   "obj": 137,
+   "title": "Second Floor"
+  },
+  {
+   "description": null,
+   "obj": 138,
+   "title": "Steam Tunnel"
+  },
+  {
+   "description": "This is a laboratory of some sort. It takes up most of the building on this level, all the interior walls having been knocked down. (One reason these temporary buildings are still here is their flexibility: no one cares if they get more or less destroyed.) A stairway leads down, and a door leads north.",
+   "obj": 140,
+   "title": "Temporary Lab"
+  },
+  {
+   "description": "This is the subbasement of the Aeronautical Engineering Building. A stairway leads up. A narrow crack in the northwest corner of the room opens into a larger space.",
+   "obj": 142,
+   "title": "Subbasement"
+  },
+  {
+   "description": "This is the very top of the Great Dome, a favorite place for Tech fraternities to install cows, Volkswagen Beetles, giant birthday candles, and other bizarre objects. The top is flat, round, and about five feet in diameter. It's very windy, which has kept the snow from accumulating here. The only way off is down.",
+   "obj": 145,
+   "title": "On the Great Dome"
+  },
+  {
+   "description": null,
+   "obj": 149,
+   "title": "Before the Altar"
+  },
+  {
+   "description": "This is the central corridor of the Nutrition Building. The main building is south, and a stairway leads down.",
+   "obj": 150,
+   "title": "Fruits and Nuts"
+  },
+  {
+   "description": "This is a place. Things move about on a broken, rocky surface. Harsh sounds split the air. Something sticky grabs at your feet. There is no color, everything is drained of brightness, dull and lifeless. A path descends into a shallow bowl of black basalt.",
+   "obj": 152,
+   "title": "Place"
+  },
+  {
+   "description": "This basement level room is made of smooth, damp-seeming concrete. Fluorescent lights cast harsh shadows. To the west is a stairway, and to the east the basement area continues.",
+   "obj": 158,
+   "title": "Aero Basement"
+  },
+  {
+   "description": null,
+   "obj": 161,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 164,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 171,
+   "title": "Ancient Storage"
+  },
+  {
+   "description": null,
+   "obj": 174,
+   "title": "Department of Alchemy"
+  },
+  {
+   "description": "This is a large room crammed with computer terminals, small computers, and printers. An exit leads south. Banners, posters, and signs festoon the walls. Most of the tables are covered with waste paper, old pizza boxes, and empty Coke cans. There are usually a lot of people here, but tonight it's almost deserted.",
+   "obj": 176,
+   "title": "Terminal Room"
+  },
+  {
+   "description": "This cluttered passage leads southeast. It is full of apparently discarded electronic equipment, old rusty file cabinets, and other detritus. A stairway also leads up.",
+   "obj": 179,
+   "title": "Cluttered Passage"
+  },
+  {
+   "description": "In the spring and summer, this cheery green court is a haven from classwork. Right now, the majestic buildings of the main campus are almost invisible in the howling blizzard. A locked door bars your way to the north.",
+   "obj": 180,
+   "title": "Great Court"
+  },
+  {
+   "description": null,
+   "obj": 181,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 184,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 185,
+   "title": "Smith Street"
+  },
+  {
+   "description": null,
+   "obj": 187,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": "This is the main entrance to the campus buildings. Blinding snow obscures the stately Grecian columns and rounded dome to the east. You can barely make out the inscription on the pediment (which reads \"George Vnderwood Edwards, Fovnder; P. David Lebling, Architect\"). West across Massachusetts Avenue are other buildings, but you can't see them.",
+   "obj": 190,
+   "title": "Mass. Ave."
+  },
+  {
+   "description": "This is the top of the stairway. A door leads out to the roof here, and you can hear the wind blowing beyond. There is a sign on the door.",
+   "obj": 195,
+   "title": "Top Floor"
+  },
+  {
+   "description": "This is a cluttered basement below the Brown Building. Discarded equipment nearly blocks an already narrow hallway that terminates in a stairway leading up. The passage itself continues northwest.",
+   "obj": 200,
+   "title": "Brown Basement"
+  },
+  {
+   "description": null,
+   "obj": 201,
+   "title": "Renovated Cave"
+  },
+  {
+   "description": "During the Second World War, some temporary buildings were built to house war-related research. Naturally, these buildings, though flimsy and ugly, are still around. This is the basement of one of them. The basement extends west, a stairway leads up, and a large passage is to the east.",
+   "obj": 202,
+   "title": "Temporary Basement"
+  },
+  {
+   "description": null,
+   "obj": 206,
+   "title": "Infinite Corridor"
+  },
+  {
+   "description": null,
+   "obj": 208,
+   "title": "Infinite Corridor"
+  },
+  {
+   "description": null,
+   "obj": 210,
+   "title": "Infinite Corridor"
+  },
+  {
+   "description": null,
+   "obj": 213,
+   "title": "Top of Dome"
+  },
+  {
+   "description": null,
+   "obj": 214,
+   "title": "Infinite Corridor"
+  },
+  {
+   "description": null,
+   "obj": 218,
+   "title": "Infinite Corridor"
+  },
+  {
+   "description": null,
+   "obj": 221,
+   "title": "Steam Tunnel"
+  },
+  {
+   "description": "A low parapet surrounds a small roof here. The air conditioning cooling tower and the small protrusion containing the stairs are dwarfed by a semitransparent dome which towers above you. The blowing snow obscures all detail of the city across the river to the south.",
+   "obj": 222,
+   "title": "Skyscraper Roof"
+  },
+  {
+   "description": null,
+   "obj": 227,
+   "title": "Steam Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 232,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 234,
+   "title": "Wet Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 240,
+   "title": "Brown Building"
+  },
+  {
+   "description": null,
+   "obj": 248,
+   "title": "Chemistry Building"
+  },
+  {
+   "description": null,
+   "obj": 249,
+   "title": "Great Dome"
+  }
+ ],
+ "serial": "870912",
+ "story": "LURKING.Z3"
+}

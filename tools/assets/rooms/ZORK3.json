@@ -1,0 +1,439 @@
+{
+ "count": 86,
+ "desc_prop": 4,
+ "release": 17,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 9,
+   "title": "Water Slide"
+  },
+  {
+   "description": null,
+   "obj": 10,
+   "title": "High Arch"
+  },
+  {
+   "description": "You are in a wide stone channel, part of the water supply system for the Great Underground Empire. The source of water was a waterfall to the south, which has long since dried up. Water flowed along the aqueduct to the north. This region is lit from above, although the source of light is not apparent.",
+   "obj": 11,
+   "title": "Aqueduct"
+  },
+  {
+   "description": null,
+   "obj": 12,
+   "title": "Key Room"
+  },
+  {
+   "description": null,
+   "obj": 13,
+   "title": "Dark Place"
+  },
+  {
+   "description": null,
+   "obj": 14,
+   "title": "Dark Place"
+  },
+  {
+   "description": "You are on the south shore of the lake. Rock formations prevent movement to the west and thickening swamp to the east makes the going all but impossible. To the south, where the beach meets a rock formation, you can make out a dark passage sloping steeply upward into the rock.",
+   "obj": 15,
+   "title": "Southern Shore"
+  },
+  {
+   "description": "This is a small chamber carved out of the rock at the end of a short crawl. On the wall is crudely chiseled the number \"8\". The only apparent exit, to the east, seems to be a blur and a loud, whirring sound resounds through the rock.",
+   "obj": 18,
+   "title": "Room 8"
+  },
+  {
+   "description": null,
+   "obj": 20,
+   "title": "Drafty Room"
+  },
+  {
+   "description": "You have come to a dead end in the mine.\nThere is a small pile of coal here.",
+   "obj": 21,
+   "title": "Dead End"
+  },
+  {
+   "description": "This is a rather wide room. On one side is the bottom of a narrow wooden ladder. To the west and the south are passages leaving the room.",
+   "obj": 22,
+   "title": "Ladder Bottom"
+  },
+  {
+   "description": "This is a very small room. In the corner is a rickety wooden ladder, leading downward. It might be safe to descend. There is also a staircase leading upward.",
+   "obj": 24,
+   "title": "Ladder Top"
+  },
+  {
+   "description": "This is a long and narrow passage, which is cluttered with broken timbers. A wide passage comes from the east and turns at the west end of the room into a very narrow passageway. From the west comes a strong draft.",
+   "obj": 25,
+   "title": "Timber Room"
+  },
+  {
+   "description": "Mounted on one wall is a flaming torch, which fills the room with a flickering light.",
+   "obj": 43,
+   "title": "Scenic Vista"
+  },
+  {
+   "description": "You are on the western shore of the lake. The ground here is quite hard, but a few sickly reeds manage to grow near the water's edge. The only path leads into the rock to the south.",
+   "obj": 45,
+   "title": "Western Shore"
+  },
+  {
+   "description": "You are below the surface of the lake. It turns out that the lake is quite shallow and the bottom is only a few feet below you. Considering the frigid temperature of the water, you should probably not plan an extended stay.  The lake bottom is sandy and a few hearty plants and algae live there.",
+   "obj": 46,
+   "title": "Underwater"
+  },
+  {
+   "description": "You are floating on the surface of the lake. The water is ice cold and your ability to survive here for long is very questionable. A swim north puts you at your starting point. Conditions to the east are poor where the lake turns into swamp. The west and south shores are suitable for walking, however.",
+   "obj": 48,
+   "title": "On the Lake"
+  },
+  {
+   "description": "This is a small balcony carved into a near-vertical cliff. To the east, stretching from north to south, stands a monumental aqueduct supported by mighty stone pillars, some of which are starting to crumble from age. You feel a sense of loss and sadness as you ponder this once-proud structure and the failure of the Empire which created this and other engineering marvels. Some stone steps lead up to the northwest.",
+   "obj": 50,
+   "title": "Aqueduct View"
+  },
+  {
+   "description": "You are in a wide cavern on the north shore of a small lake. Some polished stone steps lead to the southeast and a sheer rock face prevents any movement around the lake to the southwest. The cavern is dimly lit from above.",
+   "obj": 52,
+   "title": "Lake Shore"
+  },
+  {
+   "description": "You are in a dank passage filled with a wispy fog. A spooky passageway leads north and a wider path heads off to the south. To the west, the path leaves the rock and enters an eerie, shadowy land.",
+   "obj": 53,
+   "title": "Foggy Room"
+  },
+  {
+   "description": null,
+   "obj": 55,
+   "title": "Cliff Ledge"
+  },
+  {
+   "description": null,
+   "obj": 58,
+   "title": "Cliff"
+  },
+  {
+   "description": "You are at the base of a steep cliff. Directly above you is a wide ledge and far above that some natural sunlight can be seen. To the northeast is a steeply climbing path and the ground becomes sandy toward the south.",
+   "obj": 60,
+   "title": "Cliff Base"
+  },
+  {
+   "description": "You are at a sharp turn on a narrow and steeply sloping path, strewn with boulders of various sizes. The path climbs sharply toward a desolate plain to the southeast. Southwest of here the path winds down to the base of a cliff.",
+   "obj": 61,
+   "title": "Hairpin Loop"
+  },
+  {
+   "description": "You are west of the junction, where the rock-bound passage widens out into a large, flat area. Although the land here is barren, you can see vegetation to the west. South of here is a mighty wall of stone, ancient and crumbling.  To the southwest the wall has decayed enough to form an opening, through which seeps a thin mist. A trail dips sharply into rocky terrain to the northwest.",
+   "obj": 62,
+   "title": "Barren Area"
+  },
+  {
+   "description": "You are at the junction of a north-south passage and an east-west passage. To the north, you can make out the bottom of a stairway. The ways to the east and south are relatively cramped, but a wider trail leads to the west.",
+   "obj": 63,
+   "title": "Junction"
+  },
+  {
+   "description": "You are at the bottom of a seemingly endless stair, winding its way upward beyond your vision. An eerie light, coming from all around you, casts strange shadows on the walls. To the south is a dark and winding trail.",
+   "obj": 64,
+   "title": "Endless Stair"
+  },
+  {
+   "description": null,
+   "obj": 68,
+   "title": "Flathead Ocean"
+  },
+  {
+   "description": "You are standing atop a steep cliff, looking west over a vast ocean. Far below, the surf pounds at a sandy beach. To the south and east are rolling hills filled with eerie shadows. A path cut into the face of the cliff descends toward the beach. To the north is a tall stone wall, which ends at the cliff edge. It was obviously built long ago, and directly north is a spot where you could climb over the rubble of the decaying wall.",
+   "obj": 69,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are in a land of dark shadows and shallow hills, which stretch out in all directions. To the west, the land dips sharply.",
+   "obj": 70,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are near the southern end of the land of shadow. The ground here is soft and spongy, and it becomes quicksand to the south. North and east of here are gentle, rolling hills. A gentle sea breeze wafts over a steeply sloping path to the west.",
+   "obj": 71,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are at the southern end of a shadowy land. The ground here is quite soft, and the area is surrounded by quicksand on most sides. North of here is a terrain of shallow hills.",
+   "obj": 72,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are in an ominously dark land of rolling hills. The ground becomes softer to the south.",
+   "obj": 73,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are in a dark and shadowy land. All around you are gentle hills and eerie shadows. Far above, shrouded in mist, you can barely make out the ceiling of the enormous cavern that spans this entire land.",
+   "obj": 74,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are in a shadowy land of low, rolling hills stretching out to the west and south. The land is bordered to the north by a massive stone wall. Ancient and weathered, the wall has crumbled enough at one point to permit passage.",
+   "obj": 76,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are at the eastern end of a dark, featureless landscape of shallow hills. Paths to the east and southeast re-enter the rock.",
+   "obj": 77,
+   "title": "Land of Shadow"
+  },
+  {
+   "description": "You are in a dark and quite creepy crawlway with passages leaving to the north, east, south, and southwest.",
+   "obj": 78,
+   "title": "Creepy Crawl"
+  },
+  {
+   "description": null,
+   "obj": 92,
+   "title": "Museum Entrance"
+  },
+  {
+   "description": null,
+   "obj": 93,
+   "title": "Jewel Room"
+  },
+  {
+   "description": null,
+   "obj": 95,
+   "title": "Technology Museum"
+  },
+  {
+   "description": null,
+   "obj": 96,
+   "title": "Technology Museum"
+  },
+  {
+   "description": null,
+   "obj": 97,
+   "title": "Jewel Room"
+  },
+  {
+   "description": null,
+   "obj": 98,
+   "title": "Museum Entrance"
+  },
+  {
+   "description": null,
+   "obj": 99,
+   "title": "Side Room"
+  },
+  {
+   "description": null,
+   "obj": 100,
+   "title": "Royal Puzzle Entrance"
+  },
+  {
+   "description": null,
+   "obj": 101,
+   "title": "Technology Museum"
+  },
+  {
+   "description": null,
+   "obj": 102,
+   "title": "Jewel Room"
+  },
+  {
+   "description": null,
+   "obj": 105,
+   "title": "Museum Entrance"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "title": "Great Door"
+  },
+  {
+   "description": "This is the north end of a large hall with a vaulted ceiling. A long, tiled hallway leads north through a tall arch. Although the origin or purpose of this room is unclear, there is a large rendering of the Royal Seal of Lord Dimwit Flathead carved on the wall.",
+   "obj": 110,
+   "title": "Royal Hall"
+  },
+  {
+   "description": "This is a chamber of breathtaking beauty. Mighty stalagmites form structured shapes of rock, encrusted with crystalline formations. Phosphorescent mosses, fed by a trickle of water from some unseen source above, make the crystals glow and sparkle with every color of the rainbow. There is an opening to the west, and a man-made passage heads south.",
+   "obj": 112,
+   "title": "Crystal Grotto"
+  },
+  {
+   "description": "This is a very low and narrow passage leading east to west.",
+   "obj": 113,
+   "title": "Tight Squeeze"
+  },
+  {
+   "description": null,
+   "obj": 135,
+   "title": "Prison Cell"
+  },
+  {
+   "description": "You are in a bare prison cell. Its wooden door is securely fastened, and you can see only flames and smoke through its small window.",
+   "obj": 137,
+   "title": "Prison Cell"
+  },
+  {
+   "description": null,
+   "obj": 138,
+   "title": "Prison Cell"
+  },
+  {
+   "description": null,
+   "obj": 139,
+   "title": "Parapet"
+  },
+  {
+   "description": null,
+   "obj": 143,
+   "title": "North Corridor"
+  },
+  {
+   "description": null,
+   "obj": 144,
+   "title": "Dungeon Entrance"
+  },
+  {
+   "description": null,
+   "obj": 147,
+   "title": "South Corridor"
+  },
+  {
+   "description": "This is a hall with polished marble walls. It widens slightly as it turns east at its northern and southern ends.",
+   "obj": 148,
+   "title": "West Corridor"
+  },
+  {
+   "description": "This is a hall with polished marble walls. It widens slightly as it turns west at its northern and southern ends.",
+   "obj": 149,
+   "title": "East Corridor"
+  },
+  {
+   "description": "This is a particularly damp spot even by dungeon standards. You can see a crossroads to the west, and two nearly identical passages lead east and northeast. A stone channel, wide and deep, steeply descends into the room from the south. It is covered with moss and lichen, and is far too slippery to climb. The channel crosses the room, but the opening where it once continued north is now blocked by rubble.",
+   "obj": 152,
+   "title": "Damp Passage"
+  },
+  {
+   "description": "You have come to the end of two adjoining passages to the west and the northwest.",
+   "obj": 153,
+   "title": "Dead End"
+  },
+  {
+   "description": null,
+   "obj": 154,
+   "title": "Engravings Room"
+  },
+  {
+   "description": null,
+   "obj": 155,
+   "title": "Beam Room"
+  },
+  {
+   "description": "You are standing at the southern end of a long, dimly lit hall. To the south, stairs ascend into darkness. To the north the corridor is illuminated by torches set high in the walls, out of reach. On one wall is a red button.",
+   "obj": 157,
+   "title": "Button Room"
+  },
+  {
+   "description": null,
+   "obj": 158,
+   "title": "Inside Mirror"
+  },
+  {
+   "description": null,
+   "obj": 159,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 160,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 161,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 162,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 163,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 164,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 165,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 166,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 167,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 168,
+   "title": "Narrow Room"
+  },
+  {
+   "description": null,
+   "obj": 169,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 170,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 171,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 172,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 174,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "title": "Narrow Corridor"
+  },
+  {
+   "description": null,
+   "obj": 193,
+   "title": "Room in a Puzzle"
+  },
+  {
+   "description": null,
+   "obj": 195,
+   "title": "Side Room"
+  },
+  {
+   "description": null,
+   "obj": 201,
+   "title": "Royal Puzzle Entrance"
+  }
+ ],
+ "serial": "840727",
+ "story": "ZORK3.Z3"
+}

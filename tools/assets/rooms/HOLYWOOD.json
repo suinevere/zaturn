@@ -1,0 +1,344 @@
+{
+ "count": 67,
+ "desc_prop": 12,
+ "release": 37,
+ "rooms": [
+  {
+   "description": "You're standing in front of the house where you spent many of your summers as a youngster. The old place is not as big as it seemed to you then, but it is still quite large. Stone pathways wind east and west around the house, and a larger main walkway leads north.",
+   "obj": 2,
+   "title": "South Junction"
+  },
+  {
+   "description": null,
+   "obj": 5,
+   "title": "Parlor"
+  },
+  {
+   "description": "You are swimming in a shallow inlet, whose waters are much calmer than in the open ocean to the north. A sandy beach lies to the east and the mouth of a dark cave gapes open to the south.",
+   "obj": 10,
+   "title": "Inlet"
+  },
+  {
+   "description": null,
+   "obj": 15,
+   "title": "Prop Vault"
+  },
+  {
+   "description": null,
+   "obj": 18,
+   "title": "Shaft Bottom"
+  },
+  {
+   "description": "You're inside the chimney. You can see a couple of holes here in the chimney where bricks used to be. The chimney continues upward and downward.",
+   "obj": 24,
+   "title": "In the Chimney"
+  },
+  {
+   "description": "This is Aunt Hildegarde's kitchen. It is a fairly large, sterile area with several pieces of commercial-grade equipment to handle the vast amount of food needed for Hollywood parties. It is not exactly the kind of homey kitchen most people's aunts have. The whole family remembers the Christmas everyone received fruit cakes with serial numbers on them. A doorway leads to the east and stairs lead down from here.",
+   "obj": 30,
+   "title": "Kitchen"
+  },
+  {
+   "description": "This is the southwestern corner of a large backyard whose main feature is an elaborate garden. The stone walkway splits in three directions here: north, along the perimeter of the garden; south, around the side of the house; and east, where the walkway ends at the foot of a couple of steps.",
+   "obj": 31,
+   "title": "Southwest Junction"
+  },
+  {
+   "description": "This is the dining room with a long, walnut table and seating for twelve. You remember more than one evening falling asleep at the table while Uncle Buddy rambled on about the way Hollywood used to be. A large picture window looks out on the garden. Doorways lead east, west and south.",
+   "obj": 35,
+   "title": "Dining Room"
+  },
+  {
+   "description": null,
+   "obj": 36,
+   "title": "Cellar"
+  },
+  {
+   "description": null,
+   "obj": 38,
+   "title": "Work Room"
+  },
+  {
+   "description": "You're on a wet, narrow ledge in a dripping underground cave. There is a pool of blackness to the south and a tunnel leads north.",
+   "obj": 39,
+   "title": "Ledge"
+  },
+  {
+   "description": "You feel a mild current flowing east. You have to grit your teeth to keep them from chattering in the cold water.",
+   "obj": 45,
+   "title": "Underwater Passage"
+  },
+  {
+   "description": "You're doing your best to keep your balance here on the roof. During a fierce storm you can see Linda Ronstadt's house wash into the ocean from here. A chimney juts up from the roof here and there is another chimney to the east, near the end of the roof.",
+   "obj": 47,
+   "title": "West End of Roof"
+  },
+  {
+   "description": "You're standing in the chimney. There are a couple of holes here in the chimney where bricks used to be. This chimney doesn't lead any further down, only up.",
+   "obj": 50,
+   "title": "In the Chimney"
+  },
+  {
+   "description": null,
+   "obj": 58,
+   "title": "Upstairs Hall, East"
+  },
+  {
+   "description": null,
+   "obj": 60,
+   "title": "Patio"
+  },
+  {
+   "description": "This cramped area is just big enough for one person and all the equipment. A thick glass window overlooks the screening room to the north.",
+   "obj": 70,
+   "title": "Projection Booth"
+  },
+  {
+   "description": "You are in the overpoweringly fragrant rose bush section of the garden. As you admire the roses you notice one somewhat sickly rose bush. Something about the sight of this particular rose bush makes you feel a bit queasy. The stone walkway leads northwest and southwest.",
+   "obj": 73,
+   "title": "Garden, East"
+  },
+  {
+   "description": "This is a rickety landing at the top of a long flight of old, wooden stairs leading down to the beach far below. You and Cousin Herman would race down these stairs in the summertime to see who would get to the water first. Usually Cousin Herman would trip you and win. A path in the grass leads west.",
+   "obj": 78,
+   "title": "Top Landing"
+  },
+  {
+   "description": "You're about halfway down the steep staircase, which creaks under your weight. There are several steps missing here. It's quite a gap: probably more than you could jump across. On the other side of the gap, the stairs continue down. Climbing up the stairs returns to the landing.",
+   "obj": 79,
+   "title": "Middle of Beach Stairs"
+  },
+  {
+   "description": "This is the living room where Uncle Buddy and Aunt Hildegarde used to spend their evenings. Most of the west wall is covered by a grand stone fireplace with a mantle over it. A long sofa, several cushy chairs and a telephone fill the room. Most of the hardwood floor is covered by a monstrous Persian rug. A doorway leads north and an archway exits to the east.",
+   "obj": 80,
+   "title": "Living Room"
+  },
+  {
+   "description": null,
+   "obj": 84,
+   "title": "Ladies' Room"
+  },
+  {
+   "description": "You are in the orchid section of the garden. Tender orchid petals of every color surround a small pond here. The stone walkway leads north, southeast and southwest.",
+   "obj": 86,
+   "title": "Garden, North"
+  },
+  {
+   "description": "This is the end of a beach which stretches to the east. The fine white sand underfoot reflects the light. A slight breeze blows off the ocean to the north. A wooden landing is south of here, and an inlet lies west.",
+   "obj": 88,
+   "title": "Beach"
+  },
+  {
+   "description": null,
+   "obj": 90,
+   "title": "Bomb Shelter"
+  },
+  {
+   "description": "You're in the chimney, above the fireplace. You can see a couple of holes here in the chimney where bricks used to be. The chimney continues upward and the fireplace is below.",
+   "obj": 91,
+   "title": "In the Chimney"
+  },
+  {
+   "description": "In this corner of the backyard you can make out the enormous hedge, which is part of the estate's hedge maze. The stone walkway splits in three directions here: north, along the dark and towering hedge; south, past the fragrant and inviting garden; and east, where the walkway cuts a straight and narrow path between the hedge and the garden.",
+   "obj": 93,
+   "title": "Northwest Junction"
+  },
+  {
+   "description": "You're standing on a stone walkway in the tulip section of the garden. The walkway leads northeast and southeast.",
+   "obj": 95,
+   "title": "Garden, West"
+  },
+  {
+   "description": "This was your favorite room as a child. Each summer Uncle Buddy would have props and models from his various movies brought here for the amusement of his numerous guests. There is a scale model of downtown Tokyo here. Doorways lead south, east and west. There is a door to the north.",
+   "obj": 97,
+   "title": "Game Room"
+  },
+  {
+   "description": "In this corner of the backyard you can make out the enormous hedge, which is part of the estate's hedge maze. The stone walkway splits in three directions here: north, along the dark and towering hedge; south, past the fragrant and inviting garden; and west, where the walkway cuts a straight and narrow path between the hedge and the garden. A slightly worn path in the grass heads east.",
+   "obj": 99,
+   "title": "Northeast Junction"
+  },
+  {
+   "description": "You're about halfway up the steep stairs. There are several steps of the stairs missing here. It's quite a gap: probably more than you could jump across. On the other side of the gap stairs continue up. Climbing down the stairs returns to the beach.",
+   "obj": 101,
+   "title": "Middle of Beach Stairs"
+  },
+  {
+   "description": null,
+   "obj": 105,
+   "title": "Crawl Space, South"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "title": "Hedge Maze"
+  },
+  {
+   "description": null,
+   "obj": 118,
+   "title": "Upstairs Hall, West"
+  },
+  {
+   "description": null,
+   "obj": 119,
+   "title": "Cliff"
+  },
+  {
+   "description": "This is the east end of the roof. A chimney juts up from the roof here and there is another chimney off to the west, near the end of the roof.",
+   "obj": 121,
+   "title": "East End of Roof"
+  },
+  {
+   "description": null,
+   "obj": 122,
+   "title": "Foyer"
+  },
+  {
+   "description": null,
+   "obj": 125,
+   "title": "Surface of Pool"
+  },
+  {
+   "description": "You are in a hedge maze of astonishing complexity. A path leads north.",
+   "obj": 143,
+   "title": "Hedge Maze"
+  },
+  {
+   "description": "You are swimming on the surface of the pool. The water sparkles, reflecting the light coming in from an opening to the north. To the east is a boat dock.",
+   "obj": 147,
+   "title": "Surface of Grotto Pool"
+  },
+  {
+   "description": "This is Aunt Hildegarde and Uncle Buddy's bedroom. There is a thick, round bed here, typical of Uncle Buddy trying to be a Hollywood type. Next to the bed is a chair and a phone. A doorway leads south.",
+   "obj": 153,
+   "title": "Master Bedroom"
+  },
+  {
+   "description": "This is the southeastern corner of a large backyard whose main feature is an elaborate garden. The stone walkway splits in three directions here: north, along the perimeter of the garden; south, around the side of the house; and west, where the walkway ends at a couple of steps leading up.",
+   "obj": 156,
+   "title": "Southeast Junction"
+  },
+  {
+   "description": "This is the entrance to the hedge maze. Aunt Hildegarde told you never to go into the maze without the map, and of course you would go in anyway and she would have to come in and find you.\n\nGuests were forever getting lost in the maze at parties. Sometimes you wished Cousin Herman would go in and never come out. But you always had the feeling he was thinking the same about you, only more seriously. Tall hedges, thick and green, stretch along paths leading to the east and west and a grass path north enters the maze. A stone walkway leads south.",
+   "obj": 160,
+   "title": "Entrance to Hedge Maze"
+  },
+  {
+   "description": null,
+   "obj": 166,
+   "title": "Closet"
+  },
+  {
+   "description": null,
+   "obj": 169,
+   "title": "Men's Room"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "title": "Attic"
+  },
+  {
+   "description": "You're standing on a stone walkway in Aunt Hildegarde's much envied garden where she would spend hours tending to her flowers, bushes and trees. The garden was off limits to you as a child because of an incident one summer when you and Cousin Herman were playing in the garden. You suggested pretending to be wild African animals and climbed a tree and began to screech as if a baboon while Cousin Herman ran off toward the roses shouting something about being a rhinoceros.\n\nAfter howling until your throat felt like you had puffed on one of Uncle Buddy's Hollywood cigars, you went to find Cousin Herman. When you arrived you couldn't believe your eyes -- Cousin Herman had pulled all the thorns off of all of Aunt Hildegarde's rose bushes in a quest to find the biggest thorn possible so he could be a rhino. Of course when Aunt Hildegarde saw her naked rose bushes, Cousin Herman blamed it all on you. The walkway leads south, northeast and northwest.",
+   "obj": 182,
+   "title": "Garden, South"
+  },
+  {
+   "description": "You're standing on the front porch of the house. Next to the front door is a regulation mailbox endorsed by Buck Palace. Beneath the mailbox is a doorbell once rung by Sonny Tufts. To the south is a walkway.",
+   "obj": 185,
+   "title": "Front Porch"
+  },
+  {
+   "description": "This is a spare bedroom where guests would stay if they couldn't drive home after one of the parties. The bed is big and fluffy and all the furniture is padded well. Uncle Buddy put two brass handles on the floor so guests would have something to hang onto when the room began to spin. A doorway leads north.",
+   "obj": 189,
+   "title": "Guest Room"
+  },
+  {
+   "description": null,
+   "obj": 192,
+   "title": "Crawl Space, North"
+  },
+  {
+   "description": "You feel a current coming from above and flowing east through the passage.",
+   "obj": 200,
+   "title": "Underwater Passage"
+  },
+  {
+   "description": "This is a small passage which ends here. It looks as if the construction of this room was never completed.",
+   "obj": 202,
+   "title": "Small Passage"
+  },
+  {
+   "description": null,
+   "obj": 204,
+   "title": "Underwater"
+  },
+  {
+   "description": "This is the bottom landing. A rickety wooden walkway leads west. To the north is a sandy beach, and steep stairs lead up a rocky cliff.",
+   "obj": 205,
+   "title": "Bottom Landing"
+  },
+  {
+   "description": null,
+   "obj": 209,
+   "title": "Bedroom"
+  },
+  {
+   "description": "Your soggy footsteps echo through the long, slimy corridor which runs up, towards a dry area, and south, toward dripping noises.",
+   "obj": 213,
+   "title": "Tunnel"
+  },
+  {
+   "description": null,
+   "obj": 219,
+   "title": "Cannon Emplacement"
+  },
+  {
+   "description": null,
+   "obj": 223,
+   "title": "Fireplace"
+  },
+  {
+   "description": null,
+   "obj": 230,
+   "title": "Top of Closet"
+  },
+  {
+   "description": null,
+   "obj": 231,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 232,
+   "title": "Upstairs Hall, Middle"
+  },
+  {
+   "description": "As you swim underwater you can see faint light above you and darkness below.",
+   "obj": 233,
+   "title": "Grotto, Underwater"
+  },
+  {
+   "description": "This is a short hall stretching east and west. Doorways lead north to the ladies' room and south to the men's room.",
+   "obj": 234,
+   "title": "Short Hall"
+  },
+  {
+   "description": "This is the screening room where Uncle Buddy died. He had a massive heart attack while viewing the final cut of his first horror musical, \"A Corpse Line.\" The film was never released and no one knows what happened to the only full-length version, worth a fortune today. Rumor has it that as he was dying he proclaimed \"A Corpse Line\" to be his masterwork of horror. Other rumors say the film was so bad that, if it had been released and he hadn't died, someone would have killed him. Several rows of plush theatre-like seats face a movie screen. Doorways lead south and west.",
+   "obj": 238,
+   "title": "Screening Room"
+  },
+  {
+   "description": null,
+   "obj": 239,
+   "title": "Grotto"
+  },
+  {
+   "description": null,
+   "obj": 244,
+   "title": "Upstairs Bathroom"
+  }
+ ],
+ "serial": "861215",
+ "story": "HOLYWOOD.Z3"
+}

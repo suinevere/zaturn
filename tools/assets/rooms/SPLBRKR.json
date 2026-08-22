@@ -1,0 +1,44 @@
+{
+ "count": 7,
+ "desc_prop": 11,
+ "release": 87,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 14,
+   "title": "rezrov spell"
+  },
+  {
+   "description": null,
+   "obj": 35,
+   "title": "lesoch spell"
+  },
+  {
+   "description": null,
+   "obj": 150,
+   "title": "frotz spell"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "title": "yomin spell"
+  },
+  {
+   "description": null,
+   "obj": 204,
+   "title": "gnusto spell"
+  },
+  {
+   "description": null,
+   "obj": 229,
+   "title": "malyon spell"
+  },
+  {
+   "description": null,
+   "obj": 240,
+   "title": "jindak spell"
+  }
+ ],
+ "serial": "860904",
+ "story": "SPLBRKR.Z3"
+}

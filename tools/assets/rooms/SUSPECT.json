@@ -1,0 +1,289 @@
+{
+ "count": 56,
+ "desc_prop": 15,
+ "release": 14,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 103,
+   "title": "Barn"
+  },
+  {
+   "description": "This is a rain-drenched and soggy garden. Against the garage to the west is a doghouse. Flagstone paths lead northeast and northwest, and a glass door leads to the hallway.",
+   "obj": 106,
+   "title": "Garden"
+  },
+  {
+   "description": "This is north of the house and west of the garden, where the hill slopes down to pastures and paddocks. To the south is the house and to the west the garage.",
+   "obj": 107,
+   "title": "North of House"
+  },
+  {
+   "description": "Outside the house, west of the garage. A path leads south to a door and north to the back of the house. On the other side of the drive is a door to one of the nearer horse barns.",
+   "obj": 109,
+   "title": "West of Garage"
+  },
+  {
+   "description": "Outside the house, just west of a door that opens onto a long east-west hallway.",
+   "obj": 110,
+   "title": "West of House"
+  },
+  {
+   "description": "This is a small pond, all of whose plants and animals have shut up shop for the winter. A path leads northwest to the patio from here.",
+   "obj": 111,
+   "title": "Pond"
+  },
+  {
+   "description": "This is outside the house to the east, south of the patio and west of the pond.",
+   "obj": 112,
+   "title": "Outside House"
+  },
+  {
+   "description": "This is a large flagstone patio east of the house. Paths lead north to the back porch and south towards the front of the house. To east is a pond, and in the distance you can see fences marking off the boundaries of pastures.",
+   "obj": 113,
+   "title": "Patio"
+  },
+  {
+   "description": "This is the south end of the ballroom, at the bar.",
+   "obj": 118,
+   "title": "Near Bar"
+  },
+  {
+   "description": "This is the south end of the ballroom. A huge fieldstone fireplace dominates the south wall. The bar is to the east.",
+   "obj": 120,
+   "title": "Near Fireplace"
+  },
+  {
+   "description": "This is near the south entrance to the ballroom. The fireplace is to the east, and the long hall is visible outside the entrance.",
+   "obj": 121,
+   "title": "South Entrance"
+  },
+  {
+   "description": "This is near the middle of the ballroom, at a French door leading out to the patio.",
+   "obj": 123,
+   "title": "Near French Door"
+  },
+  {
+   "description": "This is the dance floor, smack in the center of the ballroom.",
+   "obj": 124,
+   "title": "Dance Floor"
+  },
+  {
+   "description": "This is the middle area of the ballroom, near the center entrance.",
+   "obj": 125,
+   "title": "Center Entrance"
+  },
+  {
+   "description": "The northern end of the ballroom, next to the door leading to the kitchen. To the west is a band platform.",
+   "obj": 126,
+   "title": "Near Kitchen"
+  },
+  {
+   "description": "This is the northern end of the ballroom. A raised area provides a band platform, and there is a stereo hookup for use when there is no band.",
+   "obj": 127,
+   "title": "Near Band"
+  },
+  {
+   "description": "This is the northern end of the ballroom, near the entrance.",
+   "obj": 128,
+   "title": "North Entrance"
+  },
+  {
+   "description": "The garage holds four cars quite comfortably, each with its own separate door. After parking, one can leave through the door to the east, which leads to a covered walkway and the main house. At the house end of the garage is an immaculate workbench.",
+   "obj": 139,
+   "title": "Garage"
+  },
+  {
+   "description": "This is the back porch. The kitchen is to the south, and a flagstone path leads east and west.",
+   "obj": 140,
+   "title": "Back Porch"
+  },
+  {
+   "description": "This is the back entry to the kitchen. A door leads outside to the north.",
+   "obj": 142,
+   "title": "Back Entry"
+  },
+  {
+   "description": "This is a large country kitchen. It is quite disarrayed right now because of the party. There are doorways leading south to the ballroom, west to the dining room, and north to the back entry. There is a stove with a kettle boiling on top of it, and telephone over a counter on one wall.",
+   "obj": 144,
+   "title": "Kitchen"
+  },
+  {
+   "description": "This is the formal dining room. To the south is the long hall, to the east the kitchen. A crystal chandelier dominates the room, hanging over a large walnut table. On the east wall convenient to the kitchen is a long sideboard. On the north wall is a china cabinet. The west wall is mostly windows which overlook the garden.",
+   "obj": 149,
+   "title": "Dining Room"
+  },
+  {
+   "description": "This room is situated to receive the morning sun, and in daytime would be bright and airy. Many plants crowd the floor, fill the plant stands situated under the windows, and hang from hooks attached to the ceiling. Ms. Ashcroft has a green thumb, apparently.",
+   "obj": 151,
+   "title": "Sun Room"
+  },
+  {
+   "description": "Every inch of wall space here is covered with bookshelves, except for doors leading north and west, and two thickly curtained windows. There are an enormous number of books here.",
+   "obj": 156,
+   "title": "Library"
+  },
+  {
+   "description": "This is a normal half-bath, no shower or tub.",
+   "obj": 157,
+   "title": "East Bath"
+  },
+  {
+   "description": "This is a small linen closet. It looks like most of the towels and other supplies for the downstairs baths are kept here.",
+   "obj": 158,
+   "title": "Linen Closet"
+  },
+  {
+   "description": "This is a full bath, including a shower stall.",
+   "obj": 163,
+   "title": "West Bath"
+  },
+  {
+   "description": "This is a large and comfortable living room. The decor is formal, and the stern faces of several generations of Ashcrofts peer down from portraits above you. A pair of large doorways open out to the hall on the south wall, flanking a marble fireplace. An ornately carved mantel surmounts the fireplace. Wide windows peer out over the garden to the north. There is a telephone on an end table to the right of the sofa.",
+   "obj": 167,
+   "title": "Living Room"
+  },
+  {
+   "description": "This covered walkway extends east and west from the hallway door to the garage. The garden is to the north, and a door to the office is southwest.",
+   "obj": 169,
+   "title": "Covered Walkway"
+  },
+  {
+   "description": null,
+   "obj": 186,
+   "title": "Office"
+  },
+  {
+   "description": "This is a large room with a projection TV and VCR at one end. Comfortable chairs and sofa are grouped around it. A bookcase contains a large library of videotapes. There is a telephone on the bookcase. The hallway is to the south and on the east is a connecting door to the office.",
+   "obj": 192,
+   "title": "Media Room"
+  },
+  {
+   "description": "The east hall ends here. A door opens to the outside and another opens south to the sun room.",
+   "obj": 195,
+   "title": "East Hall End"
+  },
+  {
+   "description": "The east hall continues. To the south is a bathroom.",
+   "obj": 197,
+   "title": "East Hall at Bath"
+  },
+  {
+   "description": "This is the beginning of the east hall. North is the long front hall and south is a door leading into the library. The hall continues to the east.",
+   "obj": 199,
+   "title": "East Hall"
+  },
+  {
+   "description": "This is the northern end of the hall, where a doorway leads to the dining room.",
+   "obj": 200,
+   "title": "Hall at Dining Room"
+  },
+  {
+   "description": "Near the north end of the long hall a doorway opens into the ballroom, and to the west a sliding glass door opens out into the garden.",
+   "obj": 202,
+   "title": "Long Hall North"
+  },
+  {
+   "description": "This is the middle of the long hall. To the east is a large doorway opening onto the ballroom, and to the west is a stairway leading up.",
+   "obj": 203,
+   "title": "Hall Near Ballroom"
+  },
+  {
+   "description": "This is a large coat closet full of rather damp coats, overcoats, and raincoats.",
+   "obj": 205,
+   "title": "East Coat Closet"
+  },
+  {
+   "description": "This is almost the southern end of the long north-south hall. A large doorway opens into the southern end of the ballroom. Another door on the west is to a small closet.",
+   "obj": 207,
+   "title": "Long Hall South"
+  },
+  {
+   "description": "Here the front hall and a long north-south hall fronting the ballroom intersect. Another hall starts south of here and goes east.",
+   "obj": 208,
+   "title": "Long Hall Begins"
+  },
+  {
+   "description": "The front hall runs past an entrance to the living room here, to the north. Another hall intersects to the east.",
+   "obj": 209,
+   "title": "Front Hall East"
+  },
+  {
+   "description": "This is the front hall, which runs east and west. Entrances to the living room are east and west of here, and the entry hall is to the south.",
+   "obj": 210,
+   "title": "Front Hall"
+  },
+  {
+   "description": "The front hall runs south of the living room here, and a large doorway opens north into that room. East and south is the way back into the entry hall. Another hall intersects to the west.",
+   "obj": 211,
+   "title": "Front Hall West"
+  },
+  {
+   "description": "The north end of the hall, at an outer door. A landing leading to a stairway is east. You can see a covered walkway through a jalousied door to the north.",
+   "obj": 213,
+   "title": "North Hall"
+  },
+  {
+   "description": "This is a walk-in coat closet that doesn't seem to be in use this evening.",
+   "obj": 215,
+   "title": "West Coat Closet"
+  },
+  {
+   "description": "This is a north-south hallway leading to an outer door further north. To the east is a coat closet.",
+   "obj": 217,
+   "title": "Hall Near Coat Closet"
+  },
+  {
+   "description": "Here a north-south hallway and a hallway to the east meet.",
+   "obj": 218,
+   "title": "Hallway Intersection"
+  },
+  {
+   "description": "The hallway makes an elbow bend here. In the distance to the north and west are doors leading outside. North of here another hall leads east.",
+   "obj": 219,
+   "title": "Hall at Corner"
+  },
+  {
+   "description": "Off the hallway here are the office to the north and the morning room to the south.",
+   "obj": 221,
+   "title": "Hall at Office"
+  },
+  {
+   "description": "Near the west end of the hallway, doors lead north to a bathroom and south to a linen closet.",
+   "obj": 224,
+   "title": "Hall Near Bath"
+  },
+  {
+   "description": "This is the west end of the main hallway. To the west is a door leading out of the house, and there are also doors north and south.",
+   "obj": 227,
+   "title": "West End of Hallway"
+  },
+  {
+   "description": "This is Ms. Ashcroft's sitting room. The room in furnished with formal but comfortable looking chairs, a small couch, and a large oriental rug. A telephone is on one end table. The door is to the north and leads back into the hall.",
+   "obj": 232,
+   "title": "Sitting Room"
+  },
+  {
+   "description": "This room is set up for receiving guests, casual conversation, and informal entertaining. Doors lead east to the entry hall and north to the hallway. Several windows grace the southern wall, and a telephone sits on a walnut secretary in one corner.",
+   "obj": 237,
+   "title": "Morning Room"
+  },
+  {
+   "description": "The front entry hall is dominated by two curving staircases which lead up to the second floor of the house. These have velvet ribbons across them to keep the guests downstairs. In addition to the front door, which goes out to the porch, there are large double doors leading north and smaller doors leading east and west. The entry is sparsely furnished, imposing but not overpowering.",
+   "obj": 244,
+   "title": "Entry Hall"
+  },
+  {
+   "description": "This is a screened porch covering much of the front of the house. There are potted plants and lawn chairs arranged to suggest conversational groupings. To the south you can see the circular driveway, and beyond, barely visible in the rain and fog, is a stand of oaks which screen the house on this side. The front lights are on, and the doorbell to the left of the front door is clearly visible.",
+   "obj": 252,
+   "title": "Front Porch"
+  },
+  {
+   "description": "This is the circular driveway in front of the house. Many cars are parked here, and the drive is somewhat blocked. To the south is a stand of oaks, to the north is the front porch of the house. Piled along the border of the driveway are hundreds of pumpkins. Many of them are carved and lighted, others unadorned.",
+   "obj": 254,
+   "title": "Circular Driveway"
+  }
+ ],
+ "serial": "841005",
+ "story": "SUSPECT.Z3"
+}

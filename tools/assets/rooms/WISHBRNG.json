@@ -1,0 +1,264 @@
+{
+ "count": 51,
+ "desc_prop": 13,
+ "release": 69,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 6,
+   "title": "Lighthouse"
+  },
+  {
+   "description": null,
+   "obj": 10,
+   "title": "Theater Lobby"
+  },
+  {
+   "description": null,
+   "obj": 20,
+   "title": "Lake Edge"
+  },
+  {
+   "description": null,
+   "obj": 22,
+   "title": "Cliff Edge"
+  },
+  {
+   "description": null,
+   "obj": 44,
+   "title": "Rotary South"
+  },
+  {
+   "description": null,
+   "obj": 49,
+   "title": "Park"
+  },
+  {
+   "description": "You are standing in an open field west of a white house, with a boarded front door.",
+   "obj": 51,
+   "title": "West of House"
+  },
+  {
+   "description": null,
+   "obj": 57,
+   "title": "Open Grave"
+  },
+  {
+   "description": null,
+   "obj": 62,
+   "title": "Rotary North"
+  },
+  {
+   "description": null,
+   "obj": 66,
+   "title": "Underground"
+  },
+  {
+   "description": null,
+   "obj": 68,
+   "title": "Twilight Glen"
+  },
+  {
+   "description": null,
+   "obj": 69,
+   "title": "Underground"
+  },
+  {
+   "description": null,
+   "obj": 80,
+   "title": "South of Bridge"
+  },
+  {
+   "description": null,
+   "obj": 84,
+   "title": "Wharf's End"
+  },
+  {
+   "description": null,
+   "obj": 86,
+   "title": "Video Arcade"
+  },
+  {
+   "description": null,
+   "obj": 90,
+   "title": "Jail Cell"
+  },
+  {
+   "description": null,
+   "obj": 94,
+   "title": "Outside Cottage"
+  },
+  {
+   "description": null,
+   "obj": 95,
+   "title": "Hilltop"
+  },
+  {
+   "description": "You're lost in a thick cloud of fog.",
+   "obj": 101,
+   "title": "Fog"
+  },
+  {
+   "description": null,
+   "obj": 102,
+   "title": "River Outlet"
+  },
+  {
+   "description": null,
+   "obj": 116,
+   "title": "Bridge"
+  },
+  {
+   "description": null,
+   "obj": 127,
+   "title": "Grue's Nest"
+  },
+  {
+   "description": null,
+   "obj": 132,
+   "title": "Misty Island"
+  },
+  {
+   "description": null,
+   "obj": 134,
+   "title": "Lookout Hill"
+  },
+  {
+   "description": null,
+   "obj": 138,
+   "title": "Laboratory"
+  },
+  {
+   "description": null,
+   "obj": 139,
+   "title": "Underground"
+  },
+  {
+   "description": null,
+   "obj": 141,
+   "title": "Torture Chamber"
+  },
+  {
+   "description": null,
+   "obj": 143,
+   "title": "Fuzziness"
+  },
+  {
+   "description": null,
+   "obj": 144,
+   "title": "Rotary East"
+  },
+  {
+   "description": null,
+   "obj": 149,
+   "title": "Cottage"
+  },
+  {
+   "description": null,
+   "obj": 152,
+   "title": "Tidal Pool"
+  },
+  {
+   "description": null,
+   "obj": 156,
+   "title": "Pleasure Wharf"
+  },
+  {
+   "description": null,
+   "obj": 162,
+   "title": "North of Bridge"
+  },
+  {
+   "description": null,
+   "obj": 166,
+   "title": "Post Office"
+  },
+  {
+   "description": null,
+   "obj": 177,
+   "title": "Cliff Bottom"
+  },
+  {
+   "description": null,
+   "obj": 183,
+   "title": "Spooky Copse"
+  },
+  {
+   "description": null,
+   "obj": 187,
+   "title": "Circulation Desk"
+  },
+  {
+   "description": null,
+   "obj": 203,
+   "title": "Museum"
+  },
+  {
+   "description": null,
+   "obj": 206,
+   "title": "Police Station"
+  },
+  {
+   "description": null,
+   "obj": 220,
+   "title": "Underground"
+  },
+  {
+   "description": null,
+   "obj": 222,
+   "title": "Creepy Corner"
+  },
+  {
+   "description": null,
+   "obj": 226,
+   "title": "Rocky Path"
+  },
+  {
+   "description": null,
+   "obj": 232,
+   "title": "Throne Room"
+  },
+  {
+   "description": null,
+   "obj": 236,
+   "title": "Rotary West"
+  },
+  {
+   "description": null,
+   "obj": 237,
+   "title": "Church"
+  },
+  {
+   "description": null,
+   "obj": 238,
+   "title": "Round Chamber"
+  },
+  {
+   "description": null,
+   "obj": 239,
+   "title": "Vestibule"
+  },
+  {
+   "description": null,
+   "obj": 240,
+   "title": "Inside Theater"
+  },
+  {
+   "description": null,
+   "obj": 242,
+   "title": "Magick Shoppe"
+  },
+  {
+   "description": null,
+   "obj": 245,
+   "title": "Steep Trail"
+  },
+  {
+   "description": null,
+   "obj": 246,
+   "title": "Outside Cemetery"
+  }
+ ],
+ "serial": "850920",
+ "story": "WISHBRNG.Z3"
+}

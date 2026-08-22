@@ -1,0 +1,309 @@
+{
+ "count": 60,
+ "desc_prop": 16,
+ "release": 8,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 83,
+   "title": "Cryogenic Area"
+  },
+  {
+   "description": null,
+   "obj": 84,
+   "title": "Biological Laboratory"
+  },
+  {
+   "description": null,
+   "obj": 85,
+   "title": "Biology Corridor"
+  },
+  {
+   "description": null,
+   "obj": 86,
+   "title": "Vehicle Debarkation Area"
+  },
+  {
+   "description": null,
+   "obj": 87,
+   "title": "Alpha FC"
+  },
+  {
+   "description": "I tagged m, bnuqthe sb",
+   "obj": 88,
+   "title": "Primary Channel"
+  },
+  {
+   "description": null,
+   "obj": 89,
+   "title": "Beta FC"
+  },
+  {
+   "description": "I tagged m, bnuqthe sb",
+   "obj": 90,
+   "title": "Secondary Channel"
+  },
+  {
+   "description": null,
+   "obj": 91,
+   "title": "Gamma FC"
+  },
+  {
+   "description": null,
+   "obj": 92,
+   "title": "East End"
+  },
+  {
+   "description": null,
+   "obj": 93,
+   "title": "Cavernous Room"
+  },
+  {
+   "description": null,
+   "obj": 94,
+   "title": "Transit Control Area"
+  },
+  {
+   "description": null,
+   "obj": 95,
+   "title": "Hydroponics Control Area"
+  },
+  {
+   "description": null,
+   "obj": 96,
+   "title": "Weather Control Area"
+  },
+  {
+   "description": null,
+   "obj": 97,
+   "title": "Skywalk Gamma"
+  },
+  {
+   "description": null,
+   "obj": 98,
+   "title": "Skywalk Beta"
+  },
+  {
+   "description": "CLC jt It's Let's SCLC pm(",
+   "obj": 99,
+   "title": "Skywalk Alpha"
+  },
+  {
+   "description": null,
+   "obj": 100,
+   "title": "Top Passage"
+  },
+  {
+   "description": null,
+   "obj": 102,
+   "title": "Short Corridor"
+  },
+  {
+   "description": null,
+   "obj": 103,
+   "title": "Hallway End"
+  },
+  {
+   "description": null,
+   "obj": 104,
+   "title": "Library Core"
+  },
+  {
+   "description": null,
+   "obj": 105,
+   "title": "Library Entrance"
+  },
+  {
+   "description": null,
+   "obj": 106,
+   "title": "Maintenance Access"
+  },
+  {
+   "description": null,
+   "obj": 107,
+   "title": "Hallway Branch"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "title": "Hallway Corner"
+  },
+  {
+   "description": null,
+   "obj": 109,
+   "title": "Sleep Chamber"
+  },
+  {
+   "description": null,
+   "obj": 110,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 111,
+   "title": "Activities Area"
+  },
+  {
+   "description": null,
+   "obj": 112,
+   "title": "Access Hallway"
+  },
+  {
+   "description": null,
+   "obj": 113,
+   "title": "Beta Repair"
+  },
+  {
+   "description": null,
+   "obj": 114,
+   "title": "Alpha Repair"
+  },
+  {
+   "description": null,
+   "obj": 115,
+   "title": "Bending Passage"
+  },
+  {
+   "description": null,
+   "obj": 116,
+   "title": "Southeast Passage"
+  },
+  {
+   "description": null,
+   "obj": 117,
+   "title": "Southeast Junction"
+  },
+  {
+   "description": null,
+   "obj": 118,
+   "title": "Central Core"
+  },
+  {
+   "description": null,
+   "obj": 119,
+   "title": "Historical Peripheral"
+  },
+  {
+   "description": null,
+   "obj": 120,
+   "title": "Technical Peripheral"
+  },
+  {
+   "description": null,
+   "obj": 121,
+   "title": "Index Peripheral"
+  },
+  {
+   "description": null,
+   "obj": 122,
+   "title": "Outer Library Area"
+  },
+  {
+   "description": null,
+   "obj": 123,
+   "title": "Hallway Junction"
+  },
+  {
+   "description": null,
+   "obj": 124,
+   "title": "Sloping Corridor"
+  },
+  {
+   "description": null,
+   "obj": 125,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 126,
+   "title": "Hallway"
+  },
+  {
+   "description": null,
+   "obj": 127,
+   "title": "Small Supply Room"
+  },
+  {
+   "description": null,
+   "obj": 128,
+   "title": "Sterilization Chamber"
+  },
+  {
+   "description": null,
+   "obj": 129,
+   "title": "Decontamination Chamber"
+  },
+  {
+   "description": null,
+   "obj": 130,
+   "title": "Dead End"
+  },
+  {
+   "description": null,
+   "obj": 131,
+   "title": "Hallway T"
+  },
+  {
+   "description": null,
+   "obj": 132,
+   "title": "Hydroponics Monitors"
+  },
+  {
+   "description": null,
+   "obj": 133,
+   "title": "Transit Monitors"
+  },
+  {
+   "description": null,
+   "obj": 134,
+   "title": "Bending Corridor"
+  },
+  {
+   "description": null,
+   "obj": 135,
+   "title": "Main Supply Room"
+  },
+  {
+   "description": null,
+   "obj": 136,
+   "title": "Middle Supply Room"
+  },
+  {
+   "description": null,
+   "obj": 138,
+   "title": "Sub Supply Room"
+  },
+  {
+   "description": null,
+   "obj": 139,
+   "title": "UD Tube"
+  },
+  {
+   "description": null,
+   "obj": 143,
+   "title": "Advisory Peripheral"
+  },
+  {
+   "description": null,
+   "obj": 148,
+   "title": "Entry Area"
+  },
+  {
+   "description": null,
+   "obj": 151,
+   "title": "Central Chamber"
+  },
+  {
+   "description": null,
+   "obj": 154,
+   "title": "Gamma Repair"
+  },
+  {
+   "description": null,
+   "obj": 157,
+   "title": "Weather Monitors"
+  }
+ ],
+ "serial": "840521",
+ "story": "SUSPENDD.Z3"
+}

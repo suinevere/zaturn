@@ -1,0 +1,189 @@
+{
+ "count": 36,
+ "desc_prop": 15,
+ "release": 97,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 1,
+   "title": "Inside Prop Tent"
+  },
+  {
+   "description": null,
+   "obj": 4,
+   "title": "Back Yard"
+  },
+  {
+   "description": null,
+   "obj": 13,
+   "title": "Inside Mahler's Cage"
+  },
+  {
+   "description": null,
+   "obj": 15,
+   "title": "Hypnotist's Parlor"
+  },
+  {
+   "description": null,
+   "obj": 30,
+   "title": "Top of Cage"
+  },
+  {
+   "description": null,
+   "obj": 53,
+   "title": "On the Tent"
+  },
+  {
+   "description": null,
+   "obj": 56,
+   "title": "Platform"
+  },
+  {
+   "description": null,
+   "obj": 57,
+   "title": "Connection"
+  },
+  {
+   "description": null,
+   "obj": 59,
+   "title": "Office"
+  },
+  {
+   "description": null,
+   "obj": 62,
+   "title": "Walking a Tightrope"
+  },
+  {
+   "description": null,
+   "obj": 63,
+   "title": "On the Wagon"
+  },
+  {
+   "description": null,
+   "obj": 70,
+   "title": "Platform"
+  },
+  {
+   "description": null,
+   "obj": 81,
+   "title": "In the Wings"
+  },
+  {
+   "description": null,
+   "obj": 87,
+   "title": "Midway Entrance"
+  },
+  {
+   "description": null,
+   "obj": 91,
+   "title": "East Half of Fat Lady"
+  },
+  {
+   "description": null,
+   "obj": 94,
+   "title": "Camp, West"
+  },
+  {
+   "description": null,
+   "obj": 105,
+   "title": "Midway of Midway"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "title": "Jennifer's Boudoir"
+  },
+  {
+   "description": null,
+   "obj": 112,
+   "title": "Elephant Tent"
+  },
+  {
+   "description": null,
+   "obj": 121,
+   "title": "Menagerie Nook"
+  },
+  {
+   "description": null,
+   "obj": 131,
+   "title": "Performance Ring"
+  },
+  {
+   "description": null,
+   "obj": 148,
+   "title": "Near White Wagon"
+  },
+  {
+   "description": null,
+   "obj": 150,
+   "title": "West Half of Fat Lady"
+  },
+  {
+   "description": null,
+   "obj": 157,
+   "title": "Clown Alley"
+  },
+  {
+   "description": null,
+   "obj": 170,
+   "title": "Lions' Den"
+  },
+  {
+   "description": null,
+   "obj": 175,
+   "title": "Menagerie"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "title": "Wardrobe Closet"
+  },
+  {
+   "description": null,
+   "obj": 182,
+   "title": "Standing Room Only"
+  },
+  {
+   "description": null,
+   "obj": 192,
+   "title": "Inside Cage"
+  },
+  {
+   "description": null,
+   "obj": 194,
+   "title": "Far End of Midway"
+  },
+  {
+   "description": null,
+   "obj": 201,
+   "title": "Camp, East"
+  },
+  {
+   "description": null,
+   "obj": 206,
+   "title": "Under the Bleachers"
+  },
+  {
+   "description": "You're hanging from the high wire.",
+   "obj": 225,
+   "title": "Left Hanging"
+  },
+  {
+   "description": null,
+   "obj": 226,
+   "title": "Inside Trailer"
+  },
+  {
+   "description": null,
+   "obj": 230,
+   "title": "Beside the Big Top"
+  },
+  {
+   "description": null,
+   "obj": 232,
+   "title": "Blue Room"
+  }
+ ],
+ "serial": "851218",
+ "story": "BALLYHOO.Z3"
+}

@@ -1,0 +1,154 @@
+{
+ "count": 29,
+ "desc_prop": 13,
+ "release": 22,
+ "rooms": [
+  {
+   "description": "This room is a well-equipped workshop. Besides the usual sort of tools, the place is full of mechanical and electrical parts and supplies: switches, relays, spools of colored wire, and so on. One wall holds the main electric board and a home-made junction box with more wires going in and out than you can shake a stick at. The only door is the one you came in.",
+   "obj": 96,
+   "title": "workshop"
+  },
+  {
+   "description": null,
+   "obj": 102,
+   "title": "garage"
+  },
+  {
+   "description": "This is the south end of a hallway that runs the length of the house. At the far end, to the north, you can see the living room; immediately to the south is a door. Other doors on both sides lead to other rooms.",
+   "obj": 122,
+   "title": "hallway"
+  },
+  {
+   "description": "This is a little-used storage closet containing odds and ends of no interest whatsoever. The exit is to the east.",
+   "obj": 126,
+   "title": "storage closet"
+  },
+  {
+   "description": null,
+   "obj": 130,
+   "title": "entry"
+  },
+  {
+   "description": "This hallway seems to run the length of the house, from the garage at the south end to the living room at the north. There is enough warm yellow light flooding from the living room for you to see a few doors on each side of the hall.",
+   "obj": 132,
+   "title": "hallway"
+  },
+  {
+   "description": null,
+   "obj": 133,
+   "title": "butler's bathroom"
+  },
+  {
+   "description": null,
+   "obj": 135,
+   "title": "butler's room"
+  },
+  {
+   "description": null,
+   "obj": 138,
+   "title": "hallway"
+  },
+  {
+   "description": null,
+   "obj": 139,
+   "title": "hallway"
+  },
+  {
+   "description": "The Linder kitchen is full of electric appliances: range and hood, refrigerator, mixer, toaster, clock, and so on. Several white steel cabinets make for plenty of storage space. To the north is the dining room, to the east the hall.",
+   "obj": 153,
+   "title": "kitchen"
+  },
+  {
+   "description": "A table and benches, built out of blond wood for six people, sit in the middle of the room. On the south wall is a swinging door that leads to the kitchen, and on the east wall a double door to the living room. Through a French door on the west wall you can see the front yard.",
+   "obj": 158,
+   "title": "dining room"
+  },
+  {
+   "description": null,
+   "obj": 168,
+   "title": "living room"
+  },
+  {
+   "description": null,
+   "obj": 174,
+   "title": "Linder's bedroom"
+  },
+  {
+   "description": "This is a separate room for a toilet only.",
+   "obj": 176,
+   "title": "toilet room"
+  },
+  {
+   "description": "This is a separate room, completely lined with tile, for bathing in the Japanese style. On one side is a shower head and drain, where you could wash away surface dirt. On the other side is a deep tub, to be filled with steaming water up to your neck. Potted plants give the room a tropical air. A window looks over the rock garden outside, and a door leads west.",
+   "obj": 180,
+   "title": "tub room"
+  },
+  {
+   "description": "This room has only a large cabinet with counter, sink and mirror. On the counter are a shaver, toothpaste, and so on. The tub and toilet must be in separate rooms. There are doors on all four walls: the one to the north looks like redwood, the one to the south like cedar, and the other two like ordinary doors.",
+   "obj": 185,
+   "title": "bathroom"
+  },
+  {
+   "description": null,
+   "obj": 197,
+   "title": "Monica's bedroom"
+  },
+  {
+   "description": "This is a rock garden in the Japanese style, east of Linder's bedroom. A few smooth round boulders lie partly buried in a bed of gravel, which is carefully raked to be reminiscent of flowing water. A sequence of smaller rocks forms a zig-zag path from the bedroom door to the south edge of the garden, where the lawn begins. There's a door into the house, and a couple of windows.",
+   "obj": 203,
+   "title": "rock garden"
+  },
+  {
+   "description": "You are on a neatly manicured lawn, east of Monica's bedroom. The lawn extends east to the edge of the woods. From here you can go to a rock garden in the north or the entrance to Linder's office in the south. There's a door into the house, and a window.",
+   "obj": 205,
+   "title": "back yard"
+  },
+  {
+   "description": null,
+   "obj": 207,
+   "title": "office"
+  },
+  {
+   "description": null,
+   "obj": 214,
+   "title": "office porch"
+  },
+  {
+   "description": "You are on a path made of stepping stones, which leads from the back gate at the south to Linder's office at the north. In the east you can see a thick woods. To the west is the side yard.",
+   "obj": 218,
+   "title": "office path"
+  },
+  {
+   "description": null,
+   "obj": 219,
+   "title": "side yard"
+  },
+  {
+   "description": null,
+   "obj": 221,
+   "title": "limbo"
+  },
+  {
+   "description": "This is the entrance to the driveway from the street, which lies to the south. To the north is the driveway, and to the east is the side yard.",
+   "obj": 224,
+   "title": "driveway entrance"
+  },
+  {
+   "description": "The driveway, paved with peastone, runs from the entrance at the south end in a curve to a two-car garage at the east end. North of you is the front porch, the entrance to the house.",
+   "obj": 225,
+   "title": "driveway"
+  },
+  {
+   "description": null,
+   "obj": 228,
+   "title": "front porch"
+  },
+  {
+   "description": "You are in the front yard of the Linder property. Most of the space is occupied by a kitchen garden full of vegetables and herbs. A wooden fence surrounds the yard on the west and north sides. To the east is the house, with a French door and two windows. To the south is a gate that leads to the front porch.",
+   "obj": 237,
+   "title": "front yard"
+  }
+ ],
+ "serial": "840924",
+ "story": "WITNESS.Z3"
+}

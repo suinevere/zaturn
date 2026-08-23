@@ -1,4 +1,4 @@
-"""Cover cross-mood dedup, promotion into the source tree, and refetching."""
+"""Cover cross-scene dedup, promotion into the source tree, and refetching."""
 import json
 import sys
 from pathlib import Path
@@ -11,39 +11,30 @@ import art_status
 import fetch_art
 
 
-def record(pid, mood="HORROR", donor="HOUSE", noun="hallway", phash="0" * 16,
+def record(pid, game="ZORK1", scene="CAVE", noun="hallway", phash="0" * 16,
            status=art_status.CANDIDATE):
+    """One manifest record in the shipping shape: a game, a scene, no donor."""
     return {"id": pid, "page_url": f"https://pixabay.com/photos/{pid}/",
-            "image_url": "", "phrase": "dark hallway", "mood": mood,
-            "donor": donor, "noun": noun, "licence": "Pixabay Content License",
+            "image_url": "", "phrase": "dark hallway", "game": game,
+            "scene": scene, "noun": noun,
+            "licence": "Pixabay Content License",
             "fetched": "2026-08-06", "luminance": 70.0, "busyness": 4.0,
             "banding": 2.0, "verdict": "pass", "phash": phash, "status": status}
 
 
-def scene_record(pid, scene="CAVE", noun="hallway", phash="0" * 16,
-                  status=art_status.CANDIDATE):
-    """A record in the new scene shape: no donor, and "scene" not "mood"."""
-    return {"id": pid, "page_url": f"https://pixabay.com/photos/{pid}/",
-            "image_url": "", "phrase": "dark hallway", "scene": scene,
-            "noun": noun, "licence": "Pixabay Content License",
-            "fetched": "2026-08-06", "luminance": 70.0, "busyness": 4.0,
-            "banding": 2.0, "verdict": "pass", "phash": phash, "status": status}
+scene_record = record
 
 
 def make_candidate(root, rec):
-    d = root / rec["mood"] / rec["donor"] / rec["noun"]
+    """Write a picture where _rel expects it: <game>/<scene>/<id>.png."""
+    d = root / rec["game"] / rec["scene"]
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{rec['id']}.png"
     Image.new("RGB", (320, 224), (60, 60, 60)).save(p, "PNG")
     return p
 
 
-def make_scene_candidate(root, rec):
-    d = root / rec["scene"] / rec["noun"]
-    d.mkdir(parents=True, exist_ok=True)
-    p = d / f"{rec['id']}.png"
-    Image.new("RGB", (320, 224), (60, 60, 60)).save(p, "PNG")
-    return p
+make_scene_candidate = make_candidate
 
 
 def test_promote_moves_accepted_and_leaves_rejected(tmp_path):
@@ -54,9 +45,9 @@ def test_promote_moves_accepted_and_leaves_rejected(tmp_path):
 
     counts = art_review.promote({"1": "accept", "2": "reject"}, recs, cand, png)
 
-    assert counts == {"HORROR": art_review.Counts(gained=1, lost=0)}
-    assert (png / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
-    assert not (png / "HORROR" / "HOUSE" / "hallway" / "2.png").exists()
+    assert counts == {"CAVE": art_review.Counts(gained=1, lost=0)}
+    assert (png / "ZORK1" / "CAVE" / "1.png").exists()
+    assert not (png / "ZORK1" / "CAVE" / "2.png").exists()
     assert recs["1"]["status"] == art_status.ACCEPTED
     assert recs["2"]["status"] == art_status.REJECTED
 
@@ -70,14 +61,14 @@ def test_promotion_is_idempotent_even_if_the_source_file_reappears(tmp_path):
     make_candidate(cand, recs["1"])
     counts = art_review.promote({"1": "accept"}, recs, cand, png)
     assert counts == {}, "an already-accepted record must not be promoted twice"
-    assert (cand / "HORROR" / "HOUSE" / "hallway" / "1.png").exists(), \
+    assert (cand / "ZORK1" / "CAVE" / "1.png").exists(), \
         "a stray re-fetch reappearing must not fool the guard into re-promoting"
 
 
-def test_dedup_drops_a_near_duplicate_across_moods():
-    a = record(1, mood="HORROR", phash="ff00ff00ff00ff00")
-    b = record(2, mood="HOUSE", phash="ff00ff00ff00ff01")
-    c = record(3, mood="TOWN", phash="00ff00ff00ff00ff")
+def test_dedup_drops_a_near_duplicate_across_scenes():
+    a = record(1, scene="CAVE", phash="ff00ff00ff00ff00")
+    b = record(2, scene="PARLOR", phash="ff00ff00ff00ff01")
+    c = record(3, scene="VILLAGE", phash="00ff00ff00ff00ff")
     kept = art_review.dedup([a, b, c])
     assert [r["id"] for r in kept] == [1, 3]
 
@@ -91,13 +82,13 @@ def test_dedup_drops_a_candidate_matching_an_already_accepted_hash():
     """Cross-run blind spot: an id accepted and promoted in an earlier pass
     is gone from the candidates list by the next run, so dedup must be told
     about it separately or its duplicate sails through untouched."""
-    new = record(2, mood="HOUSE", phash="ff00ff00ff00ff01")
+    new = record(2, scene="PARLOR", phash="ff00ff00ff00ff01")
     kept = art_review.dedup([new], already_accepted=["ff00ff00ff00ff00"])
     assert kept == []
 
 
 def test_dedup_keeps_a_candidate_far_from_every_accepted_hash():
-    new = record(2, mood="HOUSE", phash="00000000000000ff")
+    new = record(2, scene="PARLOR", phash="00000000000000ff")
     kept = art_review.dedup([new], already_accepted=["ff00ff00ff00ff00"])
     assert [r["id"] for r in kept] == [2]
 
@@ -115,13 +106,13 @@ def test_main_promote_moves_accepted_and_updates_the_manifest_on_disk(tmp_path):
 
     assert art_review.main(["--promote", str(verdicts_path)], repo=tmp_path) == 0
 
-    assert (assets / "png" / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
+    assert (assets / "png" / "ZORK1" / "CAVE" / "1.png").exists()
     saved = fetch_art.load_manifest(manifest_path)
     assert saved["1"]["status"] == art_status.ACCEPTED
 
 
 def make_promoted(root, rec):
-    d = root / rec["mood"] / rec["donor"] / rec["noun"]
+    d = root / rec["game"] / rec["scene"]
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{rec['id']}.png"
     Image.new("RGB", (320, 224), (90, 90, 90)).save(p, "PNG")
@@ -138,7 +129,7 @@ def test_promote_unaccepts_by_moving_the_file_back(tmp_path):
 
     assert rec["status"] == art_status.REJECTED
     assert not kept.exists(), "the tracked png must be removed"
-    assert (cand / "HORROR" / "HOUSE" / "hallway" / "1.png").exists(), \
+    assert (cand / "ZORK1" / "CAVE" / "1.png").exists(), \
         "the file must return to candidates so it can be re-accepted"
 
 
@@ -151,14 +142,14 @@ def test_promote_re_accepts_a_rejected_image(tmp_path):
     counts = art_review.promote({"1": "accept"}, manifest, cand, png)
 
     assert rec["status"] == art_status.ACCEPTED
-    assert (png / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
-    assert counts["HORROR"].gained == 1
+    assert (png / "ZORK1" / "CAVE" / "1.png").exists()
+    assert counts["CAVE"].gained == 1
 
 
 def test_promote_counts_gains_and_losses_separately(tmp_path):
     cand, png = tmp_path / "c", tmp_path / "png"
-    up = record(1, mood="HORROR", status=art_status.REJECTED)
-    down = record(2, mood="HOUSE", status=art_status.ACCEPTED)
+    up = record(1, scene="CAVE", status=art_status.REJECTED)
+    down = record(2, scene="PARLOR", status=art_status.ACCEPTED)
     make_candidate(cand, up)
     make_promoted(png, down)
     manifest = {"1": up, "2": down}
@@ -166,9 +157,9 @@ def test_promote_counts_gains_and_losses_separately(tmp_path):
     counts = art_review.promote({"1": "accept", "2": "reject"}, manifest,
                                 cand, png)
 
-    assert counts["HORROR"] == art_review.Counts(gained=1, lost=0), \
+    assert counts["CAVE"] == art_review.Counts(gained=1, lost=0), \
         "a lone gain in one mood must not be conflated with the other mood's loss"
-    assert counts["HOUSE"] == art_review.Counts(gained=0, lost=1)
+    assert counts["PARLOR"] == art_review.Counts(gained=0, lost=1)
 
 
 def test_promote_never_touches_a_metric_rejected_record(tmp_path):
@@ -249,7 +240,7 @@ def test_refetch_restores_a_missing_rejected_picture(tmp_path):
     n = art_review.refetch_missing({"1": rec}, cand, png, fetcher)
 
     assert n == 1
-    assert (cand / "HORROR" / "HOUSE" / "hallway" / "1.png").exists()
+    assert (cand / "ZORK1" / "CAVE" / "1.png").exists()
 
 
 def test_refetch_skips_a_picture_already_on_disk(tmp_path):
@@ -288,9 +279,9 @@ def test_promote_unmark_returns_accepted_to_candidate_and_moves_file_back(
 
     assert rec["status"] == art_status.CANDIDATE
     assert not kept.exists(), "the tracked png must be removed"
-    assert (cand / "HORROR" / "HOUSE" / "hallway" / "7.png").exists(), \
+    assert (cand / "ZORK1" / "CAVE" / "7.png").exists(), \
         "the file must return to candidates so it stays in play"
-    assert counts == {"HORROR": art_review.Counts(gained=0, lost=1)}, \
+    assert counts == {"CAVE": art_review.Counts(gained=0, lost=1)}, \
         "unmarking an accepted record is a pure loss"
 
 
@@ -327,7 +318,7 @@ def test_main_reject_unmarked_sweeps_only_candidate_records(tmp_path, capsys):
     c3 = record(3, status=art_status.CANDIDATE, noun="attic")
     acc = record(4, status=art_status.ACCEPTED, noun="stairs")
     rej = record(5, status=art_status.REJECTED, noun="landing")
-    other = record(6, mood="TOWN", donor="TOWN", noun="square",
+    other = record(6, scene="VILLAGE", noun="square",
                    status=art_status.CANDIDATE)
     for rec in (c1, c2, c3, other):
         make_candidate(cand, rec)
@@ -348,23 +339,23 @@ def test_main_reject_unmarked_sweeps_only_candidate_records(tmp_path, capsys):
     assert saved["5"]["status"] == art_status.REJECTED, \
         "an already-rejected record must stay rejected, not be touched twice"
     out = capsys.readouterr().out
-    assert "HORROR" in out and "TOWN" in out
+    assert "CAVE" in out and "VILLAGE" in out
 
 
-def test_main_reject_unmarked_scoped_to_one_mood_leaves_other_moods_untouched(
+def test_main_reject_unmarked_scoped_to_one_scene_leaves_other_scenes_untouched(
         tmp_path):
     assets = tmp_path / "tools" / "assets"
     cand = assets / "candidates"
     h1 = record(1, status=art_status.CANDIDATE)
     h2 = record(2, status=art_status.CANDIDATE, noun="cellar")
-    t1 = record(3, mood="TOWN", donor="TOWN", noun="square",
+    t1 = record(3, scene="VILLAGE", noun="square",
                status=art_status.CANDIDATE)
     for rec in (h1, h2, t1):
         make_candidate(cand, rec)
     manifest = {"1": h1, "2": h2, "3": t1}
     fetch_art.save_manifest(assets / "art_manifest.json", manifest)
 
-    assert art_review.main(["--reject-unmarked", "HORROR"],
+    assert art_review.main(["--reject-unmarked", "CAVE"],
                            repo=tmp_path) == 0
 
     saved = fetch_art.load_manifest(assets / "art_manifest.json")
@@ -375,27 +366,35 @@ def test_main_reject_unmarked_scoped_to_one_mood_leaves_other_moods_untouched(
 
 
 def test_scene_of_prefers_scene_over_mood():
-    rec = record(1, mood="HORROR")
+    rec = record(1, scene="CAVE")
     rec["scene"] = "CAVE"
     assert art_review.scene_of(rec) == "CAVE"
 
 
-def test_scene_of_falls_back_to_mood_for_an_old_shape_record():
-    rec = record(1, mood="HORROR")
-    assert art_review.scene_of(rec) == "HORROR"
+def test_scene_of_falls_back_to_mood_for_a_stale_record():
+    """Nothing writes mood any more; the fallback exists so a manifest left
+    over from before the rewrite degrades to an unknown scene the server
+    drops, rather than a KeyError."""
+    assert art_review.scene_of({"id": 1, "mood": "HORROR"}) == "HORROR"
 
 
-def test_rel_has_no_donor_segment_for_a_scene_shaped_record():
-    rec = scene_record(1, scene="CAVE", noun="tunnel")
-    assert art_review._rel(rec) == Path("CAVE", "tunnel", "1.png")
+def test_rel_is_game_then_scene_then_the_picture():
+    """The layout make_tga.convert_game_tree walks. It globs a scene directory
+    for files without recursing, so a noun segment -- which this path used to
+    carry -- hides every picture from the disc build."""
+    rec = record(1, game="ENCHANTR", scene="CAVE", noun="tunnel")
+    assert art_review._rel(rec) == Path("ENCHANTR") / "CAVE" / "1.png"
 
 
-def test_rel_keeps_the_donor_segment_for_an_old_shape_record():
-    rec = record(1, mood="HORROR", donor="HOUSE", noun="hallway")
-    assert art_review._rel(rec) == Path("HORROR", "HOUSE", "hallway", "1.png")
+def test_rel_degrades_rather_than_raising_on_a_record_with_no_game():
+    """A manifest left over from before the game-first rewrite must render as
+    an unknown pool the server quietly drops, not a KeyError that takes the
+    page down."""
+    stale = {"id": 1, "mood": "HORROR", "noun": "hallway"}
+    assert art_review._rel(stale) == Path("UNKNOWN") / "HORROR" / "1.png"
 
 
-def test_promote_moves_a_scene_shaped_candidate_with_no_donor_directory(
+def test_promote_moves_a_candidate_from_the_flat_scene_directory(
         tmp_path):
     cand, png = tmp_path / "c", tmp_path / "png"
     rec = scene_record(1, scene="CAVE", noun="tunnel")
@@ -404,26 +403,31 @@ def test_promote_moves_a_scene_shaped_candidate_with_no_donor_directory(
 
     counts = art_review.promote({"1": "accept"}, manifest, cand, png)
 
-    assert (png / "CAVE" / "tunnel" / "1.png").exists()
+    assert (png / "ZORK1" / "CAVE" / "1.png").exists()
     assert rec["status"] == art_status.ACCEPTED
     assert counts == {"CAVE": art_review.Counts(gained=1, lost=0)}
 
 
-def test_promote_counts_group_old_and_new_shape_records_separately(tmp_path):
-    """An old-shape record's mood and a new-shape record's scene both land
-    in promote()'s counts dict under whichever name scene_of() resolves --
-    proving the two shapes never get conflated under one key by accident."""
-    cand, png = tmp_path / "c", tmp_path / "png"
-    old = record(1, mood="HORROR", donor="HOUSE", noun="hallway")
-    new = scene_record(2, scene="CAVE", noun="tunnel")
-    make_candidate(cand, old)
-    make_scene_candidate(cand, new)
-    manifest = {"1": old, "2": new}
-
+def test_promote_counts_are_grouped_by_scene(tmp_path):
+    """One promote call spanning two scenes must report them apart, since the
+    caller prints a line per scene."""
+    cand, png = tmp_path / "candidates", tmp_path / "png"
+    a = record(1, scene="CAVE", noun="tunnel")
+    b = record(2, scene="PARLOR", noun="hallway")
+    make_candidate(cand, a)
+    make_candidate(cand, b)
+    manifest = {"1": a, "2": b}
     counts = art_review.promote({"1": "accept", "2": "accept"}, manifest,
                                 cand, png)
+    assert counts["CAVE"].gained == 1
+    assert counts["PARLOR"].gained == 1
 
-    assert counts == {
-        "HORROR": art_review.Counts(gained=1, lost=0),
-        "CAVE": art_review.Counts(gained=1, lost=0),
-    }
+
+def test_dedup_does_not_run_across_games(tmp_path):
+    """Two stories ship their own copy of a picture -- art is duplicated per
+    game by design -- so the same photograph in ZORK1 and ENCHANTR is not a
+    duplicate to be dropped."""
+    a = record(1, game="ZORK1", phash="ff00ff00ff00ff00")
+    b = record(2, game="ENCHANTR", phash="ff00ff00ff00ff00")
+    assert len(art_review.dedup([a])) == 1
+    assert len(art_review.dedup([b])) == 1

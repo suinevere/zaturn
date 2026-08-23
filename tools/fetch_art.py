@@ -49,7 +49,7 @@ def load_manifest(path):
     Dependencies: json
     Globals: N/A
     Params: path -- the manifest file
-    Returns: dict keyed by stringified Pixabay id
+    Returns: dict keyed by "<game>:<id>"
     """
     path = Path(path)
     if not path.exists():
@@ -85,8 +85,11 @@ def harvest(plan, fetcher, out_dir, manifest, per_scene_budget, total_budget=Non
         what keeps every scene represented and stays in force regardless of
         it.
 
-        A Pixabay id already in the manifest is skipped without a download,
-        which is what makes a re-run cheap and a partial run resumable.
+        A picture already fetched for this game is skipped without a
+        download, which is what makes a re-run cheap and a partial run
+        resumable. The key carries the game, so the same photograph can be
+        fetched again for a different story -- art is duplicated per game by
+        design, and two stories curate their pools independently.
 
         Each record's "source" and "licence" come from the fetcher's own
         .source/.licence attributes, defaulting to Pixabay's when absent, so
@@ -125,7 +128,7 @@ def harvest(plan, fetcher, out_dir, manifest, per_scene_budget, total_budget=Non
                     break
                 if total_budget is not None and len(kept) >= total_budget:
                     return kept
-                key = str(hit["id"])
+                key = f"{query.game}:{hit['id']}"
                 if key in manifest:
                     continue
                 try:
@@ -140,7 +143,8 @@ def harvest(plan, fetcher, out_dir, manifest, per_scene_budget, total_budget=Non
                 record = {
                     "id": hit["id"], "page_url": hit["page_url"],
                     "image_url": hit["image_url"], "phrase": query.phrase,
-                    "scene": query.scene, "noun": query.noun,
+                    "game": query.game, "scene": query.scene,
+                    "noun": query.noun,
                     "source": getattr(fetcher, "source", "pixabay"),
                     "licence": getattr(fetcher, "licence", LICENCE),
                     "fetched": date.today().isoformat(),
@@ -159,7 +163,7 @@ def harvest(plan, fetcher, out_dir, manifest, per_scene_budget, total_budget=Non
                 if call != "pass":
                     continue
 
-                dest = out_dir / query.scene / query.noun
+                dest = out_dir / query.game / query.scene
                 dest.mkdir(parents=True, exist_ok=True)
                 path = dest / f"{hit['id']}.png"
                 art_metrics.crop(im).save(path, "PNG")
@@ -555,18 +559,20 @@ def main(argv):
         fetcher or fetching anything -- the everything-degrades rule.
         Absent, every scene in the vocabulary is planned.
 
-        `--game STEM` narrows the same way, but to one story's own scenes
-        (read from tools/assets/scenes/<STEM>.json) rather than a
-        hand-typed list -- a fetch run naturally targets one game's scene
-        set, since art now ships per game. Combined with `--scene`, the
-        final selection is their intersection; a game with no blessed
-        scenes file yet reports so and returns 0.
+        `--game STEM` is required, and names both the scenes to fetch (read
+        from tools/assets/scenes/<STEM>.json, the story's own blessed tags)
+        and the genre those scenes are searched in -- a sci-fi corridor and
+        a detective's corridor are not the same photograph, and
+        art_nouns.GAME_GENRE is where that judgement lives. Combined with
+        `--scene`, the final selection is their intersection; a game with no
+        blessed scenes file yet reports so and returns 0.
     Author: suinevere
     Dependencies: art_queries, art_nouns, art_status, scene_vocab
     Globals: DOTENV_PATH
     Params: argv -- [] | [per_scene_budget] | [per_scene_budget, total_budget],
-        with an optional "--reset-rejected" flag, "--source X", "--budget N",
-        "--scene NAME[,NAME...]" and "--game STEM" anywhere in argv
+        with a required "--game STEM" and optional "--reset-rejected",
+        "--source X", "--budget N" and "--scene NAME[,NAME...]" anywhere in
+        argv
     Returns: 0 always; failures are reported, not raised
     """
     repo = Path(__file__).resolve().parents[1]
@@ -606,20 +612,25 @@ def main(argv):
                   + ", ".join(vocab.SCENES))
             return 0
 
+    game = None
     if "--game" in argv:
         i = argv.index("--game")
         game = argv[i + 1]
         del argv[i:i + 2]
-        game_scenes = set(_scenes_for_game(repo, game))
-        if not game_scenes:
-            print(f"  {game}: no blessed scenes file, nothing to fetch")
-            return 0
-        selected_scenes = (sorted(game_scenes & set(selected_scenes))
-                            if selected_scenes is not None
-                            else sorted(game_scenes))
-        if not selected_scenes:
-            print(f"  {game}'s scenes and --scene do not overlap; nothing to fetch")
-            return 0
+    if game is None:
+        print("  --game STEM is required: art is fetched, curated and shipped "
+              "per game, so a run without one has nowhere to put its pictures.")
+        return 0
+    game_scenes = set(_scenes_for_game(repo, game))
+    if not game_scenes:
+        print(f"  {game}: no blessed scenes file, nothing to fetch")
+        return 0
+    selected_scenes = (sorted(game_scenes & set(selected_scenes))
+                        if selected_scenes is not None
+                        else sorted(game_scenes))
+    if not selected_scenes:
+        print(f"  {game}'s scenes and --scene do not overlap; nothing to fetch")
+        return 0
 
     load_dotenv_into_environ()
 
@@ -649,10 +660,14 @@ def main(argv):
 
     per_scene_budget = int(argv[0]) if argv else 99
     total_budget = int(argv[1]) if len(argv) > 1 else None
-    scenes = selected_scenes if selected_scenes is not None else list(vocab.SCENES)
-    nouns = {scene: art_nouns.nouns_for_scene(scene) for scene in scenes}
-    nouns = {scene: words for scene, words in nouns.items() if words}
-    plan = art_queries.build(nouns)
+    genre = art_nouns.genre_for_game(game)
+    nouns = art_nouns.nouns_for_game(game, selected_scenes)
+    if not nouns:
+        print(f"  {game}: none of its scenes have search phrases")
+        return 0
+    plan = art_queries.build(nouns, game)
+    print(f"  {game} as {genre}: {len(nouns)} scene(s), "
+          f"{sum(len(v) for v in plan.values())} queries")
 
     manifest = load_manifest(manifest_path)
     kept = []

@@ -24,7 +24,7 @@ from collections import namedtuple
 
 import scene_vocab as vocab
 
-Query = namedtuple("Query", "scene noun phrase")
+Query = namedtuple("Query", "game scene noun phrase")
 
 
 def validate(nouns):
@@ -47,22 +47,23 @@ def validate(nouns):
     return nouns
 
 
-def build(nouns=None):
-    """Turn a nouns mapping into one Query per noun, grouped by scene.
+def build(nouns, game):
+    """Turn one game's nouns mapping into one Query per phrase, grouped by scene.
 
-    Description: Each noun is already a complete search phrase, so this is a
-        straight one-to-one lift rather than a cross product -- the shape
-        the old mood/donor/adjective build() had, kept only because
-        harvest() and the manifest still key on a scene->[Query] plan.
+    Description: Each phrase is already a complete search, so this is a
+        straight one-to-one lift rather than a cross product -- the shape the
+        old mood/donor/adjective build() had, kept only because harvest() and
+        the manifest still key on a scene->[Query] plan. The game rides along
+        on every Query because art now ships per game: the same phrase run for
+        two stories must produce two independently curated pools, and the
+        record harvest() writes needs to say which.
     Author: suinevere
     Dependencies: validate, scene_vocab
     Globals: N/A
-    Params: nouns -- dict mapping scene to an iterable of query nouns;
-        defaults to scene_vocab.FETCH_NOUNS
+    Params: nouns -- dict mapping scene to an iterable of query phrases;
+        game -- the story stem this run is fetching for
     Returns: dict mapping scene to a list of Query, in nouns' own order
     """
-    if nouns is None:
-        nouns = vocab.FETCH_NOUNS
     validate(nouns)
-    return {scene: [Query(scene, noun, noun) for noun in words]
+    return {scene: [Query(game, scene, noun, noun) for noun in words]
             for scene, words in nouns.items()}

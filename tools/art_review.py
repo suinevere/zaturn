@@ -48,9 +48,12 @@ def _hamming(a, b):
 def dedup(records, already_accepted=None):
     """Drop records whose perceptual hash is too close to an earlier one.
 
-    Description: Runs across every scene, not within one. A cave that appears in
-        both CAVE and CRYPT reads as the rotation being broken, which is the
-        same reason the pools are kept disjoint on the disc.
+    Description: Runs across every scene of one game, not within one scene. A
+        cave that appears in both CAVE and CRYPT reads as the rotation being
+        broken, which is the same reason the pools are kept disjoint on the
+        disc. It deliberately does not run across games: two stories ship
+        their own copy of a picture, so the same photograph in ZORK1 and in
+        ENCHANTR is not a duplicate, it is the design.
 
         `already_accepted` seeds `seen` before any candidate is judged, so a
         picture promoted in an earlier review pass still blocks its duplicate
@@ -84,16 +87,15 @@ Counts = namedtuple("Counts", "gained lost")
 def scene_of(rec):
     """The scene a record belongs to, whichever vocabulary wrote it.
 
-    Description: A record fetched under the new scene vocabulary carries
-        "scene" directly; every record from before this migration carries
-        "mood" instead and has no "scene" key at all. Reading defensively
-        here is what lets the 412 old-shape records already on disc keep
-        working without being rewritten.
+    Description: Every record now carries "scene" directly. The legacy
+        "mood" fallback is kept for one reason only: a stale manifest from
+        before the game-first rewrite should render as an unknown scene the
+        server quietly drops, not as a KeyError that takes the page down.
     Author: suinevere
     Dependencies: N/A
     Globals: N/A
-    Params: rec -- a manifest record, either shape
-    Returns: the record's scene (or legacy mood) name
+    Params: rec -- a manifest record
+    Returns: the record's scene name, or its legacy mood
     """
     return rec.get("scene", rec.get("mood"))
 
@@ -102,20 +104,19 @@ def _rel(rec):
     """Build a record's path relative to either image tree.
 
     Description: The candidates tree and the source tree share one layout, so
-        one relative path locates a picture in both. A scene-shaped record
-        has no donor -- fetch_art now writes straight to <scene>/<noun>/ --
-        so the donor segment is included only when the record still carries
-        one, which is exactly the old mood-shaped records on disc today.
+        one relative path locates a picture in both. That layout is
+        <game>/<scene>/<id>.png, which is what make_tga.convert_game_tree
+        walks -- it globs a scene directory for files rather than recursing,
+        so the noun cannot be a path segment. The noun survives as a record
+        field, where the review server still groups by it.
     Author: suinevere
     Dependencies: pathlib
     Globals: N/A
-    Params: rec -- a manifest record, either shape
-    Returns: Path of <scene>/<donor>/<noun>/<id>.png when a donor is present,
-        otherwise <scene>/<noun>/<id>.png
+    Params: rec -- a manifest record
+    Returns: Path of <game>/<scene>/<id>.png
     """
-    donor = rec.get("donor")
-    parts = [scene_of(rec)] + ([donor] if donor else []) + [rec["noun"]]
-    return Path(*parts) / "{}.png".format(rec["id"])
+    return Path(rec.get("game") or "UNKNOWN",
+                scene_of(rec) or "UNKNOWN") / "{}.png".format(rec["id"])
 
 
 def _move_if_absent(src, dst):

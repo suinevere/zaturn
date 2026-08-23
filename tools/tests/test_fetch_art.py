@@ -94,13 +94,13 @@ class PingRaisesSession:
         return self.responses.pop(0)
 
 
-PLAN = {"HORROR": [Query("HORROR", "hallway", "dark hallway"),
-                   Query("HORROR", "morgue", "dark morgue")]}
+PLAN = {"HORROR": [Query("ZORK1", "HORROR", "hallway", "dark hallway"),
+                   Query("ZORK1", "HORROR", "morgue", "dark morgue")]}
 
 PLAN2 = {
-    "DESERT": [Query("DESERT", "oasis", "arid oasis"),
-              Query("DESERT", "mesa", "arid mesa")],
-    "TOWN":   [Query("TOWN", "alleyway", "quiet alleyway")],
+    "DESERT": [Query("ZORK1", "DESERT", "oasis", "arid oasis"),
+              Query("ZORK1", "DESERT", "mesa", "arid mesa")],
+    "TOWN":   [Query("ZORK1", "TOWN", "alleyway", "quiet alleyway")],
 }
 
 
@@ -114,10 +114,13 @@ def test_harvest_writes_one_png_per_surviving_candidate(tmp_path):
 
 
 def test_provenance_lands_in_the_folder_path(tmp_path):
+    """Game then scene, and nothing below: make_tga globs a scene directory for
+    files without recursing, so a noun segment would hide every picture from
+    the disc build."""
     got = fetch_art.harvest(PLAN, StubFetcher(), tmp_path, {}, per_scene_budget=99)
     rel = sorted(str(c.path.relative_to(tmp_path)).replace("\\", "/") for c in got)
-    assert rel[0].startswith("HORROR/hallway/")
-    assert rel[-1].startswith("HORROR/morgue/")
+    assert rel and all(r.startswith("ZORK1/HORROR/") for r in rel)
+    assert not any(r.count("/") > 2 for r in rel)
 
 
 def test_rejected_candidates_are_recorded_but_not_written(tmp_path):
@@ -224,7 +227,7 @@ def test_manifest_round_trips(tmp_path):
 def test_no_api_key_is_reported_not_raised(monkeypatch, capsys, tmp_path):
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
     monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
-    assert fetch_art.main([]) == 0
+    assert fetch_art.main(["--game", "ZORK1"]) == 0
     assert "PIXABAY_API_KEY" in capsys.readouterr().out
 
 
@@ -244,9 +247,11 @@ def test_main_runs_the_real_chain_with_a_stubbed_fetcher(monkeypatch, capsys, tm
     monkeypatch.setattr(fetch_art, "PixabayFetcher",
                         lambda key: StubFetcher(per_phrase=1, value=70))
 
-    assert fetch_art.main(["1"]) == 0
+    assert fetch_art.main(["1", "--game", "ZORK1"]) == 0
     assert saved["data"], "the chain must reach harvest and write manifest entries"
-    assert all("scene" in r and "phrase" in r for r in saved["data"].values())
+    assert all("game" in r and "scene" in r and "phrase" in r
+               for r in saved["data"].values())
+    assert all(k.startswith("ZORK1:") for k in saved["data"])
     assert any(r["status"] == art_status.CANDIDATE for r in saved["data"].values())
     out = capsys.readouterr().out
     assert "candidates written" in out
@@ -409,11 +414,11 @@ def test_harvest_records_unsplash_source_licence_author_fields(tmp_path):
         FakeResponse(200, content=png_bytes(70)),
     ])
     f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=50)
-    plan = {"HORROR": [Query("HORROR", "hallway", "dark hallway")]}
+    plan = {"HORROR": [Query("ZORK1", "HORROR", "hallway", "dark hallway")]}
     manifest = {}
     got = fetch_art.harvest(plan, f, tmp_path, manifest, per_scene_budget=99)
     assert len(got) == 1
-    rec = manifest["u1"]
+    rec = manifest["ZORK1:u1"]
     assert rec["source"] == "unsplash"
     assert rec["licence"] == "Unsplash License"
     assert rec["author"] == "Asymmetric Artist"
@@ -430,8 +435,8 @@ def test_harvest_continues_cleanly_when_unsplash_budget_runs_out(tmp_path):
     session = FakeSession([FakeResponse(200, payload),
                            FakeResponse(200, content=png_bytes(70))])
     f = fetch_art.UnsplashFetcher("access-key-fake", session=session, budget=1)
-    plan = {"HORROR": [Query("HORROR", "hallway", "one"),
-                       Query("HORROR", "morgue", "two")]}
+    plan = {"HORROR": [Query("ZORK1", "HORROR", "hallway", "one"),
+                       Query("ZORK1", "HORROR", "morgue", "two")]}
     manifest = {}
     got = fetch_art.harvest(plan, f, tmp_path, manifest, per_scene_budget=99)
     assert len(got) == 1, "the second query's search must degrade, not crash the run"
@@ -447,20 +452,20 @@ def test_harvest_records_pixabay_source_field_via_real_fetcher(tmp_path):
     session = FakeSession([FakeResponse(200, payload),
                            FakeResponse(200, content=png_bytes(70))])
     f = fetch_art.PixabayFetcher("key-fake", session=session, pause=0)
-    plan = {"HORROR": [Query("HORROR", "hallway", "dark hallway")]}
+    plan = {"HORROR": [Query("ZORK1", "HORROR", "hallway", "dark hallway")]}
     manifest = {}
     got = fetch_art.harvest(plan, f, tmp_path, manifest, per_scene_budget=99)
     assert len(got) == 1
-    assert manifest["501"]["source"] == "pixabay"
-    assert manifest["501"]["licence"] == fetch_art.LICENCE
-    assert "author" not in manifest["501"], \
+    assert manifest["ZORK1:501"]["source"] == "pixabay"
+    assert manifest["ZORK1:501"]["licence"] == fetch_art.LICENCE
+    assert "author" not in manifest["ZORK1:501"], \
         "Pixabay hits carry no author field, so none must be invented"
 
 
 def test_main_source_flag_selects_unsplash_and_reports_missing_key(monkeypatch, capsys, tmp_path):
     monkeypatch.delenv("UNSPLASH_ID", raising=False)
     monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
-    assert fetch_art.main(["--source", "unsplash"]) == 0
+    assert fetch_art.main(["--source", "unsplash", "--game", "ZORK1"]) == 0
     assert "UNSPLASH_ID" in capsys.readouterr().out
 
 
@@ -481,12 +486,12 @@ def test_main_budget_flag_is_parsed_without_disturbing_positional_args(monkeypat
         return []
 
     monkeypatch.setattr(fetch_art, "harvest", fake_harvest)
-    assert fetch_art.main(["3", "--budget", "10"]) == 0
+    assert fetch_art.main(["3", "--budget", "10", "--game", "ZORK1"]) == 0
     assert seen_budget["per_scene_budget"] == 3, \
         "--budget must not shift the positional per_scene_budget argument"
 
 
-def _stub_main_for_scene_capture(monkeypatch, tmp_path, seen):
+def _stub_main_for_scene_capture(monkeypatch, tmp_path, seen, scenes=None):
     """Wire main() so the plan reaching harvest() is captured, not fetched.
 
     Description: Shared rigging for the --scene tests below -- a real
@@ -517,12 +522,25 @@ def _stub_main_for_scene_capture(monkeypatch, tmp_path, seen):
         return []
 
     monkeypatch.setattr(fetch_art, "harvest", fake_harvest)
+    if scenes is not None:
+        monkeypatch.setattr(fetch_art, "_scenes_for_game",
+                            lambda repo, game: list(scenes))
+
+
+STUB_SCENES = ("DESERT", "CAVE", "FOREST")
+"""STUB_SCENES
+
+Description: The scene set a stubbed game is tagged with. Three real scenes
+    whose base phrases are disjoint, so an assertion about which scenes were
+    planned cannot pass by two vocabularies happening to overlap.
+Author: suinevere
+"""
 
 
 def test_main_scene_flag_restricts_the_plan_to_the_named_scene(monkeypatch, tmp_path):
     seen = {}
-    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--scene", "DESERT"]) == 0
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen, STUB_SCENES)
+    assert fetch_art.main(["--scene", "DESERT", "--game", "STUB"]) == 0
     assert seen["scenes"] == ["DESERT"], \
         "every other scene must be entirely unqueried, not just budget-starved"
     assert seen["counts"]["DESERT"] > 0
@@ -530,8 +548,8 @@ def test_main_scene_flag_restricts_the_plan_to_the_named_scene(monkeypatch, tmp_
 
 def test_main_scene_flag_accepts_multiple_comma_separated_scenes(monkeypatch, tmp_path):
     seen = {}
-    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--scene", "DESERT,CAVE"]) == 0
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen, STUB_SCENES)
+    assert fetch_art.main(["--scene", "DESERT,CAVE", "--game", "STUB"]) == 0
     assert seen["scenes"] == ["CAVE", "DESERT"]
     assert not seen["phrases"]["DESERT"] & seen["phrases"]["CAVE"], \
         "DESERT and CAVE must draw from genuinely different vocabularies, " \
@@ -541,16 +559,16 @@ def test_main_scene_flag_accepts_multiple_comma_separated_scenes(monkeypatch, tm
 
 def test_main_scene_flag_is_case_insensitive(monkeypatch, tmp_path):
     seen = {}
-    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--scene", "desert"]) == 0
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen, STUB_SCENES)
+    assert fetch_art.main(["--scene", "desert", "--game", "STUB"]) == 0
     assert seen["scenes"] == ["DESERT"]
 
 
 def test_main_scene_flag_reports_an_unknown_scene_but_still_runs_the_known_ones(
         monkeypatch, tmp_path, capsys):
     seen = {}
-    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main(["--scene", "DESERT,NOTASCENE"]) == 0
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen, STUB_SCENES)
+    assert fetch_art.main(["--scene", "DESERT,NOTASCENE", "--game", "STUB"]) == 0
     assert seen["scenes"] == ["DESERT"]
     out = capsys.readouterr().out
     assert "NOTASCENE" in out
@@ -573,14 +591,34 @@ def test_main_scene_flag_all_unknown_prints_the_valid_list_and_fetches_nothing(
         assert scene in out, f"the everything-degrades message must name {scene}"
 
 
-def test_main_without_scene_flag_plans_every_scene_as_before(monkeypatch, tmp_path):
+def test_main_without_scene_flag_plans_every_scene_the_game_is_tagged_with(
+        monkeypatch, tmp_path):
+    """Not every scene in the vocabulary any more. Fetching art for a scene no
+    room in this story was tagged with would put pictures on the disc that
+    nothing can ever show."""
     seen = {}
-    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen)
-    assert fetch_art.main([]) == 0
-    assert seen["scenes"] == sorted(vocab.SCENES)
+    _stub_main_for_scene_capture(monkeypatch, tmp_path, seen, STUB_SCENES)
+    assert fetch_art.main(["--game", "STUB"]) == 0
+    assert seen["scenes"] == sorted(STUB_SCENES)
     assert len(set(seen["counts"].values())) > 1, \
         "the real vocabulary's per-scene query counts differ; a flattened " \
         "fixture would defeat the point of asserting against them"
+
+
+def test_main_without_a_game_refuses_and_fetches_nothing(
+        monkeypatch, tmp_path, capsys):
+    """Art is fetched, curated and shipped per game, so a run without one has
+    nowhere to put its pictures."""
+    monkeypatch.setenv("PIXABAY_API_KEY", "test-key-fake")
+    monkeypatch.setattr(fetch_art, "DOTENV_PATH", tmp_path / "absent.env")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("a run with no --game must not reach harvest")
+
+    monkeypatch.setattr(fetch_art, "PixabayFetcher", fail_if_called)
+    monkeypatch.setattr(fetch_art, "harvest", fail_if_called)
+    assert fetch_art.main([]) == 0
+    assert "--game" in capsys.readouterr().out
 
 
 def test_main_game_flag_restricts_the_plan_to_that_game_own_scenes(monkeypatch, tmp_path):
@@ -698,7 +736,7 @@ def test_undecodable_dotenv_does_not_crash_main(monkeypatch, capsys, tmp_path):
     env_path.write_bytes(b"\xff\xfe garbage\n")
     monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
     monkeypatch.setattr(fetch_art, "DOTENV_PATH", env_path)
-    assert fetch_art.main([]) == 0
+    assert fetch_art.main(["--game", "ZORK1"]) == 0
     assert "PIXABAY_API_KEY" in capsys.readouterr().out
 
 
@@ -726,3 +764,30 @@ def test_phash_reflects_image_content_not_a_constant(tmp_path, monkeypatch):
     h1, h2 = fetch_art._phash(p1), fetch_art._phash(p2)
     assert h1 and h2
     assert h1 != h2, "a constant _phash would collapse every candidate to one hash"
+
+
+def test_harvest_writes_under_game_then_scene_which_is_what_make_tga_reads(
+        tmp_path):
+    """make_tga.convert_game_tree walks <GAME>/<SCENE>/ and globs that scene
+    directory for files, without recursing. A fetcher writing anywhere else --
+    <SCENE>/<noun>/, as it did -- produces pictures no disc build can ever
+    convert."""
+    f = StubFetcher()
+    plan = {"CAVE": [Query("ZORK1", "CAVE", "cave", "cave")]}
+    got = fetch_art.harvest(plan, f, tmp_path, {}, per_scene_budget=1)
+    assert got
+    assert got[0].path.parent == tmp_path / "ZORK1" / "CAVE"
+
+
+def test_the_same_picture_is_fetched_again_for_a_second_game(tmp_path):
+    """Art is duplicated per game by design -- each ships its own copy in its
+    own 1..99 range -- so a manifest keyed by bare id would let the first game
+    to claim a photograph deny it to every other."""
+    manifest = {}
+    plan1 = {"CAVE": [Query("ZORK1", "CAVE", "cave", "cave")]}
+    plan2 = {"CAVE": [Query("ZORK3", "CAVE", "cave", "cave")]}
+    fetch_art.harvest(plan1, StubFetcher(), tmp_path, manifest, per_scene_budget=1)
+    fetch_art.harvest(plan2, StubFetcher(), tmp_path, manifest, per_scene_budget=1)
+    games = {r["game"] for r in manifest.values()}
+    assert games == {"ZORK1", "ZORK3"}
+    assert all(k.startswith(r["game"] + ":") for k, r in manifest.items())

@@ -10,10 +10,12 @@ Author: suinevere
 Dependencies: flask, scene_vocab, art_review, art_status, fetch_art
 Globals: N/A
 """
+import json
 import socket
 import sys
 from pathlib import Path
 
+import art_nouns
 import art_review
 import art_status
 import fetch_art
@@ -49,19 +51,19 @@ def _assets(repo):
     return Path(repo) / "tools" / "assets"
 
 
-PER_SCENE_TARGET = 99
-"""PER_SCENE_TARGET
+PER_GAME_TARGET = 99
+"""PER_GAME_TARGET
 
-Description: The progress bars' picture goal, one flat number for every
-    scene rather than a per-scene figure read from a vocabulary file. The
-    old per-mood targets lived in art_queries.json, which the scene
-    migration retired -- nothing in scene_vocab replaces it, and inventing a
-    per-scene number without curation data behind it would be a guess
-    dressed up as configuration. 99 matches fetch_art.harvest's own default
-    per-scene budget (the disc's 1..99 per-game index cap), so the bar reads
-    as "how close to a full scene" rather than an arbitrary line.
+Description: The progress bar's picture goal for one game. 99 is not a taste
+    call: it is the disc's per-game index range, the ceiling
+    make_tga.convert_game_tree stops at, so a full bar means "this game's
+    1..99 slots are spoken for" rather than an invented quota. The old
+    per-scene target had no such anchor -- 99 pictures of one scene was never
+    the goal -- and the per-mood figures it replaced lived in
+    art_queries.json, which the scene migration retired.
 Author: suinevere
 """
+
 
 SHOWN = (art_status.ACCEPTED, art_status.REJECTED, art_status.CANDIDATE)
 
@@ -73,7 +75,39 @@ FILTERS = {
 }
 
 
-def groups_for(records, scene, status):
+def games_for(assets):
+    """Every story with blessed room tags, and the scenes each one needs.
+
+    Description: The shopping list comes from the scene server's own output --
+        tools/assets/scenes/<STEM>.json, the blessed object->scene verdicts --
+        so a game asks for exactly the scenes its rooms were tagged with and
+        nothing else. Tag a room, and the art UI grows a section for it; that
+        is the whole coupling between the two servers. A story with no tags
+        yet simply does not appear.
+    Author: suinevere
+    Dependencies: json, pathlib, scene_vocab
+    Globals: N/A
+    Params: assets -- the tools/assets directory
+    Returns: dict mapping game stem to a list of scene names in
+        scene_vocab.SCENES order
+    """
+    out = {}
+    scenes_dir = Path(assets) / "scenes"
+    if not scenes_dir.is_dir():
+        return out
+    for path in sorted(scenes_dir.glob("*.json")):
+        if path.stem.endswith(".review"):
+            continue
+        try:
+            blessed = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        wanted = set(blessed.values())
+        out[path.stem] = [s for s in vocab.SCENES if s in wanted]
+    return out
+
+
+def groups_for(records, game, scene, status):
     """Split one scene's pictures into noun sections.
 
     Description: The sections mirror the on-disk tree
@@ -89,15 +123,16 @@ def groups_for(records, scene, status):
     Author: suinevere
     Dependencies: art_status, art_review
     Globals: SHOWN, FILTERS
-    Params: records -- the manifest dict; scene -- the scene folder name
-        (matched against a record's scene, or its legacy mood when it has
-        no scene); status -- one of FILTERS' keys; anything else is treated
-        as "all"
-    Returns: list of group dicts sorted by noun
+    Params: records -- the manifest dict; game -- the story stem whose pool
+        this is; scene -- the scene folder name; status -- one of FILTERS'
+        keys; anything else is treated as "all"
+    Returns: list of group dicts sorted by noun, each record carrying the
+        manifest key it was stored under
     """
     wanted = FILTERS.get(status, SHOWN)
-    mine = [r for r in records.values()
-            if art_review.scene_of(r) == scene and r["status"] in SHOWN]
+    mine = [dict(r, key=k) for k, r in records.items()
+            if r.get("game") == game and art_review.scene_of(r) == scene
+            and r["status"] in SHOWN]
     nouns = sorted({r["noun"] for r in mine})
     out = []
     for noun in nouns:
@@ -136,37 +171,83 @@ def create_app(repo=None):
 
     @app.route("/")
     def index():
-        """Render the scene list with each scene's counts and progress toward target.
+        """Render the game list: one row per story with blessed room tags.
 
-        Description: Scenes come from scene_vocab.SCENES rather than the
-            manifest, so a scene with zero pictures still gets a row and a
-            visible target, in its table-index order rather than
-            alphabetically. A manifest record whose scene (or legacy mood)
-            names none of the 32 current scenes is silently left out of
-            every row rather than crashing the page -- the expected state
-            for the old mood-tagged corpus until it is re-tagged.
+        Description: Games are the top level because art ships per game -- a
+            picture lives at png/<GAME>/<SCENE>/ and converts into that game's
+            own 1..99 TGA range. A story's row counts only its own records, and
+            its target is the disc's 99-picture cap for one game rather than a
+            per-scene figure, because 99 is the real ceiling the owner is
+            filling toward. "scenes covered" is the number of that game's
+            tagged scenes with at least one accepted picture, which is the
+            honest measure of whether a game can be played without a blank
+            background.
         Author: suinevere
-        Dependencies: flask, fetch_art, scene_vocab, art_review, art_status
-        Globals: PER_SCENE_TARGET
+        Dependencies: flask, fetch_art, art_review, art_status
+        Globals: PER_GAME_TARGET
         Params: N/A
-        Returns: rendered HTML listing every scene in the vocabulary
+        Returns: rendered HTML listing every story with blessed tags
         """
         manifest = fetch_art.load_manifest(assets / "art_manifest.json")
         rows = []
-        for scene in vocab.SCENES:
-            mine = [r for r in manifest.values()
-                    if art_review.scene_of(r) == scene]
+        for game, scenes in games_for(assets).items():
+            mine = [r for r in manifest.values() if r.get("game") == game]
+            covered = {art_review.scene_of(r) for r in mine
+                       if r["status"] == art_status.ACCEPTED}
             rows.append({
-                "scene": scene,
+                "game": game,
+                "genre": art_nouns.genre_for_game(game),
+                "scenes": len(scenes),
+                "covered": len([s for s in scenes if s in covered]),
                 "accepted": sum(1 for r in mine
                                 if r["status"] == art_status.ACCEPTED),
                 "rejected": sum(1 for r in mine
                                 if r["status"] == art_status.REJECTED),
                 "undecided": sum(1 for r in mine
                                  if r["status"] == art_status.CANDIDATE),
-                "target": PER_SCENE_TARGET,
+                "target": PER_GAME_TARGET,
             })
         return render_template_string(INDEX_HTML, rows=rows)
+
+    @app.route("/game/<game>")
+    def game_page(game):
+        """Render one game's scenes, in the order they index into its TGA range.
+
+        Description: The scene list is the game's own blessed tags, so it is
+            exactly the shopping list and never the whole 32-name vocabulary --
+            fetching art for a scene no room in this story was tagged with
+            would put pictures on the disc that nothing can ever show. A scene
+            with zero accepted pictures is the row that matters, so it is
+            marked rather than merely counted.
+        Author: suinevere
+        Dependencies: flask, fetch_art, art_review, art_status, art_nouns
+        Globals: N/A
+        Params: game -- the story stem from the URL
+        Returns: rendered HTML; 404 for a stem with no blessed tags
+        """
+        from flask import abort
+        scenes = games_for(assets).get(game)
+        if scenes is None:
+            abort(404)
+        manifest = fetch_art.load_manifest(assets / "art_manifest.json")
+        genre = art_nouns.genre_for_game(game)
+        rows = []
+        for scene in scenes:
+            mine = [r for r in manifest.values()
+                    if r.get("game") == game
+                    and art_review.scene_of(r) == scene]
+            rows.append({
+                "scene": scene,
+                "phrases": ", ".join(art_nouns.nouns_for_scene(scene, genre)),
+                "accepted": sum(1 for r in mine
+                                if r["status"] == art_status.ACCEPTED),
+                "rejected": sum(1 for r in mine
+                                if r["status"] == art_status.REJECTED),
+                "undecided": sum(1 for r in mine
+                                 if r["status"] == art_status.CANDIDATE),
+            })
+        return render_template_string(GAME_HTML, game=game, genre=genre,
+                                      rows=rows)
 
     @app.route("/image/<pid>")
     def image(pid):
@@ -227,7 +308,8 @@ def create_app(repo=None):
         fetch_art.save_manifest(path, manifest)
         scene = art_review.scene_of(rec)
         mine = [r for r in manifest.values()
-                if art_review.scene_of(r) == scene]
+                if r.get("game") == rec.get("game")
+                and art_review.scene_of(r) == scene]
         return jsonify({
             "id": pid,
             "status": rec["status"],
@@ -239,8 +321,8 @@ def create_app(repo=None):
                              if r["status"] == art_status.CANDIDATE),
         })
 
-    @app.route("/scene/<scene>")
-    def scene_page(scene):
+    @app.route("/game/<game>/<scene>")
+    def scene_page(game, scene):
         """Render one scene's pictures grouped by noun with a status filter.
 
         Description: Defaults to the undecided view because a resumed review
@@ -251,23 +333,23 @@ def create_app(repo=None):
         Author: suinevere
         Dependencies: flask, art_review, fetch_art, scene_vocab
         Globals: N/A
-        Params: scene -- the scene folder name from the URL
-        Returns: rendered HTML; 404 for a name that is not a known scene
+        Params: game -- the story stem; scene -- the scene folder name
+        Returns: rendered HTML; 404 for an unknown game or scene
         """
-        from flask import abort, render_template_string, request
-        if scene not in vocab.SCENE_INDEX:
+        from flask import abort, request
+        if scene not in vocab.SCENE_INDEX or game not in games_for(assets):
             abort(404)
         manifest = fetch_art.load_manifest(assets / "art_manifest.json")
         status = request.args.get("status", "undecided")
-        groups = groups_for(manifest, scene, status)
+        groups = groups_for(manifest, game, scene, status)
         have = set()
         for root in (assets / "png", assets / "candidates"):
             for g in groups:
                 for r in g["records"]:
                     if (Path(root) / art_review._rel(r)).exists():
-                        have.add(str(r["id"]))
-        return render_template_string(SCENE_HTML, scene=scene, groups=groups,
-                                      status=status, have=have)
+                        have.add(r["key"])
+        return render_template_string(SCENE_HTML, game=game, scene=scene,
+                                      groups=groups, status=status, have=have)
 
     return app
 
@@ -276,13 +358,19 @@ INDEX_HTML = """<!doctype html><meta charset="utf-8"><title>Room art review</tit
 <style>body{background:#111;color:#ddd;font:13px sans-serif;margin:24px}
 table{border-collapse:collapse}td,th{padding:5px 14px;border-bottom:1px solid #333;text-align:right}
 td:first-child,th:first-child{text-align:left}a{color:#8cf}
+td.g{text-align:left;color:#888}
 .bar{background:#222;width:120px;height:9px;display:inline-block}
 .bar i{background:#4a8;height:9px;display:block}</style>
 <h1>Room art review</h1>
-<table><tr><th>scene</th><th>accepted</th><th>rejected</th><th>undecided</th>
-<th>of target</th><th></th></tr>
+<p style="color:#888">Art ships per game. Pick a story, then one of the
+scenes its own rooms were tagged with; the search phrases follow that
+story's genre.</p>
+<table><tr><th>game</th><th>genre</th><th>scenes covered</th><th>accepted</th>
+<th>rejected</th><th>undecided</th><th>of 99</th><th></th></tr>
 {% for r in rows %}<tr>
-<td><a href="/scene/{{ r.scene }}">{{ r.scene }}</a></td>
+<td><a href="/game/{{ r.game }}">{{ r.game }}</a></td>
+<td class="g">{{ r.genre }}</td>
+<td>{{ r.covered }} / {{ r.scenes }}</td>
 <td>{{ r.accepted }}</td><td>{{ r.rejected }}</td><td>{{ r.undecided }}</td>
 <td>{{ r.accepted }} / {{ r.target }}</td>
 <td><span class="bar"><i style="width:{{ (100 * r.accepted // r.target) if r.target else 0 }}%"></i></span></td>
@@ -291,7 +379,30 @@ td:first-child,th:first-child{text-align:left}a{color:#8cf}
 """
 
 
-SCENE_HTML = """<!doctype html><meta charset="utf-8"><title>{{ scene }}</title>
+GAME_HTML = """<!doctype html><meta charset="utf-8"><title>{{ game }}</title>
+<style>body{background:#111;color:#ddd;font:13px sans-serif;margin:24px}
+table{border-collapse:collapse}td,th{padding:5px 14px;border-bottom:1px solid #333;text-align:right}
+td:first-child,th:first-child{text-align:left}a{color:#8cf}
+td.q{text-align:left;color:#777;font-size:11px}
+tr.empty td:first-child a{color:#fc6}</style>
+<p><a href="/">&larr; all games</a></p>
+<h1>{{ game }} <span style="color:#888;font-weight:normal">searched as {{ genre }}</span></h1>
+<p style="color:#888">These are the scenes this story's rooms are tagged
+with, nothing else. Amber means no accepted picture yet, so those rooms
+would draw a blank background. Fetch more with
+<code>tools/fetch_art.py --game {{ game }} --scene NAME</code>.</p>
+<table><tr><th>scene</th><th>search phrases</th><th>accepted</th>
+<th>rejected</th><th>undecided</th></tr>
+{% for r in rows %}<tr class="{{ 'empty' if not r.accepted else '' }}">
+<td><a href="/game/{{ game }}/{{ r.scene }}">{{ r.scene }}</a></td>
+<td class="q">{{ r.phrases }}</td>
+<td>{{ r.accepted }}</td><td>{{ r.rejected }}</td><td>{{ r.undecided }}</td>
+</tr>{% endfor %}
+</table>
+"""
+
+
+SCENE_HTML = """<!doctype html><meta charset="utf-8"><title>{{ game }} {{ scene }}</title>
 <style>body{background:#111;color:#ddd;font:13px sans-serif;margin:24px}
 a{color:#8cf}h2{margin:26px 0 6px;font-size:14px;border-bottom:1px solid #333}
 figure{display:inline-block;margin:6px;text-align:center;width:320px}
@@ -303,23 +414,27 @@ figure.accepted{outline:3px solid #4a8}figure.rejected{opacity:.35}
 figure:focus{outline:3px solid #8cf}
 #big{position:fixed;inset:0;background:#000d;display:none;
 align-items:center;justify-content:center}#big img{max-width:95vw}</style>
-<p><a href="/">&larr; all scenes</a> &middot;
+<p><a href="/">&larr; all games</a> &middot;
+<a href="/game/{{ game }}">&larr; {{ game }}</a> &middot;
 {% for f in ["undecided","accepted","rejected","all"] %}
-<a href="/scene/{{ scene }}?status={{ f }}">{{ f }}</a>
+<a href="/game/{{ game }}/{{ scene }}?status={{ f }}">{{ f }}</a>
 {% endfor %}</p>
-<h1>{{ scene }}</h1>
-<p style="color:#888;font-size:13px">Click or Enter accepts, again un-accepts. Keys: <b>a</b> accept, <b>r</b> reject, <b>u</b> back to undecided, arrows move. Nothing is final &mdash; the <b>accepted</b> and <b>rejected</b> filters above are where you re-judge.</p>
+<h1>{{ game }} &middot; {{ scene }}</h1>
+<p style="color:#888;font-size:13px">Click or Enter accepts, again
+un-accepts. Keys: <b>a</b> accept, <b>r</b> reject, <b>u</b> back to
+undecided, arrows move. Nothing is final &mdash; the <b>accepted</b> and
+<b>rejected</b> filters above are where you re-judge.</p>
 {% for g in groups %}
 <h2>{{ g.noun }} &mdash;
 {{ g.accepted }} accepted &middot; {{ g.rejected }} rejected &middot;
 {{ g.undecided }} undecided</h2>
 {% for r in g.records %}
-<figure data-id="{{ r.id }}" tabindex="0" class="{{ r.status }}">
-{% if r.id|string in have %}<img src="/image/{{ r.id }}" width="320" height="224" alt="" tabindex="-1" onclick="toggle('{{ r.id }}')">
+<figure data-id="{{ r.key }}" tabindex="0" class="{{ r.status }}">
+{% if r.key in have %}<img src="/image/{{ r.key }}" width="320" height="224" alt="" tabindex="-1" onclick="toggle('{{ r.key }}')">
 {% else %}<div class="gone">no local copy</div>{% endif %}
 <figcaption>{{ r.phrase }}<br>
 <a href="{{ r.page_url }}" target="_blank" tabindex="-1">{{ r.id }}</a>
-<button type="button" tabindex="-1" onclick="zoom('{{ r.id }}')">zoom</button>
+<button type="button" tabindex="-1" onclick="zoom('{{ r.key }}')">zoom</button>
 <span class="st">{{ r.status }}</span>
 </figcaption></figure>
 {% endfor %}{% endfor %}
@@ -365,7 +480,6 @@ function prev(f){ var a = all(), i = a.indexOf(f);
   if (i > 0) a[i-1].focus(); }
 </script>
 """
-
 
 def main(argv):
     """Run the review server on every interface.

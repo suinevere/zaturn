@@ -20,10 +20,14 @@ def test_snapshot_is_tracked():
     assert _tracked("tools/assets/art_manifest.snapshot.json")
 
 
-def test_snapshot_is_valid_json_with_records():
+def test_snapshot_records_carry_the_shipping_shape():
+    """Empty is legal -- curation restarts from zero whenever the art model
+    changes -- but a record that is there must name the game it belongs to,
+    since the whole tree is keyed on that now."""
     snap = REPO / "tools" / "assets" / "art_manifest.snapshot.json"
     data = json.loads(snap.read_text(encoding="utf-8"))
     assert isinstance(data, dict)
-    assert len(data) > 0
-    sample = next(iter(data.values()))
-    assert "status" in sample
+    for key, rec in data.items():
+        assert "status" in rec, key
+        assert "game" in rec and "scene" in rec, key
+        assert key == "{}:{}".format(rec["game"], rec["id"]), key

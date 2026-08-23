@@ -728,7 +728,11 @@ const char *title_art_file(int index) {
  | Description: One of the shared title pictures, chosen by `seed` reduced
  |   modulo TITLE_ART_N -- the boot's own pick, separate from the preload
  |   walk below. NULL when TITLE_ART_N is 0, which the caller must treat as
- |   "no wallpaper" rather than read a nonexistent file.
+ |   "no wallpaper" rather than read a nonexistent file. The #if guards the
+ |   modulo itself rather than relying on a runtime check: TITLE_ART_N is
+ |   compile-time 0 until real title art ships, and `seed % 0` is a
+ |   -Wdiv-by-zero on every build even though the runtime check below made it
+ |   statically unreachable.
  | Author: suinevere
  | Dependencies: title_art_file
  | Globals: N/A
@@ -736,9 +740,13 @@ const char *title_art_file(int index) {
  | Returns: the disc path, or NULL
  ----------------------*/
 const char *title_art_random(unsigned int seed) {
+#if TITLE_ART_N > 0
     const unsigned int n = (unsigned int) TITLE_ART_N;
-    if (n == 0u) return nullptr;
     return title_art_file((int) (seed % n) + 1);
+#else
+    (void) seed;
+    return nullptr;
+#endif
 }
 
 /*----------------------

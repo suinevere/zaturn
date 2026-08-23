@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Hold the background-art cache's constants against the art actually shipped.
 
-The cache is filled in two places. splash_show() calls
-display_preload_categories() around the still-resident boot jingle and before any
-typeahead trie exists, so it is capped to a couple of slots and its real job is the
-title's own house picture. display_warm_cache_random() at game start is the fill
-that matters: both PCM cues are freed by then and main.cxx has already built the
-game's trie, so it reads an honest free-space figure and spends the rest on art.
+The cache is filled in two places. splash_show() calls title_preload_art(),
+walking the shared TITLE/ pictures (TITLE_ART_N of them) around the
+still-resident boot jingle and before any typeahead trie exists, so it is
+capped to a couple of slots and its real job is the title's own picture.
+display_warm_cache_scenes() at game start is the fill that matters: both PCM
+cues are freed by then and main.cxx has already built the game's trie, so it
+reads an honest free-space figure and spends the rest on art, one random
+picture from each of the current game's scenes.
 
 Five things here can fail silently:
 
@@ -22,7 +24,7 @@ Five things here can fail silently:
      constant would be describing a cache that cannot exist, and eviction would
      start thrashing earlier than anyone reading title.cxx would expect.
 
-  3. display_warm_cache_random taking zero slots at game start. Every wallpaper
+  3. display_warm_cache_scenes taking zero slots at game start. Every wallpaper
      change would then read the disc over a playing track.
 
   4. The boot jingle alone not fitting LWRAM even with the art cache emptied,
@@ -36,8 +38,8 @@ Five things here can fail silently:
 The online trie is deliberately absent from this budget: ensure_online_typeahead
 only runs once the player has dialled, so an ordinary session never holds it.
 
-Art is walked recursively under cd/data/TGA: Task 1 moved every background into
-a per-mood subfolder (cd/data/TGA/<MOOD>/NN.TGA), and only the splash logo
+Art is walked recursively under cd/data/TGA: every background lives in a
+per-game subfolder (cd/data/TGA/<GAME>/NN.TGA), and only the splash logo
 (SUINE.TGA) still sits at the TGA root.
 
 Run as a human-readable report: python saturn/tests/test_lwram_splash_budget.py
@@ -132,14 +134,18 @@ def compute_budget():
     jingle = pcm_bytes("SPLASH.PCM", d["BOOT_MUSIC_MAX_BYTES"])
     cue = pcm_bytes("LOADCD.PCM", d["LOADING_MUSIC_MAX_BYTES"])
 
-    # Mirror display_preload_categories(): the splash fills around the still-resident
-    # jingle, capped by its caller rather than by the zone.
+    # Mirror title_preload_art(): the splash walks TITLE_ART_N shared TITLE/
+    # pictures around the still-resident jingle, stopping at whichever of
+    # TGA_CACHE_SLOTS or the zone's free space runs out first -- a no-op at
+    # TITLE_ART_N 0, but the slot arithmetic below is unchanged either way,
+    # since it caps at TGA_CACHE_SLOTS regardless of how many pictures exist
+    # to walk.
     free_now, splash_slots = lwram - jingle, 0
     while splash_slots < slots and free_now >= slot_bytes + floor:
         free_now -= slot_bytes
         splash_slots += 1
 
-    # Mirror display_warm_cache_random(): at game start both cues are freed and the
+    # Mirror display_warm_cache_scenes(): at game start both cues are freed and the
     # trie is already built, so the only reserve left is the floor.
     free_now, warm_slots = lwram - TRIE_RESERVE, 0
     while warm_slots < slots and free_now >= slot_bytes + floor:
@@ -148,8 +154,8 @@ def compute_budget():
 
     if not TGA_DIR.is_dir():
         raise RuntimeError("no cd/data/TGA to measure")
-    # Recursive: every background lives in a per-mood subfolder
-    # (cd/data/TGA/<MOOD>/NN.TGA) since Task 1; only the splash logo sits at
+    # Recursive: every background lives in a per-game subfolder
+    # (cd/data/TGA/<GAME>/NN.TGA); only the splash logo sits at
     # the TGA root. A flat iterdir() here would silently see zero art.
     art = sorted(p for p in TGA_DIR.rglob("*")
                  if p.is_file() and p.suffix.upper() == ".TGA"
@@ -200,7 +206,7 @@ def test_cache_slots_fit_within_lwram(budget):
 
 def test_warm_cache_can_take_at_least_one_slot(budget):
     assert budget["warm_slots"] >= 1, (
-        "display_warm_cache_random can take no slots at all at game start, with "
+        "display_warm_cache_scenes can take no slots at all at game start, with "
         "both cues freed and only the trie and the floor in its way. Every "
         "wallpaper change would then read the disc over a playing track. Lower "
         "TGA_CACHE_FLOOR.")

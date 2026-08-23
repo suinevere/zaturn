@@ -1,8 +1,8 @@
 /*----------------------
  | event_scan.c
  | Description: The event scan lifted out of the doomed room classifier
- |   (room_class.c's text_scan_event and room_class_data.c's EV table),
- |   renamed and made self-contained: whole-word, case-insensitive,
+ |   (its text event scanner and room_class_data.c's EV table), renamed
+ |   and made self-contained: whole-word, case-insensitive,
  |   first-match-wins over the whole of a turn's text. No dependency on the
  |   classifier or on music.h's TC_* enum, both of which this scan used to
  |   share -- events are a sound concern now, not a text-classification one.

@@ -4,8 +4,8 @@
        saturn/src/sound/event_scan.c saturn/src/scene/scene_map.c && /tmp/mmt
 
    Room mood used to come from classified text, so a room's category could be
-   named by its pool (TC_UNDERGROUND, TC_WILDERNESS, ...) and a track's pool
-   membership proved which mood picked it. It now comes from an authored
+   named by its pool (one of twelve, retired with the classifier) and a
+   track's pool membership proved which mood picked it. It now comes from an authored
    scene table keyed by (release, serial, object number) -- these tests use
    real rows from scene/game_rooms.inc (Zork I, release 88, serial "840726")
    for object numbers, rather than room text.

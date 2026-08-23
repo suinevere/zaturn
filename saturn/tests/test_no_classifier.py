@@ -23,12 +23,23 @@ DEAD_SYMBOLS = (
     "display_set_art_band", "art_band_of_genre", "music_note_room_title",
     "text_game_room_category", "music_category_pool", "MUSIC_FALLBACK_ROOMS",
     "TC_NEUTRAL", "TEXT_NUM_CATEGORIES", "display_category_image",
+    "display_preload_categories", "display_warm_cache_random",
+    "display_shuffle_category", "display_rotate_dynamic_category",
+    "text_scan_event", "CATEGORY_IMAGE",
+    "TC_WILDERNESS", "TC_UNDERGROUND", "TC_WATER", "TC_NAUTICAL", "TC_TOWN",
+    "TC_DUNGEON", "TC_DESERT", "TC_MAGIC", "TC_SCIFI", "TC_HORROR",
+    "TC_MYSTERY", "TC_HOUSE", "TC_DANGER", "TC_TRIUMPH", "TC_PLACE_LAST",
 )
 
 # "test" included deliberately: test/music_mix_test.c, test/music_test.c and
 # test/music_category_test.c all name these symbols, and leaving that directory
 # out of the sweep is how a dead reference survives a deletion.
 SEARCH_ROOTS = ["saturn/src", "saturn/mojozork.c", "saturn/tests", "tools", "test"]
+
+# Repo-root files only -- README.md lives here. Not a recursive walk: docs/
+# and .superpowers/ hold this feature's own planning history, which legitimately
+# names every retired symbol, and must stay out of the sweep.
+ROOT_LEVEL_SUFFIXES = {".c", ".h", ".cxx", ".inc", ".py", ".md"}
 
 
 def test_classifier_files_are_deleted():
@@ -38,19 +49,23 @@ def test_classifier_files_are_deleted():
 
 def test_no_source_still_names_a_dead_symbol():
     offenders = []
+    root_files = [f for f in REPO.iterdir()
+                  if f.is_file() and f.suffix in ROOT_LEVEL_SUFFIXES]
+    all_files = list(root_files)
     for root in SEARCH_ROOTS:
         p = REPO / root
-        files = [p] if p.is_file() else [
+        all_files += [p] if p.is_file() else [
             f for f in p.rglob("*")
             if f.suffix in {".c", ".h", ".cxx", ".inc", ".py"}
             and ".venv" not in f.parts and "__pycache__" not in f.parts
-            and f.resolve() != SELF   # this file names every DEAD_SYMBOLS entry itself
         ]
-        for f in files:
-            text = f.read_text(encoding="utf-8", errors="replace")
-            for sym in DEAD_SYMBOLS:
-                if re.search(rf"\b{sym}\b", text):
-                    offenders.append(f"{f.relative_to(REPO)}: {sym}")
+    for f in all_files:
+        if f.resolve() == SELF:  # this file names every DEAD_SYMBOLS entry itself
+            continue
+        text = f.read_text(encoding="utf-8", errors="replace")
+        for sym in DEAD_SYMBOLS:
+            if re.search(rf"\b{sym}\b", text):
+                offenders.append(f"{f.relative_to(REPO)}: {sym}")
     assert not offenders, offenders
 
 

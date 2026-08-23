@@ -3,7 +3,7 @@
 
 Description: The human half of the tagging pipeline, in the shape of
     tools/art_server.py. Shows one refused group at a time -- title, captured
-    description, and the 32 scenes -- and writes the verdict to every object in
+    description, and the scenes -- and writes the verdict to every object in
     the group, because a repeated title is a repeated place.
 
     Both JSON files are read-modify-written on every single verdict rather than
@@ -12,15 +12,21 @@ Description: The human half of the tagging pipeline, in the shape of
     the one decision in flight.
 
     Every write is reversible. Undo replays a per-story stack of prior values,
-    Skip rotates a group to the back of the queue instead of dropping it, and
-    the /tagged page lists every verdict already given so any of them can be
-    changed long after the session that made it.
+    Skip rotates a group to the back of the queue instead of dropping it, the
+    /tagged page lists every verdict already given, and any room -- queued,
+    tagged by rule or tagged by hand -- has its own page where its captured
+    description can be reread and its tag changed or removed.
+
+    The vocabulary can grow from that page. A room the 32 scenes do not
+    describe is a real outcome, and the alternative to adding a scene is
+    tagging it wrong forever.
 Author: suinevere
-Dependencies: flask, json, pathlib, sys, scene_vocab, room_scenes
-Globals: N/A
+Dependencies: flask, json, pathlib, re, sys, scene_vocab, room_scenes
+Globals: MOOD_TO_SCENES, NAME_RE
 """
 import json
 import pathlib
+import re
 import sys
 
 from flask import Flask, jsonify, render_template_string, request
@@ -52,6 +58,16 @@ MOOD_TO_SCENES = {
     "MYSTERY": ("LIBRARY", "OFFICE", "PARLOR", "CORRIDOR"),
     "HOUSE": ("PARLOR", "KITCHEN", "BEDROOM", "BATHROOM", "HOUSE_EXT"),
 }
+
+NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,15}$")
+"""NAME_RE
+
+Description: What a new scene name may look like. Uppercase because the name
+    becomes the C identifier `SC_<NAME>`, and short because it is also an
+    8.3-adjacent directory name under tools/assets/png/<GAME>/.
+Author: suinevere
+"""
+
 
 def load_hints(root):
     """Read the retired mood classifier's blessed judgments as a title hint.
@@ -95,10 +111,9 @@ def load_rooms(root, stem):
     """Read one story's captured room inventory.
 
     Description: The inventory is the only place an object number can be
-        turned back into a title, which the /tagged page needs to describe a
-        verdict given in an earlier session. Missing or unreadable degrades to
-        an empty inventory, which renders as a tagged list with bare object
-        numbers rather than an error.
+        turned back into a title and a description, which the /tagged list and
+        every room page need. Missing or unreadable degrades to an empty
+        inventory, which renders as bare object numbers rather than an error.
     Author: suinevere
     Dependencies: pathlib, json
     Globals: N/A
@@ -138,6 +153,92 @@ def load_serial(root, stem):
         return None
 
 
+def generated_scene_n(root):
+    """The SCENE_N the generated C header currently claims.
+
+    Description: Adding a scene to the vocabulary leaves three generated
+        tables a column short until the generators are re-run, and a build
+        against the stale header fails in a way that does not mention the
+        vocabulary at all. Comparing this against len(vocab.SCENES) is what
+        lets the pages carry a banner that clears itself once the generators
+        have run. A missing or unparsable header degrades to None, which
+        reads as "cannot tell" and shows no banner.
+    Author: suinevere
+    Dependencies: pathlib, re
+    Globals: N/A
+    Params: root -- repo root
+    Returns: the integer SCENE_N, or None
+    """
+    path = pathlib.Path(root) / "saturn" / "src" / "scene" / "scene_map.h"
+    if not path.exists():
+        return None
+    try:
+        found = re.search(r"#define\s+SCENE_N\s+(\d+)",
+                          path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    return int(found.group(1)) if found else None
+
+
+def append_scene(root, name, phrases):
+    """Append one scene to the tagging vocabulary, on disk and in memory.
+
+    Description: Appends, never inserts. scene_vocab.SCENES' order *is* the C
+        enum value and a column index in three generated tables, so adding at
+        the end is safe and moving anything silently repoints every row of
+        every table. The name lands in SCENES and its search phrases in
+        FETCH_NOUNS together, because art_queries.validate refuses a scene it
+        cannot search, and a scene added to one but not the other would take
+        the next fetch run down.
+
+        Applies the same append to the live module object as well as the file,
+        rather than reloading: a reload re-reads the module's own path, which
+        is the shipping vocabulary even when this call was aimed at a test
+        tree, and every reader goes through the module attribute, so rebinding
+        it is what the reload would have achieved anyway.
+    Author: suinevere
+    Dependencies: pathlib, re, scene_vocab
+    Globals: NAME_RE
+    Params: root -- repo root; name -- the new scene name; phrases -- an
+        iterable of stock-photo search phrases, empty for a default derived
+        from the name
+    Returns: (True, "") on success, or (False, reason)
+    """
+    if not NAME_RE.match(name or ""):
+        return False, "a scene name is 2 to 16 characters of A-Z, 0-9 and _"
+    if name in vocab.SCENE_INDEX:
+        return False, f"{name} is already a scene"
+    words = tuple(p.strip() for p in phrases if p and p.strip())
+    if not words:
+        words = (name.lower().replace("_", " "),)
+
+    path = pathlib.Path(root) / "tools" / "scene_vocab.py"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return False, f"cannot read scene_vocab.py ({exc})"
+
+    scenes_at = text.index("SCENES = (")
+    scenes_end = text.index("\n)\n", scenes_at)
+    text = text[:scenes_end] + f'\n    "{name}",' + text[scenes_end:]
+
+    nouns_at = text.index("FETCH_NOUNS = {")
+    nouns_end = text.index("\n}\n", nouns_at)
+    row = '\n    "{}":{}({}),'.format(
+        name, " " * max(1, 10 - len(name)),
+        ", ".join(f'"{w}"' for w in words) + ("," if len(words) == 1 else ""))
+    text = text[:nouns_end] + row + text[nouns_end:]
+
+    try:
+        path.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        return False, f"cannot write scene_vocab.py ({exc})"
+    vocab.SCENE_INDEX[name] = len(vocab.SCENES)
+    vocab.SCENES = vocab.SCENES + (name,)
+    vocab.FETCH_NOUNS[name] = words
+    return True, ""
+
+
 PAGE = """<!doctype html><title>{{ stem }} — scenes</title>
 <style>
  body{font:15px system-ui;margin:2rem;max-width:56rem}
@@ -150,16 +251,19 @@ PAGE = """<!doctype html><title>{{ stem }} — scenes</title>
  #scope{color:#a00;font-size:13px;margin:0 0 .8rem}
  .bar{margin-top:1.2rem;display:flex;gap:.6rem;align-items:center}
  .bar small{color:#666}
+ .stale{background:#fee;border-left:3px solid #c00;padding:.5rem .6rem;
+        font-size:13px;margin:0 0 1rem}
  a{color:#06c}
 </style>
+{% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
 <h1>{{ stem }} <small id="left">{{ left }} left</small>
   — <a href="/game/{{ stem }}/tagged">review {{ tagged }} already tagged</a></h1>
 <div id="legend">
  One click = one tag = this room's whole picture and music. There is no second
  tag and no overlap.<br>
  <b>Yellow</b> buttons are the retired mood classifier's guess for this exact
- room, narrowed to a handful of scenes. A hint, not a limit — any of the 32 is
- a legal answer, and yellow is often wrong.<br>
+ room, narrowed to a handful of scenes. A hint, not a limit — any of the
+ {{ scenes|length }} is a legal answer, and yellow is often wrong.<br>
  <b>Skip</b> sends the room to the back of the queue, it does not drop it.
  <b>Back</b> undoes the last verdict or skip and puts you on it again.
 </div>
@@ -167,6 +271,8 @@ PAGE = """<!doctype html><title>{{ stem }} — scenes</title>
   {% if hint_mood %}<small id="hint-mood">(was {{ hint_mood }})</small>{% endif %}</h2>
 <div id="scope">{{ scope }}</div>
 <div id="desc">{{ group.description or '(no description captured)' if group else '' }}</div>
+<p><a id="roomlink" href="{{ '/game/' ~ stem ~ '/room/' ~ group.obj if group else '#' }}">
+  open this room's own page (add a scene, or change it later) →</a></p>
 <div class="grid">
 {% for s in scenes %}<button data-scene="{{ s }}"
   class="{{ 'hint' if s in hint_scenes else '' }}"
@@ -201,6 +307,8 @@ function render(d) {
   document.getElementById('left').textContent = d.left + ' left';
   document.getElementById('back').disabled = !d.undoable;
   document.getElementById('undo-note').textContent = d.undo_note || '';
+  document.getElementById('roomlink').href =
+      d.group ? '/game/{{ stem }}/room/' + d.group.obj : '#';
   applyHint(d.hint_mood, d.hint_scenes || []);
 }
 async function post(url, body) {
@@ -235,20 +343,27 @@ TAGGED_PAGE = """<!doctype html><title>{{ stem }} — tagged</title>
  select{font:inherit;padding:.2rem}
  .src{color:#888;font-size:13px}
  .changed{color:#a00}
+ .stale{background:#fee;border-left:3px solid #c00;padding:.5rem .6rem;
+        font-size:13px;margin:0 0 1rem}
  a{color:#06c}
 </style>
+{% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
 <h1>{{ stem }} — {{ rows|length }} tagged
   <small>(<a href="/game/{{ stem }}">back to the queue, {{ left }} left</a>)</small></h1>
-<p style="color:#555;font-size:13px">Change any tag here and it is written
-immediately. <b>rule</b> means the title rules decided it and no human has
+<p style="color:#555;font-size:13px">Change a tag here and it is written
+immediately; pick <b>— unset —</b> to untag a room and send it back to the
+queue. Click a title to open that room, reread its captured description and
+retag it there. <b>rule</b> means the title rules decided it and no human has
 looked; <b>you</b> means someone chose it. Changing a rule verdict pins it, so
 re-running <code>tools/room_scenes.py</code> will never overwrite it again.</p>
 <table>
 <tr><th>title</th><th>objects</th><th>scene</th><th>source</th></tr>
 {% for r in rows %}
-<tr><td>{{ r.title }}</td>
-  <td class="src">{{ r.objs|join(', ') }}</td>
+<tr><td><a href="/game/{{ stem }}/room/{{ r.objs[0] }}">{{ r.title }}</a></td>
+  <td class="src">{% for o in r.objs %}<a
+    href="/game/{{ stem }}/room/{{ o }}">{{ o }}</a>{{ ", " if not loop.last }}{% endfor %}</td>
   <td><select onchange="retag(this, {{ r.objs|tojson }})">
+    <option value="">— unset —</option>
     {% for s in scenes %}<option value="{{ s }}"
       {{ 'selected' if s == r.scene else '' }}>{{ s }}</option>{% endfor %}
   </select></td>
@@ -259,10 +374,96 @@ re-running <code>tools/room_scenes.py</code> will never overwrite it again.</p>
 async function retag(sel, objs) {
   const r = await fetch('/retag', {method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({story: '{{ stem }}', objs: objs, scene: sel.value})});
+    body: JSON.stringify({story: '{{ stem }}', objs: objs,
+                          scene: sel.value || null})});
   if (!r.ok) { alert('rejected'); return; }
-  sel.parentElement.parentElement.lastElementChild.textContent = 'you';
-  sel.parentElement.parentElement.lastElementChild.className = 'src changed';
+  if (!sel.value) { sel.closest('tr').remove(); return; }
+  const cell = sel.closest('tr').lastElementChild;
+  cell.textContent = 'you';
+  cell.className = 'src changed';
+}
+</script>"""
+
+
+ROOM_PAGE = """<!doctype html><title>{{ stem }} — {{ room.title }}</title>
+<style>
+ body{font:15px system-ui;margin:2rem;max-width:56rem}
+ #desc{color:#444;line-height:1.5;margin:.5rem 0 1rem;white-space:pre-wrap}
+ .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem}
+ button{padding:.6rem;font:inherit;cursor:pointer}
+ .hint{background:#ffd;font-weight:600}
+ .current{outline:3px solid #4a8;font-weight:700}
+ #scope{color:#a00;font-size:13px;margin:0 0 .8rem}
+ .stale{background:#fee;border-left:3px solid #c00;padding:.5rem .6rem;
+        font-size:13px;margin:0 0 1rem}
+ fieldset{margin:1.4rem 0 0;border:1px solid #ddd;padding:.6rem .8rem}
+ legend{font-size:13px;color:#666}
+ input{font:inherit;padding:.3rem}
+ #note{margin-top:.8rem;color:#060;font-size:13px}
+ a{color:#06c}
+</style>
+{% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
+<p><a href="/game/{{ stem }}">← queue ({{ left }} left)</a> ·
+   <a href="/game/{{ stem }}/tagged">tagged list</a></p>
+<h1>{{ room.title }}
+  {% if hint_mood %}<small style="color:#888">(was {{ hint_mood }})</small>{% endif %}</h1>
+<p style="color:#666;font-size:13px">object {{ room.obj }} ·
+  currently <b id="current">{{ current or 'untagged' }}</b>
+  {% if queued %}· still in the review queue{% endif %}</p>
+<div id="desc">{{ room.description or '(no description captured)' }}</div>
+<p id="scope">
+  <label><input type="checkbox" id="only" {{ 'checked' if siblings|length < 2 }}
+    {{ 'disabled' if siblings|length < 2 }}> this room only</label>
+  {% if siblings|length > 1 %}— otherwise it applies to all {{ siblings|length }} rooms titled “{{ room.title }}” ({{ siblings|join(', ') }}){% endif %}
+</p>
+<div class="grid">
+{% for s in scenes %}<button data-scene="{{ s }}"
+  class="{{ 'hint' if s in hint_scenes else '' }}{{ ' current' if s == current else '' }}"
+  onclick="retag('{{ s }}')">{{ s }}</button>{% endfor %}
+</div>
+<p><button onclick="retag(null)">— unset —</button>
+  <small style="color:#666">drops your verdict. The room returns to the review
+  queue, unless the title rules have an answer of their own, in which case it
+  reverts to that.</small></p>
+<fieldset><legend>none of these describe it?</legend>
+  <p style="color:#666;font-size:13px;margin:.2rem 0 .6rem">Adds a scene to the
+  vocabulary and tags this room with it. Appending is safe; the new scene lands
+  at the end of the enum and gets its own art folder. You will need to re-run
+  both generators afterwards — the banner will say so.</p>
+  <input id="newname" placeholder="MISTROOM" size="14">
+  <input id="newphrases" placeholder="search phrases, comma separated" size="40">
+  <button onclick="addScene()">add scene and tag this room</button>
+</fieldset>
+<p id="note"></p>
+<script>
+const OBJ = {{ room.obj }};
+const SIBS = {{ siblings|tojson }};
+function targets() {
+  return document.getElementById('only').checked ? [OBJ] : SIBS;
+}
+async function retag(scene) {
+  const r = await fetch('/retag', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({story: '{{ stem }}', objs: targets(), scene: scene})});
+  if (!r.ok) { alert('rejected'); return; }
+  document.getElementById('current').textContent = scene || 'untagged';
+  document.querySelectorAll('button[data-scene]').forEach(function (b) {
+    b.classList.toggle('current', b.dataset.scene === scene);
+  });
+  document.getElementById('note').textContent =
+      scene ? ('tagged ' + targets().length + ' room(s) ' + scene)
+            : 'untagged; back in the queue';
+}
+async function addScene() {
+  const name = document.getElementById('newname').value.trim().toUpperCase();
+  const phrases = document.getElementById('newphrases').value;
+  const r = await fetch('/scene/new', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({story: '{{ stem }}', objs: targets(),
+                          name: name, phrases: phrases})});
+  const d = await r.json();
+  if (!r.ok) { document.getElementById('note').textContent = d.error; return; }
+  location.reload();
 }
 </script>"""
 
@@ -273,9 +474,9 @@ def create_app(repo=None):
     Description: The review app, rooted at `repo` so tests can point it at a
         temporary tree instead of the working copy. Holds one undo stack per
         story for the life of the process; the durable way back to an older
-        verdict is the /tagged page, not this stack.
+        verdict is the /tagged page and the per-room pages, not this stack.
     Author: suinevere
-    Dependencies: flask, scene_vocab, room_scenes
+    Dependencies: flask, scene_vocab, room_scenes, art_nouns
     Globals: N/A
     Params: repo -- repo root; defaults to the one containing this file
     Returns: a flask.Flask
@@ -301,6 +502,16 @@ def create_app(repo=None):
         mood = hints.get((serial, group["title"].strip().lower()))
         return mood, MOOD_TO_SCENES.get(mood, ())
 
+    def stale_note():
+        want = len(vocab.SCENES)
+        have = generated_scene_n(root)
+        if have is None or have == want:
+            return ""
+        return (f"The vocabulary has {want} scenes but the generated C header "
+                f"still says SCENE_N {have}. Re-run "
+                f"tools/gen_scene_tables.py and tools/make_tga.py before the "
+                f"next disc build.")
+
     def load(stem):
         b = scenes_dir / f"{stem}.json"
         r = scenes_dir / f"{stem}.review.json"
@@ -313,10 +524,28 @@ def create_app(repo=None):
         (scenes_dir / f"{stem}.review.json").write_text(
             json.dumps(review, indent=1, sort_keys=True) + "\n", encoding="utf-8")
 
-    def remember(stem, objs, blessed, group, index):
+    def rebuild_review(stem, blessed):
+        """Re-derive the queue from the inventory for the current blessed set.
+
+        Description: Untagging a room must put it back in front of the
+            reviewer, and the only authority on whether a room belongs in the
+            queue is room_scenes: it belongs there when the title rules refuse
+            it and no human has ruled. Re-deriving rather than hand-inserting
+            keeps the two files' one invariant -- no object both tagged and
+            queued -- true by construction.
+        """
+        rooms = load_rooms(root, stem)
+        if not rooms:
+            return None
+        decided, refused = room_scenes.decide(rooms)
+        existing = {int(k): v for k, v in blessed.items()}
+        merged, review = room_scenes.merge(existing, decided, refused)
+        return {str(k): v for k, v in sorted(merged.items())}, review
+
+    def remember(stem, objs, blessed, group, index, rebuild=False):
         history.setdefault(stem, []).append(
             {"prior": {str(o): blessed.get(str(o)) for o in objs},
-             "group": group, "index": index})
+             "group": group, "index": index, "rebuild": rebuild})
 
     def scope_of(group):
         if group is None or len(group["objs"]) < 2:
@@ -352,6 +581,21 @@ def create_app(repo=None):
         save(stem, blessed, review)
         return group, blessed, review
 
+    def apply_tag(stem, objs, scene):
+        """Write or clear one tag across a set of objects, undoably."""
+        blessed, review = load(stem)
+        remember(stem, objs, blessed, None, None, rebuild=True)
+        for o in objs:
+            if scene is None:
+                blessed.pop(str(o), None)
+            else:
+                blessed[str(o)] = scene
+        rebuilt = rebuild_review(stem, blessed)
+        if rebuilt is not None:
+            blessed, review = rebuilt
+        save(stem, blessed, review)
+        return blessed, review
+
     @app.route("/")
     def index():
         rows = sorted(p.stem.replace(".review", "")
@@ -364,7 +608,8 @@ def create_app(repo=None):
         blessed, review = load(stem)
         s = state(stem, review)
         return render_template_string(PAGE, stem=stem, scenes=vocab.SCENES,
-                                      tagged=len(blessed), **s)
+                                      tagged=len(blessed), stale=stale_note(),
+                                      **s)
 
     @app.route("/game/<stem>/tagged")
     def tagged(stem):
@@ -385,7 +630,38 @@ def create_app(repo=None):
         for g in rows:
             g["objs"].sort()
         return render_template_string(TAGGED_PAGE, stem=stem, rows=rows,
-                                      scenes=vocab.SCENES, left=len(review))
+                                      scenes=vocab.SCENES, left=len(review),
+                                      stale=stale_note())
+
+    @app.route("/game/<stem>/room/<int:obj>")
+    def room(stem, obj):
+        """One room: its captured description, its tag, and every way to change it.
+
+        Description: Reachable for any room in the inventory, queued or
+            tagged, by rule or by hand -- a decision made three hundred rooms
+            ago is worth as much as the one in front of you, and the queue
+            alone can never return you to it.
+        Author: suinevere
+        Dependencies: flask, scene_vocab, room_scenes
+        Globals: N/A
+        Params: stem -- story stem; obj -- Z-machine object number
+        Returns: rendered HTML; 404 when the story or object is unknown
+        """
+        from flask import abort
+        rooms = load_rooms(root, stem)
+        row = next((r for r in rooms if r["obj"] == obj), None)
+        if row is None:
+            abort(404)
+        blessed, review = load(stem)
+        siblings = sorted(r["obj"] for r in rooms
+                          if r["title"] == row["title"])
+        hint_mood, hint_scenes = hint_for(stem, {"title": row["title"]})
+        queued = any(obj in g["objs"] for g in review)
+        return render_template_string(
+            ROOM_PAGE, stem=stem, room=row, scenes=vocab.SCENES,
+            current=blessed.get(str(obj)), siblings=siblings, queued=queued,
+            hint_mood=hint_mood, hint_scenes=hint_scenes, left=len(review),
+            stale=stale_note())
 
     @app.route("/verdict", methods=["POST"])
     def verdict():
@@ -407,16 +683,50 @@ def create_app(repo=None):
 
     @app.route("/retag", methods=["POST"])
     def retag():
+        """Set or clear the tag on a set of objects.
+
+        Description: A null scene is UNSET, not an error: it drops the
+            blessed entries and re-derives the queue, so the room comes back
+            to be decided again rather than silently becoming untagged and
+            unreachable.
+        Author: suinevere
+        Dependencies: flask, scene_vocab
+        Globals: N/A
+        Params: N/A -- reads {"story", "objs", "scene"} from the body
+        Returns: the story's refreshed queue state; 400 for a scene that is
+            not in the vocabulary and not null
+        """
         d = request.get_json(force=True)
-        if d.get("scene") not in vocab.SCENE_INDEX:
+        scene = d.get("scene")
+        if scene is not None and scene not in vocab.SCENE_INDEX:
             return jsonify(error="unknown scene"), 400
-        objs = d.get("objs") or []
-        blessed, review = load(d["story"])
-        remember(d["story"], objs, blessed, None, None)
-        for o in objs:
-            blessed[str(o)] = d["scene"]
-        save(d["story"], blessed, review)
+        _, review = apply_tag(d["story"], d.get("objs") or [], scene)
         return jsonify(**state(d["story"], review))
+
+    @app.route("/scene/new", methods=["POST"])
+    def scene_new():
+        """Add a scene to the vocabulary and tag the given objects with it.
+
+        Description: The two halves are one action on purpose. A scene added
+            and not used is a column of zeros in three generated tables and an
+            empty art folder; the reason to add one is always the room in
+            front of you.
+        Author: suinevere
+        Dependencies: flask, scene_vocab
+        Globals: N/A
+        Params: N/A -- reads {"story", "objs", "name", "phrases"} from the body
+        Returns: the refreshed queue state plus the new name; 400 with a
+            reason when the name is malformed or already taken
+        """
+        d = request.get_json(force=True)
+        name = (d.get("name") or "").strip().upper()
+        phrases = (d.get("phrases") or "").split(",")
+        ok, why = append_scene(root, name, phrases)
+        if not ok:
+            return jsonify(error=why), 400
+        _, review = apply_tag(d["story"], d.get("objs") or [], name)
+        return jsonify(name=name, stale=stale_note(),
+                       **state(d["story"], review))
 
     @app.route("/undo", methods=["POST"])
     def undo():
@@ -431,7 +741,11 @@ def create_app(repo=None):
                 blessed.pop(key, None)
             else:
                 blessed[key] = prior
-        if entry["group"] is not None:
+        if entry.get("rebuild"):
+            rebuilt = rebuild_review(d["story"], blessed)
+            if rebuilt is not None:
+                blessed, review = rebuilt
+        elif entry["group"] is not None:
             review = [g for g in review if g["obj"] != entry["group"]["obj"]]
             review.insert(entry["index"], entry["group"])
         save(d["story"], blessed, review)

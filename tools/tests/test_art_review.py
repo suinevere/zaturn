@@ -20,8 +20,26 @@ def record(pid, mood="HORROR", donor="HOUSE", noun="hallway", phash="0" * 16,
             "banding": 2.0, "verdict": "pass", "phash": phash, "status": status}
 
 
+def scene_record(pid, scene="CAVE", noun="hallway", phash="0" * 16,
+                  status=art_status.CANDIDATE):
+    """A record in the new scene shape: no donor, and "scene" not "mood"."""
+    return {"id": pid, "page_url": f"https://pixabay.com/photos/{pid}/",
+            "image_url": "", "phrase": "dark hallway", "scene": scene,
+            "noun": noun, "licence": "Pixabay Content License",
+            "fetched": "2026-08-06", "luminance": 70.0, "busyness": 4.0,
+            "banding": 2.0, "verdict": "pass", "phash": phash, "status": status}
+
+
 def make_candidate(root, rec):
     d = root / rec["mood"] / rec["donor"] / rec["noun"]
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{rec['id']}.png"
+    Image.new("RGB", (320, 224), (60, 60, 60)).save(p, "PNG")
+    return p
+
+
+def make_scene_candidate(root, rec):
+    d = root / rec["scene"] / rec["noun"]
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{rec['id']}.png"
     Image.new("RGB", (320, 224), (60, 60, 60)).save(p, "PNG")
@@ -354,3 +372,58 @@ def test_main_reject_unmarked_scoped_to_one_mood_leaves_other_moods_untouched(
     assert saved["2"]["status"] == art_status.REJECTED
     assert saved["3"]["status"] == art_status.CANDIDATE, \
         "a mood-scoped sweep must leave every other mood's candidates alone"
+
+
+def test_scene_of_prefers_scene_over_mood():
+    rec = record(1, mood="HORROR")
+    rec["scene"] = "CAVE"
+    assert art_review.scene_of(rec) == "CAVE"
+
+
+def test_scene_of_falls_back_to_mood_for_an_old_shape_record():
+    rec = record(1, mood="HORROR")
+    assert art_review.scene_of(rec) == "HORROR"
+
+
+def test_rel_has_no_donor_segment_for_a_scene_shaped_record():
+    rec = scene_record(1, scene="CAVE", noun="tunnel")
+    assert art_review._rel(rec) == Path("CAVE", "tunnel", "1.png")
+
+
+def test_rel_keeps_the_donor_segment_for_an_old_shape_record():
+    rec = record(1, mood="HORROR", donor="HOUSE", noun="hallway")
+    assert art_review._rel(rec) == Path("HORROR", "HOUSE", "hallway", "1.png")
+
+
+def test_promote_moves_a_scene_shaped_candidate_with_no_donor_directory(
+        tmp_path):
+    cand, png = tmp_path / "c", tmp_path / "png"
+    rec = scene_record(1, scene="CAVE", noun="tunnel")
+    make_scene_candidate(cand, rec)
+    manifest = {"1": rec}
+
+    counts = art_review.promote({"1": "accept"}, manifest, cand, png)
+
+    assert (png / "CAVE" / "tunnel" / "1.png").exists()
+    assert rec["status"] == art_status.ACCEPTED
+    assert counts == {"CAVE": art_review.Counts(gained=1, lost=0)}
+
+
+def test_promote_counts_group_old_and_new_shape_records_separately(tmp_path):
+    """An old-shape record's mood and a new-shape record's scene both land
+    in promote()'s counts dict under whichever name scene_of() resolves --
+    proving the two shapes never get conflated under one key by accident."""
+    cand, png = tmp_path / "c", tmp_path / "png"
+    old = record(1, mood="HORROR", donor="HOUSE", noun="hallway")
+    new = scene_record(2, scene="CAVE", noun="tunnel")
+    make_candidate(cand, old)
+    make_scene_candidate(cand, new)
+    manifest = {"1": old, "2": new}
+
+    counts = art_review.promote({"1": "accept", "2": "accept"}, manifest,
+                                cand, png)
+
+    assert counts == {
+        "HORROR": art_review.Counts(gained=1, lost=0),
+        "CAVE": art_review.Counts(gained=1, lost=0),
+    }

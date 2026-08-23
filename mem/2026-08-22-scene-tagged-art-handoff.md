@@ -1,6 +1,6 @@
 ---
 name: scene-tagged-art-handoff
-description: The mood classifier is deleted and replaced by per-room scene tags with per-game art folders; the branch is code-complete and green, and what remains is two owner tasks plus a small parked residue.
+description: The mood classifier is deleted and replaced by per-room scene tags with per-game art folders, squashed onto main as f381dac; what remains is two owner tasks, a wallpaper-less title screen, and a small parked residue.
 metadata:
   type: project
 ---

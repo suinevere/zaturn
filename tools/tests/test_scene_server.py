@@ -445,3 +445,84 @@ def test_no_warning_when_the_header_agrees_with_the_vocabulary(furnished):
         f"#define SCENE_N {len(scene_server.vocab.SCENES)}\n", encoding="utf-8")
     page = app.test_client().get("/game/ZORK1").get_data(as_text=True)
     assert "gen_scene_tables.py" not in page
+
+
+def test_the_music_page_lists_only_the_scenes_the_game_is_tagged_with(furnished):
+    """Music for a scene no room was tagged with can never sound."""
+    app, _ = furnished
+    page = app.test_client().get("/game/ZORK1/tracks").get_data(as_text=True)
+    assert "MAZE" in page
+    assert "SHIP_INT" not in page
+
+
+def test_writing_a_single_track_is_reported_back_as_the_effective_music(furnished):
+    app, tmp = furnished
+    c = app.test_client()
+    r = c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                                "layer": "default", "tracks": "23"})
+    assert r.status_code == 200
+    assert r.get_json()["effective"] == "23"
+    doc = json.loads((tmp / "tools" / "assets" / "tracks.json").read_text())
+    assert doc["default"]["MAZE"] == [23]
+
+
+def test_a_game_override_wins_on_the_page_and_in_the_file(furnished):
+    app, tmp = furnished
+    c = app.test_client()
+    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                            "layer": "default", "tracks": "18, 19"})
+    r = c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                                "layer": "game", "tracks": "23"})
+    assert r.get_json()["effective"] == "23"
+    doc = json.loads((tmp / "tools" / "assets" / "tracks.json").read_text())
+    assert doc["default"]["MAZE"] == [18, 19]
+    assert doc["games"]["ZORK1"]["MAZE"] == [23]
+
+
+def test_clearing_an_override_falls_back_to_the_default(furnished):
+    app, _ = furnished
+    c = app.test_client()
+    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                            "layer": "default", "tracks": "18"})
+    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                            "layer": "game", "tracks": "23"})
+    r = c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                                "layer": "game", "tracks": ""})
+    assert r.get_json()["effective"] == "18"
+
+
+def test_a_track_the_disc_does_not_have_is_refused_not_dropped(furnished):
+    """A number the page accepted and the disc cannot play is silence nobody
+    would think to look for."""
+    app, tmp = furnished
+    r = app.test_client().post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                                                "layer": "default", "tracks": "99"})
+    assert r.status_code == 400
+    assert not (tmp / "tools" / "assets" / "tracks.json").exists()
+
+
+def test_gibberish_in_the_track_field_is_refused(furnished):
+    app, _ = furnished
+    r = app.test_client().post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                                                "layer": "default", "tracks": "seven"})
+    assert r.status_code == 400
+
+
+def test_an_unknown_scene_or_layer_is_refused(furnished):
+    app, _ = furnished
+    c = app.test_client()
+    assert c.post("/tracks", json={"story": "ZORK1", "scene": "NOPE",
+                                   "layer": "default", "tracks": "5"}).status_code == 400
+    assert c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                                   "layer": "elsewhere", "tracks": "5"}).status_code == 400
+
+
+def test_authoring_music_raises_the_regenerate_banner(furnished):
+    """Editing tracks.json leaves the compiled C table behind, and the failure
+    that follows is silence rather than an error."""
+    app, _ = furnished
+    c = app.test_client()
+    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
+                            "layer": "default", "tracks": "23"})
+    page = c.get("/game/ZORK1/tracks").get_data(as_text=True)
+    assert "gen_scene_tables.py" in page

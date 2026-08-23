@@ -1,9 +1,11 @@
 /*----------------------
  | game_tracks.inc
  | Description: GENERATED FILE -- do not edit by hand; produced by
- |   tools/gen_scene_tables.py. Per-game, per-scene track assignments;
- |   all zero for now, which the runtime reads as "no tracks authored,
- |   fall back to the neutral pool."
+ |   tools/gen_scene_tables.py from tools/assets/tracks.json. One
+ |   CD-DA track mask per game per scene; bit i is track
+ |   i + MUSIC_TRACK_MIN. A zero means no tracks authored, which the
+ |   runtime reads as "fall back to the neutral pool." A mask with one
+ |   bit is static music: the engine's draw has nothing to choose.
  | Author: suinevere
  ----------------------*/
 static const unsigned long SCENE_TRACKS[GAME_N][SCENE_N] = {

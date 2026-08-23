@@ -87,13 +87,18 @@ int music_category_track(int category) {
 /*----------------------
  | music_track_from_mask
  | Description: The r-th set bit of a scene's track mask, as a CD-DA track
- |   number. r is reduced modulo the number of set bits, so any value is legal
- |   and an empty mask answers 0 (no track) rather than dividing by zero.
+ |   number. Bit i is track i + MUSIC_TRACK_MIN, so bits 0..30 name tracks
+ |   2..32 -- the disc's whole run, exactly. The obvious encoding, bit i is
+ |   track i, cannot reach track 32 at all and wastes bits 0 and 1 on track
+ |   numbers that do not exist; that silent ceiling was harmless only while
+ |   every mask was zero.
+ |   r is reduced modulo the number of set bits, so any value works, and an
+ |   empty mask answers 0 (no track) rather than dividing by zero.
  |
  |   A mask rather than a list because the disc carries 31 tracks and one 32-bit
- |   word holds every subset of them, with no length field and no indirection.
+ |   word holds a whole scene's playlist with no allocation and no length field.
  | Author: suinevere
- | Dependencies: N/A
+ | Dependencies: music.h (MUSIC_TRACK_MIN)
  | Globals: N/A
  | Params: mask -- one bit per track; r -- any value
  | Returns: a track number, or 0 when the mask is empty
@@ -105,7 +110,7 @@ int music_track_from_mask(unsigned long mask, unsigned int r) {
     r %= (unsigned int) n;
     for (i = 0; i < 32; i++) {
         if (!(mask & (1UL << i))) continue;
-        if (r == 0) return i;
+        if (r == 0) return i + MUSIC_TRACK_MIN;
         r--;
     }
     return 0;

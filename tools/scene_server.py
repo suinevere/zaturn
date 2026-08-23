@@ -21,7 +21,8 @@ Description: The human half of the tagging pipeline, in the shape of
     describe is a real outcome, and the alternative to adding a scene is
     tagging it wrong forever.
 Author: suinevere
-Dependencies: flask, json, pathlib, re, sys, scene_vocab, room_scenes
+Dependencies: flask, json, pathlib, re, sys, scene_vocab, room_scenes,
+    scene_tracks
 Globals: MOOD_TO_SCENES, NAME_RE
 """
 import json
@@ -34,6 +35,7 @@ from flask import Flask, jsonify, render_template_string, request
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import room_scenes
+import scene_tracks
 import scene_vocab as vocab
 
 """MOOD_TO_SCENES
@@ -239,6 +241,47 @@ def append_scene(root, name, phrases):
     return True, ""
 
 
+def _csv(tracks):
+    """A track list as the page shows it, and as it is typed back in.
+
+    Description: One spelling for the empty case -- the empty string -- so a
+        cleared field and an absent entry cannot look different.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: N/A
+    Params: tracks -- an iterable of track numbers, or None
+    Returns: a comma-separated string, possibly empty
+    """
+    return ", ".join(str(t) for t in sorted(tracks or ()))
+
+
+def _parse_tracks(text):
+    """Track numbers from what someone typed.
+
+    Description: Accepts commas, spaces or both, and refuses anything that is
+        not a track on the disc. Raising rather than dropping: a number the
+        page accepted and the disc cannot play is silence nobody would think
+        to look for.
+    Author: suinevere
+    Dependencies: scene_tracks
+    Globals: N/A
+    Params: text -- the raw field value
+    Returns: a sorted list of distinct track numbers
+    """
+    out = set()
+    for word in (text or "").replace(",", " ").split():
+        try:
+            n = int(word)
+        except ValueError:
+            raise ValueError(f"{word!r} is not a track number")
+        if not scene_tracks.TRACK_MIN <= n <= scene_tracks.TRACK_MAX:
+            raise ValueError(
+                f"track {n} is outside {scene_tracks.TRACK_MIN}"
+                f"..{scene_tracks.TRACK_MAX}")
+        out.add(n)
+    return sorted(out)
+
+
 PAGE = """<!doctype html><title>{{ stem }} — scenes</title>
 <style>
  body{font:15px system-ui;margin:2rem;max-width:56rem}
@@ -257,7 +300,8 @@ PAGE = """<!doctype html><title>{{ stem }} — scenes</title>
 </style>
 {% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
 <h1>{{ stem }} <small id="left">{{ left }} left</small>
-  — <a href="/game/{{ stem }}/tagged">review {{ tagged }} already tagged</a></h1>
+  — <a href="/game/{{ stem }}/tagged">review {{ tagged }} already tagged</a>
+  · <a href="/game/{{ stem }}/tracks">music</a></h1>
 <div id="legend">
  One click = one tag = this room's whole picture and music. There is no second
  tag and no overlap.<br>
@@ -404,7 +448,8 @@ ROOM_PAGE = """<!doctype html><title>{{ stem }} — {{ room.title }}</title>
 </style>
 {% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
 <p><a href="/game/{{ stem }}">← queue ({{ left }} left)</a> ·
-   <a href="/game/{{ stem }}/tagged">tagged list</a></p>
+   <a href="/game/{{ stem }}/tagged">tagged list</a> ·
+   <a href="/game/{{ stem }}/tracks">music</a></p>
 <h1>{{ room.title }}
   {% if hint_mood %}<small style="color:#888">(was {{ hint_mood }})</small>{% endif %}</h1>
 <p style="color:#666;font-size:13px">object {{ room.obj }} ·
@@ -468,6 +513,65 @@ async function addScene() {
 </script>"""
 
 
+TRACKS_PAGE = """<!doctype html><title>{{ stem }} — music</title>
+<style>
+ body{font:15px system-ui;margin:2rem;max-width:60rem}
+ table{border-collapse:collapse;width:100%}
+ td,th{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left}
+ th{font-size:13px;color:#666}
+ input{font:inherit;padding:.25rem;width:14rem}
+ .now{color:#060;font-size:13px}
+ .none{color:#a60;font-size:13px}
+ .stale{background:#fee;border-left:3px solid #c00;padding:.5rem .6rem;
+        font-size:13px;margin:0 0 1rem}
+ .note{color:#555;font-size:13px;line-height:1.5;border-left:3px solid #cde;
+       padding-left:.6rem;margin:0 0 1rem}
+ a{color:#06c}
+</style>
+{% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
+<p><a href="/game/{{ stem }}">← queue</a> ·
+   <a href="/game/{{ stem }}/tagged">tagged list</a></p>
+<h1>{{ stem }} — music per scene</h1>
+<div class="note">
+ Type CD-DA track numbers, {{ tmin }}–{{ tmax }}, comma separated. <b>One number
+ is static music</b>: that scene always plays that track. Several means the
+ engine picks among them when the scene changes.<br>
+ <b>all games</b> is the shared default. <b>{{ stem }} only</b> overrides it for
+ this story and <em>replaces</em> the default rather than adding to it; clear it
+ to fall back. A scene with neither draws from the neutral pool, which is what
+ every scene does today.<br>
+ Saved immediately. The C table is rebuilt by
+ <code>tools/gen_scene_tables.py</code>, and the banner above says when it is
+ behind.
+</div>
+<table>
+<tr><th>scene</th><th>all games</th><th>{{ stem }} only</th><th>plays</th></tr>
+{% for r in rows %}
+<tr><td>{{ r.scene }}</td>
+  <td><input value="{{ r.default }}" data-scene="{{ r.scene }}" data-layer="default"
+        onchange="save(this)"></td>
+  <td><input value="{{ r.override }}" data-scene="{{ r.scene }}" data-layer="game"
+        onchange="save(this)"></td>
+  <td class="{{ 'now' if r.effective else 'none' }}"
+      id="eff-{{ r.scene }}">{{ r.effective or 'neutral pool' }}</td></tr>
+{% endfor %}
+</table>
+<script>
+async function save(input) {
+  const r = await fetch('/tracks', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({story: '{{ stem }}', scene: input.dataset.scene,
+                          layer: input.dataset.layer, tracks: input.value})});
+  const d = await r.json();
+  if (!r.ok) { alert(d.error); return; }
+  input.value = d.written;
+  const cell = document.getElementById('eff-' + input.dataset.scene);
+  cell.textContent = d.effective || 'neutral pool';
+  cell.className = d.effective ? 'now' : 'none';
+}
+</script>"""
+
+
 def create_app(repo=None):
     """Build the review app, rooted at repo so tests can point it elsewhere.
 
@@ -505,12 +609,18 @@ def create_app(repo=None):
     def stale_note():
         want = len(vocab.SCENES)
         have = generated_scene_n(root)
-        if have is None or have == want:
-            return ""
-        return (f"The vocabulary has {want} scenes but the generated C header "
-                f"still says SCENE_N {have}. Re-run "
-                f"tools/gen_scene_tables.py and tools/make_tga.py before the "
-                f"next disc build.")
+        if have is not None and have != want:
+            return (f"The vocabulary has {want} scenes but the generated C header "
+                    f"still says SCENE_N {have}. Re-run "
+                    f"tools/gen_scene_tables.py and tools/make_tga.py before the "
+                    f"next disc build.")
+        behind = scene_tracks.stale_games(root)
+        if behind:
+            named = ", ".join(behind[:6]) + ("..." if len(behind) > 6 else "")
+            return (f"Music is authored but not compiled for {len(behind)} game(s) "
+                    f"({named}). Re-run tools/gen_scene_tables.py before the next "
+                    f"disc build.")
+        return ""
 
     def load(stem):
         b = scenes_dir / f"{stem}.json"
@@ -662,6 +772,90 @@ def create_app(repo=None):
             current=blessed.get(str(obj)), siblings=siblings, queued=queued,
             hint_mood=hint_mood, hint_scenes=hint_scenes, left=len(review),
             stale=stale_note())
+
+    @app.route("/game/<stem>/tracks")
+    def tracks_page(stem):
+        """Author which CD-DA tracks one game's scenes play.
+
+        Description: Lists only the scenes this game's rooms are tagged with,
+            for the same reason the art server does: music for a scene no room
+            was tagged with can never sound. Shows both layers side by side
+            because the effective answer is one replacing the other, and a
+            page that hid the default would make an override look like the
+            only value there had ever been.
+        Author: suinevere
+        Dependencies: flask, scene_tracks, scene_vocab
+        Globals: N/A
+        Params: stem -- the story stem from the URL
+        Returns: rendered HTML; 404 for a story with no blessed tags
+        """
+        from flask import abort
+        blessed, review = load(stem)
+        if not blessed and not review:
+            abort(404)
+        data = scene_tracks.load(root)
+        resolved = scene_tracks.for_game(data, stem)
+        wanted = set(blessed.values())
+        rows = []
+        for scene in vocab.SCENES:
+            if scene not in wanted:
+                continue
+            rows.append({
+                "scene": scene,
+                "default": _csv(data.get("default", {}).get(scene)),
+                "override": _csv((data.get("games", {}).get(stem) or {}).get(scene)),
+                "effective": _csv(resolved.get(scene)),
+            })
+        return render_template_string(
+            TRACKS_PAGE, stem=stem, rows=rows, stale=stale_note(),
+            tmin=scene_tracks.TRACK_MIN, tmax=scene_tracks.TRACK_MAX)
+
+    @app.route("/tracks", methods=["POST"])
+    def tracks_write():
+        """Write one scene's tracks into one layer.
+
+        Description: An empty value clears that layer rather than storing an
+            empty list, so "no override" has exactly one spelling. Rejects a
+            track outside the disc's range instead of dropping it silently --
+            a number that compiles to no bit would look authored on the page
+            and be silence on the disc.
+        Author: suinevere
+        Dependencies: flask, scene_tracks, scene_vocab
+        Globals: N/A
+        Params: N/A -- reads {"story", "scene", "layer", "tracks"} from the body
+        Returns: the written value and the scene's new effective tracks; 400
+            for an unknown scene, unknown layer or out-of-range track
+        """
+        d = request.get_json(force=True)
+        scene = d.get("scene")
+        if scene not in vocab.SCENE_INDEX:
+            return jsonify(error="unknown scene"), 400
+        if d.get("layer") not in ("default", "game"):
+            return jsonify(error="unknown layer"), 400
+        try:
+            tracks = _parse_tracks(d.get("tracks"))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+
+        data = scene_tracks.load(root)
+        if d["layer"] == "default":
+            data.setdefault("default", {})
+            if tracks:
+                data["default"][scene] = tracks
+            else:
+                data["default"].pop(scene, None)
+        else:
+            games = data.setdefault("games", {})
+            row = games.setdefault(d["story"], {})
+            if tracks:
+                row[scene] = tracks
+            else:
+                row.pop(scene, None)
+        scene_tracks.save(root, data)
+        effective = scene_tracks.for_game(scene_tracks.load(root),
+                                          d["story"]).get(scene)
+        return jsonify(written=_csv(tracks), effective=_csv(effective),
+                       stale=stale_note())
 
     @app.route("/verdict", methods=["POST"])
     def verdict():

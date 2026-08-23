@@ -6,7 +6,7 @@ Description: Task 8 of the scene-tagged-art plan. Reads scene_vocab.SCENES
     blessed room-to-scene verdicts, keyed by object number) alongside its
     matching tools/assets/rooms/<STEM>.json (release and serial), and emits
     three files: game_rooms.inc (one 256-byte room map per game plus the
-    GAME_ROOM_MAP lookup table), game_tracks.inc (an all-zero per-scene track
+    GAME_ROOM_MAP lookup table), game_tracks.inc (the per-scene track
     table -- no tracks are authored yet, and zero is the documented "fall
     back to the neutral pool" sentinel), and the generated half of
     scene_map.h (the SC_* enum, SCENE_N, GAME_N, and SCENE_NAME).
@@ -40,6 +40,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import scene_tracks
 import scene_vocab as vocab
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -166,35 +167,51 @@ def _write_game_rooms():
 
 
 def _write_game_tracks():
-    """Writes game_tracks.inc: SCENE_TRACKS[GAME_N][SCENE_N], all zero.
+    """Writes game_tracks.inc: SCENE_TRACKS[GAME_N][SCENE_N] from tracks.json.
 
-    Description: Writes game_tracks.inc: SCENE_TRACKS[GAME_N][SCENE_N], all
-        zero -- no tracks are authored yet, and zero is the documented
-        "fall back to the neutral pool" sentinel, not a placeholder to be
-        confused with a bug.
+    Description: Compiles the authored scene->track assignments into one mask
+        per (game, scene). A scene nobody has authored stays zero, which the
+        runtime reads as "fall back to the neutral pool" -- a documented
+        sentinel, not a placeholder to be confused with a bug. Row order is
+        GAMES and column order is scene_vocab.SCENES, because both are index
+        positions in the generated C.
+
+        Prints the document's problems rather than raising on them: an unknown
+        scene name or an out-of-range track compiles to nothing, and the run
+        that would tell you so is the one you want to finish.
     Author: suinevere
-    Dependencies: pathlib
-    Globals: GAMES, TRACKS_OUT
+    Dependencies: pathlib, scene_tracks
+    Globals: GAMES, TRACKS_OUT, ROOT
     Params: N/A
-    Returns: N/A
+    Returns: the number of (game, scene) pairs with at least one track
     """
+    data = scene_tracks.load(ROOT)
+    for problem in scene_tracks.validate(data):
+        print(f"  tracks.json: {problem}")
+
     lines = []
     lines.append("/*----------------------")
     lines.append(" | game_tracks.inc")
     lines.append(" | Description: GENERATED FILE -- do not edit by hand; produced by")
-    lines.append(" |   tools/gen_scene_tables.py. Per-game, per-scene track assignments;")
-    lines.append(" |   all zero for now, which the runtime reads as \"no tracks authored,")
-    lines.append(" |   fall back to the neutral pool.\"")
+    lines.append(" |   tools/gen_scene_tables.py from tools/assets/tracks.json. One")
+    lines.append(" |   CD-DA track mask per game per scene; bit i is track")
+    lines.append(" |   i + MUSIC_TRACK_MIN. A zero means no tracks authored, which the")
+    lines.append(" |   runtime reads as \"fall back to the neutral pool.\" A mask with one")
+    lines.append(" |   bit is static music: the engine's draw has nothing to choose.")
     lines.append(" | Author: suinevere")
     lines.append(" ----------------------*/")
     lines.append("static const unsigned long SCENE_TRACKS[GAME_N][SCENE_N] = {")
-    zero_row = "    { " + ", ".join(["0"] * len(vocab.SCENES)) + " },"
-    for _stem, _release, _serial in GAMES:
-        lines.append(zero_row)
+    authored = 0
+    for stem, _release, _serial in GAMES:
+        masks = scene_tracks.masks_for_game(data, stem)
+        authored += sum(1 for m in masks if m)
+        cells = ", ".join(("0" if m == 0 else f"0x{m:08X}UL") for m in masks)
+        lines.append(f"    {{ {cells} }},")
     lines.append("};")
     TRACKS_OUT.parent.mkdir(parents=True, exist_ok=True)
     with TRACKS_OUT.open("w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
+    return authored
 
 
 def _sentinel_block():
@@ -268,9 +285,10 @@ def main(argv):
     Returns: 0
     """
     _write_game_rooms()
-    _write_game_tracks()
+    authored = _write_game_tracks()
     _write_scene_map_h()
     print(f"gen_scene_tables: {len(GAMES)} games -> {ROOMS_OUT}, {TRACKS_OUT}, {MAP_OUT}")
+    print(f"  {authored} (game, scene) pair(s) have authored music")
     return 0
 
 

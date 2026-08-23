@@ -30,17 +30,23 @@ static void rec_cat(int cat) { (void) cat; g_cat_calls++; }
 int main(void) {
     check(music_track_from_mask(0UL, 0) == 0, "an empty mask picks no track");
 
-    check(music_track_from_mask(1UL << 4, 0) == 4, "a single bit picks its track");
-    check(music_track_from_mask(1UL << 4, 7) == 4,
+    check(music_track_from_mask(1UL << 4, 0) == 4 + MUSIC_TRACK_MIN,
+          "a single bit picks its track");
+    check(music_track_from_mask(1UL << 4, 7) == 4 + MUSIC_TRACK_MIN,
           "r is reduced modulo the population count");
 
     {
-        unsigned long m = (1UL << 2) | (1UL << 9) | (1UL << 30);
+        unsigned long m = (1UL << 0) | (1UL << 7) | (1UL << 28);
         check(music_track_from_mask(m, 0) == 2, "first set bit");
         check(music_track_from_mask(m, 1) == 9, "second set bit");
         check(music_track_from_mask(m, 2) == 30, "third set bit");
         check(music_track_from_mask(m, 3) == 2, "wraps back to the first");
     }
+
+    /* The disc runs 2..32. Bit 30 must reach the last of them: under the old
+       bit-i-is-track-i encoding track 32 had no bit at all. */
+    check(music_track_from_mask(1UL << 30, 0) == 32, "the last disc track is reachable");
+    check(music_track_from_mask(1UL << 0, 0) == MUSIC_TRACK_MIN, "bit 0 is the first track");
 
     /* An event taking over the track must NOT announce a category. Object 38
        of Zork I (release 88, serial "840726") carries an authored scene

@@ -63,3 +63,10 @@ tools/.env
 tools/assets/art_manifest.json
 tools/assets/art_manifest.json.bak*
 tools/assets/art_manifest.json.reverted-*
+
+# Review server runtime artefacts, written by tools/servers.py.
+/.asset_servers.json
+/scene_server.log
+/scene_server.err.log
+/art_server.log
+/art_server.err.log

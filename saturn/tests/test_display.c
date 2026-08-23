@@ -243,6 +243,35 @@ static void test_cycle_palette(void) {
     }
 }
 
+static void test_custom_on_dynamic_steps_forward(void) {
+    /* The regression display_cycle_palette's own comment describes: a Custom
+       built on Dynamic (index 0) must step onto PAL(0)/PAL(last), not re-select
+       Dynamic and wipe the player's colours back to black and white. No game
+       ships scene art yet, so display_defaults cannot be trusted to land on
+       Dynamic itself -- d.palette is set directly instead, which reaches the
+       same state without needing art on disc. */
+    DisplayState d;
+
+    d.palette = DISP_PAL_DYNAMIC;
+    d.bg      = DISP_BG_BLACK;
+    d.text    = DISP_TEXT_CYAN;            /* diverged -> Custom, base Dynamic */
+    d.image   = DISP_IMAGE_NONE;
+    assert(strcmp(display_palette_name(&d), "Custom") == 0);
+
+    display_cycle_palette(&d, 1);
+    assert(d.palette == PAL(0));
+    assert(d.bg == display_preset_bg(PAL(0)) && d.text == display_preset_text(PAL(0)));
+
+    d.palette = DISP_PAL_DYNAMIC;
+    d.bg      = DISP_BG_BLACK;
+    d.text    = DISP_TEXT_CYAN;
+    d.image   = DISP_IMAGE_NONE;
+    display_cycle_palette(&d, -1);
+    assert(d.palette == PAL(DISP_PRESET_N - 1));
+    assert(d.bg == display_preset_bg(PAL(DISP_PRESET_N - 1))
+        && d.text == display_preset_text(PAL(DISP_PRESET_N - 1)));
+}
+
 static void test_cycle_palette_skips_dynamic_without_art(void) {
     /* No game ships scene art yet, so display_cycle_palette treats Dynamic as
        an unreachable stop and steps straight past it in both directions --
@@ -1003,6 +1032,7 @@ int main(void) {
     test_legibility_guard();
     test_guard_follows_bg_color_under_image();
     test_cycle_palette();
+    test_custom_on_dynamic_steps_forward();
     test_cycle_palette_skips_dynamic_without_art();
     test_five_is_not_a_display_sentinel();
     test_seven_is_not_a_display_sentinel();

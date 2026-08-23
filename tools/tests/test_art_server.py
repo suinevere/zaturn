@@ -98,14 +98,15 @@ def test_index_shows_the_flat_per_scene_target(tmp_path):
 def test_index_still_lists_every_scene_with_an_old_shape_manifest(tmp_path):
     """A record left over from before the scene migration carries mood and
     donor, not scene -- the index must not crash and must still show every
-    scene, even though the old mood rarely names a current scene."""
-    acc = old_record(1, mood="DESERT", donor="DESERT", noun="dune",
+    scene, even though the old mood never names a current scene. WILDER is
+    a genuine one of the twelve legacy moods and, unlike DESERT, does not
+    collide with a real scene name."""
+    acc = old_record(1, mood="WILDER", donor="WILDER", noun="dune",
                      status=art_status.ACCEPTED)
     client = build(tmp_path, [acc], promoted=[acc])
 
     page = client.get("/").get_data(as_text=True)
 
-    assert "DESERT" in page
     for scene in art_server.vocab.SCENES:
         assert scene in page
 
@@ -299,13 +300,42 @@ def test_groups_never_include_metric_rejected(tmp_path):
 
 def test_groups_for_matches_old_shape_records_by_mood(tmp_path):
     """A pre-migration record with no "scene" key must still group under
-    its legacy mood, since scene_of() falls back to mood."""
-    recs = [old_record(1, mood="CAVE", donor="CAVE", noun="tunnel")]
+    its legacy mood, since scene_of() falls back to mood. WILDER is a
+    genuine one of the twelve legacy moods and, unlike CAVE (never a
+    legacy mood) or DESERT (a mood that collides with a real scene), it
+    cannot pass this test by accident."""
+    recs = [old_record(1, mood="WILDER", donor="WILDER", noun="tunnel")]
     by_id = {str(r["id"]): r for r in recs}
 
-    groups = art_server.groups_for(by_id, "CAVE", "all")
+    groups = art_server.groups_for(by_id, "WILDER", "all")
 
     assert [g["noun"] for g in groups] == ["tunnel"]
+
+
+def test_scene_route_reaches_a_migrated_record_that_still_carries_its_legacy_mood(
+        tmp_path):
+    """Migration only adds a scene key; mood is never deleted. The actual
+    HTTP route -- not just groups_for, which the earlier gap hid behind --
+    must reach a record once it carries scene, even with mood still on it."""
+    rec = old_record(1, mood="WILDER", donor="WILDER", noun="tunnel")
+    rec["scene"] = "CAVE"
+    client = build(tmp_path, [rec], candidates=[rec])
+
+    resp = client.get("/scene/CAVE")
+
+    assert resp.status_code == 200
+    assert 'data-id="1"' in resp.get_data(as_text=True)
+
+
+def test_scene_route_404s_for_a_legacy_mood_name_not_in_the_vocabulary(
+        tmp_path):
+    """A record with no scene key groups under its mood in groups_for, but
+    the route for that legacy mood name must still 404 -- legacy names are
+    never routed, only additively re-tagged onto real scenes."""
+    rec = old_record(1, mood="WILDER", donor="WILDER", noun="tunnel")
+    client = build(tmp_path, [rec], candidates=[rec])
+
+    assert client.get("/scene/WILDER").status_code == 404
 
 
 def test_scene_page_defaults_to_undecided(tmp_path):

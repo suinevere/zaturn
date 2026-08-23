@@ -308,6 +308,7 @@ align-items:center;justify-content:center}#big img{max-width:95vw}</style>
 <a href="/scene/{{ scene }}?status={{ f }}">{{ f }}</a>
 {% endfor %}</p>
 <h1>{{ scene }}</h1>
+<p style="color:#888;font-size:13px">Click or Enter accepts, again un-accepts. Keys: <b>a</b> accept, <b>r</b> reject, <b>u</b> back to undecided, arrows move. Nothing is final &mdash; the <b>accepted</b> and <b>rejected</b> filters above are where you re-judge.</p>
 {% for g in groups %}
 <h2>{{ g.noun }} &mdash;
 {{ g.accepted }} accepted &middot; {{ g.rejected }} rejected &middot;
@@ -351,6 +352,7 @@ document.addEventListener('keydown', function(e){
   if (!f || f.tagName !== 'FIGURE') return;
   if (e.key === 'a' || e.key === 'A') { v(f.dataset.id, 'accept'); next(f); }
   if (e.key === 'r' || e.key === 'R') { v(f.dataset.id, 'reject'); next(f); }
+  if (e.key === 'u' || e.key === 'U') { v(f.dataset.id, 'unmark'); }
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(f.dataset.id); }
   if (e.key === 'ArrowRight') next(f);
   if (e.key === 'ArrowLeft') prev(f);

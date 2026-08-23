@@ -135,13 +135,89 @@ def test_hints_are_scoped_to_the_same_story_no_cross_game_bleed(tmp_path):
     assert b"(was HOUSE)" not in r2.data
 
 
-def test_skip_removes_the_group_from_the_queue_without_blessing_anything(app, tmp_path):
+def test_skip_defers_the_group_to_the_back_without_blessing_anything(app, tmp_path):
+    """Skip must never cost a room. It rotates; only room_scenes.py used to be
+    able to bring a dropped group back, and only by regenerating the queue."""
     c = app.test_client()
     r = c.post("/skip", json={"story": "ZORK1", "obj": 7})
     assert r.status_code == 200
     review = json.loads(
         (tmp_path / "tools" / "assets" / "scenes" / "ZORK1.review.json").read_text())
-    assert [g["obj"] for g in review] == [9]
+    assert [g["obj"] for g in review] == [9, 7]
     blessed = json.loads(
         (tmp_path / "tools" / "assets" / "scenes" / "ZORK1.json").read_text())
     assert blessed == {"1": "FOREST"}
+
+
+def test_undo_restores_the_group_and_erases_its_verdict(app, tmp_path):
+    scenes = tmp_path / "tools" / "assets" / "scenes"
+    c = app.test_client()
+    c.post("/verdict", json={"story": "ZORK1", "obj": 7, "scene": "MAZE"})
+    r = c.post("/undo", json={"story": "ZORK1"})
+    assert r.status_code == 200
+    blessed = json.loads((scenes / "ZORK1.json").read_text())
+    assert "7" not in blessed and "8" not in blessed
+    review = json.loads((scenes / "ZORK1.review.json").read_text())
+    assert [g["obj"] for g in review] == [7, 9]
+
+
+def test_undo_puts_a_skipped_group_back_where_it_was(app, tmp_path):
+    scenes = tmp_path / "tools" / "assets" / "scenes"
+    c = app.test_client()
+    c.post("/skip", json={"story": "ZORK1", "obj": 7})
+    c.post("/undo", json={"story": "ZORK1"})
+    review = json.loads((scenes / "ZORK1.review.json").read_text())
+    assert [g["obj"] for g in review] == [7, 9]
+
+
+def test_undo_walks_back_more_than_one_verdict(app, tmp_path):
+    scenes = tmp_path / "tools" / "assets" / "scenes"
+    c = app.test_client()
+    c.post("/verdict", json={"story": "ZORK1", "obj": 7, "scene": "MAZE"})
+    c.post("/verdict", json={"story": "ZORK1", "obj": 9, "scene": "CAVE"})
+    c.post("/undo", json={"story": "ZORK1"})
+    c.post("/undo", json={"story": "ZORK1"})
+    blessed = json.loads((scenes / "ZORK1.json").read_text())
+    assert blessed == {"1": "FOREST"}
+    review = json.loads((scenes / "ZORK1.review.json").read_text())
+    assert [g["obj"] for g in review] == [7, 9]
+
+
+def test_undo_on_an_empty_stack_is_refused_not_silently_ignored(app):
+    r = app.test_client().post("/undo", json={"story": "ZORK1"})
+    assert r.status_code == 409
+
+
+def test_retag_overwrites_a_verdict_and_is_itself_undoable(app, tmp_path):
+    scenes = tmp_path / "tools" / "assets" / "scenes"
+    c = app.test_client()
+    c.post("/retag", json={"story": "ZORK1", "objs": [1], "scene": "CAVE"})
+    assert json.loads((scenes / "ZORK1.json").read_text())["1"] == "CAVE"
+    c.post("/undo", json={"story": "ZORK1"})
+    assert json.loads((scenes / "ZORK1.json").read_text())["1"] == "FOREST"
+
+
+def test_retag_rejects_a_scene_outside_the_vocabulary(app):
+    r = app.test_client().post("/retag",
+                               json={"story": "ZORK1", "objs": [1], "scene": "NOPE"})
+    assert r.status_code == 400
+
+
+def test_tagged_page_names_the_room_and_marks_who_decided_it(app, tmp_path):
+    """Object 1 is blessed FOREST but the rules refuse "Cube", so the page must
+    call it a human verdict, not a rule one."""
+    rooms = tmp_path / "tools" / "assets" / "rooms"
+    rooms.mkdir(parents=True)
+    (rooms / "ZORK1.json").write_text(json.dumps(
+        {"serial": "AAAAAA", "rooms": [{"obj": 1, "title": "Cube",
+                                        "description": None}]}))
+    r = app.test_client().get("/game/ZORK1/tagged")
+    assert r.status_code == 200
+    assert b"Cube" in r.data
+    assert b"you" in r.data
+
+
+def test_a_group_verdict_shows_its_scope_before_the_click(app):
+    """Fifteen Mazes behind one button is the thing a reviewer must be told."""
+    r = app.test_client().get("/game/ZORK1")
+    assert b"all 2 rooms" in r.data

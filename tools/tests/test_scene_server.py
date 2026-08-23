@@ -540,3 +540,189 @@ def test_authoring_music_raises_the_regenerate_banner(furnished):
     c.post("/tracks", json={"track": 23, "scenes": "MAZE"})
     page = c.get("/game/ZORK1/tracks").get_data(as_text=True)
     assert "gen_scene_tables.py" in page
+
+
+@pytest.fixture
+def renamable(growable):
+    """A growable tree that also carries art_nouns.py, a picture folder, music
+    and a term override -- every place a tag name is written down."""
+    app, tmp = growable
+    (tmp / "tools" / "art_nouns.py").write_text(
+        (REPO / "tools" / "art_nouns.py").read_text(encoding="utf-8"),
+        encoding="utf-8")
+    png = tmp / "tools" / "assets" / "png" / "ZORK1" / "MAZE"
+    png.mkdir(parents=True)
+    (png / "1.png").write_bytes(b"not really a png")
+    (tmp / "tools" / "assets" / "tracks.json").write_text(
+        json.dumps({"23": ["MAZE"]}), encoding="utf-8")
+    (tmp / "tools" / "assets" / "search_terms.json").write_text(
+        json.dumps({"scenes": {"MAZE": ["hedge maze"]}, "games": {}}),
+        encoding="utf-8")
+    saved = dict(scene_server.art_nouns.GENRE_NOUNS["FANTASY"])
+    yield app, tmp
+    scene_server.art_nouns.GENRE_NOUNS["FANTASY"].clear()
+    scene_server.art_nouns.GENRE_NOUNS["FANTASY"].update(saved)
+
+
+def test_editing_a_tags_phrases_is_written_and_shown_as_edited(furnished):
+    app, tmp = furnished
+    r = app.test_client().post("/search/scene",
+                               json={"story": "ZORK1", "scene": "MAZE",
+                                     "terms": "hedge maze, stone labyrinth"})
+    assert r.status_code == 200
+    assert r.get_json()["edited"] is True
+    assert r.get_json()["written"] == "hedge maze, stone labyrinth"
+    doc = json.loads((tmp / "tools" / "assets" / "search_terms.json").read_text())
+    assert doc["scenes"]["MAZE"] == ["hedge maze", "stone labyrinth"]
+
+
+def test_a_phrase_may_contain_spaces(furnished):
+    """"rocky shore" is one search, not two, so only commas separate."""
+    app, tmp = furnished
+    app.test_client().post("/search/scene",
+                           json={"story": "ZORK1", "scene": "MAZE",
+                                 "terms": "twisty stone passages"})
+    doc = json.loads((tmp / "tools" / "assets" / "search_terms.json").read_text())
+    assert doc["scenes"]["MAZE"] == ["twisty stone passages"]
+
+
+def test_clearing_a_tags_phrases_restores_the_shipped_ones(furnished):
+    app, _ = furnished
+    c = app.test_client()
+    c.post("/search/scene", json={"story": "ZORK1", "scene": "MAZE",
+                                  "terms": "hedge maze"})
+    r = c.post("/search/scene", json={"story": "ZORK1", "scene": "MAZE",
+                                      "terms": ""})
+    assert r.get_json()["edited"] is False
+    assert r.get_json()["queries"]["MAZE"], "a cleared tag is not left unsearchable"
+
+
+def test_editing_a_tag_that_is_not_in_the_vocabulary_is_refused(furnished):
+    app, _ = furnished
+    r = app.test_client().post("/search/scene",
+                               json={"story": "ZORK1", "scene": "NOPE",
+                                     "terms": "x"})
+    assert r.status_code == 400
+
+
+def test_global_keywords_are_written_and_reach_every_query(furnished):
+    app, tmp = furnished
+    r = app.test_client().post("/search/game",
+                               json={"story": "ZORK1", "terms": "medieval, stone"})
+    assert r.status_code == 200
+    assert r.get_json()["written"] == "medieval stone"
+    doc = json.loads((tmp / "tools" / "assets" / "search_terms.json").read_text())
+    assert doc["games"]["ZORK1"] == ["medieval", "stone"]
+    assert "medieval stone" in r.get_json()["queries"]["MAZE"]
+
+
+def test_clearing_the_global_keywords_removes_them_from_the_queries(furnished):
+    app, _ = furnished
+    c = app.test_client()
+    c.post("/search/game", json={"story": "ZORK1", "terms": "medieval"})
+    r = c.post("/search/game", json={"story": "ZORK1", "terms": ""})
+    assert r.get_json()["written"] == ""
+    assert "medieval" not in r.get_json()["queries"]["MAZE"]
+
+
+def test_the_search_page_shows_what_is_actually_searched(furnished):
+    app, _ = furnished
+    c = app.test_client()
+    c.post("/search/game", json={"story": "ZORK1", "terms": "medieval"})
+    page = c.get("/game/ZORK1/search").get_data(as_text=True)
+    assert "medieval" in page
+    assert 'id="q-MAZE"' in page
+
+
+def test_the_search_page_shows_only_this_story_tags_unless_asked(furnished):
+    app, _ = furnished
+    c = app.test_client()
+    mine = c.get("/game/ZORK1/search").get_data(as_text=True)
+    assert 'data-scene="MAZE"' in mine
+    assert 'data-scene="SHIP_INT"' not in mine
+    every = c.get("/game/ZORK1/search?all=1").get_data(as_text=True)
+    assert 'data-scene="SHIP_INT"' in every
+
+
+def test_renaming_a_tag_moves_the_vocabulary_entry_without_moving_its_position(
+        renamable):
+    """The position is the C enum value and a column index in the generated
+    tables. Renaming is safe precisely because it does not move."""
+    app, tmp = renamable
+    before = scene_server.vocab.SCENE_INDEX["MAZE"]
+    ok, why = scene_server.rename_scene(tmp, "MAZE", "LABYRINTH")
+    assert ok, why
+    assert "MAZE" not in scene_server.vocab.SCENE_INDEX
+    assert scene_server.vocab.SCENE_INDEX["LABYRINTH"] == before
+    assert scene_server.vocab.SCENES[before] == "LABYRINTH"
+    text = (tmp / "tools" / "scene_vocab.py").read_text(encoding="utf-8")
+    assert '"LABYRINTH"' in text and '"MAZE"' not in text
+
+
+def test_renaming_a_tag_moves_every_rooms_verdict(renamable):
+    """A tag name is what the blessed files store, so a rename that skipped
+    them would untag every room that used it."""
+    app, tmp = renamable
+    scenes = tmp / "tools" / "assets" / "scenes"
+    (scenes / "ZORK1.json").write_text(json.dumps({"7": "MAZE", "8": "MAZE",
+                                                   "9": "CAVE"}))
+    assert scene_server.rename_scene(tmp, "MAZE", "LABYRINTH")[0]
+    blessed = json.loads((scenes / "ZORK1.json").read_text())
+    assert blessed == {"7": "LABYRINTH", "8": "LABYRINTH", "9": "CAVE"}
+
+
+def test_renaming_a_tag_moves_its_music_its_terms_and_its_pictures(renamable):
+    app, tmp = renamable
+    assert scene_server.rename_scene(tmp, "MAZE", "LABYRINTH")[0]
+    music = json.loads((tmp / "tools" / "assets" / "tracks.json").read_text())
+    assert music == {"23": ["LABYRINTH"]}
+    terms = json.loads((tmp / "tools" / "assets" / "search_terms.json").read_text())
+    assert terms["scenes"] == {"LABYRINTH": ["hedge maze"]}
+    png = tmp / "tools" / "assets" / "png" / "ZORK1"
+    assert (png / "LABYRINTH" / "1.png").exists()
+    assert not (png / "MAZE").exists()
+
+
+def test_renaming_a_tag_moves_its_genre_rewordings(renamable):
+    app, tmp = renamable
+    assert scene_server.rename_scene(tmp, "MAZE", "LABYRINTH")[0]
+    assert "LABYRINTH" in scene_server.art_nouns.GENRE_NOUNS["SCIFI"]
+    assert "MAZE" not in scene_server.art_nouns.GENRE_NOUNS["SCIFI"]
+    text = (tmp / "tools" / "art_nouns.py").read_text(encoding="utf-8")
+    assert '"LABYRINTH"' in text and '"MAZE"' not in text
+
+
+def test_a_rename_to_a_name_already_taken_is_refused(renamable):
+    app, tmp = renamable
+    ok, why = scene_server.rename_scene(tmp, "MAZE", "CAVE")
+    assert not ok and "already" in why
+    assert "MAZE" in scene_server.vocab.SCENE_INDEX
+
+
+def test_a_rename_to_a_malformed_name_is_refused(renamable):
+    app, tmp = renamable
+    for bad in ("", "x", "lower", "HAS SPACE", "9START"):
+        ok, _ = scene_server.rename_scene(tmp, "MAZE", bad)
+        assert not ok, bad
+    assert "MAZE" in scene_server.vocab.SCENE_INDEX
+
+
+def test_renaming_a_tag_that_does_not_exist_is_refused(renamable):
+    app, tmp = renamable
+    assert not scene_server.rename_scene(tmp, "NOPE", "LABYRINTH")[0]
+
+
+def test_the_rename_route_reports_its_refusal(renamable):
+    app, _ = renamable
+    r = app.test_client().post("/search/rename",
+                               json={"old": "MAZE", "new": "CAVE"})
+    assert r.status_code == 400
+    assert "already" in r.get_json()["error"]
+
+
+def test_the_rename_route_renames(renamable):
+    app, tmp = renamable
+    r = app.test_client().post("/search/rename",
+                               json={"old": "MAZE", "new": "LABYRINTH"})
+    assert r.status_code == 200
+    assert "LABYRINTH" in scene_server.vocab.SCENE_INDEX

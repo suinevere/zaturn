@@ -19,9 +19,10 @@ Description: A scene names a place; a genre names what that place looks like in
     those fall through to the neutral base, and MODERN overrides nothing at all
     because the base vocabulary is already contemporary.
 Author: suinevere
-Dependencies: scene_vocab
+Dependencies: scene_vocab, art_terms
 Globals: GENRES, DEFAULT_GENRE, GAME_GENRE, GENRE_NOUNS
 """
+import art_terms
 import scene_vocab as vocab
 
 GENRES = ("FANTASY", "SCIFI", "DETECTIVE", "HORROR", "NAUTICAL", "ANCIENT",
@@ -206,44 +207,58 @@ def genre_for_game(game):
     return GAME_GENRE.get(game, DEFAULT_GENRE)
 
 
-def nouns_for_scene(scene, genre=None):
+def nouns_for_scene(scene, genre=None, terms=None):
     """The stock-photo query phrases to fetch one scene in one genre.
 
-    Description: A genre's own phrases for that scene when it has them,
-        otherwise scene_vocab.FETCH_NOUNS's neutral ones. An unknown scene name
-        gets an empty tuple rather than a KeyError -- a caller iterating
-        scene_vocab.SCENES never needs to guard the lookup, and a caller
-        passing a typo sees "no nouns" instead of a crash. An unknown genre
-        falls through to the base vocabulary for the same reason.
+    Description: A hand-edited override first, then the genre's own phrases
+        for that scene, then scene_vocab.FETCH_NOUNS's neutral ones. The
+        override comes first because the other two are shipped guesses and it
+        is the correction someone made after seeing what they returned.
+
+        An unknown scene name gets an empty tuple rather than a KeyError -- a
+        caller iterating scene_vocab.SCENES never needs to guard the lookup,
+        and a caller passing a typo sees "no nouns" instead of a crash. An
+        unknown genre falls through for the same reason.
     Author: suinevere
-    Dependencies: scene_vocab
+    Dependencies: scene_vocab, art_terms
     Globals: GENRE_NOUNS
     Params: scene -- an SC_* scene name, e.g. "FOREST"; genre -- a name from
-        GENRES, or None for the neutral base vocabulary
+        GENRES, or None for the neutral base vocabulary; terms -- a loaded
+        art_terms document, or None to consult no overrides
     Returns: a tuple of query phrases, possibly empty
     """
+    if terms is not None:
+        edited = art_terms.scene_override(terms, scene)
+        if edited:
+            return tuple(edited)
     override = GENRE_NOUNS.get(genre or "", {}).get(scene)
     if override:
         return tuple(override)
     return vocab.FETCH_NOUNS.get(scene, ())
 
 
-def nouns_for_game(game, scenes):
-    """One game's whole shopping list: scene -> phrases, in its own genre.
+def nouns_for_game(game, scenes, terms=None):
+    """One game's whole shopping list: scene -> phrases, ready to search.
 
-    Description: Skips a scene with no phrases rather than emitting an empty
-        list, because art_queries.validate refuses a scene it cannot search
-        and a caller should not have to filter first.
+    Description: Resolves each scene's phrases, then appends the story's own
+        filter terms to every one of them -- a period or a setting is not a
+        place to photograph, so it can only ever narrow the places.
+
+        Skips a scene with no phrases rather than emitting an empty list,
+        because art_queries.validate refuses a scene it cannot search and a
+        caller should not have to filter first.
     Author: suinevere
-    Dependencies: N/A
+    Dependencies: art_terms
     Globals: N/A
-    Params: game -- a story stem; scenes -- the scene names that game needs
+    Params: game -- a story stem; scenes -- the scene names that game needs;
+        terms -- a loaded art_terms document, or None
     Returns: dict mapping scene to a tuple of query phrases
     """
     genre = genre_for_game(game)
+    filters = art_terms.game_terms(terms, game) if terms is not None else ()
     out = {}
     for scene in scenes:
-        words = nouns_for_scene(scene, genre)
+        words = nouns_for_scene(scene, genre, terms)
         if words:
-            out[scene] = words
+            out[scene] = art_terms.apply_terms(words, filters)
     return out

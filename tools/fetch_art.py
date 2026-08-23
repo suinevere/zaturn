@@ -30,6 +30,7 @@ from PIL import Image
 import art_metrics
 import art_nouns
 import art_queries
+import art_terms
 import art_status
 import scene_vocab as vocab
 
@@ -661,13 +662,18 @@ def main(argv):
     per_scene_budget = int(argv[0]) if argv else 99
     total_budget = int(argv[1]) if len(argv) > 1 else None
     genre = art_nouns.genre_for_game(game)
-    nouns = art_nouns.nouns_for_game(game, selected_scenes)
+    terms = art_terms.load(repo)
+    for problem in art_terms.validate(terms):
+        print(f"  search_terms.json: {problem}")
+    filters = art_terms.game_terms(terms, game)
+    nouns = art_nouns.nouns_for_game(game, selected_scenes, terms)
     if not nouns:
         print(f"  {game}: none of its scenes have search phrases")
         return 0
     plan = art_queries.build(nouns, game)
     print(f"  {game} as {genre}: {len(nouns)} scene(s), "
-          f"{sum(len(v) for v in plan.values())} queries")
+          f"{sum(len(v) for v in plan.values())} queries"
+          + (f", filtered by {' '.join(filters)}" if filters else ""))
 
     manifest = load_manifest(manifest_path)
     kept = []

@@ -22,7 +22,7 @@ Description: The human half of the tagging pipeline, in the shape of
     tagging it wrong forever.
 Author: suinevere
 Dependencies: flask, json, pathlib, re, sys, scene_vocab, room_scenes,
-    scene_tracks
+    scene_tracks, art_terms, art_nouns
 Globals: MOOD_TO_SCENES, NAME_RE
 """
 import json
@@ -34,6 +34,8 @@ from flask import Flask, jsonify, render_template_string, request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import art_nouns
+import art_terms
 import room_scenes
 import scene_tracks
 import scene_vocab as vocab
@@ -241,6 +243,144 @@ def append_scene(root, name, phrases):
     return True, ""
 
 
+def set_phrases(root, scene, phrases):
+    """Replace one scene's stock-photo search phrases.
+
+    Description: Writes to tools/assets/search_terms.json rather than back
+        into scene_vocab.py: the shipped phrases are a guess, this is the
+        correction someone made after seeing what they returned, and keeping
+        the two apart means a pull can improve the guess without discarding
+        the correction. Clearing the field drops the override and restores
+        the shipped phrases rather than leaving the scene unsearchable.
+    Author: suinevere
+    Dependencies: art_terms, scene_vocab
+    Globals: N/A
+    Params: root -- repo root; scene -- a scene name; phrases -- the new
+        phrases, empty to revert
+    Returns: (True, "") on success, or (False, reason)
+    """
+    if scene not in vocab.SCENE_INDEX:
+        return False, f"{scene} is not a scene"
+    data = art_terms.load(root)
+    words = [p.strip() for p in phrases if p and p.strip()]
+    if words:
+        data.setdefault("scenes", {})[scene] = words
+    else:
+        (data.get("scenes") or {}).pop(scene, None)
+    art_terms.save(root, data)
+    return True, ""
+
+
+def set_game_terms(root, game, words):
+    """Replace one story's global search filter terms.
+
+    Description: These are appended to every phrase that story searches, so
+        they are the place for a period or a setting -- "1930s" is not
+        somewhere a camera can point, and would return nothing as a phrase of
+        its own.
+    Author: suinevere
+    Dependencies: art_terms
+    Globals: N/A
+    Params: root -- repo root; game -- a story stem; words -- the new terms,
+        empty to clear
+    Returns: (True, "") always; there is nothing about a word to reject
+    """
+    data = art_terms.load(root)
+    clean = [w.strip() for w in words if w and w.strip()]
+    if clean:
+        data.setdefault("games", {})[game] = clean
+    else:
+        (data.get("games") or {}).pop(game, None)
+    art_terms.save(root, data)
+    return True, ""
+
+
+def rename_scene(root, old, new):
+    """Rename a scene everywhere its name is written down.
+
+    Description: The name is a string in six places, and leaving any of them
+        behind loses work silently rather than loudly: the vocabulary and its
+        phrases, the genre rewordings, every story's blessed room tags, the
+        music assignments, the search-term overrides, and the directory each
+        game's pictures for that scene sit in.
+
+        The position in SCENES never moves, so the C enum value, the generated
+        room maps and the music masks all keep meaning what they meant --
+        which is why renaming is safe and reordering never is.
+    Author: suinevere
+    Dependencies: pathlib, json, art_terms, scene_tracks, scene_vocab
+    Globals: NAME_RE
+    Params: root -- repo root; old -- the current name; new -- the new one
+    Returns: (True, "") on success, or (False, reason)
+    """
+    root = pathlib.Path(root)
+    if old not in vocab.SCENE_INDEX:
+        return False, f"{old} is not a scene"
+    if not NAME_RE.match(new or ""):
+        return False, "a scene name is 2 to 16 characters of A-Z, 0-9 and _"
+    if new in vocab.SCENE_INDEX:
+        return False, f"{new} is already a scene"
+
+    path = root / "tools" / "scene_vocab.py"
+    nouns_path = root / "tools" / "art_nouns.py"
+    try:
+        text = path.read_text(encoding="utf-8")
+        nouns_text = nouns_path.read_text(encoding="utf-8") if nouns_path.exists() else ""
+    except OSError as exc:
+        return False, f"cannot read the vocabulary ({exc})"
+
+    text = text.replace(f'"{old}"', f'"{new}"')
+    try:
+        path.write_text(text, encoding="utf-8")
+        if nouns_text:
+            nouns_path.write_text(
+                nouns_text.replace(f'"{old}"', f'"{new}"'), encoding="utf-8")
+    except OSError as exc:
+        return False, f"cannot write the vocabulary ({exc})"
+
+    scenes_dir = root / "tools" / "assets" / "scenes"
+    if scenes_dir.is_dir():
+        for blessed_path in sorted(scenes_dir.glob("*.json")):
+            if blessed_path.stem.endswith(".review"):
+                continue
+            try:
+                blessed = json.loads(blessed_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if old not in blessed.values():
+                continue
+            moved = {k: (new if v == old else v) for k, v in blessed.items()}
+            blessed_path.write_text(
+                json.dumps(moved, indent=1, sort_keys=True) + "\n",
+                encoding="utf-8")
+
+    music = scene_tracks.load(root)
+    if any(old in names for names in music.values()):
+        scene_tracks.save(root, {t: [new if n == old else n for n in names]
+                                 for t, names in music.items()})
+
+    terms = art_terms.load(root)
+    art_terms.rename_scene(terms, old, new)
+    art_terms.save(root, terms)
+
+    png = root / "tools" / "assets" / "png"
+    if png.is_dir():
+        for game_dir in sorted(p for p in png.iterdir() if p.is_dir()):
+            src = game_dir / old
+            if src.is_dir() and not (game_dir / new).exists():
+                src.rename(game_dir / new)
+
+    index = vocab.SCENE_INDEX.pop(old)
+    vocab.SCENE_INDEX[new] = index
+    vocab.SCENES = tuple(new if n == old else n for n in vocab.SCENES)
+    if old in vocab.FETCH_NOUNS:
+        vocab.FETCH_NOUNS[new] = vocab.FETCH_NOUNS.pop(old)
+    for genre_rows in art_nouns.GENRE_NOUNS.values():
+        if old in genre_rows:
+            genre_rows[new] = genre_rows.pop(old)
+    return True, ""
+
+
 def _csv(names):
     """A scene list as the page shows it, and as it is typed back in.
 
@@ -296,7 +436,8 @@ PAGE = """<!doctype html><title>{{ stem }} — scenes</title>
 {% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
 <h1>{{ stem }} <small id="left">{{ left }} left</small>
   — <a href="/game/{{ stem }}/tagged">review {{ tagged }} already tagged</a>
-  · <a href="/game/{{ stem }}/tracks">music</a></h1>
+  · <a href="/game/{{ stem }}/tracks">music</a>
+  · <a href="/game/{{ stem }}/search">search terms</a></h1>
 <div id="legend">
  One click = one tag = this room's whole picture and music. There is no second
  tag and no overlap.<br>
@@ -444,7 +585,8 @@ ROOM_PAGE = """<!doctype html><title>{{ stem }} — {{ room.title }}</title>
 {% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
 <p><a href="/game/{{ stem }}">← queue ({{ left }} left)</a> ·
    <a href="/game/{{ stem }}/tagged">tagged list</a> ·
-   <a href="/game/{{ stem }}/tracks">music</a></p>
+   <a href="/game/{{ stem }}/tracks">music</a> ·
+   <a href="/game/{{ stem }}/search">search terms</a></p>
 <h1>{{ room.title }}
   {% if hint_mood %}<small style="color:#888">(was {{ hint_mood }})</small>{% endif %}</h1>
 <p style="color:#666;font-size:13px">object {{ room.obj }} ·
@@ -579,6 +721,114 @@ async function save(input) {
 }
 paint();
 </script>"""
+
+
+SEARCH_PAGE = """<!doctype html><title>{{ stem }} &mdash; search terms</title>
+<style>
+ body{font:15px system-ui;margin:2rem;max-width:70rem}
+ table{border-collapse:collapse;width:100%}
+ td,th{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;
+       vertical-align:top}
+ th{font-size:13px;color:#666}
+ input{font:inherit;padding:.25rem}
+ input.name{width:9rem;font-weight:600}
+ input.terms{width:100%}
+ input.glob{width:24rem}
+ .q{color:#666;font-size:12px;line-height:1.5}
+ .edited{color:#a00;font-size:12px}
+ .shipped{color:#999;font-size:12px}
+ .unused{opacity:.55}
+ .stale{background:#fee;border-left:3px solid #c00;padding:.5rem .6rem;
+        font-size:13px;margin:0 0 1rem}
+ .note{color:#555;font-size:13px;line-height:1.5;border-left:3px solid #cde;
+       padding-left:.6rem;margin:0 0 1rem}
+ fieldset{border:1px solid #ddd;padding:.6rem .8rem;margin:0 0 1.4rem}
+ legend{font-size:13px;color:#666}
+ a{color:#06c}
+</style>
+{% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
+<p><a href="/game/{{ stem }}">&larr; {{ stem }} queue ({{ left }} left)</a> &middot;
+   <a href="/game/{{ stem }}/tagged">tagged list</a> &middot;
+   <a href="/game/{{ stem }}/tracks">music</a></p>
+<h1>{{ stem }} &mdash; search terms
+  <small style="color:#888;font-weight:normal">genre {{ genre }}</small></h1>
+<fieldset><legend>global keywords for {{ stem }}</legend>
+ <p class="q">Appended to every search this story runs. The place for a period
+ or a setting &mdash; <b>1930s</b>, <b>medieval</b>, <b>art deco</b> &mdash;
+ which is not somewhere a camera can point and would return nothing as a search
+ of its own. A word already in a phrase is not repeated.</p>
+ <input class="glob" id="glob" value="{{ game_terms }}"
+   placeholder="1930s film noir" onchange="saveGlobal(this)">
+ <span class="q" id="globnote"></span>
+</fieldset>
+<div class="note">
+ Search phrases are <b>shared by every game</b> &mdash; only the keywords above
+ belong to this story. Editing a tag&rsquo;s phrases overrides the shipped ones;
+ clear the field to go back to them. Renaming a tag moves it everywhere at once:
+ the vocabulary, every story&rsquo;s room tags, the music table, and each
+ game&rsquo;s picture folder. Its position never moves, so nothing already
+ generated changes meaning.<br>
+ {% if showing_all %}Showing all {{ rows|length }} tags &middot;
+ <a href="/game/{{ stem }}/search">only the ones {{ stem }} uses</a>
+ {% else %}Showing the {{ rows|length }} tags {{ stem }} uses &middot;
+ <a href="/game/{{ stem }}/search?all=1">show all</a>{% endif %}
+</div>
+<table>
+<tr><th>tag</th><th>search phrases</th><th>rooms</th><th>what is searched</th></tr>
+{% for r in rows %}
+<tr class="{{ 'unused' if not r.rooms }}">
+  <td><input class="name" value="{{ r.scene }}" data-scene="{{ r.scene }}"
+        onchange="rename(this)"></td>
+  <td><input class="terms" value="{{ r.terms }}" data-scene="{{ r.scene }}"
+        onchange="savePhrases(this)" placeholder="{{ r.shipped }}">
+      <div class="{{ 'edited' if r.edited else 'shipped' }}"
+           id="src-{{ r.scene }}">{{ 'edited' if r.edited else 'shipped' }}</div></td>
+  <td class="q">{{ r.rooms or "&mdash;" }}</td>
+  <td class="q" id="q-{{ r.scene }}">{{ r.queries }}</td></tr>
+{% endfor %}
+</table>
+<script>
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST",
+    headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const d = await r.json();
+  if (!r.ok) { alert(d.error); return null; }
+  return d;
+}
+function repaint(d) {
+  for (const scene in (d.queries || {})) {
+    const td = document.getElementById("q-" + scene);
+    if (td) td.textContent = d.queries[scene];
+  }
+}
+async function saveGlobal(input) {
+  const d = await post("/search/game", {story: "{{ stem }}", terms: input.value});
+  if (!d) return;
+  input.value = d.written;
+  document.getElementById("globnote").textContent =
+    d.written ? "filtering every search" : "no filter";
+  repaint(d);
+}
+async function savePhrases(input) {
+  const d = await post("/search/scene",
+    {story: "{{ stem }}", scene: input.dataset.scene, terms: input.value});
+  if (!d) return;
+  input.value = d.written;
+  const src = document.getElementById("src-" + input.dataset.scene);
+  src.textContent = d.edited ? "edited" : "shipped";
+  src.className = d.edited ? "edited" : "shipped";
+  repaint(d);
+}
+async function rename(input) {
+  const was = input.dataset.scene;
+  const now = input.value.trim().toUpperCase();
+  if (now === was) return;
+  const d = await post("/search/rename", {old: was, new: now});
+  if (!d) { input.value = was; return; }
+  location.reload();
+}
+</script>"""
+
 
 
 def create_app(repo=None):
@@ -778,6 +1028,120 @@ def create_app(repo=None):
             current=blessed.get(str(obj)), siblings=siblings, queued=queued,
             hint_mood=hint_mood, hint_scenes=hint_scenes, left=len(review),
             stale=stale_note())
+
+    @app.route("/game/<stem>/search")
+    def search_page(stem):
+        """Edit what the art fetcher searches for.
+
+        Description: Three things on one page because they compose into one
+            answer: the story's global keywords, each tag's phrases, and the
+            query those two actually produce. Splitting them would mean editing
+            a filter without seeing what it filters.
+
+            Defaults to the tags this story uses, since that is the list
+            someone curating it cares about; ?all=1 shows the whole vocabulary,
+            because a tag no story uses yet still needs its phrases fixed
+            before anyone fetches for it.
+        Author: suinevere
+        Dependencies: flask, art_terms, art_nouns, scene_vocab
+        Globals: N/A
+        Params: stem -- the story stem from the URL
+        Returns: rendered HTML; 404 for a story with no tags at all
+        """
+        from flask import abort
+        blessed, review = load(stem)
+        if not blessed and not review:
+            abort(404)
+        showing_all = request.args.get("all") == "1"
+        terms = art_terms.load(root)
+        genre = art_nouns.genre_for_game(stem)
+        counts = {}
+        for scene in blessed.values():
+            counts[scene] = counts.get(scene, 0) + 1
+        names = [s for s in vocab.SCENES if showing_all or s in counts]
+        resolved = art_nouns.nouns_for_game(stem, names, terms)
+        rows = []
+        for scene in names:
+            edited = art_terms.scene_override(terms, scene)
+            rows.append({
+                "scene": scene,
+                "terms": ", ".join(edited or ()),
+                "shipped": ", ".join(art_nouns.nouns_for_scene(scene, genre)),
+                "edited": bool(edited),
+                "rooms": counts.get(scene, 0),
+                "queries": " / ".join(resolved.get(scene, ())),
+            })
+        return render_template_string(
+            SEARCH_PAGE, stem=stem, rows=rows, genre=genre,
+            game_terms=" ".join(art_terms.game_terms(terms, stem)),
+            showing_all=showing_all, left=len(review), stale=stale_note())
+
+    def queries_now(stem):
+        """Every tag's resolved query line, for the page to repaint with."""
+        terms = art_terms.load(root)
+        resolved = art_nouns.nouns_for_game(stem, vocab.SCENES, terms)
+        return {scene: " / ".join(resolved.get(scene, ()))
+                for scene in vocab.SCENES}
+
+    @app.route("/search/game", methods=["POST"])
+    def search_game():
+        """Set one story's global search keywords.
+
+        Description: Splits on whitespace or commas, either way -- someone
+            typing a period and a style is not thinking about separators.
+        Author: suinevere
+        Dependencies: flask, art_terms
+        Globals: N/A
+        Params: N/A -- reads {"story", "terms"} from the body
+        Returns: what was written and every tag's refreshed query line
+        """
+        d = request.get_json(force=True)
+        words = (d.get("terms") or "").replace(",", " ").split()
+        set_game_terms(root, d["story"], words)
+        return jsonify(written=" ".join(words), stale=stale_note(),
+                       queries=queries_now(d["story"]))
+
+    @app.route("/search/scene", methods=["POST"])
+    def search_scene():
+        """Override one tag's search phrases, or clear the override.
+
+        Description: Splits on commas only. A phrase is several words --
+            "rocky shore" is one search, not two -- so a space cannot be a
+            separator here the way it is for the global keywords.
+        Author: suinevere
+        Dependencies: flask, art_terms, scene_vocab
+        Globals: N/A
+        Params: N/A -- reads {"story", "scene", "terms"} from the body
+        Returns: what was written, whether it is now an override, and every
+            tag's refreshed query line; 400 for an unknown tag
+        """
+        d = request.get_json(force=True)
+        phrases = [p.strip() for p in (d.get("terms") or "").split(",")]
+        ok, why = set_phrases(root, d.get("scene"), phrases)
+        if not ok:
+            return jsonify(error=why), 400
+        edited = art_terms.scene_override(art_terms.load(root), d["scene"])
+        return jsonify(written=", ".join(edited or ()), edited=bool(edited),
+                       stale=stale_note(), queries=queries_now(d["story"]))
+
+    @app.route("/search/rename", methods=["POST"])
+    def search_rename():
+        """Rename a tag everywhere its name is written down.
+
+        Description: Six places, and leaving any behind loses work silently.
+            rename_scene owns the cascade; this route only reports its verdict.
+        Author: suinevere
+        Dependencies: flask
+        Globals: N/A
+        Params: N/A -- reads {"old", "new"} from the body
+        Returns: the new name; 400 with a reason when the rename is refused
+        """
+        d = request.get_json(force=True)
+        ok, why = rename_scene(root, d.get("old"),
+                               (d.get("new") or "").strip().upper())
+        if not ok:
+            return jsonify(error=why), 400
+        return jsonify(name=d["new"], stale=stale_note())
 
     @app.route("/tracks")
     @app.route("/game/<stem>/tracks")

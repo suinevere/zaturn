@@ -125,10 +125,12 @@ def _process_story(stem, rooms_dir, scenes_dir):
     review_path = scenes_dir / f"{stem}.review.json"
 
     scenes_dir.mkdir(parents=True, exist_ok=True)
-    blessed_path.write_text(json.dumps(out_blessed, indent=1, sort_keys=True),
-                             encoding="utf-8")
-    review_path.write_text(json.dumps(review, indent=1, sort_keys=True),
-                            encoding="utf-8")
+    blessed_path.write_text(
+        json.dumps(out_blessed, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8")
+    review_path.write_text(
+        json.dumps(review, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8")
 
     return len(decided), len(refused), len(review)
 

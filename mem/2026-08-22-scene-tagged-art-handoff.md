@@ -5,6 +5,10 @@ metadata:
   type: project
 ---
 
+**PARTLY STALE as of 2026-08-23.** The art half was rebuilt game-first in
+`ecd2808` and the undo/review work landed in `d674a0d`; where this document and
+those commits disagree, the commits win. The scene-tagging half still stands.
+
 Landed on `main` as a single squashed commit `f381dac`, +26,584 / −5,740 across
 166 files, pushed to `origin/main`. Suite **231 passed, 0 failed**. All eight host
 C tests pass, every SH-2 `syntax-check.sh` is clean with zero warnings, and both
@@ -49,10 +53,12 @@ keystroke. 855 old mood judgements survive as hints in
 `tools/art_server.py` on :8080. Zork I needs 13 scenes: CAVE, DARKROOM, FOREST,
 HOUSE_EXT, KITCHEN, MAZE, MINE, PARLOR, PIT, RIVER, ROCKY, SHORE, TEMPLE.
 
-**It starts roughly half-curated.** Measured, not guessed: of 113 already-accepted
-images, seven of Zork I's scenes already have art — ROCKY 13, SHORE 13,
-HOUSE_EXT 10, DARKROOM 9, RIVER 6, CAVE 5, MINE 1 = 57 images. Only KITCHEN,
-MAZE, PARLOR, PIT, TEMPLE and FOREST need a real campaign.
+**It starts from zero.** The half-curated pool this handoff originally
+described was fetched under the mood vocabulary into `png/<SCENE>/<noun>/`,
+which `make_tga.convert_game_tree` never read -- it walks `png/<GAME>/<SCENE>/`
+and skips any top-level directory that is not a game stem, so not one of those
+412 pictures could ever have reached a disc. The manifest, the tree and the
+rescue migration were deleted in `ecd2808`; see [[art-data-is-disposable]].
 
 ## What is deliberately unfinished
 
@@ -64,12 +70,6 @@ filename, outside the scene machinery — and `TITLE_ART_N` is 0 because
 `make_tga.py`. Until then `title_bg_hide()` runs and the logo sits on plain
 background.
 
-**42 of 412 curation records are unreachable**, across 9 nouns. Add to
-`scene_vocab.FETCH_NOUNS`: `chamber`/`crawlway`/`passage`/`passageway` → CAVE,
-`cockpit` → SHIP_INT, `inn`/`marketplace`/`shop` → VILLAGE, `alleyway` → ROAD,
-then re-run `tools/migrate_manifest_scene.py`, which is committed and idempotent.
-Five minutes.
-
 **`SCENE_TRACKS` is all zero**, so every scene falls back to the neutral CD-DA
 pool and no two scenes sound different yet. Per-game track selection over the
 shared 31 tracks is data, not code — art is duplicated per game, audio cannot be,
@@ -77,11 +77,11 @@ because those tracks are already ~85% of the disc.
 
 ## Traps worth knowing
 
-`art_manifest.json` is now **gitignored**, with `art_status.py --snapshot`
-writing the committed copy at promote time. It had been destroyed twice by git
-operations. Backups outside the repo:
-`zaturn-manifest-backup-20260822-104844` and
-`zaturn_backups/art_manifest.json.backup-20260822-205648`.
+`art_manifest.json` is **gitignored**, with `art_status.py --snapshot` writing
+the committed copy at promote time. Both are empty as of `ecd2808` and the old
+backups are worthless: every record in them predates the game-first layout.
+Room *tags* are the opposite -- hand-made and irreplaceable. Never conflate the
+two.
 
 `.gitattributes` pins `saturn/src/scene/**` to `eol=lf`. Without it the
 generators write LF, `core.autocrlf` checks out CRLF, and the byte-identical test

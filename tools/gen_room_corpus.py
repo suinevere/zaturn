@@ -42,7 +42,7 @@ SOLUTIONS = ROOT / "tools" / "typeahead" / "solutions"
 WANDER = ROOT / "tools" / "wander.txt"
 OUT = ROOT / "test" / "corpus" / "rooms.inc"
 
-TITLE_MAX = 64          # matches TEXT_TITLE_MAX in room_class.c
+TITLE_MAX = 64          # a room title longer than this is corpus noise, not a real name
 MIN_BODY = 20           # a room prints prose, not a two-word acknowledgement
 
 # Games whose interactive menu never leads anywhere: Infocom's two promotional

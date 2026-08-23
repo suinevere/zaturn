@@ -1,0 +1,399 @@
+{
+ "count": 65,
+ "desc_prop": 11,
+ "release": 2,
+ "rooms": [
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 1,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": "You are behind the white house, where a path enters the forest to the east.  In one corner of the house there is a small window which is slightly ajar.",
+   "obj": 2,
+   "source": "runtime",
+   "title": "Behind House"
+  },
+  {
+   "description": "You are about 10 feet above the ground nestled among some large branches. The nearest branch above you is above your reach. A bird's nest is tangled around a branch here. In the nest is a large egg encrusted with precious jewels and inlaid with  gold, apparently scavenged somewhere by a childless songbird.",
+   "obj": 5,
+   "source": "runtime",
+   "title": "Up a Tree"
+  },
+  {
+   "description": "This is a small beach on the Frigid River below the Falls. A rainbow  crosses over the falls to the east and a path leads to the southwest.",
+   "obj": 8,
+   "source": "static",
+   "title": "End of Rainbow"
+  },
+  {
+   "description": null,
+   "obj": 13,
+   "source": null,
+   "title": "Cyclops Room"
+  },
+  {
+   "description": "This room is full of discarded bags, which crumble at your touch. There  is an exit down a staircase.",
+   "obj": 14,
+   "source": "static",
+   "title": "Thief's Den"
+  },
+  {
+   "description": "This is a non-descript part of a coal mine.",
+   "obj": 17,
+   "source": "static",
+   "title": "Coal Mine"
+  },
+  {
+   "description": "You are standing in an open field west of a white house, with a boarded front door. There is a mailbox here.",
+   "obj": 22,
+   "source": "runtime",
+   "title": "West of House"
+  },
+  {
+   "description": null,
+   "obj": 23,
+   "source": null,
+   "title": "Aragain Falls"
+  },
+  {
+   "description": "The river is running faster here, and the roar of rushing water is almost  unbearable. You can see beaches on both the east and west shores.",
+   "obj": 24,
+   "source": "static",
+   "title": "Frigid River"
+  },
+  {
+   "description": "This is a tiny cave with an entrance on the north, and a  forbidding staircase leading down.",
+   "obj": 25,
+   "source": "static",
+   "title": "Windy Cave"
+  },
+  {
+   "description": null,
+   "obj": 26,
+   "source": null,
+   "title": "Cellar"
+  },
+  {
+   "description": "You are on a large sandy beach on the east shore of the river. A path runs  along the river to the south, and a cave that is partially buried in sand  lies to the northeast.",
+   "obj": 28,
+   "source": "static",
+   "title": "Sandy Beach"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike. A skeleton, probably the remains of a luckless adventurer, lies here.",
+   "obj": 30,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": null,
+   "obj": 31,
+   "source": null,
+   "title": "Reservoir North"
+  },
+  {
+   "description": null,
+   "obj": 35,
+   "source": null,
+   "title": "Entrance to Hades"
+  },
+  {
+   "description": "This is a non-descript part of a coal mine. The top of a  rickety ladder pokes through a hole in the floor.",
+   "obj": 36,
+   "source": "static",
+   "title": "Coal Mine"
+  },
+  {
+   "description": "This is a drafty room at the bottom of a long shaft. To the south is a  passageway and to the east a very narrow crack. In the shaft can be seen  a heavy iron chain.",
+   "obj": 39,
+   "source": "static",
+   "title": "Drafty Room"
+  },
+  {
+   "description": null,
+   "obj": 42,
+   "source": null,
+   "title": "Dome Room"
+  },
+  {
+   "description": null,
+   "obj": 48,
+   "source": null,
+   "title": "Reservoir South"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 49,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": "You are atop the west wall of a great canyon. From here there is a superb view of the Frigid River as it flows out of a dark cavern, flanked by towering white cliffs. Below rainbow-clad Aragain Falls, the river twists  into a passage which is impossible to enter. Paths enter the forest to the west and north. It is possible to climb down into the canyon from here.",
+   "obj": 55,
+   "source": "static",
+   "title": "Canyon View"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 56,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": null,
+   "obj": 58,
+   "source": null,
+   "title": "Living Room"
+  },
+  {
+   "description": "This is a small chamber, which appears to have been part of a coal mine. There are openings to the north and east, and a steep metal slide twisting  downward.",
+   "obj": 64,
+   "source": "static",
+   "title": "Slide Room"
+  },
+  {
+   "description": "This is a non-descript part of a coal mine.",
+   "obj": 65,
+   "source": "static",
+   "title": "Coal Mine"
+  },
+  {
+   "description": "You have come to a dead end in the maze.",
+   "obj": 66,
+   "source": "static",
+   "title": "Dead End"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 67,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 78,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": "This is a large room with exits to the west and north. In the middle of  the room is a small shaft descending through the floor into darkness below. Constructed over the top of the shaft is a metal framework to which a heavy  iron chain is attached. A foul odor comes from the room to the north.",
+   "obj": 80,
+   "source": "static",
+   "title": "Shaft Room"
+  },
+  {
+   "description": "This is a path winding through a dimly-lit forest. The path turns a corner  here, heading south and east. One large tree with some low branches stands  at the edge of the path.",
+   "obj": 81,
+   "source": "static",
+   "title": "Forest Path"
+  },
+  {
+   "description": "This is a sand-filled cave whose exit is to the southwest.",
+   "obj": 83,
+   "source": "static",
+   "title": "Sandy Cave"
+  },
+  {
+   "description": "This appears to have been an artist's studio. The walls and floors are  splattered with paint. At the west end of the room is an open door. A  narrow chimney leads up from a fireplace; although you might be able to  get up it, it seems unlikely you could get back down.",
+   "obj": 84,
+   "source": "static",
+   "title": "Studio"
+  },
+  {
+   "description": "This is a long east-west passage which is cluttered with broken timbers.  At the east end of the room, a rickety ladder leads through an opening in  the roof. A strong draft comes from the west where the room narrows  considerably.",
+   "obj": 86,
+   "source": "static",
+   "title": "Timber Room"
+  },
+  {
+   "description": "You are on a quiet section of the Frigid River near the Dam. There is  a landing on the west shore.",
+   "obj": 90,
+   "source": "static",
+   "title": "Frigid River"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 91,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": "This is a small room with passages to the east and south and a forbidding hole leading west. Bloodstains and deep scratches mar the walls.",
+   "obj": 92,
+   "source": "static",
+   "title": "The Troll Room"
+  },
+  {
+   "description": null,
+   "obj": 96,
+   "source": null,
+   "title": "Kitchen"
+  },
+  {
+   "description": "You are at the entrance of a disused coal mine. Strange squeaky sounds  come from a shaft leading into the north wall, and there is another exit  to the south.",
+   "obj": 100,
+   "source": "static",
+   "title": "Mine Entrance"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 101,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": "You are south of the white house. There is no door here, and all the  windows are boarded.",
+   "obj": 102,
+   "source": "static",
+   "title": "South of House"
+  },
+  {
+   "description": "This is a circular stone room with passages in all directions, although  several have been blocked by cave-ins.",
+   "obj": 104,
+   "source": "static",
+   "title": "Round Room"
+  },
+  {
+   "description": "This was maintenance room for Flood Control Dam #3. On the wall is an  important-looking button. The west wall contains a door.",
+   "obj": 107,
+   "source": "static",
+   "title": "Maintenance Room"
+  },
+  {
+   "description": "You are at the base of a river canyon near the flowing runoff of Aragain  Falls. The cliff wall may be climbable, and to the northeast is a narrow path.",
+   "obj": 112,
+   "source": "static",
+   "title": "Canyon Bottom"
+  },
+  {
+   "description": "You are east of a massive stone tomb. Through an open door you see  darkness within.",
+   "obj": 116,
+   "source": "static",
+   "title": "Stone Barrow"
+  },
+  {
+   "description": null,
+   "obj": 119,
+   "source": null,
+   "title": "Dam"
+  },
+  {
+   "description": null,
+   "obj": 121,
+   "source": null,
+   "title": "Bat Room"
+  },
+  {
+   "description": "This is part of a maze of twisty little passages, all alike.",
+   "obj": 124,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": "You have come to a dead end in the maze.",
+   "obj": 125,
+   "source": "static",
+   "title": "Dead End"
+  },
+  {
+   "description": "This is the attic. The only exit is a stairway leading down.",
+   "obj": 131,
+   "source": "static",
+   "title": "Attic"
+  },
+  {
+   "description": "This is a former Egyptian tomb. There is an ascending staircase to the west.",
+   "obj": 132,
+   "source": "static",
+   "title": "Egyptian Room"
+  },
+  {
+   "description": "You are next to the altar at the south end of the temple. In one corner is a small hole in the floor.",
+   "obj": 134,
+   "source": "static",
+   "title": "Altar"
+  },
+  {
+   "description": null,
+   "obj": 135,
+   "source": null,
+   "title": "Grating Room"
+  },
+  {
+   "description": "You are on a path in a dimly-lit forest. The path heads west  into the heart of the forest, and to the southeast where the trees seem to  thin out.",
+   "obj": 136,
+   "source": "static",
+   "title": "Forest Edge"
+  },
+  {
+   "description": "You are at the base of the dam, on a bank of the river Frigid.",
+   "obj": 137,
+   "source": "static",
+   "title": "Dam Base"
+  },
+  {
+   "description": "This is the north end of a large temple. Engraved on the east wall is  a prayer in a long-forgotten language. Below the prayer is a staircase  leading down.",
+   "obj": 139,
+   "source": "static",
+   "title": "Temple"
+  },
+  {
+   "description": "You have entered the Land of the Living Dead. You can hear the sounds of thousands of lost souls weeping and moaning. A passage exits to the north.",
+   "obj": 140,
+   "source": "static",
+   "title": "Land of the Dead"
+  },
+  {
+   "description": "The river descends into a valley with a narrow beach on the west shore.  In the distance a rumbling can be heard.",
+   "obj": 143,
+   "source": "static",
+   "title": "Frigid River"
+  },
+  {
+   "description": null,
+   "obj": 147,
+   "source": null,
+   "title": "Machine Room"
+  },
+  {
+   "description": "This room smells strongly of coal gas. Tunnels lead south and east.",
+   "obj": 150,
+   "source": "static",
+   "title": "Gas Room"
+  },
+  {
+   "description": "You are on a narrow beach at the base of the White Cliffs. A passage  leads west into the Cliffs.",
+   "obj": 151,
+   "source": "static",
+   "title": "White Cliffs Beach"
+  },
+  {
+   "description": "This is a small cave with exits on the east and west.",
+   "obj": 152,
+   "source": "static",
+   "title": "Dusty Cave"
+  },
+  {
+   "description": "You are north of the white house. There is no door here, and all the  windows are boarded up. To the north a narrow path enters the woods.",
+   "obj": 153,
+   "source": "static",
+   "title": "North of House"
+  },
+  {
+   "description": "You are on what used to be a large lake, but which is now a large mud pile. There are 'shores' to the north and south.",
+   "obj": 155,
+   "source": "static",
+   "title": "Reservoir"
+  },
+  {
+   "description": "You have come to a dead end in the mine.",
+   "obj": 158,
+   "source": "static",
+   "title": "Dead End"
+  }
+ ],
+ "serial": "840207",
+ "story": "MZORKI.Z3"
+}

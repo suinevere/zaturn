@@ -1,0 +1,453 @@
+{
+ "count": 74,
+ "desc_prop": 15,
+ "release": 55,
+ "rooms": [
+  {
+   "description": "You are in the desert, a vast wasteland of sand and heat.",
+   "obj": 8,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": null,
+   "obj": 34,
+   "source": null,
+   "title": "Desert"
+  },
+  {
+   "description": "You are in the desert, out of sight of the encampment. You are thankful there's no wind, even though a cooling breeze would be welcomed, since the fine sand particles would sting your face and hands. All around is the desert, a sweeping expanse of disheartening sand.",
+   "obj": 35,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are in the desert, east of the encampment. From this distance the camp seems little more than a mirage, an image of another reality which has little to do with the brutal, searing reality of the desert, your quickly dehydrating body, or your painfully broiling feet.",
+   "obj": 36,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are deep into the desert, as deep as anyone in his right mind would ever care to venture. A small but strong gust of wind reaches your face, pelting you with grains of sand so small they remind you of fine sugar. Even with your lips tightly closed, the wind manages to drive a few grains into your mouth. You are thankful that none got into your eyes.",
+   "obj": 37,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are standing on the top of a sand dune, looking all around at a place on Earth where man was never meant to be. That is the only conclusion you can draw as you force yourself to breathe the hot, arid air of the desert through your nose. Breathing through your mouth makes you instantly thirsty, a dangerous state to find yourself in while surrounded by sand.",
+   "obj": 38,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are in the desert, still within sight of the encampment, just a tiny oasis to the west. The tents, shimmering behind the heat waves rising from the sand, seem to be calling you back, beckoning, offering safety and refuge.",
+   "obj": 39,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are deep in desert, the encampment little more than a memory. You think for a moment, closing your eyes, trying to picture the coolness of the Nile, the comfort of your cot, and are overcome with doubts. When you open your eyes again you are greeted with the same nightmare: All around you, all you can see for mile after mile is sand and more sand.",
+   "obj": 40,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are in the desert, almost out of sight of the encampment, your only link with civilization. You are just close enough to make out a tiny dot on the western horizon which could be one of the tents. The searing sand is making walking a difficult and painful experience, something alien to you.",
+   "obj": 41,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are in the broiling sands of the desert, a short distance from the camp. Off to the west you can just make out a slight discoloration in the sand, the start of an east/west path which borders the northern edge of the camp.",
+   "obj": 42,
+   "source": "static",
+   "title": "Desert"
+  },
+  {
+   "description": "You are in a tent which used to house the workers and their personal effects. Looking around, taking in the stripped and bare surroundings, you feel surprised that they even left the canvas walls. You quickly realize that they took what they needed -- taking everything would have been more trouble than it was worth. From the looks of things they cleared out quickly but quietly.",
+   "obj": 43,
+   "source": "static",
+   "title": "Work Tent"
+  },
+  {
+   "description": "You are at the start of a path which heads north along the eastern border of the encampment. To the east you can see the horror and the beauty which brought you here, the desert sand and its hidden treasure. The firepit is visible to the northwest.",
+   "obj": 44,
+   "source": "static",
+   "title": "Southern Path"
+  },
+  {
+   "description": "You are on an east/west path, directly to the north of the work tent. To the north you can see the firepit and, beyond that, your tent. The work tent borders an endless vista of fine, burning sand stretching out to the south.",
+   "obj": 45,
+   "source": "static",
+   "title": "Outside Work Tent"
+  },
+  {
+   "description": "You are at the west edge of an east/west path on the southern side of the encampment. Directly to the west is a heavy growth of thickets, making any attempt at western movement a painful and futile task. Through the thickets you can hear the sound of water running gently by.",
+   "obj": 46,
+   "source": "static",
+   "title": "Southern Path"
+  },
+  {
+   "description": "You are at the eastern edge of an east/west path in the middle of the camp. To the west you can see the firepit and beyond that the supply tent. To the east you can see the desert -- a vista difficult to avoid seeing from just about anywhere in the camp. A north/south path intersects here, traveling along the eastern border of the camp.",
+   "obj": 47,
+   "source": "static",
+   "title": "Middle Path"
+  },
+  {
+   "description": "You're on a north/south path on the west edge of the encampment. Directly to the west is the supply tent, its flaps open, still in the hot, quiet air. To the east you can see the central firepit, a reminder of your being alone. A row of thickets, impossible to make any progress through even with a machete, grows along the western edge of the camp directly to the north and south of the tent.",
+   "obj": 49,
+   "source": "static",
+   "title": "Outside Supply Tent"
+  },
+  {
+   "description": "You are in a tent, very much like your own -- a tent which had originally contained the supplies for your expedition. You notice, however, that most of the items which were here just yesterday have vanished with your workers. The tent looks as if it's been cleaned out and, as your stomach growls, the empty tent ironically reminds you of a turkey carcass picked clean after a huge Thanksgiving meal. Through the open tent flaps to the east you can see the firepit. If only one of the workers had remained behind, you would make him pay.",
+   "obj": 50,
+   "source": "static",
+   "title": "Supply Tent"
+  },
+  {
+   "description": "You are on an east/west path on the northern side of the encampment. To the east you can see the sites of previous excavations your workers had begun before they deserted you. Low, gentle sand dunes roll out of sight to the north, but your camp's eastern border has a path, heading off to the south, which starts here.",
+   "obj": 51,
+   "source": "static",
+   "title": "Northern Path"
+  },
+  {
+   "description": "You are in your tent. Golden rays of the sun filter through the open tent flaps on the southern wall, but no breeze makes its way through. The dry, searing heat in the tent would be bearable if only the air stirred, even a little.",
+   "obj": 52,
+   "source": "static",
+   "title": "Your Tent"
+  },
+  {
+   "description": "You are on an east/west path on the north side of the encampment. To the south you can see a firepit and to the north is the entrance to your tent. Everything is oddly quiet, unsettling, creating a feeling of floating anxiety. The stillness seems to enhance the eerie quality of the desert, the feeling of being truly alone.",
+   "obj": 54,
+   "source": "static",
+   "title": "Outside Your Tent"
+  },
+  {
+   "description": "You are on an east/west path on the north side of the encampment. A path to the south starts here, and you can see the riverbank clearly to the west. A warm, light breeze reaches your face, drying your sweat into a thin mask of salt. You glance to the north and are greeted by a disheartening sight: an endless stretch of searing desert.",
+   "obj": 55,
+   "source": "static",
+   "title": "Near the Nile"
+  },
+  {
+   "description": "You are in the center of the encampment, standing before a charred pit, a hole dug in the sand surrounded by blackened rocks. The night breezes have already started the reclamation work of the desert, covering most of the pit's bottom. You can see your tent to the north, the work tent to the south, and the supply tent to the west. Far off to the east, through the heat waves rising off the shifting sands, you can see gentle, rolling dunes.",
+   "obj": 61,
+   "source": "static",
+   "title": "Fire Pit"
+  },
+  {
+   "description": "You are on the bank of the river Nile. The shoreline is sandy and cool, and reeds wave in a light but warm breeze. Directly to the north and the south thickets make strolling along the bank impossible. You're hot, and the cool rippling water to the west looks inviting, but you're not alone in that thought -- crocodiles bask on the west bank, eyeing you hungrily, just waiting for you to enter their watery domain.",
+   "obj": 65,
+   "source": "static",
+   "title": "River Bank"
+  },
+  {
+   "description": "This room, with exits west and northwest, is filled with robot-like devices of every conceivable description, all in various states of disassembly.",
+   "obj": 69,
+   "source": "static",
+   "title": "Robot Shop"
+  },
+  {
+   "description": null,
+   "obj": 80,
+   "source": null,
+   "title": "Machine Shop"
+  },
+  {
+   "description": "This is apparently a storage room for tools. Exits lead northeast and east.",
+   "obj": 87,
+   "source": "static",
+   "title": "Tool Room"
+  },
+  {
+   "description": "This is an elevator with a door to the west, currently open. A control panel contains an Up button, a Down button, and a small slot.",
+   "obj": 89,
+   "source": "static",
+   "title": "Reactor Elevator"
+  },
+  {
+   "description": "You have just located a serious bug.",
+   "obj": 90,
+   "source": "static",
+   "title": "Reactor Access Stairs"
+  },
+  {
+   "description": "This room contains many dials and gauges for controlling a massive planetary power reactor which, according to a diagram on the wall, must be buried far below this very complex. The exit is to the west. To the east is a metal door, and next to it, a button. A dark stairway winds downward.",
+   "obj": 92,
+   "source": "static",
+   "title": "Reactor Control"
+  },
+  {
+   "description": "This is a huge, dim room with exits in the northeast and southeast corners. The room is criss-crossed with catwalks and is filled with heavy equipment presumably intended to heat and ventilate this complex. Hardly any of the equipment is still operating.",
+   "obj": 93,
+   "source": "static",
+   "title": "Physical Plant"
+  },
+  {
+   "description": "A small room for storage. The exit is to the west.",
+   "obj": 100,
+   "source": "static",
+   "title": "Storage East"
+  },
+  {
+   "description": "The corridor ends here with doorways to the southwest, south, and southeast.",
+   "obj": 101,
+   "source": "static",
+   "title": "Mech Corridor South"
+  },
+  {
+   "description": "Entrances to rooms lie to the east and west from this north-south hall.",
+   "obj": 102,
+   "source": "static",
+   "title": "Mech Corridor"
+  },
+  {
+   "description": "Entrances to rooms lie to the east and west from this north-south hall.",
+   "obj": 103,
+   "source": "static",
+   "title": "Mech Corridor North"
+  },
+  {
+   "description": null,
+   "obj": 105,
+   "source": null,
+   "title": "Systems Monitors"
+  },
+  {
+   "description": "Here is another sanitary facility. Like the others, it is dusty and non-functional.",
+   "obj": 106,
+   "source": "static",
+   "title": "SanFac E"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "source": null,
+   "title": "Admin Corridor"
+  },
+  {
+   "description": "This section of hallway seems to have suffered some minor structural damage. The walls are cracked, and a jagged crevice crosses the floor. An opening leads east and the corridor heads north and south.",
+   "obj": 111,
+   "source": "static",
+   "title": "Admin Corridor South"
+  },
+  {
+   "description": "A north-south corridor intersects the main corridor here. To the west, the main corridor extends as far as you can see; a non-working walkway from that direction ends here. To the east, the corridor widens into a well-lit area.",
+   "obj": 112,
+   "source": "static",
+   "title": "Corridor Junction"
+  },
+  {
+   "description": null,
+   "obj": 116,
+   "source": null,
+   "title": "Mess Hall"
+  },
+  {
+   "description": "This is a wide, east-west hallway with openings to the north and south. To the east, the corridor stretches off into the distance. That section of the hallway is lined with a motorized walkway (no longer running) that was probably intended to transport people or cargo down that tremendously long hall.",
+   "obj": 117,
+   "source": "static",
+   "title": "Dorm Corridor"
+  },
+  {
+   "description": "This is a small room obviously intended as a storage area.",
+   "obj": 120,
+   "source": "static",
+   "title": "Storage West"
+  },
+  {
+   "description": null,
+   "obj": 123,
+   "source": null,
+   "title": "Mess Corridor"
+  },
+  {
+   "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is south.",
+   "obj": 124,
+   "source": "static",
+   "title": "SanFac D"
+  },
+  {
+   "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+   "obj": 125,
+   "source": "static",
+   "title": "Dorm D"
+  },
+  {
+   "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is north.",
+   "obj": 126,
+   "source": "static",
+   "title": "SanFac C"
+  },
+  {
+   "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+   "obj": 128,
+   "source": "static",
+   "title": "Dorm C"
+  },
+  {
+   "description": null,
+   "obj": 146,
+   "source": null,
+   "title": "Butterfly Room"
+  },
+  {
+   "description": null,
+   "obj": 155,
+   "source": null,
+   "title": "Living Room"
+  },
+  {
+   "description": "This rather undistinguished place seems to be a broom closet. Oddly enough, there is no broom here, although there is enough dust and dirt on the ground to merit a few dozen.",
+   "obj": 157,
+   "source": "static",
+   "title": "Broom Closet"
+  },
+  {
+   "description": "You are at the top of the Great Canyon on its west wall. From here there is a marvelous view of the canyon and parts of the Frigid River upstream. Across the canyon, the walls of the White Cliffs join the mighty ramparts of the Flathead Mountains to the east. Following the Canyon upstream to the north, Aragain Falls may be seen, complete with rainbow. The mighty Frigid River flows out from a great dark cavern. To the west and south can be seen an immense forest, stretching for miles around. A path leads northwest. It is possible to climb down into the canyon from here.",
+   "obj": 172,
+   "source": "static",
+   "title": "Canyon View"
+  },
+  {
+   "description": "You are on a ledge about halfway up the wall of the river canyon. You can see from here that the main flow from Aragain Falls twists along a passage which it is impossible to enter. Below you is the canyon bottom. Above you is more cliff, which appears climbable.",
+   "obj": 173,
+   "source": "static",
+   "title": "Rocky Ledge"
+  },
+  {
+   "description": "You are beneath the walls of the river canyon which may be climbable here. The lesser part of the runoff of Aragain Falls flows by below. To the north is a narrow path.",
+   "obj": 175,
+   "source": "static",
+   "title": "Canyon Bottom"
+  },
+  {
+   "description": "You are on a small, rocky beach on the continuation of the Frigid River past the Falls. The beach is narrow due to the presence of the White Cliffs. The river canyon opens here and sunlight shines in from above. A rainbow crosses over the falls to the east and a narrow path continues to the southwest.",
+   "obj": 176,
+   "source": "static",
+   "title": "End of Rainbow"
+  },
+  {
+   "description": "You are on the east edge of a chasm, the bottom of which cannot be seen. A narrow passage goes north, and the path you are on continues to the east.",
+   "obj": 177,
+   "source": "static",
+   "title": "East of Chasm"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "source": null,
+   "title": "Cellar"
+  },
+  {
+   "description": "You are in a small clearing in a well marked forest path that extends to the east and west.",
+   "obj": 180,
+   "source": "static",
+   "title": "Clearing"
+  },
+  {
+   "description": "This is a path winding through a dimly lit forest. The path heads north-south here. One particularly large tree with some low branches stands at the edge of the path.",
+   "obj": 181,
+   "source": "static",
+   "title": "Forest Path"
+  },
+  {
+   "description": "This is a dimly lit forest, with large trees all around.",
+   "obj": 182,
+   "source": "static",
+   "title": "Forest"
+  },
+  {
+   "description": "This is a dimly lit forest, with large trees all around.",
+   "obj": 183,
+   "source": "static",
+   "title": "Forest"
+  },
+  {
+   "description": "This is a forest, with trees in all directions. To the east, there appears to be sunlight.",
+   "obj": 184,
+   "source": "static",
+   "title": "Forest"
+  },
+  {
+   "description": null,
+   "obj": 185,
+   "source": null,
+   "title": "Behind House"
+  },
+  {
+   "description": "You are facing the south side of a white house. There is no door here, and all the windows are boarded.",
+   "obj": 186,
+   "source": "static",
+   "title": "South of House"
+  },
+  {
+   "description": "You are facing the north side of a white house. There is no door here, and all the windows are boarded up. To the north a narrow path winds through the trees.",
+   "obj": 187,
+   "source": "static",
+   "title": "North of House"
+  },
+  {
+   "description": null,
+   "obj": 193,
+   "source": null,
+   "title": "Up a Tree"
+  },
+  {
+   "description": "This appears to have been an artist's studio. The walls and floors are splattered with paints of 69 different colors. Strangely enough, nothing of value is hanging here. At the south end of the room is an open door (also covered with paint). A dark and narrow chimney leads up from a fireplace; although you might be able to get up it, it seems unlikely you could get back down.",
+   "obj": 195,
+   "source": "static",
+   "title": "Studio"
+  },
+  {
+   "description": "This is a small room with passages to the east and south and a forbidding hole leading west. Bloodstains and deep scratches (perhaps made by an axe) mar the walls.",
+   "obj": 197,
+   "source": "static",
+   "title": "The Troll Room"
+  },
+  {
+   "description": null,
+   "obj": 203,
+   "source": null,
+   "title": "Clearing"
+  },
+  {
+   "description": "This is an art gallery. Most of the paintings have been stolen by vandals with exceptional taste. The vandals left through either the north or west exits.",
+   "obj": 205,
+   "source": "static",
+   "title": "Gallery"
+  },
+  {
+   "description": "You are standing in an open field west of a white house, with a boarded front door.",
+   "obj": 213,
+   "source": "static",
+   "title": "West of House"
+  },
+  {
+   "description": null,
+   "obj": 219,
+   "source": null,
+   "title": "Living Room"
+  },
+  {
+   "description": "This is the attic. The only exit is a staircase leading down.",
+   "obj": 221,
+   "source": "static",
+   "title": "Attic"
+  },
+  {
+   "description": null,
+   "obj": 223,
+   "source": null,
+   "title": "Kitchen"
+  },
+  {
+   "description": "The forest thins out, revealing impassable mountains.",
+   "obj": 236,
+   "source": "static",
+   "title": "Forest"
+  }
+ ],
+ "serial": "850823",
+ "story": "INFOSAM5.Z3"
+}

@@ -1,0 +1,225 @@
+{
+ "count": 36,
+ "desc_prop": 15,
+ "release": 97,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 1,
+   "source": null,
+   "title": "Inside Prop Tent"
+  },
+  {
+   "description": "You're standing in front of the turnstile entrance to a fenced-in area, which is south. To the west stands a droopy tent, and the field continues north and east. A tall and lanky clown in baggy pants trudges out of the tent and toward the turnstile. Comrade Thumb follows behind. Adjacent to the turnstile to your south is a vertical cage.",
+   "obj": 4,
+   "source": "runtime",
+   "title": "Back Yard"
+  },
+  {
+   "description": null,
+   "obj": 13,
+   "source": null,
+   "title": "Inside Mahler's Cage"
+  },
+  {
+   "description": null,
+   "obj": 15,
+   "source": null,
+   "title": "Hypnotist's Parlor"
+  },
+  {
+   "description": null,
+   "obj": 30,
+   "source": null,
+   "title": "Top of Cage"
+  },
+  {
+   "description": null,
+   "obj": 53,
+   "source": null,
+   "title": "On the Tent"
+  },
+  {
+   "description": null,
+   "obj": 56,
+   "source": null,
+   "title": "Platform"
+  },
+  {
+   "description": "This area of matted-down crabgrass lies between the vaulted big top entrance to the north and the enticements of the midway to the east, where a sagging banner hangs crookedly above a turnstile. There is a drinking fountain near the side wall of the tent. You can enter the night to the west and south.",
+   "obj": 57,
+   "source": "runtime",
+   "title": "Connection"
+  },
+  {
+   "description": null,
+   "obj": 59,
+   "source": null,
+   "title": "Office"
+  },
+  {
+   "description": null,
+   "obj": 62,
+   "source": null,
+   "title": "Walking a Tightrope"
+  },
+  {
+   "description": null,
+   "obj": 63,
+   "source": null,
+   "title": "On the Wagon"
+  },
+  {
+   "description": null,
+   "obj": 70,
+   "source": null,
+   "title": "Platform"
+  },
+  {
+   "description": "The big top can be entered to the north and exited to the south. To the northeast, the grandstand begins its precipitous rise.",
+   "obj": 81,
+   "source": "runtime",
+   "title": "In the Wings"
+  },
+  {
+   "description": null,
+   "obj": 87,
+   "source": null,
+   "title": "Midway Entrance"
+  },
+  {
+   "description": null,
+   "obj": 91,
+   "source": null,
+   "title": "East Half of Fat Lady"
+  },
+  {
+   "description": null,
+   "obj": 94,
+   "source": null,
+   "title": "Camp, West"
+  },
+  {
+   "description": null,
+   "obj": 105,
+   "source": null,
+   "title": "Midway of Midway"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "source": null,
+   "title": "Jennifer's Boudoir"
+  },
+  {
+   "description": null,
+   "obj": 112,
+   "source": null,
+   "title": "Elephant Tent"
+  },
+  {
+   "description": null,
+   "obj": 121,
+   "source": null,
+   "title": "Menagerie Nook"
+  },
+  {
+   "description": "This is the arena's oval-shaped performance ring which is occupied by a sagging, rectangular safety net. A rope ladder dangles to within a foot of the ground. Just west lies the entrance to a large, round cage that completely encircles the second of the two rings. To the south the big top's vaulted wing leads out into the open air. The arena's rickety grandstands rise steeply north and east.",
+   "obj": 131,
+   "source": "runtime",
+   "title": "Performance Ring"
+  },
+  {
+   "description": "You are standing on a gentle upslope of the grassy field, next to a rather imposing trailer whose door is closed to the east. In dark panorama, the field continues north and west -- and south, where a large banner has been erected. Part of a narrow pole is sticking out from under the wagon.",
+   "obj": 148,
+   "source": "runtime",
+   "title": "Near White Wagon"
+  },
+  {
+   "description": null,
+   "obj": 150,
+   "source": null,
+   "title": "West Half of Fat Lady"
+  },
+  {
+   "description": null,
+   "obj": 157,
+   "source": null,
+   "title": "Clown Alley"
+  },
+  {
+   "description": null,
+   "obj": 170,
+   "source": null,
+   "title": "Lions' Den"
+  },
+  {
+   "description": null,
+   "obj": 175,
+   "source": null,
+   "title": "Menagerie"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "source": null,
+   "title": "Wardrobe Closet"
+  },
+  {
+   "description": null,
+   "obj": 182,
+   "source": null,
+   "title": "Standing Room Only"
+  },
+  {
+   "description": null,
+   "obj": 192,
+   "source": null,
+   "title": "Inside Cage"
+  },
+  {
+   "description": null,
+   "obj": 194,
+   "source": null,
+   "title": "Far End of Midway"
+  },
+  {
+   "description": null,
+   "obj": 201,
+   "source": null,
+   "title": "Camp, East"
+  },
+  {
+   "description": null,
+   "obj": 206,
+   "source": null,
+   "title": "Under the Bleachers"
+  },
+  {
+   "description": "You're hanging from the high wire.",
+   "obj": 225,
+   "source": "static",
+   "title": "Left Hanging"
+  },
+  {
+   "description": null,
+   "obj": 226,
+   "source": null,
+   "title": "Inside Trailer"
+  },
+  {
+   "description": "You're standing next to the big top, which is gently flapping in the warm breeze. A cheap plastic clown mask, having been carelessly dropped here, is lying face-up on the ground. About waist-high, a barred passage for wild animals extends several yards out from the big top.",
+   "obj": 230,
+   "source": "runtime",
+   "title": "Beside the Big Top"
+  },
+  {
+   "description": null,
+   "obj": 232,
+   "source": null,
+   "title": "Blue Room"
+  }
+ ],
+ "serial": "851218",
+ "story": "BALLYHOO.Z3"
+}

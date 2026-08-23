@@ -1,0 +1,176 @@
+[
+ {
+  "description": "You are in a small alcove off the Silver Room. Sitting in the middle of this small room is a roughly-hewn slab of granite, much like a legless table.",
+  "obj": 10,
+  "objs": [
+   10
+  ],
+  "title": "Silver Alcove"
+ },
+ {
+  "description": "You are in the Silver Chamber, a room whose walls reflect your light brilliantly due to their silver surface. A doorway leads west and out, while another doorway leads into a smaller room to the south.",
+  "obj": 11,
+  "objs": [
+   11
+  ],
+  "title": "Silver Room"
+ },
+ {
+  "description": "You are in a small alcove off the Golden Room. Sitting in the middle of this small room is a roughly-hewn slab of granite, much like a legless table.",
+  "obj": 13,
+  "objs": [
+   13
+  ],
+  "title": "Golden Alcove"
+ },
+ {
+  "description": "You are in a room whose walls are covered with gold leaf. Your light reflects off the walls with a rich, warm tone and reveals the outlines of hieroglyphics engraved in the gold itself. There is a doorway cut into the south wall and, through the reflected light, you can tell it leads into a small chamber. There is another doorway leading out to the east.",
+  "obj": 15,
+  "objs": [
+   15
+  ],
+  "title": "Golden Room"
+ },
+ {
+  "description": "You are in the temple's inner chamber. The ceiling here is lower, low enough for your light to reach it. There are openings in the east and west walls, and a large, arched doorway to the south. The walls are covered with paintings, most of which depict the Queen in different stages of preparation for her trip on the royal barge. One in particular, larger than any of the others, shows the Queen and all of her attendants aboard the barge, floating through the air on their way to the netherworld. There are some detailed hieroglyphs on one of the walls.",
+  "obj": 16,
+  "objs": [
+   16
+  ],
+  "title": "Inner Chamber"
+ },
+ {
+  "description": "You are on an east/west path on the north side of the encampment. A path to the south starts here, and you can see the riverbank clearly to the west. A warm, light breeze reaches your face, drying your sweat into a thin mask of salt. You glance to the north and are greeted by a disheartening sight: an endless stretch of searing desert.",
+  "obj": 73,
+  "objs": [
+   73
+  ],
+  "title": "Near the Nile"
+ },
+ {
+  "description": "You are in a room whose shape is that of a perfect cube. There are two square doorways cut into the walls -- one to the south, and another to the east.",
+  "obj": 95,
+  "objs": [
+   95,
+   96,
+   97,
+   98,
+   99,
+   100,
+   101,
+   102
+  ],
+  "title": "Cube"
+ },
+ {
+  "description": "You are in the westmost portion of the hold, below the deck of the barge. On the north side of the hull is a small knothole about three feet off the deck. Overhead you can see a hole going through the deck while, directly below this hole, on the deck by your feet, is a slot.",
+  "obj": 110,
+  "objs": [
+   110
+  ],
+  "title": "West End of Hold"
+ },
+ {
+  "description": "You are standing on the deck of an ancient wooden barge. Before you, cut into the deck, is a hole. To the south is a plank which leads down off the barge. You can see two cabins on the deck, one to the west and the other to the east.",
+  "obj": 114,
+  "objs": [
+   114
+  ],
+  "title": "Center of Barge"
+ },
+ {
+  "description": "You're at the start of a hallway which goes off to the north. To the south, directly behind you, is the back side of the barge. There's enough room to get around it to the east and west.",
+  "obj": 115,
+  "objs": [
+   115,
+   116,
+   117,
+   118,
+   119,
+   120
+  ],
+  "title": "Barge Chamber"
+ },
+ {
+  "description": "You are standing in the room of the protective goddess Neith. This room seems dark and mysterious with its decorations of inky-blue lapis lazuli and jet-black obsidian. Gold scrollwork defines an area on one of the walls, in the center of which is the symbol of Neith. Below this you can see some hieroglyphs etched into a beaten gold panel. There is a door in the northwest wall leading out of the room.",
+  "obj": 135,
+  "objs": [
+   135
+  ],
+  "title": "Room of Neith"
+ },
+ {
+  "description": "This is the room of the protective goddess Isis. You stand in amazement in the center of the room as thousands of tiny lights twinkle around you. With great surprise you realize that the light from your torch is being reflected by the mirror-like surfaces of innumerable quartzite chips. These are set artfully into red clay panels in the walls, and are surrounded by shiny red jasper fragments. On the southwest wall, under the winged symbol of Isis, some hieroglyphic text is inscribed in a gold panel. To the northeast is an arched opening, and, looking through it, you can barely make out a hallway.",
+  "obj": 137,
+  "objs": [
+   137
+  ],
+  "title": "Room of Isis"
+ },
+ {
+  "description": "You are standing in a small room, that of the protective goddess Selkis. There are red, blue and green patterns on the walls formed from small glazed tiles that have been carefully arranged in order of shade. The darkest tiles border the floor, and become lightest near the ceiling. On one wall, inscribed in a beaten gold panel, is the symbol of Selkis, under which you can see some hieroglyphic text. An opening through the southwest wall leads out of this room.",
+  "obj": 139,
+  "objs": [
+   139
+  ],
+  "title": "Room of Selkis"
+ },
+ {
+  "description": "You are in a strange, round room which sits in the center of four hallways. These hallways lead off to the northeast, southeast, southwest and northwest like the spokes of a wheel. Above your head is a long tunnel which stretches up and out of sight.",
+  "obj": 141,
+  "objs": [
+   141
+  ],
+  "title": "Circular Room"
+ },
+ {
+  "description": "You have entered the room of the protective goddess Nephthys. The walls here are cut from pink granite, elaborately decorated with bright red carnelian and pale yellow feldspar. Along the northeast wall are panels of beaten gold, and midway up this wall, under the winged symbol of Nephthys, you can see some hieroglyphs. To the southeast, an opening has been cut in the thick granite wall.",
+  "obj": 145,
+  "objs": [
+   145
+  ],
+  "title": "Room of Nephthys"
+ },
+ {
+  "description": "You are in the Chamber of Reconstitution of the Body, the Treasury. To the west is a doorway leading back into the Burial Chamber.",
+  "obj": 173,
+  "objs": [
+   173
+  ],
+  "title": "Treasury"
+ },
+ {
+  "description": null,
+  "obj": 174,
+  "objs": [
+   174
+  ],
+  "title": "Burial Chamber"
+ },
+ {
+  "description": "You are in the Chamber of Rebirth, the Annex. As you gaze about this small room, strange kohl-rimmed eyes gaze back at you from the painted figures which cover all of the walls. There are scenes of a great procession, with white-clad princesses offering gifts of precious oils and papyri to the mummified figure of the Queen. Bastet, the cat goddess, holds the mummy erect. Above you, painted on the ceiling, is the image of Tueris, the hippopotamus goddess. The only way out is through the doorway to the east.",
+  "obj": 181,
+  "objs": [
+   181
+  ],
+  "title": "Annex"
+ },
+ {
+  "description": "You are in the southern end of the Chamber of Eternal Royalty. From here you can see the room stretching out towards the north. The south wall is painted to resemble large baskets of lotus flowers with their blue petals framing an image of the Sun God, Amun Ra. The west wall has a timber doorway, inset several feet into the rocks, outlining a door.",
+  "obj": 186,
+  "objs": [
+   186,
+   192,
+   195
+  ],
+  "title": "Antechamber"
+ },
+ {
+  "description": null,
+  "obj": 206,
+  "objs": [
+   206
+  ],
+  "title": "Chamber of Ra"
+ }
+]

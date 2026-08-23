@@ -1,19 +1,44 @@
 /*----------------------
  | music.c
- | Description: The platform-independent music engine: room-text classification
- |   into mood categories, the mix-mode state machine (Dynamic / Override /
- |   Sequential / Random), and the loop-end / debounce logic that decides when to
- |   change track. It owns no hardware -- a backend play callback (set by the
- |   Saturn client, or by the host tests) does the actual playing, and is_playing
- |   / is_short callbacks report drive state -- so this file builds and unit-tests
- |   on the host.
+ | Description: The platform-independent music engine: the mix-mode state
+ |   machine (Dynamic / Override / Sequential / Random), the loop-end /
+ |   debounce logic that decides when to change track, and the per-turn
+ |   decision that resolves a room's authored scene -- or an in-text danger/
+ |   triumph moment -- into a CD-DA track. It owns no hardware -- a backend
+ |   play callback (set by the Saturn client, or by the host tests) does the
+ |   actual playing, and is_playing / is_short callbacks report drive state --
+ |   so this file builds and unit-tests on the host.
  | Author: suinevere
- | Dependencies: music.h (categories, mix modes, track bounds, keyword/pool/
- |   room-category data accessors), string.h
+ | Dependencies: music.h (mix modes, track bounds, pool accessor),
+ |   scene/scene_map.h (scene_of_room, scene_game_index, scene_track_mask),
+ |   event_scan.h (event_scan, EV_*), string.h
  ----------------------*/
 #include "music.h"
-#include "room_class.h"
+#include "scene/scene_map.h"
+#include "event_scan.h"
 #include <string.h>
+
+/*----------------------
+ | MUSIC_POOL_NEUTRAL
+ | Description: The pool selector for the neutral fallback, one past the last
+ |   EV_* id so it can never be mistaken for an event. music_data.c defines
+ |   the identical constant; the two files agree on this without either
+ |   owning the other's data.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_POOL_NEUTRAL EVENT_N
+
+/*----------------------
+ | CAT_KIND_NONE / CAT_KIND_SCENE / CAT_KIND_EVENT
+ | Description: What a tracked category actually is. SC_* scene ids and EV_*
+ |   event ids are separate vocabularies that both start at 0 -- comparing or
+ |   storing them as one bare int would make SC_FOREST indistinguishable from
+ |   EV_DANGER, which is exactly the ambiguity TC_* never had. Every place
+ |   that remembers "what is sounding / pending / armed" carries one of these
+ |   alongside the numeric id so the two vocabularies can never collide.
+ | Author: suinevere
+ ----------------------*/
+enum { CAT_KIND_NONE = 0, CAT_KIND_SCENE = 1, CAT_KIND_EVENT = 2 };
 
 /*----------------------
  | g_rng
@@ -46,101 +71,88 @@ static unsigned int rng_next_pub(void) { return rng_next(); }
 
 /*----------------------
  | music_category_track
- | Description: Picks a uniformly random track from a category's pool.
+ | Description: Picks a uniformly random track from a pool.
  | Author: suinevere
- | Dependencies: music.h (music_category_pool)
+ | Dependencies: music.h (music_track_pool)
  | Globals: g_rng (via rng_next)
- | Params: category -- MC_* category id
+ | Params: category -- EV_DANGER, EV_TRIUMPH, or MUSIC_POOL_NEUTRAL
  | Returns: a track number from the pool, or 0 if the pool is empty
  ----------------------*/
 int music_category_track(int category) {
-    const unsigned char* p; int n = music_category_pool(category, &p);
+    const unsigned char* p; int n = music_track_pool(category, &p);
     if (n <= 0) return 0;
     return p[rng_next() % (unsigned)n];
 }
 
 /*----------------------
- | music_note_room_title
- | Description: Forwards the interpreter's room name to the classifier. Kept on
- |   the music_* surface because saturn_glue.cxx already calls it there and the
- |   interpreter has no reason to know classification moved.
+ | music_track_from_mask
+ | Description: The r-th set bit of a scene's track mask, as a CD-DA track
+ |   number. r is reduced modulo the number of set bits, so any value is legal
+ |   and an empty mask answers 0 (no track) rather than dividing by zero.
+ |
+ |   A mask rather than a list because the disc carries 31 tracks and one 32-bit
+ |   word holds every subset of them, with no length field and no indirection.
  | Author: suinevere
- | Dependencies: room_class.h (room_class_note_title)
+ | Dependencies: N/A
  | Globals: N/A
- | Params: title -- the room name; NULL clears it
- | Returns: N/A
+ | Params: mask -- one bit per track; r -- any value
+ | Returns: a track number, or 0 when the mask is empty
  ----------------------*/
-void music_note_room_title(const char* title) {
-    room_class_note_title(title);
+int music_track_from_mask(unsigned long mask, unsigned int r) {
+    int n = 0, i;
+    for (i = 0; i < 32; i++) if (mask & (1UL << i)) n++;
+    if (n == 0) return 0;
+    r %= (unsigned int) n;
+    for (i = 0; i < 32; i++) {
+        if (!(mask & (1UL << i))) continue;
+        if (r == 0) return i;
+        r--;
+    }
+    return 0;
 }
 
 /*----------------------
  | MUSIC_TEXT_MAX
- | Description: Capacity of the per-turn text buffer the classifiers read.
+ | Description: Capacity of the per-turn text buffer event_scan reads.
  | Author: suinevere
  ----------------------*/
 #define MUSIC_TEXT_MAX 512
 
 /*----------------------
  | engine state (g_play .. g_turn_len)
- | Description: The core engine state. g_play is the backend play callback; the
- |   room block (g_release/g_serial identify the loaded game for its per-room
- |   category map; g_have_room/g_cur_room track the last classified room;
- |   g_base_cat is that room's mood and g_event_cat a per-room event override,
- |   -1 = none); g_active_track is what is sounding (0 = nothing yet); g_room_cache
- |   memoizes classify results (0 = unseen, else cat+1); g_turn_text/g_turn_len
- |   accumulate the current turn's output for classification.
+ | Description: The core engine state. g_play is the backend play callback;
+ |   g_release/g_serial/g_game_idx identify the loaded game (g_game_idx is the
+ |   cached scene_game_index row, -1 when the game carries no scene map);
+ |   g_have_room/g_cur_room track the last room seen; g_base_cat is that
+ |   room's authored scene (from scene_of_room, -1 when the room carries
+ |   none) and g_event_cat a per-room danger/triumph override (-1 = none) --
+ |   kept apart from g_base_cat because the two are different vocabularies
+ |   (see CAT_KIND_*). g_active_track is what is sounding (0 = nothing yet);
+ |   g_turn_text/g_turn_len accumulate the current turn's output for
+ |   event_scan.
  | Author: suinevere
  ----------------------*/
 static music_play_fn g_play = 0;
 static unsigned int  g_release = 0;
 static char          g_serial[8] = {0};
+static int           g_game_idx = -1;
 static int           g_have_room = 0;
 static unsigned int  g_cur_room = 0;
-static int           g_base_cat = TC_NEUTRAL;
+static int           g_base_cat = -1;
 static int           g_event_cat = -1;
 static int           g_active_track = 0;
-static unsigned char g_room_cache[256];
-/* Latches the classifier's genre-lock state. An unlisted game starts unresolved
-   with ambiguous keywords abstaining, so every verdict memoized before the lock
-   was decided on incomplete evidence and has to be thrown away when it fires. */
-static int           g_genre_was_locked = 0;
 static char          g_turn_text[MUSIC_TEXT_MAX];
 static int           g_turn_len = 0;
-
-/*----------------------
- | MUSIC_FALLBACK_ROOMS
- | Description: How many rooms in a row must classify as nothing before the
- |   engine gives up on the text and shows the game's authored default mood.
- |
- |   Three, matching MUSIC_ROTATE_ROOMS -- both answer the same shape of question
- |   and letting them disagree would be noise. It is also what keeps the older
- |   behaviour worth keeping: holding the previous picture across a corridor or a
- |   closet reads as continuity, and a threshold of one would turn every isolated
- |   featureless room into two wallpaper changes where there are currently none.
- | Author: suinevere
- ----------------------*/
-#define MUSIC_FALLBACK_ROOMS 3
-
-/*----------------------
- | g_neutral_rooms / g_fallback_cat
- | Description: g_neutral_rooms counts consecutive rooms whose text classified as
- |   nothing; g_fallback_cat is the loaded game's authored default mood, or
- |   TC_NEUTRAL when it has none and the older hold-the-previous-picture
- |   behaviour should stand.
- | Author: suinevere
- ----------------------*/
-static int           g_neutral_rooms = 0;
-static unsigned char g_fallback_cat = TC_NEUTRAL;
 
 /*----------------------
  | mix state (g_mix_mode .. g_isshort)
  | Description: Mix-mode selection and its bookkeeping. g_mix_mode is the active
  |   MIX_*; g_override_track/g_seq_track carry the Override and Sequential
- |   positions; g_active_cat is the category currently sounding (-1 = none), with
- |   g_pending_cat/g_pending_track/g_pending_frames the debounced switch waiting
- |   to commit. MUSIC_DEBOUNCE_FRAMES (1.5s @ 60fps) is how long a new room must
- |   hold before its track -- and its picture -- take over; g_debounce_frames is
+ |   positions; g_active_kind/g_active_cat are the category currently sounding
+ |   (CAT_KIND_NONE/-1 = nothing chosen yet), with g_pending_kind/g_pending_cat/
+ |   g_pending_track/g_pending_frames the debounced switch waiting to commit.
+ |   MUSIC_DEBOUNCE_FRAMES (1.5s @ 60fps) is how long a new room must hold
+ |   before its track -- and its picture -- take over; g_debounce_frames is
  |   the runtime override (host tests shorten it). g_isplaying/g_isshort are the
  |   drive-state callbacks.
  | Author: suinevere
@@ -148,7 +160,9 @@ static unsigned char g_fallback_cat = TC_NEUTRAL;
 static int g_mix_mode = MIX_DYNAMIC;
 static int g_override_track = 10;
 static int g_seq_track = MUSIC_TRACK_MIN;
+static int g_active_kind = CAT_KIND_NONE;
 static int g_active_cat = -1;
+static int g_pending_kind = CAT_KIND_NONE;
 static int g_pending_cat = -1;
 static int g_pending_track = 0;
 static int g_pending_frames = 0;
@@ -187,24 +201,30 @@ void music_set_debounce_frames(int n) { g_debounce_frames = (n < 0) ? 0 : n; }
 /*----------------------
  | g_cat_fn / music_set_category_fn / notify_cat
  | Description: The category-change subscriber and the one place that calls it.
- |   The active category is the only thing that decides which track sounds, and it
- |   is now also what decides which picture shows; publishing it here rather than
- |   letting the client re-derive it from the same text keeps the two on one
- |   event, so a picture cannot end up describing a mood the music has already
- |   left. Optional: with nothing installed the engine behaves exactly as it did
- |   before, which is what the pre-existing host tests assume.
+ |   The callback's contract is scene-only: it announces the active SCENE, for
+ |   choosing a background picture, and nothing else. notify_cat takes the kind
+ |   alongside the value and fires g_cat_fn only when kind is CAT_KIND_SCENE --
+ |   an event taking over the track (CAT_KIND_EVENT) is deliberately silent to
+ |   the subscriber, which holds whatever picture it is already showing. Events
+ |   carry no picture of their own, and passing one through as a bare int would
+ |   be indistinguishable from a real scene on the other end (see CAT_KIND_*).
+ |   Suppressing it here, in the one place that knows events have no picture,
+ |   is simpler than pushing that policy onto every subscriber. Optional: with
+ |   nothing installed the engine behaves exactly as it did before, which is
+ |   what the pre-existing host tests assume.
  | Author: suinevere
  ----------------------*/
 static void (*g_cat_fn)(int) = 0;
 void music_set_category_fn(void (*fn)(int cat)) { g_cat_fn = fn; }
-static void notify_cat(int cat) { if (g_cat_fn) g_cat_fn(cat); }
+static void notify_cat(int kind, int cat) { if (kind == CAT_KIND_SCENE && g_cat_fn) g_cat_fn(cat); }
 
 /*----------------------
  | g_rot_fn / music_set_rotate_fn / notify_rotate / g_same_cat_rooms
  | Description: The same-category rotation subscriber, and the room counter that
  |   triggers it. g_same_cat_rooms counts rooms entered since the last commit
  |   while the mood held; at MUSIC_ROTATE_ROOMS the engine cycles to another track
- |   in the category it is already in and tells the art to follow.
+ |   in the category it is already in and tells the art to follow. Same
+ |   scene-only contract as notify_cat: fires only when kind is CAT_KIND_SCENE.
  |
  |   This is a separate signal from notify_cat because the client's job differs:
  |   on a category change it resolves that mood's picture, on a rotation it has to
@@ -215,7 +235,7 @@ static void notify_cat(int cat) { if (g_cat_fn) g_cat_fn(cat); }
 static void (*g_rot_fn)(int) = 0;
 static int g_same_cat_rooms = 0;
 void music_set_rotate_fn(void (*fn)(int cat)) { g_rot_fn = fn; }
-static void notify_rotate(int cat) { if (g_rot_fn) g_rot_fn(cat); }
+static void notify_rotate(int kind, int cat) { if (kind == CAT_KIND_SCENE && g_rot_fn) g_rot_fn(cat); }
 
 /*----------------------
  | g_paused / g_pause_fn / g_resume_fn / music_set_pausefns
@@ -365,19 +385,19 @@ static void play_dyn(int track, int pass) {
 
 /*----------------------
  | pick_prefer_long
- | Description: Chooses a track from `cat`'s pool, preferring a non-short one and,
+ | Description: Chooses a track from a pool, preferring a non-short one and,
  |   where the pool allows, one other than what is sounding now -- a category
  |   change should be audible, so it cycles off the current track instead of
  |   possibly re-rolling it. Falls back to any long track if the only long option
  |   is the current one, then to any track at all.
  | Author: suinevere
- | Dependencies: music.h (music_category_pool)
+ | Dependencies: music.h (music_track_pool)
  | Globals: g_active_track (read)
- | Params: cat -- MC_* category to pick from
+ | Params: cat -- EV_DANGER, EV_TRIUMPH, or MUSIC_POOL_NEUTRAL
  | Returns: a track number, or 0 if the pool is empty
  ----------------------*/
 static int pick_prefer_long(int cat) {
-    const unsigned char* p; int n = music_category_pool(cat, &p);
+    const unsigned char* p; int n = music_track_pool(cat, &p);
     if (n <= 0) return 0;
     int longs[64], m = 0;
     for (int i = 0; i < n && m < 64; i++)
@@ -389,6 +409,31 @@ static int pick_prefer_long(int cat) {
 }
 
 /*----------------------
+ | pick_dynamic_track
+ | Description: Chooses a track for a target the room-scene lookup or the
+ |   event scan named. An event still comes from its pool the way a room mood
+ |   always did (pick_prefer_long). A scene with authored tracks draws the
+ |   r-th set bit of its mask (music_track_from_mask); one with none authored
+ |   -- the same as no scene at all, CAT_KIND_NONE -- falls back to the
+ |   neutral pool.
+ | Author: suinevere
+ | Dependencies: scene/scene_map.h (scene_track_mask), music_track_from_mask,
+ |   pick_prefer_long
+ | Globals: g_game_idx (read)
+ | Params: kind -- CAT_KIND_SCENE, CAT_KIND_EVENT, or CAT_KIND_NONE; cat --
+ |   the SC_* or EV_* value, meaningless when kind is CAT_KIND_NONE
+ | Returns: a track number
+ ----------------------*/
+static int pick_dynamic_track(int kind, int cat) {
+    if (kind == CAT_KIND_EVENT) return pick_prefer_long(cat);
+    if (kind == CAT_KIND_SCENE && g_game_idx >= 0) {
+        unsigned long mask = scene_track_mask(g_game_idx, cat);
+        if (mask) return music_track_from_mask(mask, rng_next_pub());
+    }
+    return pick_prefer_long(MUSIC_POOL_NEUTRAL);
+}
+
+/*----------------------
  | music_set_backend
  | Description: Installs the backend play callback (track, loop) the engine drives.
  | Author: suinevere
@@ -397,11 +442,12 @@ void music_set_backend(music_play_fn play) { g_play = play; }
 
 /*----------------------
  | music_set_game
- | Description: Records the loaded game's release number and (truncated) serial so
- |   music_on_turn can consult that game's per-room category map.
+ | Description: Records the loaded game's release number and (truncated)
+ |   serial, and resolves and caches its scene-table row index so
+ |   music_on_turn does not have to look it up every turn.
  | Author: suinevere
- | Dependencies: N/A
- | Globals: g_release, g_serial
+ | Dependencies: scene/scene_map.h (scene_game_index)
+ | Globals: g_release, g_serial, g_game_idx
  | Params: release -- Z-machine release word; serial -- 6-char serial (may be short)
  | Returns: N/A
  ----------------------*/
@@ -409,10 +455,7 @@ void music_set_game(unsigned int release, const char* serial) {
     g_release = release;
     for (int i = 0; i < 6 && serial && serial[i]; i++) g_serial[i] = serial[i];
     g_serial[6] = 0;
-    room_class_set_game(g_release, g_serial);
-    g_genre_was_locked = room_class_genre_locked();
-    g_fallback_cat = text_game_fallback(g_release, g_serial);
-    g_neutral_rooms = 0;
+    g_game_idx = scene_game_index(g_release, g_serial);
 }
 
 /*----------------------
@@ -448,18 +491,19 @@ static void fade_emit(int level) { if (g_fade_fn) g_fade_fn(level); }
  |   Shared by the instant path and the bottom of a fade so the two cannot drift.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_active_cat, g_pending_cat, g_pending_track
+ | Globals: g_active_kind, g_active_cat, g_pending_kind, g_pending_cat, g_pending_track
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void commit_pending(void) {
     int t = g_pending_track;
     int rotate = g_pending_rotate;
+    g_active_kind = g_pending_kind;
     g_active_cat = g_pending_cat;
-    g_pending_cat = -1; g_pending_track = 0; g_pending_rotate = 0;
+    g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0; g_pending_rotate = 0;
     g_same_cat_rooms = 0;          // the walk that earned this rotation is spent
-    if (rotate) notify_rotate(g_active_cat);
-    else        notify_cat(g_active_cat);
+    if (rotate) notify_rotate(g_active_kind, g_active_cat);
+    else        notify_cat(g_active_kind, g_active_cat);
     play_dyn(t, 1);
 }
 
@@ -521,34 +565,22 @@ void music_transition_flush(void) {
 /*----------------------
  | music_reset
  | Description: Clears play state back to first-boot values and tells the backend
- |   to stop. Does NOT clear which game is loaded -- g_release/g_serial survive it
- |   on purpose, because main.cxx calls music_set_game before music_reset on every
- |   load, so anything keyed off the story identity (the authored genre, the
- |   fallback mood) is re-derived here rather than wiped, or it would be lost for
- |   the whole session. Called for a new game and on soft-reset re-entry so a
- |   stale engine cannot leak a track into the menu.
+ |   to stop. Does NOT clear which game is loaded -- g_release/g_serial/g_game_idx
+ |   survive it on purpose, because main.cxx calls music_set_game before
+ |   music_reset on every load, and that is where they are derived. Called for a
+ |   new game and on soft-reset re-entry so a stale engine cannot leak a track
+ |   into the menu.
  | Author: suinevere
- | Dependencies: room_class.h (room_class_reset, room_class_set_game,
- |   room_class_genre_locked, text_game_fallback); stops via g_play
- | Globals: nearly all engine/mix state, including g_fallback_cat and
- |   g_genre_was_locked which it re-derives from g_release/g_serial
+ | Dependencies: N/A (stops via g_play)
+ | Globals: nearly all engine/mix state except g_release/g_serial/g_game_idx
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void music_reset(void) {
-    g_have_room = 0; g_cur_room = 0; g_base_cat = TC_NEUTRAL; g_event_cat = -1;
-    room_class_reset();
+    g_have_room = 0; g_cur_room = 0; g_base_cat = -1; g_event_cat = -1;
     g_active_track = 0; g_turn_len = 0; g_turn_text[0] = 0;
-    for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
-    g_neutral_rooms = 0;
-    /* Reset clears play state, not which game is loaded. main.cxx calls
-       music_set_game before music_reset, so anything derived from the story
-       identity has to be re-derived here or it is lost for the whole session --
-       g_release and g_serial deliberately survive reset for exactly this. */
-    room_class_set_game(g_release, g_serial);
-    g_fallback_cat = text_game_fallback(g_release, g_serial);
-    g_genre_was_locked = room_class_genre_locked();
-    g_active_cat = -1; g_pending_cat = -1; g_pending_track = 0; g_pending_frames = 0;
+    g_active_kind = CAT_KIND_NONE; g_active_cat = -1;
+    g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0; g_pending_frames = 0;
     g_pending_rotate = 0; g_same_cat_rooms = 0;
     g_seq_track = MUSIC_TRACK_MIN;
     g_await_play = 0;
@@ -557,12 +589,10 @@ void music_reset(void) {
     g_hold_kind = HOLD_NONE;
     if (g_phase != MP_IDLE) fade_emit(255);   // mid-ramp: nothing else would lift it
     g_phase = MP_IDLE; g_fade_i = 0;
-    // Announce the neutral mood so the track comes off whatever the last room
-    // set. The WALLPAPER deliberately does not follow: TC_NEUTRAL carries no art
-    // (see CATEGORY_IMAGE in display.c), so the picture holds. That is fine on
-    // every path that reaches here -- main.cxx shows the title picture explicitly
-    // straight afterwards, and at game start the loading screen is still up.
-    notify_cat(TC_NEUTRAL);
+    // Nothing to announce: notify_cat only fires for CAT_KIND_SCENE, and there
+    // is no active scene right after a reset, so the subscriber hears nothing
+    // and holds whatever picture it is already showing.
+    notify_cat(CAT_KIND_NONE, -1);
     if (g_play) g_play(0, 0);
 }
 
@@ -631,12 +661,13 @@ static void play_random_now(void) {
  |   drives it off the room.
  | Author: suinevere
  | Dependencies: N/A (plays via g_play)
- | Globals: g_mix_mode, g_active_cat, g_pending_*, g_active_track, g_seq_track
+ | Globals: g_mix_mode, g_active_kind, g_pending_*, g_active_track, g_seq_track
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void music_start(void) {
-    g_active_cat = -1; g_pending_cat = -1; g_pending_track = 0;
+    g_active_kind = CAT_KIND_NONE; g_active_cat = -1;
+    g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0;
     switch (g_mix_mode) {
         case MIX_OVERRIDE:
             g_active_track = g_override_track;
@@ -659,19 +690,22 @@ void music_start(void) {
  |   which has nothing to key off and would otherwise sit silent waiting for a
  |   music_on_turn that a menu never sends. It opens on the track the player
  |   selected in Sound Options (music_set_mix records it) and, once that has had its
- |   MUSIC_DYN_LOOPS passes, cycles on through TC_NEUTRAL -- the pool that means "no
- |   particular mood", which is exactly what a menu is. Deliberately does NOT clear
- |   an established category the way music_start does: called from Sound Options
- |   mid-game, the room the player is standing in still sets the mood, and only a
- |   screen reached before any room has been seen falls back to neutral.
+ |   MUSIC_DYN_LOOPS passes, cycles on through the neutral pool -- which means "no
+ |   particular mood", exactly what a menu is. Deliberately does NOT clear an
+ |   established category the way music_start does: called from Sound Options
+ |   mid-game, the room the player is standing in still sets the mood (guarded by
+ |   g_active_track rather than the category, since "nothing has played yet this
+ |   session" is what actually distinguishes a fresh boot from a mid-game preview),
+ |   and only a screen reached before any room has been seen falls back to neutral.
  | Author: suinevere
  | Dependencies: N/A (plays via g_play)
- | Globals: g_mix_mode, g_active_cat, g_pending_*, g_active_track, g_seq_track
+ | Globals: g_mix_mode, g_active_kind, g_active_cat, g_pending_*, g_active_track,
+ |   g_seq_track
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void music_start_menu(void) {
-    g_pending_cat = -1; g_pending_track = 0;
+    g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0;
     switch (g_mix_mode) {
         case MIX_OVERRIDE:
         case MIX_SEQUENTIAL:
@@ -679,7 +713,10 @@ void music_start_menu(void) {
             music_start();
             break;
         case MIX_DYNAMIC: default:
-            if (g_active_cat < 0) { g_active_cat = TC_NEUTRAL; notify_cat(TC_NEUTRAL); }
+            if (g_active_track == 0) {
+                g_active_kind = CAT_KIND_NONE; g_active_cat = -1;
+                notify_cat(CAT_KIND_NONE, -1);   // no scene: subscriber hears nothing
+            }
             play_dyn(g_override_track, 1);
             break;
     }
@@ -698,14 +735,14 @@ void music_start_menu(void) {
  |   Random, and for Dynamic either replays the same track for another pass or, once
  |   it has had MUSIC_DYN_LOOPS of them, cycles to another track in the category it
  |   is already in -- the player has heard that one enough by then, whether or not
- |   the mood has moved. pick_prefer_long steers off the current track where the
- |   pool has a second long option, so the cycle is audible. This runs wherever
- |   music_tick does, so the passes keep counting in the in-game menus as well as at
- |   the prompt. Override repeats on its own, so there is nothing to do.
+ |   the mood has moved. pick_dynamic_track steers off the current track where the
+ |   source allows, so the cycle is audible. This runs wherever music_tick does, so
+ |   the passes keep counting in the in-game menus as well as at the prompt.
+ |   Override repeats on its own, so there is nothing to do.
  | Author: suinevere
  | Dependencies: N/A (plays via g_play, reads g_isplaying)
- | Globals: g_pending_*, g_await_play, g_active_track, g_active_cat, g_dyn_pass,
- |   g_seq_track, g_mix_mode
+ | Globals: g_pending_*, g_await_play, g_active_track, g_active_kind, g_active_cat,
+ |   g_dyn_pass, g_seq_track, g_mix_mode
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -756,9 +793,9 @@ void music_tick(void) {
             g_active_track = g_override_track;
             g_await_play = 1;
             if (g_play) g_play(g_override_track, 1);
-        } else if (g_mix_mode == MIX_DYNAMIC && g_active_cat >= 0) {
+        } else if (g_mix_mode == MIX_DYNAMIC) {
             if (g_dyn_pass < MUSIC_DYN_LOOPS) play_dyn(g_active_track, g_dyn_pass + 1);
-            else                              play_dyn(pick_prefer_long(g_active_cat), 1);
+            else                              play_dyn(pick_dynamic_track(g_active_kind, g_active_cat), 1);
         }
     }
 }
@@ -803,68 +840,55 @@ void music_note_output(const char* str, unsigned int len) {
 /*----------------------
  | music_on_turn
  | Description: The Dynamic-mode decision made once per turn (a no-op that just
- |   clears the buffer in other modes). Determines the target category -- an event
- |   keyword overrides the room's base mood, which comes from the game's per-room
- |   map, else a memoized keyword classification. If the target already sounds it
- |   keeps the stream; on the very first switch it plays immediately; otherwise it
- |   arms a debounced pending switch (restarting the countdown when the target
- |   changes), so brief passes through a room do not thrash the music. After
- |   MUSIC_FALLBACK_ROOMS rooms that classify as nothing, the game's authored
- |   default mood stands in for the text.
+ |   clears the buffer in other modes). obj is the room's Z-machine object number:
+ |   scene_of_room looks up its authored scene directly, so there is no
+ |   classification left to memoize. event_scan's result overrides the room's
+ |   scene for the rest of the room's stay, same as before, but is kept in its own
+ |   slot (g_event_cat) rather than folded into g_base_cat -- an SC_* and an EV_*
+ |   value are different vocabularies that both start at 0.
+ |
+ |   scene_of_room returning -1 means "this room has no authored scene"; per its
+ |   contract that is "hold whatever is showing", so with no event either the turn
+ |   changes nothing at all rather than falling back to a category. If the target
+ |   already sounds it keeps the stream; on the very first switch it plays
+ |   immediately; otherwise it arms a debounced pending switch (restarting the
+ |   countdown when the target changes), so brief passes through a room do not
+ |   thrash the music.
  | Author: suinevere
- | Dependencies: music.h (text_game_room_category)
+ | Dependencies: scene/scene_map.h (scene_of_room), event_scan.h (event_scan)
  | Globals: g_mix_mode, g_turn_text, g_cur_room, g_have_room, g_base_cat,
- |   g_event_cat, g_room_cache, g_active_cat, g_active_track, g_pending_*,
- |   g_neutral_rooms, g_fallback_cat
- | Params: room -- the current room number
+ |   g_event_cat, g_active_kind, g_active_cat, g_active_track, g_pending_*,
+ |   g_same_cat_rooms
+ | Params: obj -- the current room's Z-machine object number
  | Returns: N/A
  ----------------------*/
-void music_on_turn(unsigned int room) {
+void music_on_turn(unsigned int obj) {
     if (g_mix_mode != MIX_DYNAMIC) { g_turn_len = 0; g_turn_text[0] = 0; return; }
 
-    int event_cat = text_scan_event(g_turn_text);
-    int room_changed = (!g_have_room || room != g_cur_room);
+    int event_cat = event_scan(g_turn_text);
+    int room_changed = (!g_have_room || obj != g_cur_room);
     if (room_changed) {
-        int base = text_game_room_category(g_release, g_serial, room);
-        if (base < 0) {
-            unsigned char cached = (room < 256) ? g_room_cache[room] : 0;
-            if (cached) base = cached - 1;
-            else { base = text_classify_room(g_turn_text); if (room < 256) g_room_cache[room] = (unsigned char)(base + 1); }
-            /* Everything memoized before the genre settled was decided with the
-               ambiguous words abstaining, so it is all suspect. Drop the lot and
-               redo this room; the target comparison below then announces the new
-               mood on its own, so the picture and the track catch up together. */
-            if (!g_genre_was_locked && room_class_genre_locked()) {
-                g_genre_was_locked = 1;
-                for (int i = 0; i < 256; i++) g_room_cache[i] = 0;
-                base = text_classify_room(g_turn_text);
-                if (room < 256) g_room_cache[room] = (unsigned char)(base + 1);
-            }
-        }
-        /* The cache above stored the real verdict, not this substitution, so a
-           revisit mid-run behaves exactly like the first visit and the room
-           corpus keeps meaning "what the text says". */
-        if (base != TC_NEUTRAL) {
-            g_neutral_rooms = 0;
-        } else if (++g_neutral_rooms >= MUSIC_FALLBACK_ROOMS &&
-                   g_fallback_cat != TC_NEUTRAL) {
-            base = g_fallback_cat;
-        }
-        g_cur_room = room; g_have_room = 1; g_base_cat = base; g_event_cat = -1;
+        int base = scene_of_room(g_release, g_serial, obj);
+        g_cur_room = obj; g_have_room = 1; g_base_cat = base; g_event_cat = -1;
     }
     if (event_cat >= 0) g_event_cat = event_cat;
 
+    int target_kind = (g_event_cat >= 0) ? CAT_KIND_EVENT
+                     : (g_base_cat  >= 0) ? CAT_KIND_SCENE : CAT_KIND_NONE;
+    if (target_kind == CAT_KIND_NONE) { g_turn_len = 0; g_turn_text[0] = 0; return; }
     int target = (g_event_cat >= 0) ? g_event_cat : g_base_cat;
-    if (target != g_active_cat) {
+
+    if (target_kind != g_active_kind || target != g_active_cat) {
         /* A real mood change. It supersedes any rotation that was waiting: the
            point of the rotation was to relieve an unchanging mood, and the mood
            just changed. */
         if (g_active_track == 0) {
-            g_active_cat = target; g_same_cat_rooms = 0;
-            notify_cat(target); play_dyn(pick_prefer_long(target), 1);
-        } else if (target != g_pending_cat || g_pending_rotate) {
+            g_active_kind = target_kind; g_active_cat = target; g_same_cat_rooms = 0;
+            notify_cat(target_kind, target); play_dyn(pick_dynamic_track(target_kind, target), 1);
+        } else if (target != g_pending_cat || target_kind != g_pending_kind || g_pending_rotate) {
+            g_pending_kind   = target_kind;
             g_pending_cat    = target;
-            g_pending_track  = pick_prefer_long(target);
+            g_pending_track  = pick_dynamic_track(target_kind, target);
             g_pending_rotate = 0;
             g_pending_frames = g_debounce_frames;
         } else if (room_changed) {
@@ -877,7 +901,7 @@ void music_on_turn(unsigned int room) {
     } else {
         /* The mood they are in is the one already sounding. */
         if (g_pending_cat >= 0 && !g_pending_rotate) {
-            g_pending_cat = -1; g_pending_track = 0;   /* they came back; drop it */
+            g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0;   /* they came back; drop it */
         }
         if (room_changed) {
             g_same_cat_rooms++;
@@ -885,10 +909,11 @@ void music_on_turn(unsigned int room) {
                 g_pending_frames = g_debounce_frames;  /* still walking: keep settling */
             } else if (g_same_cat_rooms >= MUSIC_ROTATE_ROOMS) {
                 /* Three rooms of one mood. Move to another track in the same
-                   category -- pick_prefer_long steers off what is sounding, so
+                   category -- pick_dynamic_track steers off what is sounding, so
                    the change is audible -- and tell the art to move too. */
+                g_pending_kind   = g_active_kind;
                 g_pending_cat    = g_active_cat;
-                g_pending_track  = pick_prefer_long(g_active_cat);
+                g_pending_track  = pick_dynamic_track(g_active_kind, g_active_cat);
                 g_pending_rotate = 1;
                 g_pending_frames = g_debounce_frames;
             }

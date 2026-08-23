@@ -2,8 +2,8 @@
 
 Description: The metric gate removes what is provably unusable; everything left
     is a judgement call, which is now made in tools/art_server.py. This module
-    keeps the state machine that judgement writes through: cross-mood dedup so
-    the same picture is not offered for two moods, promote() as the only mover
+    keeps the state machine that judgement writes through: cross-scene dedup so
+    the same picture is not offered for two scenes, promote() as the only mover
     of files between tools/assets/candidates and tools/assets/png, and
     refetch_missing to restore a picture a fresh clone never had.
 
@@ -48,8 +48,8 @@ def _hamming(a, b):
 def dedup(records, already_accepted=None):
     """Drop records whose perceptual hash is too close to an earlier one.
 
-    Description: Runs across every mood, not within one. A cave that appears in
-        both UNDRGRND and HORROR reads as the rotation being broken, which is the
+    Description: Runs across every scene, not within one. A cave that appears in
+        both CAVE and CRYPT reads as the rotation being broken, which is the
         same reason the pools are kept disjoint on the disc.
 
         `already_accepted` seeds `seen` before any candidate is judged, so a
@@ -81,19 +81,41 @@ def dedup(records, already_accepted=None):
 Counts = namedtuple("Counts", "gained lost")
 
 
+def scene_of(rec):
+    """The scene a record belongs to, whichever vocabulary wrote it.
+
+    Description: A record fetched under the new scene vocabulary carries
+        "scene" directly; every record from before this migration carries
+        "mood" instead and has no "scene" key at all. Reading defensively
+        here is what lets the 412 old-shape records already on disc keep
+        working without being rewritten.
+    Author: suinevere
+    Dependencies: N/A
+    Globals: N/A
+    Params: rec -- a manifest record, either shape
+    Returns: the record's scene (or legacy mood) name
+    """
+    return rec.get("scene", rec.get("mood"))
+
+
 def _rel(rec):
     """Build a record's path relative to either image tree.
 
     Description: The candidates tree and the source tree share one layout, so
-        one relative path locates a picture in both.
+        one relative path locates a picture in both. A scene-shaped record
+        has no donor -- fetch_art now writes straight to <scene>/<noun>/ --
+        so the donor segment is included only when the record still carries
+        one, which is exactly the old mood-shaped records on disc today.
     Author: suinevere
     Dependencies: pathlib
     Globals: N/A
-    Params: rec -- a manifest record
-    Returns: Path of <mood>/<donor>/<noun>/<id>.png
+    Params: rec -- a manifest record, either shape
+    Returns: Path of <scene>/<donor>/<noun>/<id>.png when a donor is present,
+        otherwise <scene>/<noun>/<id>.png
     """
-    return (Path(rec["mood"]) / rec["donor"] / rec["noun"]
-            / "{}.png".format(rec["id"]))
+    donor = rec.get("donor")
+    parts = [scene_of(rec)] + ([donor] if donor else []) + [rec["noun"]]
+    return Path(*parts) / "{}.png".format(rec["id"])
 
 
 def _move_if_absent(src, dst):
@@ -134,7 +156,7 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
     Params: verdicts -- id -> "accept"/"reject"/"unmark"; manifest -- mutated
         in place; candidates_dir -- the git-ignored tree; png_dir --
         tools/assets/png
-    Returns: dict mapping mood to a Counts of gained and lost pictures
+    Returns: dict mapping scene to a Counts of gained and lost pictures
     """
     counts = {}
     for key, call in verdicts.items():
@@ -164,8 +186,9 @@ def promote(verdicts, manifest, candidates_dir, png_dir):
             continue
         gained = 1 if want == art_status.ACCEPTED else 0
         lost = 1 if was == art_status.ACCEPTED else 0
-        prev = counts.get(rec["mood"], Counts(0, 0))
-        counts[rec["mood"]] = Counts(prev.gained + gained, prev.lost + lost)
+        scene = scene_of(rec)
+        prev = counts.get(scene, Counts(0, 0))
+        counts[scene] = Counts(prev.gained + gained, prev.lost + lost)
     return counts
 
 
@@ -222,7 +245,7 @@ def main(argv, repo=None):
     Dependencies: fetch_art, art_status
     Globals: N/A
     Params: argv -- ["--promote", "<verdicts.json>"] or
-        ["--reject-unmarked", "[MOOD]"]; repo -- optional repository root
+        ["--reject-unmarked", "[SCENE]"]; repo -- optional repository root
         override, for tests
     Returns: 0 always
     """
@@ -239,31 +262,31 @@ def main(argv, repo=None):
         counts = promote(verdicts, manifest, assets / "candidates",
                          assets / "png")
         fetch_art.save_manifest(manifest_path, manifest)
-        for mood in sorted(counts):
-            print(f"  {mood}: +{counts[mood].gained} -{counts[mood].lost}")
+        for scene in sorted(counts):
+            print(f"  {scene}: +{counts[scene].gained} -{counts[scene].lost}")
         return 0
 
     if argv and argv[0] == "--reject-unmarked":
-        mood_filter = argv[1] if len(argv) >= 2 else None
+        scene_filter = argv[1] if len(argv) >= 2 else None
         verdicts = {}
         for key, rec in manifest.items():
             if rec["status"] != art_status.CANDIDATE:
                 continue
-            if mood_filter is not None and rec["mood"] != mood_filter:
+            if scene_filter is not None and scene_of(rec) != scene_filter:
                 continue
             verdicts[key] = "reject"
         swept = {}
         for key in verdicts:
-            mood = manifest[key]["mood"]
-            swept[mood] = swept.get(mood, 0) + 1
+            scene = scene_of(manifest[key])
+            swept[scene] = swept.get(scene, 0) + 1
         promote(verdicts, manifest, assets / "candidates", assets / "png")
         fetch_art.save_manifest(manifest_path, manifest)
-        for mood in sorted(swept):
-            print(f"  {mood}: rejected {swept[mood]} unmarked candidate(s)")
+        for scene in sorted(swept):
+            print(f"  {scene}: rejected {swept[scene]} unmarked candidate(s)")
         return 0
 
     print("  usage: art_review.py --promote <verdicts.json>")
-    print("  usage: art_review.py --reject-unmarked [MOOD]")
+    print("  usage: art_review.py --reject-unmarked [SCENE]")
     print("  review runs at http://127.0.0.1:8080 -- python tools/art_server.py")
     return 0
 

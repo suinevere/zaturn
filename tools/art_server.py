@@ -7,17 +7,17 @@ Description: Replaces the static contact sheets. Pictures are served as files
     status change goes through art_review.promote, which owns the four
     transitions and the png/candidates moves.
 Author: suinevere
-Dependencies: flask, art_queries, art_review, art_status, fetch_art
+Dependencies: flask, scene_vocab, art_review, art_status, fetch_art
 Globals: N/A
 """
 import socket
 import sys
 from pathlib import Path
 
-import art_queries
 import art_review
 import art_status
 import fetch_art
+import scene_vocab as vocab
 
 """HOST / PORT
 
@@ -49,28 +49,19 @@ def _assets(repo):
     return Path(repo) / "tools" / "assets"
 
 
-def _targets(assets):
-    """Read each mood's picture goal from the shipped vocabulary.
+PER_SCENE_TARGET = 99
+"""PER_SCENE_TARGET
 
-    Description: The goal lives in art_queries.json rather than in this file,
-        so retuning the vocabulary retunes the progress bars with it. A missing
-        or unreadable vocabulary degrades to an empty map and the UI simply
-        shows no target.
-    Author: suinevere
-    Dependencies: art_queries
-    Globals: N/A
-    Params: assets -- the tools/assets directory
-    Returns: dict mapping mood to its integer target
-    """
-    try:
-        vocab = art_queries.load(assets / "art_queries.json")
-    except Exception:
-        return {}
-    out = {}
-    for mood, entry in vocab.items():
-        out[mood] = entry.get("target", 0)
-    return out
-
+Description: The progress bars' picture goal, one flat number for every
+    scene rather than a per-scene figure read from a vocabulary file. The
+    old per-mood targets lived in art_queries.json, which the scene
+    migration retired -- nothing in scene_vocab replaces it, and inventing a
+    per-scene number without curation data behind it would be a guess
+    dressed up as configuration. 99 matches fetch_art.harvest's own default
+    per-scene budget (the disc's 1..99 per-game index cap), so the bar reads
+    as "how close to a full scene" rather than an arbitrary line.
+Author: suinevere
+"""
 
 SHOWN = (art_status.ACCEPTED, art_status.REJECTED, art_status.CANDIDATE)
 
@@ -82,35 +73,39 @@ FILTERS = {
 }
 
 
-def groups_for(records, mood, status):
-    """Split one mood's pictures into donor/noun sections.
+def groups_for(records, scene, status):
+    """Split one scene's pictures into noun sections.
 
     Description: The sections mirror the on-disk tree
-        tools/assets/png/<MOOD>/<DONOR>/<noun>/, which is the subdivision the
-        owner is filling toward a target -- so each carries its own counts and a
-        thin noun is visible without arithmetic. Counts describe the whole
-        group, not the filtered view, because "two accepted here already" is
-        what decides whether to keep a third. METRIC_REJECTED never appears:
-        the fetcher writes no file for one, so there is nothing to show.
+        tools/assets/png/<SCENE>/<noun>/, which is the subdivision the owner
+        is filling toward a target -- so each carries its own counts and a
+        thin noun is visible without arithmetic. There is no donor section
+        any more: every scene names a place directly, so nothing is
+        borrowed from another scene's nouns the way HORROR once borrowed
+        HOUSE's. Counts describe the whole group, not the filtered view,
+        because "two accepted here already" is what decides whether to keep
+        a third. METRIC_REJECTED never appears: the fetcher writes no file
+        for one, so there is nothing to show.
     Author: suinevere
-    Dependencies: art_status
+    Dependencies: art_status, art_review
     Globals: SHOWN, FILTERS
-    Params: records -- the manifest dict; mood -- the mood folder name;
-        status -- one of FILTERS' keys; anything else is treated as "all"
-    Returns: list of group dicts sorted by (donor, noun)
+    Params: records -- the manifest dict; scene -- the scene folder name
+        (matched against a record's scene, or its legacy mood when it has
+        no scene); status -- one of FILTERS' keys; anything else is treated
+        as "all"
+    Returns: list of group dicts sorted by noun
     """
     wanted = FILTERS.get(status, SHOWN)
     mine = [r for r in records.values()
-            if r["mood"] == mood and r["status"] in SHOWN]
-    keys = sorted({(r["donor"], r["noun"]) for r in mine})
+            if art_review.scene_of(r) == scene and r["status"] in SHOWN]
+    nouns = sorted({r["noun"] for r in mine})
     out = []
-    for donor, noun in keys:
-        group = [r for r in mine
-                 if r["donor"] == donor and r["noun"] == noun]
+    for noun in nouns:
+        group = [r for r in mine if r["noun"] == noun]
         shown = sorted((r for r in group if r["status"] in wanted),
                        key=lambda r: (isinstance(r["id"], str), r["id"]))
         out.append({
-            "donor": donor, "noun": noun, "records": shown,
+            "noun": noun, "records": shown,
             "accepted": sum(1 for r in group
                             if r["status"] == art_status.ACCEPTED),
             "rejected": sum(1 for r in group
@@ -141,32 +136,35 @@ def create_app(repo=None):
 
     @app.route("/")
     def index():
-        """Render the mood list with each mood's counts and progress toward target.
+        """Render the scene list with each scene's counts and progress toward target.
 
-        Description: Moods come from the vocabulary rather than the manifest,
-            so a mood with zero pictures still gets a row and a visible target;
-            a manifest record whose mood has no vocabulary entry is silently
-            left out of every row rather than crashing the page.
+        Description: Scenes come from scene_vocab.SCENES rather than the
+            manifest, so a scene with zero pictures still gets a row and a
+            visible target, in its table-index order rather than
+            alphabetically. A manifest record whose scene (or legacy mood)
+            names none of the 32 current scenes is silently left out of
+            every row rather than crashing the page -- the expected state
+            for the old mood-tagged corpus until it is re-tagged.
         Author: suinevere
-        Dependencies: flask, fetch_art, art_queries, art_status
-        Globals: N/A
+        Dependencies: flask, fetch_art, scene_vocab, art_review, art_status
+        Globals: PER_SCENE_TARGET
         Params: N/A
-        Returns: rendered HTML listing every mood in the vocabulary
+        Returns: rendered HTML listing every scene in the vocabulary
         """
         manifest = fetch_art.load_manifest(assets / "art_manifest.json")
-        targets = _targets(assets)
         rows = []
-        for mood in sorted(targets):
-            mine = [r for r in manifest.values() if r["mood"] == mood]
+        for scene in vocab.SCENES:
+            mine = [r for r in manifest.values()
+                    if art_review.scene_of(r) == scene]
             rows.append({
-                "mood": mood,
+                "scene": scene,
                 "accepted": sum(1 for r in mine
                                 if r["status"] == art_status.ACCEPTED),
                 "rejected": sum(1 for r in mine
                                 if r["status"] == art_status.REJECTED),
                 "undecided": sum(1 for r in mine
                                  if r["status"] == art_status.CANDIDATE),
-                "target": targets[mood],
+                "target": PER_SCENE_TARGET,
             })
         return render_template_string(INDEX_HTML, rows=rows)
 
@@ -198,7 +196,7 @@ def create_app(repo=None):
 
     @app.route("/verdict", methods=["POST"])
     def verdict():
-        """Apply one verdict through promote and report the mood's refreshed counts.
+        """Apply one verdict through promote and report the scene's refreshed counts.
 
         Description: The manifest is the only truth, so this route never
             assigns rec["status"] itself -- it hands the call to
@@ -227,8 +225,9 @@ def create_app(repo=None):
         art_review.promote({pid: call}, manifest,
                            assets / "candidates", assets / "png")
         fetch_art.save_manifest(path, manifest)
-        mood = rec["mood"]
-        mine = [r for r in manifest.values() if r["mood"] == mood]
+        scene = art_review.scene_of(rec)
+        mine = [r for r in manifest.values()
+                if art_review.scene_of(r) == scene]
         return jsonify({
             "id": pid,
             "status": rec["status"],
@@ -240,9 +239,9 @@ def create_app(repo=None):
                              if r["status"] == art_status.CANDIDATE),
         })
 
-    @app.route("/mood/<mood>")
-    def mood_page(mood):
-        """Render one mood's pictures grouped by donor/noun with a status filter.
+    @app.route("/scene/<scene>")
+    def scene_page(scene):
+        """Render one scene's pictures grouped by noun with a status filter.
 
         Description: Defaults to the undecided view because a resumed review
             pass wants to see what is left, not what is already settled. The
@@ -250,24 +249,24 @@ def create_app(repo=None):
             can exist in the manifest with no file on disk yet, and the
             verdict buttons must still work for it.
         Author: suinevere
-        Dependencies: flask, art_review, fetch_art
+        Dependencies: flask, art_review, fetch_art, scene_vocab
         Globals: N/A
-        Params: mood -- the mood folder name from the URL
-        Returns: rendered HTML; 404 for a mood with no vocabulary entry
+        Params: scene -- the scene folder name from the URL
+        Returns: rendered HTML; 404 for a name that is not a known scene
         """
         from flask import abort, render_template_string, request
-        if mood not in _targets(assets):
+        if scene not in vocab.SCENE_INDEX:
             abort(404)
         manifest = fetch_art.load_manifest(assets / "art_manifest.json")
         status = request.args.get("status", "undecided")
-        groups = groups_for(manifest, mood, status)
+        groups = groups_for(manifest, scene, status)
         have = set()
         for root in (assets / "png", assets / "candidates"):
             for g in groups:
                 for r in g["records"]:
                     if (Path(root) / art_review._rel(r)).exists():
                         have.add(str(r["id"]))
-        return render_template_string(MOOD_HTML, mood=mood, groups=groups,
+        return render_template_string(SCENE_HTML, scene=scene, groups=groups,
                                       status=status, have=have)
 
     return app
@@ -280,10 +279,10 @@ td:first-child,th:first-child{text-align:left}a{color:#8cf}
 .bar{background:#222;width:120px;height:9px;display:inline-block}
 .bar i{background:#4a8;height:9px;display:block}</style>
 <h1>Room art review</h1>
-<table><tr><th>mood</th><th>accepted</th><th>rejected</th><th>undecided</th>
+<table><tr><th>scene</th><th>accepted</th><th>rejected</th><th>undecided</th>
 <th>of target</th><th></th></tr>
 {% for r in rows %}<tr>
-<td><a href="/mood/{{ r.mood }}">{{ r.mood }}</a></td>
+<td><a href="/scene/{{ r.scene }}">{{ r.scene }}</a></td>
 <td>{{ r.accepted }}</td><td>{{ r.rejected }}</td><td>{{ r.undecided }}</td>
 <td>{{ r.accepted }} / {{ r.target }}</td>
 <td><span class="bar"><i style="width:{{ (100 * r.accepted // r.target) if r.target else 0 }}%"></i></span></td>
@@ -292,7 +291,7 @@ td:first-child,th:first-child{text-align:left}a{color:#8cf}
 """
 
 
-MOOD_HTML = """<!doctype html><meta charset="utf-8"><title>{{ mood }}</title>
+SCENE_HTML = """<!doctype html><meta charset="utf-8"><title>{{ scene }}</title>
 <style>body{background:#111;color:#ddd;font:13px sans-serif;margin:24px}
 a{color:#8cf}h2{margin:26px 0 6px;font-size:14px;border-bottom:1px solid #333}
 figure{display:inline-block;margin:6px;text-align:center;width:320px}
@@ -304,13 +303,13 @@ figure.accepted{outline:3px solid #4a8}figure.rejected{opacity:.35}
 figure:focus{outline:3px solid #8cf}
 #big{position:fixed;inset:0;background:#000d;display:none;
 align-items:center;justify-content:center}#big img{max-width:95vw}</style>
-<p><a href="/">&larr; all moods</a> &middot;
+<p><a href="/">&larr; all scenes</a> &middot;
 {% for f in ["undecided","accepted","rejected","all"] %}
-<a href="/mood/{{ mood }}?status={{ f }}">{{ f }}</a>
+<a href="/scene/{{ scene }}?status={{ f }}">{{ f }}</a>
 {% endfor %}</p>
-<h1>{{ mood }}</h1>
+<h1>{{ scene }}</h1>
 {% for g in groups %}
-<h2>{{ g.donor }} / {{ g.noun }} &mdash;
+<h2>{{ g.noun }} &mdash;
 {{ g.accepted }} accepted &middot; {{ g.rejected }} rejected &middot;
 {{ g.undecided }} undecided</h2>
 {% for r in g.records %}

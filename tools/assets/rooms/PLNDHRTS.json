@@ -1,0 +1,351 @@
+{
+ "count": 57,
+ "desc_prop": 12,
+ "release": 26,
+ "rooms": [
+  {
+   "description": "Buried in the subtropical undergrowth, you lose all sense of being on someone's private estate; jungle seems to extend for miles on all sides of you. A footworn path curves from east to north here, and the vegetation lessens to the northeast.",
+   "obj": 1,
+   "source": "static",
+   "title": "Forest"
+  },
+  {
+   "description": null,
+   "obj": 2,
+   "source": null,
+   "title": "Dungeon"
+  },
+  {
+   "description": "A rutted drive runs north-south here, from a high spiked gate through the jungle to Lafond's mansion. You hide in the bushes nearby.",
+   "obj": 20,
+   "source": "static",
+   "title": "Front Drive"
+  },
+  {
+   "description": "A firepit in the floor smokes badly, fogging up the depths of this large kitchen, somehow not escaping through either the south or west doors.",
+   "obj": 21,
+   "source": "static",
+   "title": "Kitchen"
+  },
+  {
+   "description": null,
+   "obj": 24,
+   "source": null,
+   "title": "Lawn"
+  },
+  {
+   "description": "Hewn from dense rock, the cell is a stagnant burrow. Except for the tiniest glow of light from the torch two rooms away, it is pitch black.",
+   "obj": 26,
+   "source": "static",
+   "title": "Cell"
+  },
+  {
+   "description": null,
+   "obj": 28,
+   "source": null,
+   "title": "Stair Landing"
+  },
+  {
+   "description": "You stand in a carpeted hallway, leading west to a stair landing. To the north is an ornately carved door. From the south comes the impression of light and air.",
+   "obj": 30,
+   "source": "static",
+   "title": "Upstairs Hall"
+  },
+  {
+   "description": "A strong wet breeze blows from a low doorway to the east. A circle of light leads west. The passageway continues south.",
+   "obj": 34,
+   "source": "static",
+   "title": "North Passage"
+  },
+  {
+   "description": "This is a gloomy, damp area at the bottom of the Helena Louise. To the fore there seems to be a little more light, or you can climb up some steep stairs.",
+   "obj": 46,
+   "source": "static",
+   "title": "Aft Hold"
+  },
+  {
+   "description": null,
+   "obj": 48,
+   "source": null,
+   "title": "Anteroom"
+  },
+  {
+   "description": null,
+   "obj": 50,
+   "source": null,
+   "title": "Bowsprit"
+  },
+  {
+   "description": "You are at the far end of a dank passageway heading north. A wooden door leads east.",
+   "obj": 62,
+   "source": "static",
+   "title": "South Passage"
+  },
+  {
+   "description": null,
+   "obj": 65,
+   "source": null,
+   "title": "Orchestra"
+  },
+  {
+   "description": "Perfumed by the heady odor of the night-blooming jasmine entwined in the bamboo latticework, this folly is a cool, dark haven.",
+   "obj": 67,
+   "source": "static",
+   "title": "Folly"
+  },
+  {
+   "description": "The front door stands open to the south, light splayed out onto a drive stretching north into the jungle. A path leads around the western wing of the house; jutting out from the east wing is a tall hedge.",
+   "obj": 68,
+   "source": "static",
+   "title": "Main Entrance"
+  },
+  {
+   "description": null,
+   "obj": 73,
+   "source": null,
+   "title": "Beach"
+  },
+  {
+   "description": null,
+   "obj": 77,
+   "source": null,
+   "title": "Deck"
+  },
+  {
+   "description": "You are in an officer's cabin, lit by the firelight glowing through a porthole. A door is to starboard. Except for the built-in bed, the room seems to have been emptied thoroughly, if hurriedly.",
+   "obj": 80,
+   "source": "static",
+   "title": "Cabin"
+  },
+  {
+   "description": "One long table set across the north entrance indicates that supper was served here earlier. West of you is the ballroom.",
+   "obj": 83,
+   "source": "static",
+   "title": "Supper Room"
+  },
+  {
+   "description": "You perch on a platform high above the deck, giving a view of the endless sea and the southernmost cliffs of the island, where a house pokes out of the vegetation. It gives off a general glow, but no lights can be seen in any of the second story windows. A tiny beach nestles into the base of the cliff.",
+   "obj": 85,
+   "source": "static",
+   "title": "Crow's Nest"
+  },
+  {
+   "description": null,
+   "obj": 89,
+   "source": null,
+   "title": "By the Ship"
+  },
+  {
+   "description": null,
+   "obj": 92,
+   "source": null,
+   "title": "Landing"
+  },
+  {
+   "description": "This room is exotically furnished with a Turkey divan and chairs. The exit is south.",
+   "obj": 94,
+   "source": "static",
+   "title": "Parlour"
+  },
+  {
+   "description": null,
+   "obj": 99,
+   "source": null,
+   "title": "Shallows"
+  },
+  {
+   "description": null,
+   "obj": 101,
+   "source": null,
+   "title": "Hold"
+  },
+  {
+   "description": null,
+   "obj": 109,
+   "source": null,
+   "title": "Gallery"
+  },
+  {
+   "description": "A grandiose staircase splits and twists up to the next floor here, framing the entrance south to the ballroom. Long hallways lead east and west; cool night air drifts in through the front door, north of you.",
+   "obj": 112,
+   "source": "static",
+   "title": "Foyer"
+  },
+  {
+   "description": "You are in a small clearing under the western side of the house. Heavy vines creep up the wall past a second floor window, open to the night air. Southwest is an opening in the bushes.",
+   "obj": 113,
+   "source": "static",
+   "title": "Clearing"
+  },
+  {
+   "description": null,
+   "obj": 114,
+   "source": null,
+   "title": "Forecastle"
+  },
+  {
+   "description": null,
+   "obj": 123,
+   "source": null,
+   "title": "Library"
+  },
+  {
+   "description": null,
+   "obj": 127,
+   "source": null,
+   "title": "Sleeping Cupboard"
+  },
+  {
+   "description": "This tiny kitchen smells of old stew and yeast. A low door to starboard shows the way out.",
+   "obj": 134,
+   "source": "static",
+   "title": "Galley"
+  },
+  {
+   "description": "You crouch in the green rustlings of the hedge. Not far east, wind keens up the cliff, high above swells breaking against a rocky shore. You know the folly is somewhere to the west. North, the hedge is somewhat less dense.",
+   "obj": 142,
+   "source": "static",
+   "title": "In the Hedge"
+  },
+  {
+   "description": "Lit only with moonlight through the open window, tonight this room is serving as a ladies' dressing room. An exit lies to the north.",
+   "obj": 146,
+   "source": "static",
+   "title": "Bedroom"
+  },
+  {
+   "description": null,
+   "obj": 148,
+   "source": null,
+   "title": "Lagoon"
+  },
+  {
+   "description": null,
+   "obj": 151,
+   "source": null,
+   "title": "Main Deck"
+  },
+  {
+   "description": "The carpeted hallway turns from west to north here, extending into the east wing. A long table blocks the way south.",
+   "obj": 153,
+   "source": "static",
+   "title": "East Hallway"
+  },
+  {
+   "description": "Once a cell, now, with the door missing, made into a guard's bunkroom, this room is distinctly uncomfortable. Gasps of air are forced through a crack in the seaward wall of the room. The way out is west of you.",
+   "obj": 155,
+   "source": "static",
+   "title": "Guard's Bunkroom"
+  },
+  {
+   "description": "No expense has been spared to make this long dim hallway anything but a servant's corridor. The foyer is east, a kitchen north of you.",
+   "obj": 159,
+   "source": "static",
+   "title": "Hall"
+  },
+  {
+   "description": null,
+   "obj": 165,
+   "source": null,
+   "title": "Ballroom"
+  },
+  {
+   "description": null,
+   "obj": 169,
+   "source": null,
+   "title": "Captain's Quarters"
+  },
+  {
+   "description": null,
+   "obj": 171,
+   "source": null,
+   "title": "Veranda"
+  },
+  {
+   "description": "This short passage turns from east to north to stop abruptly at an iron door.",
+   "obj": 173,
+   "source": "static",
+   "title": "Corner"
+  },
+  {
+   "description": null,
+   "obj": 176,
+   "source": null,
+   "title": "Lafond's Bedroom"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "source": null,
+   "title": "On the Ladder"
+  },
+  {
+   "description": "You are on a well-trampled lawn at the side of the house, one low doorway leading in to the east. Gravelled paths lead north and south into the undergrowth.",
+   "obj": 179,
+   "source": "static",
+   "title": "Trade Entrance"
+  },
+  {
+   "description": "This tiny cell is airless and shivering cold, entirely empty of anything but darkness. A wooden door leads west.",
+   "obj": 180,
+   "source": "static",
+   "title": "Cell"
+  },
+  {
+   "description": "Cool salt air, blowing past a torch on a spiral staircase below you, ruffles your hair and circles south into the library.",
+   "obj": 183,
+   "source": "static",
+   "title": "Stairwell"
+  },
+  {
+   "description": null,
+   "obj": 185,
+   "source": null,
+   "title": "Poop"
+  },
+  {
+   "description": null,
+   "obj": 189,
+   "source": null,
+   "title": "Quarterdeck"
+  },
+  {
+   "description": null,
+   "obj": 193,
+   "source": null,
+   "title": "Crew's Quarters"
+  },
+  {
+   "description": null,
+   "obj": 195,
+   "source": null,
+   "title": "Plundered Hearts"
+  },
+  {
+   "description": null,
+   "obj": 207,
+   "source": null,
+   "title": "In the Rigging"
+  },
+  {
+   "description": "You stand in a carpeted hallway, leading east to a stair landing. Rooms lie north and south of you.",
+   "obj": 208,
+   "source": "static",
+   "title": "Upstairs Hall"
+  },
+  {
+   "description": "Flickering torchlight lights the bottom of a spiral staircase. A draft blows from the east; a passage leads south.",
+   "obj": 212,
+   "source": "static",
+   "title": "Bottom of Stairwell"
+  },
+  {
+   "description": null,
+   "obj": 216,
+   "source": null,
+   "title": "By the House"
+  }
+ ],
+ "serial": "870730",
+ "story": "PLNDHRTS.Z3"
+}

@@ -1,0 +1,188 @@
+[
+ {
+  "description": "You are about 10 feet above the ground nestled among some large branches. The nearest branch above you is above your reach. A bird's nest is tangled around a branch here. In the nest is a large egg encrusted with precious jewels and inlaid with  gold, apparently scavenged somewhere by a childless songbird.",
+  "obj": 5,
+  "objs": [
+   5
+  ],
+  "title": "Up a Tree"
+ },
+ {
+  "description": "This is a small beach on the Frigid River below the Falls. A rainbow  crosses over the falls to the east and a path leads to the southwest.",
+  "obj": 8,
+  "objs": [
+   8
+  ],
+  "title": "End of Rainbow"
+ },
+ {
+  "description": null,
+  "obj": 13,
+  "objs": [
+   13
+  ],
+  "title": "Cyclops Room"
+ },
+ {
+  "description": "This room is full of discarded bags, which crumble at your touch. There  is an exit down a staircase.",
+  "obj": 14,
+  "objs": [
+   14
+  ],
+  "title": "Thief's Den"
+ },
+ {
+  "description": null,
+  "obj": 35,
+  "objs": [
+   35
+  ],
+  "title": "Entrance to Hades"
+ },
+ {
+  "description": "This is a drafty room at the bottom of a long shaft. To the south is a  passageway and to the east a very narrow crack. In the shaft can be seen  a heavy iron chain.",
+  "obj": 39,
+  "objs": [
+   39
+  ],
+  "title": "Drafty Room"
+ },
+ {
+  "description": null,
+  "obj": 42,
+  "objs": [
+   42
+  ],
+  "title": "Dome Room"
+ },
+ {
+  "description": "This is a small chamber, which appears to have been part of a coal mine. There are openings to the north and east, and a steep metal slide twisting  downward.",
+  "obj": 64,
+  "objs": [
+   64
+  ],
+  "title": "Slide Room"
+ },
+ {
+  "description": "You have come to a dead end in the maze.",
+  "obj": 66,
+  "objs": [
+   66,
+   125,
+   158
+  ],
+  "title": "Dead End"
+ },
+ {
+  "description": "This appears to have been an artist's studio. The walls and floors are  splattered with paint. At the west end of the room is an open door. A  narrow chimney leads up from a fireplace; although you might be able to  get up it, it seems unlikely you could get back down.",
+  "obj": 84,
+  "objs": [
+   84
+  ],
+  "title": "Studio"
+ },
+ {
+  "description": "This is a long east-west passage which is cluttered with broken timbers.  At the east end of the room, a rickety ladder leads through an opening in  the roof. A strong draft comes from the west where the room narrows  considerably.",
+  "obj": 86,
+  "objs": [
+   86
+  ],
+  "title": "Timber Room"
+ },
+ {
+  "description": "This is a small room with passages to the east and south and a forbidding hole leading west. Bloodstains and deep scratches mar the walls.",
+  "obj": 92,
+  "objs": [
+   92
+  ],
+  "title": "The Troll Room"
+ },
+ {
+  "description": "This is a circular stone room with passages in all directions, although  several have been blocked by cave-ins.",
+  "obj": 104,
+  "objs": [
+   104
+  ],
+  "title": "Round Room"
+ },
+ {
+  "description": "This was maintenance room for Flood Control Dam #3. On the wall is an  important-looking button. The west wall contains a door.",
+  "obj": 107,
+  "objs": [
+   107
+  ],
+  "title": "Maintenance Room"
+ },
+ {
+  "description": "You are east of a massive stone tomb. Through an open door you see  darkness within.",
+  "obj": 116,
+  "objs": [
+   116
+  ],
+  "title": "Stone Barrow"
+ },
+ {
+  "description": null,
+  "obj": 119,
+  "objs": [
+   119
+  ],
+  "title": "Dam"
+ },
+ {
+  "description": null,
+  "obj": 121,
+  "objs": [
+   121
+  ],
+  "title": "Bat Room"
+ },
+ {
+  "description": "This is a former Egyptian tomb. There is an ascending staircase to the west.",
+  "obj": 132,
+  "objs": [
+   132
+  ],
+  "title": "Egyptian Room"
+ },
+ {
+  "description": null,
+  "obj": 135,
+  "objs": [
+   135
+  ],
+  "title": "Grating Room"
+ },
+ {
+  "description": "You are at the base of the dam, on a bank of the river Frigid.",
+  "obj": 137,
+  "objs": [
+   137
+  ],
+  "title": "Dam Base"
+ },
+ {
+  "description": "You have entered the Land of the Living Dead. You can hear the sounds of thousands of lost souls weeping and moaning. A passage exits to the north.",
+  "obj": 140,
+  "objs": [
+   140
+  ],
+  "title": "Land of the Dead"
+ },
+ {
+  "description": null,
+  "obj": 147,
+  "objs": [
+   147
+  ],
+  "title": "Machine Room"
+ },
+ {
+  "description": "This room smells strongly of coal gas. Tunnels lead south and east.",
+  "obj": 150,
+  "objs": [
+   150
+  ],
+  "title": "Gas Room"
+ }
+]

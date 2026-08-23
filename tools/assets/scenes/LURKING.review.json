@@ -1,0 +1,210 @@
+[
+ {
+  "description": null,
+  "obj": 37,
+  "objs": [
+   37
+  ],
+  "title": "Concrete Box"
+ },
+ {
+  "description": "This building extends a long way south from the Infinite Corridor. It too is full of closed, locked offices.",
+  "obj": 38,
+  "objs": [
+   38
+  ],
+  "title": "Engineering Building"
+ },
+ {
+  "description": null,
+  "obj": 65,
+  "objs": [
+   65
+  ],
+  "title": "Computer Center"
+ },
+ {
+  "description": null,
+  "obj": 69,
+  "objs": [
+   69
+  ],
+  "title": "Inner Lair"
+ },
+ {
+  "description": null,
+  "obj": 99,
+  "objs": [
+   99
+  ],
+  "title": "Large Chamber"
+ },
+ {
+  "description": "You are inside a large domed area. The dome contains equipment that makes it clear it is a weather observation station. For some reason, it also contains a small peach tree. Wind whistles outside, and snow blasts against the semitransparent material of the dome.",
+  "obj": 109,
+  "objs": [
+   109
+  ],
+  "title": "Inside Dome"
+ },
+ {
+  "description": "This is the third floor of the Computer Center. An elevator and call button are on the south side of the hallway. Stairs also lead down, for the energetic. To the north is a glass wall beyond which you can see a computer room crammed with computer equipment. A stairway leads up.",
+  "obj": 110,
+  "objs": [
+   110
+  ],
+  "title": "Third Floor"
+ },
+ {
+  "description": "You are perched precariously on the roof of the Great Dome. A set of narrow indentations in the dome provides a dangerous route to the very tip-top of the dome.",
+  "obj": 121,
+  "objs": [
+   121
+  ],
+  "title": "Roof of Great Dome"
+ },
+ {
+  "description": null,
+  "obj": 124,
+  "objs": [
+   124
+  ],
+  "title": "Elevator"
+ },
+ {
+  "description": null,
+  "obj": 127,
+  "objs": [
+   127
+  ],
+  "title": "Roof"
+ },
+ {
+  "description": "You are at the bottom of a deeply cut, smooth basalt bowl. Dimly seen shapes crowd you on all sides. Ahead, in the focus of the movement, is a rock platform.",
+  "obj": 134,
+  "objs": [
+   134
+  ],
+  "title": "Basalt Bowl"
+ },
+ {
+  "description": null,
+  "obj": 136,
+  "objs": [
+   136
+  ],
+  "title": "Aero Lobby"
+ },
+ {
+  "description": "This is the second floor of the Computer Center. An elevator and call buttons are on the south side of the hallway. A large, noisy room is to the north. Stairs also lead up and down, for the energetic. To the west a corridor leads into a smaller room.",
+  "obj": 137,
+  "objs": [
+   137
+  ],
+  "title": "Second Floor"
+ },
+ {
+  "description": "This is the very top of the Great Dome, a favorite place for Tech fraternities to install cows, Volkswagen Beetles, giant birthday candles, and other bizarre objects. The top is flat, round, and about five feet in diameter. It's very windy, which has kept the snow from accumulating here. The only way off is down.",
+  "obj": 145,
+  "objs": [
+   145
+  ],
+  "title": "On the Great Dome"
+ },
+ {
+  "description": "This is the central corridor of the Nutrition Building. The main building is south, and a stairway leads down.",
+  "obj": 150,
+  "objs": [
+   150
+  ],
+  "title": "Fruits and Nuts"
+ },
+ {
+  "description": "This is a place. Things move about on a broken, rocky surface. Harsh sounds split the air. Something sticky grabs at your feet. There is no color, everything is drained of brightness, dull and lifeless. A path descends into a shallow bowl of black basalt.",
+  "obj": 152,
+  "objs": [
+   152
+  ],
+  "title": "Place"
+ },
+ {
+  "description": null,
+  "obj": 174,
+  "objs": [
+   174
+  ],
+  "title": "Department of Alchemy"
+ },
+ {
+  "description": "This is a large room crammed with computer terminals, small computers, and printers. An exit leads south. Banners, posters, and signs festoon the walls. Most of the tables are covered with waste paper, old pizza boxes, and empty Coke cans. There are usually a lot of people here, but tonight it's almost deserted.",
+  "obj": 176,
+  "objs": [
+   176
+  ],
+  "title": "Terminal Room"
+ },
+ {
+  "description": "In the spring and summer, this cheery green court is a haven from classwork. Right now, the majestic buildings of the main campus are almost invisible in the howling blizzard. A locked door bars your way to the north.",
+  "obj": 180,
+  "objs": [
+   180
+  ],
+  "title": "Great Court"
+ },
+ {
+  "description": "This is the main entrance to the campus buildings. Blinding snow obscures the stately Grecian columns and rounded dome to the east. You can barely make out the inscription on the pediment (which reads \"George Vnderwood Edwards, Fovnder; P. David Lebling, Architect\"). West across Massachusetts Avenue are other buildings, but you can't see them.",
+  "obj": 190,
+  "objs": [
+   190
+  ],
+  "title": "Mass. Ave."
+ },
+ {
+  "description": "This is the top of the stairway. A door leads out to the roof here, and you can hear the wind blowing beyond. There is a sign on the door.",
+  "obj": 195,
+  "objs": [
+   195
+  ],
+  "title": "Top Floor"
+ },
+ {
+  "description": null,
+  "obj": 213,
+  "objs": [
+   213
+  ],
+  "title": "Top of Dome"
+ },
+ {
+  "description": "A low parapet surrounds a small roof here. The air conditioning cooling tower and the small protrusion containing the stairs are dwarfed by a semitransparent dome which towers above you. The blowing snow obscures all detail of the city across the river to the south.",
+  "obj": 222,
+  "objs": [
+   222
+  ],
+  "title": "Skyscraper Roof"
+ },
+ {
+  "description": null,
+  "obj": 240,
+  "objs": [
+   240
+  ],
+  "title": "Brown Building"
+ },
+ {
+  "description": null,
+  "obj": 248,
+  "objs": [
+   248
+  ],
+  "title": "Chemistry Building"
+ },
+ {
+  "description": null,
+  "obj": 249,
+  "objs": [
+   249
+  ],
+  "title": "Great Dome"
+ }
+]

@@ -23,7 +23,7 @@ extern "C" {
  |   over 90 fields, doing the boot's loading at full brightness, then fading out
  |   over 90 more. There is no fixed hold: the screen lasts as long as the work
  |   under it -- ensure_online_typeahead(), preload_game_catalog() and
- |   display_preload_categories() -- and not a field longer.
+ |   title_preload_art() -- and not a field longer.
  |   Loads the boot jingle first, before the logo itself, and plays it from Low
  |   Work RAM -- being resident rather than streamed, it does not contend with any
  |   CD read for the drive -- with its level on the brightness ramp, so picture and

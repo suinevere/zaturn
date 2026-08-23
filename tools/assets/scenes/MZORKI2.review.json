@@ -1,0 +1,179 @@
+[
+ {
+  "description": null,
+  "obj": 2,
+  "objs": [
+   2
+  ],
+  "title": "Up a Tree"
+ },
+ {
+  "description": null,
+  "obj": 7,
+  "objs": [
+   7
+  ],
+  "title": "Dome Room"
+ },
+ {
+  "description": "This is a circular room with passages in all directions. Several have unfortunately been blocked by cave-ins.",
+  "obj": 11,
+  "objs": [
+   11
+  ],
+  "title": "Round Room"
+ },
+ {
+  "description": "This small chamber appears to have been part of a coal mine. To the west and south are passages, and a steep metal slide twists downward.",
+  "obj": 20,
+  "objs": [
+   20
+  ],
+  "title": "Slide Room"
+ },
+ {
+  "description": null,
+  "obj": 29,
+  "objs": [
+   29
+  ],
+  "title": "Entrance to Hades"
+ },
+ {
+  "description": "This room smells strongly of coal gas. Narrow tunnels lead lead east and south.",
+  "obj": 35,
+  "objs": [
+   35
+  ],
+  "title": "Gas Room"
+ },
+ {
+  "description": null,
+  "obj": 37,
+  "objs": [
+   37,
+   151
+  ],
+  "title": "Mirror Room"
+ },
+ {
+  "description": null,
+  "obj": 56,
+  "objs": [
+   56
+  ],
+  "title": "Cyclops Room"
+ },
+ {
+  "description": null,
+  "obj": 60,
+  "objs": [
+   60
+  ],
+  "title": "Machine Room"
+ },
+ {
+  "description": "You are at the base of the dam, which looms above you. The river Frigid begins here. Across it, to the east, cliffs form giant walls stretching north-south along the shore.",
+  "obj": 79,
+  "objs": [
+   79
+  ],
+  "title": "Dam Base"
+ },
+ {
+  "description": "You are on a small, rocky beach by the Frigid River, below the falls. A rainbow crosses over the falls to the east and a narrow path continues to the southwest.",
+  "obj": 86,
+  "objs": [
+   86
+  ],
+  "title": "End of Rainbow"
+ },
+ {
+  "description": "This is a small room with passages to the east, northeast and south, and a forbidding hole leading west. Bloodstains and deep scratches (perhaps made by an axe) mar the walls.",
+  "obj": 87,
+  "objs": [
+   87
+  ],
+  "title": "Troll Room"
+ },
+ {
+  "description": "You have entered the Land of the Living Dead. Thousands of lost souls can be heard weeping and moaning. In a corner are the remains of previous adventurers less fortunate than yourself. A passage exits to the north.",
+  "obj": 99,
+  "objs": [
+   99
+  ],
+  "title": "Hades"
+ },
+ {
+  "description": "This looks like an Egyptian tomb. A stair ascends to the west.",
+  "obj": 107,
+  "objs": [
+   107
+  ],
+  "title": "Egyptian Room"
+ },
+ {
+  "description": "This is a small room at the bottom of a long shaft. A heavy iron chain hangs down the shaft. To the south is a passageway and to the east a very narrow passage.",
+  "obj": 121,
+  "objs": [
+   121
+  ],
+  "title": "Drafty Room"
+ },
+ {
+  "description": "At the east end of this narrow passage, a ladder leads upward. There's a strong draft from the west, where the passage narrows even further.",
+  "obj": 139,
+  "objs": [
+   139
+  ],
+  "title": "Ladder Room"
+ },
+ {
+  "description": null,
+  "obj": 154,
+  "objs": [
+   154
+  ],
+  "title": "Grating Room"
+ },
+ {
+  "description": "This was once an artist's studio. The walls are splattered with paints of 69 different colors. To the west is a doorway (also covered with paint). A dark and narrow chimney leads up from a fireplace; although you might be able to get up it, it seems unlikely you could get back down.",
+  "obj": 158,
+  "objs": [
+   158
+  ],
+  "title": "Studio"
+ },
+ {
+  "description": null,
+  "obj": 161,
+  "objs": [
+   161
+  ],
+  "title": "Dam"
+ },
+ {
+  "description": "This was the maintenance room for Flood Control Dam #3. Apparently, the room has been ransacked, for most of the valuable equipment is gone. On one wall is a group of buttons colored yellow, brown, and red. The only doorway is southwest.",
+  "obj": 162,
+  "objs": [
+   162
+  ],
+  "title": "Maintenance Room"
+ },
+ {
+  "description": "The only visible exit is down a staircase.",
+  "obj": 170,
+  "objs": [
+   170
+  ],
+  "title": "Thief's Lair"
+ },
+ {
+  "description": null,
+  "obj": 172,
+  "objs": [
+   172
+  ],
+  "title": "Bat Room"
+ }
+]

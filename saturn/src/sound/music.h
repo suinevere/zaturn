@@ -1,21 +1,19 @@
 /*----------------------
  | music.h
- | Description: The music engine's interface: the text categories, mix modes, and
- |   the track bounds; the tunable data-table accessors (music_data.c); the
- |   platform-independent engine (music.c); the pure classifiers exposed for
- |   tests; and the Saturn CD-DA backend (music_cdda.cxx). Every CD-DA track the
- |   client plays -- the title and menu track as much as the in-game one -- goes
- |   through this engine, so the MUSIC_DYN_LOOPS cycle rule holds in the menus and
- |   in Sound Options too, not only at the prompt.
+ | Description: The music engine's interface: mix modes and the track bounds;
+ |   the tunable data-table accessor (music_data.c); the platform-independent
+ |   engine (music.c); and the Saturn CD-DA backend (music_cdda.cxx). Every
+ |   CD-DA track the client plays -- the title and menu track as much as the
+ |   in-game one -- goes through this engine, so the MUSIC_DYN_LOOPS cycle
+ |   rule holds in the menus and in Sound Options too, not only at the prompt.
  |
- |   The category is named for where it comes from (the text on screen) rather
- |   than what it drives, because it now drives two things: the CD-DA track, and
- |   the background picture. The display subscribes via music_set_category_fn
- |   rather than re-deriving the mood from the same text, so a picture cannot end
- |   up describing a mood the music has already left. The TC_* names and the
- |   text_* classifiers are that shared vocabulary; the music_* names either side
- |   of them (music_category_pool, music_category_track) are the part that is
- |   genuinely about tracks.
+ |   The category argument music_track_pool and music_category_track take
+ |   is a scene's music category (scene/scene_map.h) rather than anything this
+ |   header defines; music.h stopped owning that vocabulary once room mood
+ |   moved from a text classifier to authored scenes. The display subscribes
+ |   to category changes via music_set_category_fn rather than re-deriving the
+ |   mood on its own clock, so a picture cannot end up describing a mood the
+ |   music has already left.
  | Author: suinevere
  | Dependencies: none
  ----------------------*/
@@ -27,56 +25,26 @@ extern "C" {
 #endif
 
 /*----------------------
- | TEXT_NUM_CATEGORIES / TC_* / MIX_* / MUSIC_TRACK_MIN / MUSIC_TRACK_MAX
- | Description: The text categories (TC_NEUTRAL..TC_TRIUMPH) and their count -- the
- |   mood read off the screen, which selects both the track and the background
- |   picture; the Audio Mix modes from Sound Options; and the track bounds.
- |   TC_NEUTRAL..TC_PLACE_LAST are places, classified from the room's text and
- |   memoized per room; TC_DANGER and TC_TRIUMPH are moments, scanned from each
- |   turn's text, and carry no picture of their own. MUSIC_TRACK_MAX is
- |   the ceiling for Sequential/Random and the override clamp -- a fixed offer, not
- |   a detected count (playing a missing track is a harmless no-op); the Sound
- |   Options track selector instead lists the disc's real tracks from
- |   music_cdda_audio_tracks().
+ | MIX_* / MUSIC_TRACK_MIN / MUSIC_TRACK_MAX
+ | Description: The Audio Mix modes from Sound Options, and the track bounds.
+ |   MUSIC_TRACK_MAX is the ceiling for Sequential/Random and the override
+ |   clamp -- a fixed offer, not a detected count (playing a missing track is
+ |   a harmless no-op); the Sound Options track selector instead lists the
+ |   disc's real tracks from music_cdda_audio_tracks().
  | Author: suinevere
  ----------------------*/
-#define TEXT_NUM_CATEGORIES 15
-enum {
-    TC_NEUTRAL = 0, TC_WILDERNESS, TC_UNDERGROUND, TC_WATER, TC_NAUTICAL,
-    TC_TOWN, TC_DUNGEON, TC_DESERT, TC_MAGIC, TC_SCIFI, TC_HORROR,
-    TC_MYSTERY, TC_HOUSE, TC_DANGER, TC_TRIUMPH
-};
-
-/*----------------------
- | TC_PLACE_LAST
- | Description: The last category a room can classify as, so the two event
- |   categories after it are excluded by construction rather than by everyone
- |   remembering to stop before them.
- |
- |   Worth a name because it has already moved once. TC_HOUSE was appended at the
- |   END of the places rather than slotted next to TC_TOWN where it reads more
- |   naturally, deliberately: the category index is the row index of
- |   music_data.c's CATEGORY_POOL and display.c's CATEGORY_IMAGE, and inserting in
- |   the middle would have silently repointed every table row after TC_TOWN.
- |   Appending costs one out-of-order enum entry and shifts nothing.
- | Author: suinevere
- ----------------------*/
-#define TC_PLACE_LAST TC_HOUSE
 enum { MIX_DYNAMIC = 0, MIX_OVERRIDE = 1, MIX_SEQUENTIAL = 2, MIX_RANDOM = 3 };
 #define MUSIC_TRACK_MIN 2
 #define MUSIC_TRACK_MAX 33
 
 /*----------------------
- | data-table accessors (music_data.c)
- | Description: music_category_pool returns a category's track pool (*out)
- |   and size; text_game_room_category returns a game's authored room category, or
- |   -1 if none. Named rather than numbered because the numbers shifted when
- |   TC_HOUSE was added, and this line read "cats 1..11" for a while afterwards.
+ | music_track_pool (music_data.c)
+ | Description: Returns a pool's track list (*out) and size. `category` is a
+ |   pool selector -- EV_DANGER, EV_TRIUMPH, or the neutral fallback one past
+ |   the last EV_* id -- not a room mood; see music_data.c's own comment.
  | Author: suinevere
  ----------------------*/
-int music_category_pool(int category, const unsigned char** out);
-int text_game_room_category(unsigned int release, const char* serial,
-                             unsigned int room);
+int music_track_pool(int category, const unsigned char** out);
 
 /*----------------------
  | music_play_fn / MUSIC_DYN_LOOPS
@@ -114,14 +82,18 @@ typedef void (*music_play_fn)(int track, int loop);
  |   state machine per frame; set_isplaying/set_isshort install the drive-state
  |   callbacks; set_debounce_frames tunes the room-switch debounce.
  |
- |   set_category_fn subscribes to the active text category, which is how the
- |   background art follows the room without re-deriving the mood from the same
- |   text on its own clock. set_rotate_fn is its sibling for the case the category
- |   does NOT change: after MUSIC_ROTATE_ROOMS rooms of one mood the engine moves
- |   to another track in that same category, and the art is expected to move with
- |   it. They are separate calls rather than one with a flag because the client
- |   does genuinely different work -- resolve a new mood's picture, versus pick a
- |   different picture for the mood it is already in. set_fade_fn / set_fade_frames add a ramp that brackets
+ |   set_category_fn subscribes to the active SCENE, which is how the
+ |   background art follows the room without re-deriving the mood on its own
+ |   clock. The contract is scene-only: the callback fires with an SC_* value
+ |   and nothing else -- an event (danger/triumph) taking over the track never
+ |   reaches it, because an event carries no picture and the subscriber is
+ |   expected to hold whatever it is already showing while one plays. set_rotate_fn
+ |   is set_category_fn's sibling for the case the scene does NOT change: after
+ |   MUSIC_ROTATE_ROOMS rooms of one mood the engine moves to another track in
+ |   that same scene, and the art is expected to move with it -- same scene-only
+ |   contract. They are separate calls rather than one with a flag because the
+ |   client does genuinely different work -- resolve a new mood's picture, versus
+ |   pick a different picture for the mood it is already in. set_fade_fn / set_fade_frames add a ramp that brackets
  |   a Dynamic commit: a commit issues a fresh play, so the audio has to be down
  |   before it happens and come up after, and one counter driving both the picture
  |   and the volume is what keeps them in step. set_fade_frames(0) is the default
@@ -135,14 +107,14 @@ void music_note_output(const char* str, unsigned int len);
 void music_on_turn(unsigned int room);
 
 /*----------------------
- | music_note_room_title
- | Description: Hands the engine the room name the interpreter decoded from the
- |   location object, to be used as the title for the next classification instead
- |   of the first line of printed text; call it before music_on_turn. Passing NULL
- |   or "" falls back to that first line.
+ | music_track_from_mask
+ | Description: The r-th set bit of a scene's track mask (scene/scene_map.h's
+ |   scene_track_mask), as a CD-DA track number. r is reduced modulo the
+ |   number of set bits, so any value is legal and an empty mask answers 0
+ |   rather than dividing by zero.
  | Author: suinevere
  ----------------------*/
-void music_note_room_title(const char* title);
+int music_track_from_mask(unsigned long mask, unsigned int r);
 
 /*----------------------
  | music_transition_active / music_transition_flush
@@ -171,8 +143,8 @@ void music_set_isshort(int (*fn)(int track));          /* backend: 1 = track pla
 void music_set_pausefns(void (*pause_fn)(void), void (*resume_fn)(void));
 void music_set_duckfns(void (*duck_fn)(void), void (*unduck_fn)(void));
 void music_set_debounce_frames(int n);                 /* room-switch debounce length */
-void music_set_category_fn(void (*fn)(int cat));       /* announce category changes */
-void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-category rotations */
+void music_set_category_fn(void (*fn)(int cat));       /* announce the active SCENE only; events are silent */
+void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-scene rotations; also scene-only */
 void music_set_fade_fn(void (*fn)(int level));         /* 0 = black/quiet, 255 = normal */
 void music_set_fade_frames(int n);                     /* ramp length; 0 = instant commit */
 

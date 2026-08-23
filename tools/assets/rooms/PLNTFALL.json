@@ -1,0 +1,633 @@
+{
+ "count": 104,
+ "desc_prop": 11,
+ "release": 37,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 12,
+   "source": null,
+   "title": "Strip Near Relay"
+  },
+  {
+   "description": "You are standing on a section of the strip with a bottomless void stretching out on both sides. The strip continues to the north and south.",
+   "obj": 13,
+   "source": "static",
+   "title": "Middle of Strip"
+  },
+  {
+   "description": "You are standing on a silicon filament, which looks to you like a wide metal highway. South of here, the filament makes a right angle and heads straight down, like a cliff overlooking a black void. The filament can be followed north, however. Station 384 lies westward.",
+   "obj": 14,
+   "source": "static",
+   "title": "Strip Near Station"
+  },
+  {
+   "description": "You are standing on a square plate of heavy metal. Above your head, parallel to the plate beneath you, is an identical metal plate. To the east is a wide, metallic strip.",
+   "obj": 16,
+   "source": "static",
+   "title": "Station 384"
+  },
+  {
+   "description": "This is another small booth. Unlike the Miniaturization Booth, this room has no slot or keyboard, so presumably it is intended only as a receiving station. The exit is on the northern side.",
+   "obj": 17,
+   "source": "static",
+   "title": "Auxiliary Booth"
+  },
+  {
+   "description": null,
+   "obj": 24,
+   "source": null,
+   "title": "Lab Office"
+  },
+  {
+   "description": "This room is filled with unfathomable equipment and large canisters bearing radioactive warnings. Many of the canisters are split open. You can see the Bio Lab through a large crack in the south wall. Sinister-looking forms move about within the Bio Lab. Although the lights here are off, the room is suffused with a pale blue glow.",
+   "obj": 27,
+   "source": "static",
+   "title": "Radiation Lab"
+  },
+  {
+   "description": null,
+   "obj": 29,
+   "source": null,
+   "title": "Bio Lab"
+  },
+  {
+   "description": "This is the eastern half of the decontamination chamber. The door to the east leads to the Radiation Lab, and the chamber continues westward. A sign on the wall reads \"WORNEENG! Raadeeaashun suuts must bee worn beeyond xis point.\"",
+   "obj": 31,
+   "source": "static",
+   "title": "Radiation Lock East"
+  },
+  {
+   "description": "This is the western half of a decontamination chamber to prevent dangerous radioactive materials from leaving the Radiation Lab which lies to the east. The door leads west to the main lab.",
+   "obj": 32,
+   "source": "static",
+   "title": "Radiation Lock West"
+  },
+  {
+   "description": "This is the first half of a sterilization chamber to prevent contamination of the delicate biological experiments in the Bio Lab which lies beyond. The door to the west leads to the main lab, and the bio lock continues eastward.",
+   "obj": 34,
+   "source": "static",
+   "title": "Bio Lock West"
+  },
+  {
+   "description": "This is a tiny room for the storage of laboratory supplies. The sole exit is to the north.",
+   "obj": 38,
+   "source": "static",
+   "title": "Lab Storage"
+  },
+  {
+   "description": "This is the heart of the Project's vast laboratory complex. There are exits to the west and southwest, and heavy metal doors to the northeast and southeast. A small doorway leads south.",
+   "obj": 41,
+   "source": "static",
+   "title": "Main Lab"
+  },
+  {
+   "description": "The is the second half of the sterilization chamber leading from the main lab to the Bio Lab. The door to the east, leading to the Bio Lab, has a window. The bio lock continues to the west.",
+   "obj": 42,
+   "source": "static",
+   "title": "Bio Lock East"
+  },
+  {
+   "description": "This is a small room barely large enough for one person. Mounted on the wall is a small slot, and next to it a keyboard with numeric keys. The exit is to the north.",
+   "obj": 44,
+   "source": "static",
+   "title": "Miniaturization Booth"
+  },
+  {
+   "description": "This is the main computer room for the Project. The only sign of activity is a glowing red light. The exits are north, west, and northeast. To the south is a small booth.",
+   "obj": 46,
+   "source": "static",
+   "title": "Computer Room"
+  },
+  {
+   "description": "The hallway ends here but continues back toward the west. Doorways lead north, south and east.",
+   "obj": 47,
+   "source": "static",
+   "title": "Project Corridor East"
+  },
+  {
+   "description": null,
+   "obj": 49,
+   "source": null,
+   "title": "Cryo-Elevator"
+  },
+  {
+   "description": null,
+   "obj": 51,
+   "source": null,
+   "title": "ProjCon Office"
+  },
+  {
+   "description": "You are at the center of a long east-west hallway. A doorway, labelled \"PrajKon Awfis\", opens to the south.",
+   "obj": 52,
+   "source": "static",
+   "title": "Project Corridor"
+  },
+  {
+   "description": "This is another dusty sanitary facility. Unlike the ones near the dorms, this one is smaller and has no bathing fixtures.",
+   "obj": 53,
+   "source": "static",
+   "title": "SanFac F"
+  },
+  {
+   "description": "This is a curving hallway leading east and northwest. There is an opening to the west.",
+   "obj": 54,
+   "source": "static",
+   "title": "Project Corridor West"
+  },
+  {
+   "description": "This is a large carpeted room with a desk and many small tables. The sole exit is down a few steps to the east.",
+   "obj": 57,
+   "source": "static",
+   "title": "Library"
+  },
+  {
+   "description": "This is a tiny room with a large \"3\" painted on the wall. A panel contains a slot about ten centimeters wide, a brown button labelled \"1\" and a beige button labelled \"2.\"",
+   "obj": 58,
+   "source": "static",
+   "title": "Booth 3"
+  },
+  {
+   "description": "This is a carpeted room, thick with dust, with exits to the north and south. To the west, up a few steps, is a wide doorway. A small booth lies to the east.",
+   "obj": 60,
+   "source": "static",
+   "title": "Library Lobby"
+  },
+  {
+   "description": null,
+   "obj": 63,
+   "source": null,
+   "title": "Course Control"
+  },
+  {
+   "description": null,
+   "obj": 70,
+   "source": null,
+   "title": "Planetary Defense"
+  },
+  {
+   "description": "This is an enormous room full of environmental control equipment presumably intended to heat and ventilate the Lawanda Complex. Oddly, although the Lawanda Complex is slightly smaller than its counterpart, this plant is much larger than the one in the Kalamontee Complex. The only exit is westward.",
+   "obj": 71,
+   "source": "static",
+   "title": "Physical Plant"
+  },
+  {
+   "description": "The hallway ends here with a large doorway leading east, and smaller doorways to the north and south. The northern doorway is labelled \"Planateree Kors Kontrool.\" The hallway itself leads west.",
+   "obj": 72,
+   "source": "static",
+   "title": "Systems Corridor East"
+  },
+  {
+   "description": "This section of hallway has a doorway to the north labelled \"Planateree Deefens.\" The corridor continues east and west.",
+   "obj": 73,
+   "source": "static",
+   "title": "Systems Corridor"
+  },
+  {
+   "description": "The corridor bends here, leading east and southwest. A doorway opens to the northwest, and a narrow stairway leads down to the north.",
+   "obj": 74,
+   "source": "static",
+   "title": "Systems Corridor West"
+  },
+  {
+   "description": "You are in a dimly lit room, filled with strange machines and wide storage cabinets, all locked. To the south, a narrow stairway leads upward. On the north wall of the room is a very small doorway.",
+   "obj": 78,
+   "source": "static",
+   "title": "Repair Room"
+  },
+  {
+   "description": "You have entered a clean, well-lighted place. There are a number of beds, some complicated looking equipment, and many shelves that are mostly bare.",
+   "obj": 83,
+   "source": "static",
+   "title": "Infirmary"
+  },
+  {
+   "description": "This is a hallway which forks to the northeast and southeast. To the west is the top of a long escalator.",
+   "obj": 84,
+   "source": "static",
+   "title": "Fork"
+  },
+  {
+   "description": "You are in the middle of a long mechanical stairway. It is not running, and seems to be in disrepair.",
+   "obj": 85,
+   "source": "static",
+   "title": "Escalator"
+  },
+  {
+   "description": null,
+   "obj": 86,
+   "source": null,
+   "title": "Lawanda Platform"
+  },
+  {
+   "description": null,
+   "obj": 87,
+   "source": null,
+   "title": "Kalamontee Platform"
+  },
+  {
+   "description": "This is a concrete platform sparsely furnished with benches. The platform continues to the east, and to the south is a metal door.",
+   "obj": 88,
+   "source": "static",
+   "title": "Waiting Area"
+  },
+  {
+   "description": "This is a balcony girdling the tower. The view is breathtaking; the tower must be half a kilometer tall. From here it is clear that you are on an island. The dormitory section of the complex is visible on the other side of the island, and the rest of the complex sprawls out directly below. In the distance, about 20 kilometers to the east, you can spot another island similar to this one. The only exit is a doorway leading northeast.",
+   "obj": 89,
+   "source": "static",
+   "title": "Observation Deck"
+  },
+  {
+   "description": null,
+   "obj": 96,
+   "source": null,
+   "title": "Comm Room"
+  },
+  {
+   "description": "This is a large vehicle with a lot of cargo space. A complex control panel is closed and locked. Everything is covered with a thick layer of rust. Through the windows of the vehicle you can see a wide Helipad, and beyond that, endless ocean far below. Several doors lead out to the Helipad.",
+   "obj": 97,
+   "source": "static",
+   "title": "Helicopter"
+  },
+  {
+   "description": "You are at the center of a wide, flat area atop the tower. A fence prevents you from approaching the perimeter, so your view is limited to cloud-filled sky. A large vehicle, severely weathered and topped with rotor blades, lies nearby. A spiral staircase leads down into the tower.",
+   "obj": 99,
+   "source": "static",
+   "title": "Helipad"
+  },
+  {
+   "description": "This is a small, circular room. A sliding door leads north, and a spiral staircase heads upwards. Other exits lie to the northeast and southwest.",
+   "obj": 100,
+   "source": "static",
+   "title": "Tower Core"
+  },
+  {
+   "description": "This is a tiny room with a large \"2\" painted on the wall. A panel contains a slot about ten centimeters wide, a brown button labelled \"1\" and a tan button labelled \"3.\"",
+   "obj": 101,
+   "source": "static",
+   "title": "Booth 2"
+  },
+  {
+   "description": null,
+   "obj": 104,
+   "source": null,
+   "title": "Lower Elevator"
+  },
+  {
+   "description": null,
+   "obj": 105,
+   "source": null,
+   "title": "Upper Elevator"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "source": null,
+   "title": "Elevator Lobby"
+  },
+  {
+   "description": "This room, with exits west and northwest, is filled with robot-like devices of every conceivable description, all in various states of disassembly.",
+   "obj": 111,
+   "source": "static",
+   "title": "Robot Shop"
+  },
+  {
+   "description": null,
+   "obj": 122,
+   "source": null,
+   "title": "Machine Shop"
+  },
+  {
+   "description": "This is apparently a storage room for tools. Exits lead northeast and east.",
+   "obj": 126,
+   "source": "static",
+   "title": "Tool Room"
+  },
+  {
+   "description": "This is an elevator with a door to the west, currently open. A control panel contains an Up button, a Down button, and a small slot.",
+   "obj": 128,
+   "source": "static",
+   "title": "Reactor Elevator"
+  },
+  {
+   "description": "You have just located a serious bug.",
+   "obj": 129,
+   "source": "static",
+   "title": "Reactor Access Stairs"
+  },
+  {
+   "description": "This room contains many dials and gauges for controlling a massive planetary power reactor which, according to a diagram on the wall, must be buried far below this very complex. The exit is to the west. To the east is a metal door, and next to it, a button. A dark stairway winds downward.",
+   "obj": 131,
+   "source": "static",
+   "title": "Reactor Control"
+  },
+  {
+   "description": "This is a huge, dim room with exits in the northeast and southeast corners. The room is criss-crossed with catwalks and is filled with heavy equipment presumably intended to heat and ventilate this complex. Hardly any of the equipment is still operating.",
+   "obj": 132,
+   "source": "static",
+   "title": "Physical Plant"
+  },
+  {
+   "description": "A small room for storage. The exit is to the west.",
+   "obj": 139,
+   "source": "static",
+   "title": "Storage East"
+  },
+  {
+   "description": "The corridor ends here with doorways to the southwest, south, and southeast.",
+   "obj": 140,
+   "source": "static",
+   "title": "Mech Corridor South"
+  },
+  {
+   "description": "Entrances to rooms lie to the east and west from this north-south hall.",
+   "obj": 141,
+   "source": "static",
+   "title": "Mech Corridor"
+  },
+  {
+   "description": "Entrances to rooms lie to the east and west from this north-south hall.",
+   "obj": 142,
+   "source": "static",
+   "title": "Mech Corridor North"
+  },
+  {
+   "description": "This is a large, plush office. The far wall is one large picture window, scratched but unbroken, offering a view of this installation and the ocean beyond. In front of the window is a wide wooden desk. The only exit is east.",
+   "obj": 143,
+   "source": "static",
+   "title": "Large Office"
+  },
+  {
+   "description": "You have entered a small office of some sort. A small desk faces the main doorway which lies to the east. Another exit leads west.",
+   "obj": 150,
+   "source": "static",
+   "title": "Small Office"
+  },
+  {
+   "description": "You have just located a serious bug.",
+   "obj": 151,
+   "source": "static",
+   "title": "Transportation Supply"
+  },
+  {
+   "description": "This is a small room whose far wall is covered with many small cubbyholes, all empty. The left wall is covered with an enormous map, labelled \"Kalamontee Kompleks\", showing two installations connected by a long hallway. Near the upper part of this map is a red arrow saying \"Yuu ar heer.\" The right wall is covered with a similar map, labelled \"Lawanda Kompleks\", showing two installations, one apparently buried deep underground.",
+   "obj": 152,
+   "source": "static",
+   "title": "Plan Room"
+  },
+  {
+   "description": null,
+   "obj": 153,
+   "source": null,
+   "title": "Systems Monitors"
+  },
+  {
+   "description": "Here is another sanitary facility. Like the others, it is dusty and non-functional.",
+   "obj": 154,
+   "source": "static",
+   "title": "SanFac E"
+  },
+  {
+   "description": null,
+   "obj": 155,
+   "source": null,
+   "title": "Admin Corridor North"
+  },
+  {
+   "description": null,
+   "obj": 157,
+   "source": null,
+   "title": "Admin Corridor"
+  },
+  {
+   "description": "This section of hallway seems to have suffered some minor structural damage. The walls are cracked, and a jagged crevice crosses the floor. An opening leads east and the corridor heads north and south.",
+   "obj": 160,
+   "source": "static",
+   "title": "Admin Corridor South"
+  },
+  {
+   "description": "A north-south corridor intersects the main corridor here. To the west, the main corridor extends as far as you can see; a non-working walkway from that direction ends here. To the east, the corridor widens into a well-lit area.",
+   "obj": 161,
+   "source": "static",
+   "title": "Corridor Junction"
+  },
+  {
+   "description": "This is the food production and dispensary area for the dining hall to the north. Of particular interest is a machine near the door. You should probably examine it more closely.",
+   "obj": 165,
+   "source": "static",
+   "title": "Kitchen"
+  },
+  {
+   "description": null,
+   "obj": 167,
+   "source": null,
+   "title": "Mess Hall"
+  },
+  {
+   "description": "This is a wide, east-west hallway with openings to the north and south. To the east, the corridor stretches off into the distance. That section of the hallway is lined with a motorized walkway (no longer running) that was probably intended to transport people or cargo down that tremendously long hall.",
+   "obj": 168,
+   "source": "static",
+   "title": "Dorm Corridor"
+  },
+  {
+   "description": "This is a small room obviously intended as a storage area.",
+   "obj": 171,
+   "source": "static",
+   "title": "Storage West"
+  },
+  {
+   "description": null,
+   "obj": 174,
+   "source": null,
+   "title": "Mess Corridor"
+  },
+  {
+   "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is south.",
+   "obj": 175,
+   "source": "static",
+   "title": "SanFac D"
+  },
+  {
+   "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+   "obj": 176,
+   "source": "static",
+   "title": "Dorm D"
+  },
+  {
+   "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is north.",
+   "obj": 177,
+   "source": "static",
+   "title": "SanFac C"
+  },
+  {
+   "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+   "obj": 178,
+   "source": "static",
+   "title": "Dorm C"
+  },
+  {
+   "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is south.",
+   "obj": 179,
+   "source": "static",
+   "title": "SanFac B"
+  },
+  {
+   "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+   "obj": 180,
+   "source": "static",
+   "title": "Dorm B"
+  },
+  {
+   "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is north.",
+   "obj": 181,
+   "source": "static",
+   "title": "SanFac A"
+  },
+  {
+   "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+   "obj": 182,
+   "source": "static",
+   "title": "Dorm A"
+  },
+  {
+   "description": "This is a wide, east-west hallway. Portals lead north and south, and another corridor branches southwest.",
+   "obj": 183,
+   "source": "static",
+   "title": "Rec Corridor"
+  },
+  {
+   "description": "This is a tiny room with a large \"1\" painted on the wall. A panel contains a slot about ten centimeters wide, a beige button labelled \"2\" and a tan button labelled \"3.\"",
+   "obj": 184,
+   "source": "static",
+   "title": "Booth 1"
+  },
+  {
+   "description": null,
+   "obj": 186,
+   "source": null,
+   "title": "Conference Room"
+  },
+  {
+   "description": null,
+   "obj": 188,
+   "source": null,
+   "title": "Rec Area"
+  },
+  {
+   "description": "This is a featureless hall leading north and south. Although the hallway is old and dusty, the construction is of a much more modern style than the castle to the south. A similar hall branches off to the northeast.",
+   "obj": 189,
+   "source": "static",
+   "title": "Plain Hall"
+  },
+  {
+   "description": "This was once the west wing of the castle, but the walls are now mostly rubble, allowing a view of the cliff and ocean below. Rubble blocks all exits save one, eastward to the courtyard.",
+   "obj": 190,
+   "source": "static",
+   "title": "West Wing"
+  },
+  {
+   "description": null,
+   "obj": 191,
+   "source": null,
+   "title": "Courtyard"
+  },
+  {
+   "description": null,
+   "obj": 192,
+   "source": null,
+   "title": "Winding Stair"
+  },
+  {
+   "description": null,
+   "obj": 193,
+   "source": null,
+   "title": "Balcony"
+  },
+  {
+   "description": "You have reached a cleft in the cliff wall where the island rises from the water. The edge of the cleft displays recently exposed rock where it collapsed under the weight of the escape pod. About two meters below, turbulent waters swirl against sharp rocks. A small structure clings to the face of the cliff about eight meters above you. Even an out-of-shape Ensign Seventh Class could probably climb up to it.",
+   "obj": 194,
+   "source": "static",
+   "title": "Crag"
+  },
+  {
+   "description": "You are momentarily disoriented as you enter the turbulent waters. Currents buffet you against the sharp rocks of an underwater cliff. A dim light filters down from above.",
+   "obj": 195,
+   "source": "static",
+   "title": "Underwater"
+  },
+  {
+   "description": null,
+   "obj": 197,
+   "source": null,
+   "title": "Betty Control West"
+  },
+  {
+   "description": null,
+   "obj": 198,
+   "source": null,
+   "title": "Betty Control East"
+  },
+  {
+   "description": null,
+   "obj": 199,
+   "source": null,
+   "title": "Shuttle Car Betty"
+  },
+  {
+   "description": null,
+   "obj": 200,
+   "source": null,
+   "title": "Alfie Control West"
+  },
+  {
+   "description": null,
+   "obj": 202,
+   "source": null,
+   "title": "Alfie Control East"
+  },
+  {
+   "description": null,
+   "obj": 204,
+   "source": null,
+   "title": "Shuttle Car Alfie"
+  },
+  {
+   "description": null,
+   "obj": 216,
+   "source": null,
+   "title": "Escape Pod"
+  },
+  {
+   "description": "This is a featureless corridor leading port and starboard. A gangway leads down, and to fore is the Hyperspatial Jump Machinery Room.",
+   "obj": 221,
+   "source": "static",
+   "title": "Deck Eight"
+  },
+  {
+   "description": "This is a steep metal gangway connecting Deck Eight, above, and Deck Nine, below.",
+   "obj": 222,
+   "source": "static",
+   "title": "Gangway"
+  },
+  {
+   "description": "The corridor widens here as it nears the main drive area. To starboard is the Ion Reactor that powers the vessel, and aft of here is the Auxiliary Control Room. The corridor continues to port.",
+   "obj": 223,
+   "source": "static",
+   "title": "Reactor Lobby"
+  },
+  {
+   "description": "You are in the Feinstein's brig. Graffiti cover the walls. The cell door to the south is locked.",
+   "obj": 232,
+   "source": "static",
+   "title": "Brig"
+  },
+  {
+   "description": "This is a featureless corridor similar to every other corridor on the ship. It curves away to starboard, and a gangway leads up. To port is the entrance to one of the ship's primary escape pods. The pod bulkhead is closed.",
+   "obj": 235,
+   "source": "runtime",
+   "title": "Deck Nine"
+  }
+ ],
+ "serial": "851003",
+ "story": "PLNTFALL.Z3"
+}

@@ -29,8 +29,10 @@
    pointers, so the drive is a set of counters here.
 
    Build (from the repo root):
-     gcc -O2 -I saturn/src -o /tmp/t saturn/tests/test_music_pause.c \
-         saturn/src/sound/music.c saturn/src/sound/music_data.c && /tmp/t
+     gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/t \
+         saturn/tests/test_music_pause.c saturn/src/sound/music.c \
+         saturn/src/sound/music_data.c saturn/src/sound/event_scan.c \
+         saturn/src/scene/scene_map.c && /tmp/t
 */
 #include "../src/sound/music.h"
 #include <stdio.h>
@@ -270,11 +272,15 @@ static void test_duck_withholds_category_commit(void) {
     music_set_category_fn(record_cat);
     music_set_debounce_frames(1);
     music_set_mix(MIX_DYNAMIC, MUSIC_TRACK_MIN);
+    /* Adventure (release 1, serial "151001"), object 21 -> an authored scene
+       (SC_MAZE), so the turn actually has something to commit. Without a game
+       set, scene_of_room finds no row and the room is "hold whatever is
+       showing" -- nothing this test could ever observe as withheld. */
+    music_set_game(1, "151001");
     music_duck();
     reset_probe();
 
-    music_note_room_title("Cellar");
-    music_on_turn(1);
+    music_on_turn(21);
     for (int i = 0; i < 120; i++) music_tick();
     assert(g_cats == 0);            /* nothing announced, so no picture asked for */
 

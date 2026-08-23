@@ -266,54 +266,47 @@ Microsoft has open-sourced, while the rest are included as-is from the catalog.
 
 ## 6. Adding a background image
 
-Backgrounds are reached through the room's mood, not picked one by one. The
-Display Options **Palette** row offers `Dynamic` plus the colour presets; which
-picture Dynamic shows is decided by the text category the music engine is in.
-The `*.TGA` files in `saturn/cd/data/TGA/` are generated from the PNGs in
-`tools/assets/png/` on every build — you do not create them by hand.
+Backgrounds are reached through the room's **scene** (`scene_vocab.SCENES`, e.g.
+`FOREST`, `CAVE`, `PARLOR`), not picked one by one. A room's scene is authored per
+game — `tools/assets/scenes/<STEM>.json`, keyed by object number — not scored from
+its text; a room named nothing keeps the picture already showing rather than
+cutting to an arbitrary one. The Display Options **Palette** row offers `Dynamic`
+plus the colour presets; which picture Dynamic shows is decided by the scene the
+current room resolves to. The `*.TGA` files in `saturn/cd/data/TGA/` are generated
+from the PNGs in `tools/assets/png/` on every build — you do not create them by
+hand.
 
-1. Save your artwork as a **320x224** PNG (JPEG works too) in the folder for the
-   mood it belongs to: `tools/assets/png/WILDER/`, `/TOWN/`, `/DUNGN/`, and so on.
-2. Name it `<FOLDER><N>` — the folder name truncated to **7 characters**, then the
-   next free index, e.g. `tools/assets/png/WILDER/WILDER4.PNG`. The disc is flat,
-   so this is the only thing tying a file back to its category.
-3. Add that filename to the matching `IMG_*` pool in the `CATEGORY_IMAGE` table in
-   `saturn/src/video/display.c`.
-4. Rebuild: `cd saturn && ./compile.bat debug`.
+1. Save your artwork as a **320x224** PNG (JPEG works too) under
+   `tools/assets/png/<GAME>/<SCENE>/`, e.g. `tools/assets/png/ZORK1/CAVE/`. The
+   game folder is the story's stem (`ZORK1`, `DEADLINE`, ...); the scene folder is
+   one of `scene_vocab.SCENES`. Any filename works — `make_tga.py` assigns disc
+   names itself.
+2. Run `python tools/make_tga.py` to convert. It walks every game's scenes in
+   `scene_vocab.SCENES` order, writes `saturn/cd/data/TGA/<GAME>/01.TGA..NN.TGA`,
+   and regenerates `game_scenes.inc` (`GAME_DIR` / `GAME_SCENE`) so `display.c`
+   knows how many pictures each scene has and where they start.
+3. Rebuild: `cd saturn && ./compile.bat debug`.
 
-`saturn/tests/test_category_art.py` is the guard for steps 2 and 3. It checks
-every name in the table is really on the disc, that the naming rule is followed,
-that no picture is claimed by two moods, and that every pool has at least two
-pictures — a pool of one means the room-count rotation moves the track under an
-unchanged wallpaper, which is indistinguishable from the art being broken.
+`tools/tests/test_make_tga.py` and `tools/tests/test_gen_scene_tables.py` are the
+guard: they check the scene walk order, that a game folder or scene folder that
+does not match a known stem or `scene_vocab.SCENES` entry is reported and
+skipped rather than silently mis-filed, and that a scene's recorded count never
+names a picture the disc lacks.
 
-Three categories deliberately carry **no** pool, and each means "hold whatever is
-showing" rather than "art missing": `TC_DANGER` and `TC_TRIUMPH` are moments
-rather than places, so the music shifts for them while the wallpaper stays on the
-room; and `TC_NEUTRAL` is the nothing-matched answer, so a room that named nothing
-keeps the picture you already had instead of cutting to an arbitrary one. If you
-want neutral rooms to have a look of their own, add `tools/assets/png/NEUTRAL/`
-and a pool for it — that is a data-only change.
+A scene with **no** pictures at all means "hold whatever is showing" rather than
+"art missing" — `display_scene_image` returns nothing for an empty scene, and the
+caller leaves the current wallpaper alone instead of cutting to a blank one.
 
-Which mood a room gets comes from keyword-scoring its text (`music_data.c`), with
-words in the **room title** counting for more than the same word in the
-description — Zork I's "West of House" is a field with a house in it, and without
-that weighting the field wins.
+> **At most 99 pictures convert per game**, across all of that game's scenes
+> combined, not per scene — `convert_game_tree` stops there and reports anything
+> past it rather than silently dropping it. How many pictures are held in RAM at
+> once is a separate and much smaller number, `TGA_CACHE_SLOTS` in
+> `saturn/src/video/title.cxx`.
 
-> **At most `DISP_IMAGE_MAX` (40) pictures register**, and the disc ships 37 plus
-> the boot logo. Past that the Saturn stops scanning, in alphabetical order, so it
-> is the *tail* of the folder that silently vanishes — not the newest file. Both
-> the converter and `test_category_art.py` say so. To make room, raise
-> `DISP_IMAGE_MAX` in `saturn/src/video/display.h`; that is a name-list cap and
-> costs almost nothing. How many pictures are held in RAM at once is a separate
-> and much smaller number, `TGA_CACHE_SLOTS` in `saturn/src/video/title.cxx`.
-
-The size and name limits are enforced, not advisory: the Saturn reads these as
-ISO9660 8.3 names, and the converter skips anything that is not exactly 320x224
-rather than guessing at a crop. It also skips a file whose stem is already
-claimed, since the disc is flat and the second one would otherwise overwrite the
-first — one mood's art quietly becoming another's. All three cases print a
-warning naming the file and never fail the build.
+The size limit is enforced, not advisory: the converter skips anything that is
+not exactly 320x224 rather than guessing at a crop, and reports it rather than
+failing the build. Disc names are still ISO9660 8.3 (the build passes
+`--norock`), but `make_tga.py` assigns them, not the source filename.
 
 Do not commit the generated `saturn/cd/data/TGA/*.TGA` — `saturn/.gitignore`
 excludes them, and at ~72 KB each the 37 shipped backgrounds would put 2.6 MB of

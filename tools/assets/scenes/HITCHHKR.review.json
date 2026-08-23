@@ -1,0 +1,130 @@
+[
+ {
+  "description": null,
+  "obj": 25,
+  "objs": [
+   25
+  ],
+  "title": "Dark"
+ },
+ {
+  "description": null,
+  "obj": 54,
+  "objs": [
+   54
+  ],
+  "title": "Dais"
+ },
+ {
+  "description": null,
+  "obj": 66,
+  "objs": [
+   66
+  ],
+  "title": "Presidential Speedboat"
+ },
+ {
+  "description": null,
+  "obj": 86,
+  "objs": [
+   86
+  ],
+  "title": "War Chamber"
+ },
+ {
+  "description": "This is the heart of the Beast's lair. The only exit leads northeast.",
+  "obj": 90,
+  "objs": [
+   90
+  ],
+  "title": "Inner Lair"
+ },
+ {
+  "description": null,
+  "obj": 98,
+  "objs": [
+   98
+  ],
+  "title": "Beast's Outer Lair"
+ },
+ {
+  "description": null,
+  "obj": 99,
+  "objs": [
+   99
+  ],
+  "title": "Lair"
+ },
+ {
+  "description": null,
+  "obj": 108,
+  "objs": [
+   108
+  ],
+  "title": "Captain's Quarters"
+ },
+ {
+  "description": null,
+  "obj": 121,
+  "objs": [
+   121
+  ],
+  "title": "Vogon Hold"
+ },
+ {
+  "description": null,
+  "obj": 134,
+  "objs": [
+   134
+  ],
+  "title": "Pub"
+ },
+ {
+  "description": null,
+  "obj": 137,
+  "objs": [
+   137
+  ],
+  "title": "Country Lane"
+ },
+ {
+  "description": "The wind moans. Dust drifts across the surface of the alien world. Zaphod, Ford, and Trillian appear and urge you forward.",
+  "obj": 174,
+  "objs": [
+   174
+  ],
+  "title": "Ramp"
+ },
+ {
+  "description": null,
+  "obj": 178,
+  "objs": [
+   178
+  ],
+  "title": "Hatchway"
+ },
+ {
+  "description": "This is an entry bay for the Heart of Gold. A corridor lies aft of here.",
+  "obj": 190,
+  "objs": [
+   190
+  ],
+  "title": "Entry Bay Number Two"
+ },
+ {
+  "description": null,
+  "obj": 201,
+  "objs": [
+   201
+  ],
+  "title": "Bridge"
+ },
+ {
+  "description": "You are in the stomach of a sperm whale. You can hear a distant sound of rushing wind.",
+  "obj": 213,
+  "objs": [
+   213
+  ],
+  "title": "Inside the Sperm Whale"
+ }
+]

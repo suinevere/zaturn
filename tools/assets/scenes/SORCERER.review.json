@@ -1,0 +1,410 @@
+[
+ {
+  "description": null,
+  "obj": 8,
+  "objs": [
+   8
+  ],
+  "title": "Crater"
+ },
+ {
+  "description": "This is a low, shadowy cave leading east to west. The rocky walls are scarred with deep claw marks.",
+  "obj": 9,
+  "objs": [
+   9
+  ],
+  "title": "Grue Lair"
+ },
+ {
+  "description": "Helistar is one of the foremost members of the Circle, and this is her private chamber.",
+  "obj": 13,
+  "objs": [
+   13
+  ],
+  "title": "Helistar's Quarters"
+ },
+ {
+  "description": null,
+  "obj": 17,
+  "objs": [
+   17
+  ],
+  "title": "Your Quarters"
+ },
+ {
+  "description": "This is the entrance lobby of the Guild Hall. Befitting the status and wealth of the Guild, the lobby is finished with polished Antharian marble, inlaid with intricate patterns of silver leaf. To the north is a wide arch, and smaller openings flank the area on the eastern and western sides, as well as the northeastern and northwestern corners. A narrow stair leads downward. Through another arch to the south, you can see the entrance steps and the main road into town.",
+  "obj": 18,
+  "objs": [
+   18
+  ],
+  "title": "Lobby"
+ },
+ {
+  "description": "This small room has a slanted roof, presumably due to the coal chute which passes overhead. You can reenter the chute to the east.",
+  "obj": 21,
+  "objs": [
+   21
+  ],
+  "title": "Slanted Room"
+ },
+ {
+  "description": "Through a breathtaking archway of glass to the east is an area glistening with reflected light. Another exit leads south.",
+  "obj": 39,
+  "objs": [
+   39
+  ],
+  "title": "Outside Glass Arch"
+ },
+ {
+  "description": "You are at the western end of the coal mine. A metal chute leads downward.",
+  "obj": 44,
+  "objs": [
+   44
+  ],
+  "title": "Top of Chute"
+ },
+ {
+  "description": "You are at the eastern end of a long midway. The park entrance lies to the east, and rides lie to the north and south.",
+  "obj": 45,
+  "objs": [
+   45
+  ],
+  "title": "East End of Midway"
+ },
+ {
+  "description": "This is a small underground hovel. On the far wall is a small fireplace, long unused.",
+  "obj": 46,
+  "objs": [
+   46
+  ],
+  "title": "Stone Hut"
+ },
+ {
+  "description": "This is the only turret of the castle still standing. It affords a marvelous view of a meadow to the west, and beyond that a twisted forest. To the north is a mighty fortress which stands atop a cliff where a turbulent river pours into an ocean. The ocean stretches out of sight to the east. A spiralling staircase leads downward.",
+  "obj": 47,
+  "objs": [
+   47
+  ],
+  "title": "Turret"
+ },
+ {
+  "description": "This is a wide road winding away to the east and west, perhaps a relic of the Great Underground Empire you read about in history class. A passage leads up to the north.",
+  "obj": 52,
+  "objs": [
+   52
+  ],
+  "title": "Highway"
+ },
+ {
+  "description": "This is an appliance store, apparently abandoned. The entrance lies to the north.",
+  "obj": 92,
+  "objs": [
+   92
+  ],
+  "title": "Store"
+ },
+ {
+  "description": "Once the armory for the fort, this room has been picked clean by vandals and soldiers of fortune. Exit north or northeast.",
+  "obj": 103,
+  "objs": [
+   103
+  ],
+  "title": "Armory"
+ },
+ {
+  "description": "This is a battlement with a view of a river to the north and an ocean to the east. Openings northwest, west, and southwest lead to other parts of the fort.",
+  "obj": 105,
+  "objs": [
+   105
+  ],
+  "title": "Gun Emplacement"
+ },
+ {
+  "description": "The tunnel turns a corner here. You could go either north or east.",
+  "obj": 108,
+  "objs": [
+   108
+  ],
+  "title": "Elbow Room"
+ },
+ {
+  "description": "This is the room of Frobar the Enchanter. There isn't much here in the way of furnishings, Frobar being a pretty dull kind of guy.",
+  "obj": 110,
+  "objs": [
+   110
+  ],
+  "title": "Frobar's Quarters"
+ },
+ {
+  "description": "The road curves here, heading east and southwest.",
+  "obj": 114,
+  "objs": [
+   114
+  ],
+  "title": "Bend"
+ },
+ {
+  "description": null,
+  "obj": 115,
+  "objs": [
+   115
+  ],
+  "title": "Belboz's Quarters"
+ },
+ {
+  "description": "This is a huge tent filled with hectic noise, blinking lights, and the smell of frying food. Near the exit is a game booth lined with prizes. The concept of the game seems to be bashing cute little mechanical bunnies with a rubber ball as they hop around a little artificial meadow.",
+  "obj": 116,
+  "objs": [
+   116
+  ],
+  "title": "Arcade"
+ },
+ {
+  "description": "The underground road ends here. A hovel, carved into the rock, lies to the east. To the north, wide marble stairs lead upward.",
+  "obj": 117,
+  "objs": [
+   117
+  ],
+  "title": "End of Highway"
+ },
+ {
+  "description": null,
+  "obj": 119,
+  "objs": [
+   119
+  ],
+  "title": "Flume"
+ },
+ {
+  "description": "This is a large hall where the Guild's young apprentices live and study as they strive to achieve a seat on the Circle. You think back to the days when you occupied these quarters. The apprentices are gone, having accompanied Frobar into town to shop. You can leave to the southeast.",
+  "obj": 132,
+  "objs": [
+   132
+  ],
+  "title": "Apprentice Quarters"
+ },
+ {
+  "description": "The river bed to the northwest is a pool covered with algae and other scum. The bed to the southeast is slightly drier. The banks are too tall and steep to climb here.",
+  "obj": 135,
+  "objs": [
+   135
+  ],
+  "title": "Near Stagnant Pool"
+ },
+ {
+  "description": null,
+  "obj": 137,
+  "objs": [
+   137
+  ],
+  "title": "Meadow"
+ },
+ {
+  "description": "On the eastern wall is a heavy door with a dial set into it. There is a sign on the door. Another exit leads west, and a wall-mounted lamp provides illumination. The floor is deeply covered with lumps of coal.",
+  "obj": 141,
+  "objs": [
+   141
+  ],
+  "title": "Dial Room"
+ },
+ {
+  "description": "This is a large and well-equipped torture chamber. These were very popular in castles of several centuries ago, but are somewhat out of fashion now. There are exits to the west and north.",
+  "obj": 148,
+  "objs": [
+   148
+  ],
+  "title": "Torture Chamber"
+ },
+ {
+  "description": "A store lies to the south from this section of the east-west road. There is a sign over the entrance.",
+  "obj": 152,
+  "objs": [
+   152
+  ],
+  "title": "Outside Store"
+ },
+ {
+  "description": null,
+  "obj": 156,
+  "objs": [
+   156
+  ],
+  "title": "Chamber of the Circle"
+ },
+ {
+  "description": "The maze opens here onto a tiny outdoor plateau, completely surrounded by towering cliffs. The only way out is back through the dazzling archway of glass to the west.\nNear the glass arch is a small rectangular brick structure. The center of the structure is a hole about a foot wide, leading down into darkness.",
+  "obj": 157,
+  "objs": [
+   157
+  ],
+  "title": "Hollow"
+ },
+ {
+  "description": "You are at the entrance to Fort Griffspotter, which lies to the east. A trail leads along the river bank to the northwest.",
+  "obj": 159,
+  "objs": [
+   159
+  ],
+  "title": "Fort Entrance"
+ },
+ {
+  "description": "This is a tall room flooded with light from an unseen source. The only exit is south.",
+  "obj": 160,
+  "objs": [
+   160
+  ],
+  "title": "Tree Room"
+ },
+ {
+  "description": "This was a barracks for the battalion stationed in this fort. You could leave to the south, or to the southeast.",
+  "obj": 166,
+  "objs": [
+   166
+  ],
+  "title": "Barracks"
+ },
+ {
+  "description": null,
+  "obj": 172,
+  "objs": [
+   172
+  ],
+  "title": "Surface of Lagoon"
+ },
+ {
+  "description": "You are at the center of a level field inside the fort. Entrances to rooms around the perimeter lie in several directions.",
+  "obj": 181,
+  "objs": [
+   181
+  ],
+  "title": "Parade Ground"
+ },
+ {
+  "description": "This is a sparsely furnished living area for the servants of the Guild. None are in sight; presumably they are out doing their daily errands. You can leave to the southwest.",
+  "obj": 186,
+  "objs": [
+   186
+  ],
+  "title": "Servants' Quarters"
+ },
+ {
+  "description": "This looks like the entrance to a run-down amusement park, no longer gaudy with lights and glitter. A sign above the entrance proclaims \"Welcome to Bozbarland - The Entertainment Capital of the Empire.\" The park lies to the west and a tunnel leads northeast.",
+  "obj": 187,
+  "objs": [
+   187
+  ],
+  "title": "Park Entrance"
+ },
+ {
+  "description": "Entrances lead north, west and south, and the rest of the midway lies to the east.",
+  "obj": 195,
+  "objs": [
+   195
+  ],
+  "title": "West End of Midway"
+ },
+ {
+  "description": "This is a moist room whose walls are thick with moss and lichens. A small hole leads up and a rocky passage leads south.",
+  "obj": 197,
+  "objs": [
+   197
+  ],
+  "title": "Slimy Room"
+ },
+ {
+  "description": "You have reached a toll gate which spans the highway.",
+  "obj": 198,
+  "objs": [
+   198
+  ],
+  "title": "Toll Gate"
+ },
+ {
+  "description": "The walls and ceiling of this room are covered with soot and held up by timbers which don't look very sturdy. A winding tunnel leads north. From the east comes a sulfurous odor.",
+  "obj": 212,
+  "objs": [
+   212
+  ],
+  "title": "Sooty Room"
+ },
+ {
+  "description": null,
+  "obj": 218,
+  "objs": [
+   218
+  ],
+  "title": "Roller Coaster"
+ },
+ {
+  "description": null,
+  "obj": 219,
+  "objs": [
+   219
+  ],
+  "title": "Drawbridge"
+ },
+ {
+  "description": null,
+  "obj": 222,
+  "objs": [
+   222
+  ],
+  "title": "Tree Branch"
+ },
+ {
+  "description": "This is a closet for storage. The only exit is east.",
+  "obj": 231,
+  "objs": [
+   231
+  ],
+  "title": "Store Room"
+ },
+ {
+  "description": "This is a large, plush room, slightly neglected.",
+  "obj": 237,
+  "objs": [
+   237
+  ],
+  "title": "Casino"
+ },
+ {
+  "description": "This is obviously the heart of a large coal mine, illuminated by a wall-mounted lamp. The bottom of a metal coal chute is visible at the north end of the room. Another chute continues downward at the southern end. A large coal bin is overflowing, and the floor is completely covered with lumps of coal. A passage leads east, but a western passage is blocked by rubble.",
+  "obj": 239,
+  "objs": [
+   239
+  ],
+  "title": "Coal Bin Room"
+ },
+ {
+  "description": "You are at the northeastern rim of a gigantic crater, the result of some ancient explosion. A wide underground highway, which ends at the crater's edge, leads northeast.",
+  "obj": 246,
+  "objs": [
+   246
+  ],
+  "title": "Edge of Crater"
+ },
+ {
+  "description": null,
+  "obj": 247,
+  "objs": [
+   247
+  ],
+  "title": "Haunted House"
+ },
+ {
+  "description": "This is the floor of a cove off the turbulent ocean to the east. The ground slopes upward to the north, west, and south. Light filters down from the surface of the water.",
+  "obj": 250,
+  "objs": [
+   250
+  ],
+  "title": "Lagoon Floor"
+ },
+ {
+  "description": "An acrid stench fills this small room, which is obviously a control center for the evil experiments in the cavern outside.",
+  "obj": 253,
+  "objs": [
+   253
+  ],
+  "title": "Belboz's Hideout"
+ }
+]

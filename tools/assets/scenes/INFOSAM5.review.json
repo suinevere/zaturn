@@ -1,0 +1,147 @@
+[
+ {
+  "description": "You are on an east/west path on the north side of the encampment. A path to the south starts here, and you can see the riverbank clearly to the west. A warm, light breeze reaches your face, drying your sweat into a thin mask of salt. You glance to the north and are greeted by a disheartening sight: an endless stretch of searing desert.",
+  "obj": 55,
+  "objs": [
+   55
+  ],
+  "title": "Near the Nile"
+ },
+ {
+  "description": "This room, with exits west and northwest, is filled with robot-like devices of every conceivable description, all in various states of disassembly.",
+  "obj": 69,
+  "objs": [
+   69
+  ],
+  "title": "Robot Shop"
+ },
+ {
+  "description": null,
+  "obj": 80,
+  "objs": [
+   80
+  ],
+  "title": "Machine Shop"
+ },
+ {
+  "description": "This is apparently a storage room for tools. Exits lead northeast and east.",
+  "obj": 87,
+  "objs": [
+   87
+  ],
+  "title": "Tool Room"
+ },
+ {
+  "description": "This is a huge, dim room with exits in the northeast and southeast corners. The room is criss-crossed with catwalks and is filled with heavy equipment presumably intended to heat and ventilate this complex. Hardly any of the equipment is still operating.",
+  "obj": 93,
+  "objs": [
+   93
+  ],
+  "title": "Physical Plant"
+ },
+ {
+  "description": null,
+  "obj": 105,
+  "objs": [
+   105
+  ],
+  "title": "Systems Monitors"
+ },
+ {
+  "description": "Here is another sanitary facility. Like the others, it is dusty and non-functional.",
+  "obj": 106,
+  "objs": [
+   106
+  ],
+  "title": "SanFac E"
+ },
+ {
+  "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is south.",
+  "obj": 124,
+  "objs": [
+   124
+  ],
+  "title": "SanFac D"
+ },
+ {
+  "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+  "obj": 125,
+  "objs": [
+   125
+  ],
+  "title": "Dorm D"
+ },
+ {
+  "description": "This must be the sanitary facility for the adjacent dormitory. The fixtures are dry and dusty, the room dead and deserted. You marvel at how little the millenia and cultural gulfs have changed toilet bowl design. The only exit is north.",
+  "obj": 126,
+  "objs": [
+   126
+  ],
+  "title": "SanFac C"
+ },
+ {
+  "description": "This is a very long room lined with multi-tiered bunks. Flimsy partitions between the tiers may have provided a modicum of privacy. These spartan living quarters could have once housed many hundreds, but it seems quite deserted now. There are openings at the north and south ends of the room.",
+  "obj": 128,
+  "objs": [
+   128
+  ],
+  "title": "Dorm C"
+ },
+ {
+  "description": null,
+  "obj": 146,
+  "objs": [
+   146
+  ],
+  "title": "Butterfly Room"
+ },
+ {
+  "description": "You are on a small, rocky beach on the continuation of the Frigid River past the Falls. The beach is narrow due to the presence of the White Cliffs. The river canyon opens here and sunlight shines in from above. A rainbow crosses over the falls to the east and a narrow path continues to the southwest.",
+  "obj": 176,
+  "objs": [
+   176
+  ],
+  "title": "End of Rainbow"
+ },
+ {
+  "description": "You are in a small clearing in a well marked forest path that extends to the east and west.",
+  "obj": 180,
+  "objs": [
+   180,
+   203
+  ],
+  "title": "Clearing"
+ },
+ {
+  "description": null,
+  "obj": 193,
+  "objs": [
+   193
+  ],
+  "title": "Up a Tree"
+ },
+ {
+  "description": "This appears to have been an artist's studio. The walls and floors are splattered with paints of 69 different colors. Strangely enough, nothing of value is hanging here. At the south end of the room is an open door (also covered with paint). A dark and narrow chimney leads up from a fireplace; although you might be able to get up it, it seems unlikely you could get back down.",
+  "obj": 195,
+  "objs": [
+   195
+  ],
+  "title": "Studio"
+ },
+ {
+  "description": "This is a small room with passages to the east and south and a forbidding hole leading west. Bloodstains and deep scratches (perhaps made by an axe) mar the walls.",
+  "obj": 197,
+  "objs": [
+   197
+  ],
+  "title": "The Troll Room"
+ },
+ {
+  "description": "This is an art gallery. Most of the paintings have been stolen by vandals with exceptional taste. The vandals left through either the north or west exits.",
+  "obj": 205,
+  "objs": [
+   205
+  ],
+  "title": "Gallery"
+ }
+]

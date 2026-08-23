@@ -1,0 +1,195 @@
+{
+ "count": 31,
+ "desc_prop": 28,
+ "release": 59,
+ "rooms": [
+  {
+   "description": null,
+   "obj": 25,
+   "source": null,
+   "title": "Dark"
+  },
+  {
+   "description": null,
+   "obj": 54,
+   "source": null,
+   "title": "Dais"
+  },
+  {
+   "description": null,
+   "obj": 66,
+   "source": null,
+   "title": "Presidential Speedboat"
+  },
+  {
+   "description": null,
+   "obj": 73,
+   "source": null,
+   "title": "Kitchen"
+  },
+  {
+   "description": null,
+   "obj": 74,
+   "source": null,
+   "title": "Dining Room"
+  },
+  {
+   "description": null,
+   "obj": 76,
+   "source": null,
+   "title": "Living Room"
+  },
+  {
+   "description": "This is part of a spongy gray maze of twisty little synapses, all alike.",
+   "obj": 81,
+   "source": "static",
+   "title": "Maze"
+  },
+  {
+   "description": null,
+   "obj": 86,
+   "source": null,
+   "title": "War Chamber"
+  },
+  {
+   "description": "This is the heart of the Beast's lair. The only exit leads northeast.",
+   "obj": 90,
+   "source": "static",
+   "title": "Inner Lair"
+  },
+  {
+   "description": null,
+   "obj": 98,
+   "source": null,
+   "title": "Beast's Outer Lair"
+  },
+  {
+   "description": null,
+   "obj": 99,
+   "source": null,
+   "title": "Lair"
+  },
+  {
+   "description": "This airlock has massive doors to port and starboard.",
+   "obj": 101,
+   "source": "static",
+   "title": "Airlock"
+  },
+  {
+   "description": null,
+   "obj": 108,
+   "source": null,
+   "title": "Captain's Quarters"
+  },
+  {
+   "description": null,
+   "obj": 121,
+   "source": null,
+   "title": "Vogon Hold"
+  },
+  {
+   "description": null,
+   "obj": 134,
+   "source": null,
+   "title": "Pub"
+  },
+  {
+   "description": null,
+   "obj": 137,
+   "source": null,
+   "title": "Country Lane"
+  },
+  {
+   "description": null,
+   "obj": 138,
+   "source": null,
+   "title": "Back of House"
+  },
+  {
+   "description": null,
+   "obj": 149,
+   "source": null,
+   "title": "Front of House"
+  },
+  {
+   "description": "This is the enclosed front porch of your home. Your front garden lies to the south, and you can re-enter your home to the north.",
+   "obj": 151,
+   "source": "static",
+   "title": "Front Porch"
+  },
+  {
+   "description": null,
+   "obj": 168,
+   "source": null,
+   "title": "Bedroom"
+  },
+  {
+   "description": "The wind moans. Dust drifts across the surface of the alien world. Zaphod, Ford, and Trillian appear and urge you forward.",
+   "obj": 174,
+   "source": "static",
+   "title": "Ramp"
+  },
+  {
+   "description": null,
+   "obj": 175,
+   "source": null,
+   "title": "Access Space"
+  },
+  {
+   "description": null,
+   "obj": 178,
+   "source": null,
+   "title": "Hatchway"
+  },
+  {
+   "description": null,
+   "obj": 188,
+   "source": null,
+   "title": "Engine Room"
+  },
+  {
+   "description": "This is an entry bay for the Heart of Gold. A corridor lies aft of here.",
+   "obj": 190,
+   "source": "static",
+   "title": "Entry Bay Number Two"
+  },
+  {
+   "description": null,
+   "obj": 191,
+   "source": null,
+   "title": "Corridor, Aft End"
+  },
+  {
+   "description": null,
+   "obj": 192,
+   "source": null,
+   "title": "Corridor, Fore End"
+  },
+  {
+   "description": null,
+   "obj": 201,
+   "source": null,
+   "title": "Bridge"
+  },
+  {
+   "description": null,
+   "obj": 210,
+   "source": null,
+   "title": "Galley"
+  },
+  {
+   "description": "You are in the stomach of a sperm whale. You can hear a distant sound of rushing wind.",
+   "obj": 213,
+   "source": "static",
+   "title": "Inside the Sperm Whale"
+  },
+  {
+   "description": "This is a small closet with an exit to starboard.",
+   "obj": 218,
+   "source": "static",
+   "title": "Marvin's Pantry"
+  }
+ ],
+ "serial": "851108",
+ "story": "HITCHHKR.Z3"
+}

@@ -1,63 +1,28 @@
-"""Derive photographable place-nouns from the room classifier's keyword table.
+"""Derive photographable place-nouns from the scene tagging vocabulary.
 
-Description: Parses saturn/src/classify/room_class_data.c and collects every
-    KT_STRUCTURE and KT_BIOME keyword, grouped by the mood folder its TC_*
-    category maps to. KT_FEATURE rows are excluded: a rug is not a room, and a
-    search for one returns a rug.
-
-    Deriving rather than duplicating is the point. A keyword added to the
-    classifier gains art coverage with no edit here, so the pictures a mood can
-    show cannot drift from the words that mood can recognise.
+Description: Reads scene_vocab.FETCH_NOUNS, the stock-photo query nouns
+    already authored for each scene. Deriving rather than duplicating is the
+    point: a scene's fetch vocabulary can never drift from its tagging
+    vocabulary, because both now come from scene_vocab.
 Author: suinevere
-Dependencies: re, pathlib
-Globals: MOODS, TC_TO_FOLDER
+Dependencies: scene_vocab
+Globals: N/A
 """
-import re
-
-# TC_* identifier -> disc folder, in enum order. The three categories that carry
-# no art (TC_NEUTRAL, TC_DANGER, TC_TRIUMPH) are absent by construction.
-TC_TO_FOLDER = {
-    "TC_WILDERNESS":  "WILDER",
-    "TC_UNDERGROUND": "UNDRGRND",
-    "TC_WATER":       "WATER",
-    "TC_NAUTICAL":    "NAUTICAL",
-    "TC_TOWN":        "TOWN",
-    "TC_DUNGEON":     "DUNGN",
-    "TC_DESERT":      "DESERT",
-    "TC_MAGIC":       "MAGIC",
-    "TC_SCIFI":       "SCIFI",
-    "TC_HORROR":      "HORROR",
-    "TC_MYSTERY":     "MYSTERY",
-    "TC_HOUSE":       "HOUSE",
-}
-
-MOODS = list(TC_TO_FOLDER.values())
-
-_ROW = re.compile(
-    r'\{\s*"([a-z ]+)"\s*,\s*(TC_[A-Z_]+)\s*,\s*(KT_[A-Z]+)\s*,\s*GN_[A-Z]+'
-)
-
-_PLACE_TIERS = ("KT_STRUCTURE", "KT_BIOME")
+import scene_vocab as vocab
 
 
-def nouns_by_mood(source):
-    """Group the table's place-nouns by mood folder.
+def nouns_for_scene(scene):
+    """The stock-photo query nouns fetch_art should use for one scene.
 
-    Description: Returns one entry per mood, sorted and deduplicated. A mood whose
-        keywords are all KT_FEATURE gets an empty list rather than being absent,
-        so a caller can tell "no nouns of its own" from "not a mood".
+    Description: Looks scene up in scene_vocab.FETCH_NOUNS directly, so a
+        noun added there gains art coverage with no edit here. An unknown
+        scene name gets an empty tuple rather than a KeyError -- a caller
+        iterating scene_vocab.SCENES never needs to guard the lookup, and a
+        caller passing a typo sees "no nouns" instead of a crash.
     Author: suinevere
-    Dependencies: N/A
-    Globals: TC_TO_FOLDER, MOODS, _ROW, _PLACE_TIERS
-    Params: source -- the text of room_class_data.c
-    Returns: dict mapping mood folder name to a sorted list of nouns
+    Dependencies: scene_vocab
+    Globals: N/A
+    Params: scene -- an SC_* scene name, e.g. "FOREST"
+    Returns: a tuple of query nouns, possibly empty
     """
-    out = {mood: set() for mood in MOODS}
-    for word, cat, tier in _ROW.findall(source):
-        if tier not in _PLACE_TIERS:
-            continue
-        folder = TC_TO_FOLDER.get(cat)
-        if folder is None:
-            continue
-        out[folder].add(word)
-    return {mood: sorted(words) for mood, words in out.items()}
+    return vocab.FETCH_NOUNS.get(scene, ())

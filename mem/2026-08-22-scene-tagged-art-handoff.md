@@ -5,10 +5,15 @@ metadata:
   type: project
 ---
 
-Branch `scene-tagged-art`, 28 commits off `main`, +26,584 / −5,740 across 166
-files. Suite **231 passed, 0 failed**. All eight host C tests pass, every SH-2
-`syntax-check.sh` is clean with zero warnings, and both generators regenerate
-byte-identically. **The owner has not built or run it once.**
+Landed on `main` as a single squashed commit `f381dac`, +26,584 / −5,740 across
+166 files, pushed to `origin/main`. Suite **231 passed, 0 failed**. All eight host
+C tests pass, every SH-2 `syntax-check.sh` is clean with zero warnings, and both
+generators regenerate byte-identically. **The owner has not built or run it once.**
+
+The unsquashed 31-commit history survives locally as branch `scene-tagged-art`
+and tag `pre-squash-scene-tagged-art`, both at `4bc7959`. Its per-task commit
+messages are the only record of which change belonged to which task; delete them
+once you are sure you will not want that.
 
 Spec `docs/superpowers/specs/2026-08-21-scene-tagged-per-game-art-and-audio-design.md`,
 plan `docs/superpowers/plans/2026-08-21-scene-tagged-per-game-art-and-audio.md`.

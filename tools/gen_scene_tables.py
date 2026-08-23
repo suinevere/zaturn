@@ -167,51 +167,52 @@ def _write_game_rooms():
 
 
 def _write_game_tracks():
-    """Writes game_tracks.inc: SCENE_TRACKS[GAME_N][SCENE_N] from tracks.json.
+    """Writes game_tracks.inc: SCENE_TRACKS[SCENE_N] from tracks.json.
 
-    Description: Compiles the authored scene->track assignments into one mask
-        per (game, scene). A scene nobody has authored stays zero, which the
-        runtime reads as "fall back to the neutral pool" -- a documented
-        sentinel, not a placeholder to be confused with a bug. Row order is
-        GAMES and column order is scene_vocab.SCENES, because both are index
-        positions in the generated C.
+    Description: Compiles the authored track->scene assignments into one mask
+        per scene. A scene nobody has authored stays zero, which the runtime
+        reads as "fall back to the neutral pool" -- a documented sentinel, not
+        a placeholder to be confused with a bug. Column order is
+        scene_vocab.SCENES because that order is the C enum value.
+
+        One row, not one per game: art is duplicated per game because a
+        picture is small, but the thirty-one CD-DA tracks are already most of
+        the disc and every story shares them.
 
         Prints the document's problems rather than raising on them: an unknown
         scene name or an out-of-range track compiles to nothing, and the run
         that would tell you so is the one you want to finish.
     Author: suinevere
     Dependencies: pathlib, scene_tracks
-    Globals: GAMES, TRACKS_OUT, ROOT
+    Globals: TRACKS_OUT, ROOT
     Params: N/A
-    Returns: the number of (game, scene) pairs with at least one track
+    Returns: the number of scenes with at least one track
     """
     data = scene_tracks.load(ROOT)
     for problem in scene_tracks.validate(data):
         print(f"  tracks.json: {problem}")
 
+    row = scene_tracks.masks(data)
     lines = []
     lines.append("/*----------------------")
     lines.append(" | game_tracks.inc")
     lines.append(" | Description: GENERATED FILE -- do not edit by hand; produced by")
-    lines.append(" |   tools/gen_scene_tables.py from tools/assets/tracks.json. One")
-    lines.append(" |   CD-DA track mask per game per scene; bit i is track")
+    lines.append(" |   tools/gen_scene_tables.py from tools/assets/tracks.json. One CD-DA")
+    lines.append(" |   track mask per scene, shared by every game; bit i is track")
     lines.append(" |   i + MUSIC_TRACK_MIN. A zero means no tracks authored, which the")
     lines.append(" |   runtime reads as \"fall back to the neutral pool.\" A mask with one")
     lines.append(" |   bit is static music: the engine's draw has nothing to choose.")
     lines.append(" | Author: suinevere")
     lines.append(" ----------------------*/")
-    lines.append("static const unsigned long SCENE_TRACKS[GAME_N][SCENE_N] = {")
-    authored = 0
-    for stem, _release, _serial in GAMES:
-        masks = scene_tracks.masks_for_game(data, stem)
-        authored += sum(1 for m in masks if m)
-        cells = ", ".join(("0" if m == 0 else f"0x{m:08X}UL") for m in masks)
-        lines.append(f"    {{ {cells} }},")
+    lines.append("static const unsigned long SCENE_TRACKS[SCENE_N] = {")
+    for scene, mask in zip(vocab.SCENES, row):
+        cell = "0" if mask == 0 else f"0x{mask:08X}UL"
+        lines.append(f"    {cell},  /* {scene} */")
     lines.append("};")
     TRACKS_OUT.parent.mkdir(parents=True, exist_ok=True)
     with TRACKS_OUT.open("w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
-    return authored
+    return sum(1 for m in row if m)
 
 
 def _sentinel_block():
@@ -288,7 +289,7 @@ def main(argv):
     authored = _write_game_tracks()
     _write_scene_map_h()
     print(f"gen_scene_tables: {len(GAMES)} games -> {ROOMS_OUT}, {TRACKS_OUT}, {MAP_OUT}")
-    print(f"  {authored} (game, scene) pair(s) have authored music")
+    print(f"  {authored} scene(s) have authored music")
     return 0
 
 

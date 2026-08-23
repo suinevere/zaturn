@@ -107,6 +107,16 @@ void music_note_output(const char* str, unsigned int len);
 void music_on_turn(unsigned int room);
 
 /*----------------------
+ | music_on_win
+ | Description: The story ended itself -- call once, from the interpreter's
+ |   run loop when its quit flag is set. Plays the win pool immediately.
+ |   Losing needs no counterpart: it arrives through music_on_turn, because
+ |   death is a turn like any other and play continues after it.
+ | Author: suinevere
+ ----------------------*/
+void music_on_win(void);
+
+/*----------------------
  | music_track_from_mask
  | Description: The r-th set bit of a scene's track mask (scene/scene_map.h's
  |   scene_track_mask), as a CD-DA track number. r is reduced modulo the

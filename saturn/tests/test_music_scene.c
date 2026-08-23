@@ -52,8 +52,8 @@ int main(void) {
        of Zork I (release 88, serial "840726") carries an authored scene
        (SC_CAVE, per saturn/src/scene/game_rooms.inc's GAME_ROOM_ZORK1) so
        entering it fires the category callback once. Then the very same room
-       prints danger text; the event overrides the mix, the callback must stay
-       silent, and the track must still audibly move. */
+       prints the death banner; the event overrides the mix, the callback must
+       stay silent, and the track must still audibly move. */
     {
         music_set_backend(rec_play);
         music_set_isplaying(isplaying_true);
@@ -68,8 +68,8 @@ int main(void) {
         check(g_cat_calls == 1, "entering a scene fires the category callback once");
         int scene_track = g_track;
 
-        music_note_output("A hideous monster lunges to attack!", 36);
-        music_on_turn(38);      /* same room: the danger event overrides the mix */
+        music_note_output("**** You have died ****", 23);
+        music_on_turn(38);      /* same room: the death banner overrides the mix */
         music_tick();           /* commit the (zero-frame) debounced switch */
         check(g_cat_calls == 1,
               "an event taking over the track must NOT announce a category");

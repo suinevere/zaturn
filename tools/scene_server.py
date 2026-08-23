@@ -241,44 +241,39 @@ def append_scene(root, name, phrases):
     return True, ""
 
 
-def _csv(tracks):
-    """A track list as the page shows it, and as it is typed back in.
+def _csv(names):
+    """A scene list as the page shows it, and as it is typed back in.
 
     Description: One spelling for the empty case -- the empty string -- so a
         cleared field and an absent entry cannot look different.
     Author: suinevere
     Dependencies: N/A
     Globals: N/A
-    Params: tracks -- an iterable of track numbers, or None
+    Params: names -- an iterable of scene names, or None
     Returns: a comma-separated string, possibly empty
     """
-    return ", ".join(str(t) for t in sorted(tracks or ()))
+    return ", ".join(sorted(names or ()))
 
 
-def _parse_tracks(text):
-    """Track numbers from what someone typed.
+def _parse_scenes(text):
+    """Scene names from what someone typed against one track.
 
-    Description: Accepts commas, spaces or both, and refuses anything that is
-        not a track on the disc. Raising rather than dropping: a number the
-        page accepted and the disc cannot play is silence nobody would think
-        to look for.
+    Description: Accepts commas, spaces or both, and upper-cases, so a name
+        typed in lower case is not a new scene. Raising rather than dropping:
+        a name the page accepted and the vocabulary does not have would look
+        authored here and be silence on the disc.
     Author: suinevere
-    Dependencies: scene_tracks
+    Dependencies: scene_vocab
     Globals: N/A
     Params: text -- the raw field value
-    Returns: a sorted list of distinct track numbers
+    Returns: a sorted list of distinct scene names
     """
     out = set()
     for word in (text or "").replace(",", " ").split():
-        try:
-            n = int(word)
-        except ValueError:
-            raise ValueError(f"{word!r} is not a track number")
-        if not scene_tracks.TRACK_MIN <= n <= scene_tracks.TRACK_MAX:
-            raise ValueError(
-                f"track {n} is outside {scene_tracks.TRACK_MIN}"
-                f"..{scene_tracks.TRACK_MAX}")
-        out.add(n)
+        name = word.strip().upper()
+        if name not in vocab.SCENE_INDEX:
+            raise ValueError(f"{word!r} is not a scene")
+        out.add(name)
     return sorted(out)
 
 
@@ -513,15 +508,18 @@ async function addScene() {
 </script>"""
 
 
-TRACKS_PAGE = """<!doctype html><title>{{ stem }} — music</title>
+TRACKS_PAGE = """<!doctype html><title>music</title>
 <style>
- body{font:15px system-ui;margin:2rem;max-width:60rem}
- table{border-collapse:collapse;width:100%}
- td,th{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left}
+ body{font:15px system-ui;margin:2rem;max-width:66rem}
+ .cols{display:flex;gap:2rem;align-items:flex-start}
+ table{border-collapse:collapse}
+ td,th{border-bottom:1px solid #ddd;padding:.3rem .5rem;text-align:left}
  th{font-size:13px;color:#666}
- input{font:inherit;padding:.25rem;width:14rem}
- .now{color:#060;font-size:13px}
+ input{font:inherit;padding:.25rem;width:22rem}
+ .num{color:#888;width:3rem}
  .none{color:#a60;font-size:13px}
+ .one{color:#060;font-size:13px}
+ .many{color:#06c;font-size:13px}
  .stale{background:#fee;border-left:3px solid #c00;padding:.5rem .6rem;
         font-size:13px;margin:0 0 1rem}
  .note{color:#555;font-size:13px;line-height:1.5;border-left:3px solid #cde;
@@ -529,46 +527,57 @@ TRACKS_PAGE = """<!doctype html><title>{{ stem }} — music</title>
  a{color:#06c}
 </style>
 {% if stale %}<p class="stale">{{ stale }}</p>{% endif %}
-<p><a href="/game/{{ stem }}">← queue</a> ·
-   <a href="/game/{{ stem }}/tagged">tagged list</a></p>
-<h1>{{ stem }} — music per scene</h1>
+{% if stem %}<p><a href="/game/{{ stem }}">← {{ stem }} queue ({{ left }} left)</a> ·
+   <a href="/game/{{ stem }}/tagged">tagged list</a></p>{% endif %}
+<h1>Music — which scenes each track belongs to</h1>
 <div class="note">
- Type CD-DA track numbers, {{ tmin }}–{{ tmax }}, comma separated. <b>One number
- is static music</b>: that scene always plays that track. Several means the
- engine picks among them when the scene changes.<br>
- <b>all games</b> is the shared default. <b>{{ stem }} only</b> overrides it for
- this story and <em>replaces</em> the default rather than adding to it; clear it
- to fall back. A scene with neither draws from the neutral pool, which is what
- every scene does today.<br>
- Saved immediately. The C table is rebuilt by
- <code>tools/gen_scene_tables.py</code>, and the banner above says when it is
- behind.
+ One row per CD-DA track. Type the scene tags that track should play
+ under, comma separated; clear the field to retire the track.<br>
+ <b>Not per game.</b> The thirty-one tracks are most of the disc and every
+ story shares them, so a scene sounds the same whichever game is loaded.<br>
+ A scene named by <b>exactly one</b> track is static — it always plays that
+ track. Named by several, the engine picks among them. Named by none, it
+ falls back to the neutral pool.<br>
+ Saved immediately; <code>tools/gen_scene_tables.py</code> compiles it.
 </div>
-<table>
-<tr><th>scene</th><th>all games</th><th>{{ stem }} only</th><th>plays</th></tr>
+<div class="cols">
+<table><tr><th>track</th><th>scenes</th></tr>
 {% for r in rows %}
-<tr><td>{{ r.scene }}</td>
-  <td><input value="{{ r.default }}" data-scene="{{ r.scene }}" data-layer="default"
-        onchange="save(this)"></td>
-  <td><input value="{{ r.override }}" data-scene="{{ r.scene }}" data-layer="game"
-        onchange="save(this)"></td>
-  <td class="{{ 'now' if r.effective else 'none' }}"
-      id="eff-{{ r.scene }}">{{ r.effective or 'neutral pool' }}</td></tr>
+<tr><td class="num">{{ r.track }}</td>
+  <td><input value="{{ r.scenes }}" data-track="{{ r.track }}"
+        onchange="save(this)" placeholder="FOREST, ROCKY"></td></tr>
 {% endfor %}
 </table>
+<table><tr><th>scene</th><th>plays</th></tr>
+{% for p in plays %}
+<tr><td>{{ p.scene }}</td>
+  <td id="plays-{{ p.scene }}" class="x">{{ p.tracks or "neutral pool" }}</td></tr>
+{% endfor %}
+</table>
+</div>
 <script>
+function paint() {
+  document.querySelectorAll("[id^=plays-]").forEach(function (td) {
+    var n = td.textContent.split(",").filter(function (x) {
+      return x.trim() && x.indexOf("neutral") === -1; }).length;
+    td.className = n === 0 ? "none" : (n === 1 ? "one" : "many");
+  });
+}
 async function save(input) {
-  const r = await fetch('/tracks', {method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({story: '{{ stem }}', scene: input.dataset.scene,
-                          layer: input.dataset.layer, tracks: input.value})});
+  const r = await fetch("/tracks", {method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({track: input.dataset.track,
+                          scenes: input.value})});
   const d = await r.json();
   if (!r.ok) { alert(d.error); return; }
   input.value = d.written;
-  const cell = document.getElementById('eff-' + input.dataset.scene);
-  cell.textContent = d.effective || 'neutral pool';
-  cell.className = d.effective ? 'now' : 'none';
+  for (const scene in d.plays) {
+    const td = document.getElementById("plays-" + scene);
+    if (td) td.textContent = d.plays[scene] || "neutral pool";
+  }
+  paint();
 }
+paint();
 </script>"""
 
 
@@ -614,12 +623,9 @@ def create_app(repo=None):
                     f"still says SCENE_N {have}. Re-run "
                     f"tools/gen_scene_tables.py and tools/make_tga.py before the "
                     f"next disc build.")
-        behind = scene_tracks.stale_games(root)
-        if behind:
-            named = ", ".join(behind[:6]) + ("..." if len(behind) > 6 else "")
-            return (f"Music is authored but not compiled for {len(behind)} game(s) "
-                    f"({named}). Re-run tools/gen_scene_tables.py before the next "
-                    f"disc build.")
+        if scene_tracks.is_stale(root):
+            return ("The music table is behind tools/assets/tracks.json. Re-run "
+                    "tools/gen_scene_tables.py before the next disc build.")
         return ""
 
     def load(stem):
@@ -773,89 +779,79 @@ def create_app(repo=None):
             hint_mood=hint_mood, hint_scenes=hint_scenes, left=len(review),
             stale=stale_note())
 
+    @app.route("/tracks")
     @app.route("/game/<stem>/tracks")
-    def tracks_page(stem):
-        """Author which CD-DA tracks one game's scenes play.
+    def tracks_page(stem=None):
+        """Author which scenes each CD-DA track belongs to.
 
-        Description: Lists only the scenes this game's rooms are tagged with,
-            for the same reason the art server does: music for a scene no room
-            was tagged with can never sound. Shows both layers side by side
-            because the effective answer is one replacing the other, and a
-            page that hid the default would make an override look like the
-            only value there had ever been.
+        Description: One row per track, because that is the decision being
+            made: you listen to track 17 and say where it belongs. The
+            scene-first view is the derived one and appears alongside as the
+            column that says what each scene will actually play.
+
+            Not per game. The thirty-one tracks are already most of the disc
+            and every story shares them, so a scene sounds the same whichever
+            game is loaded; `stem` only decides where the back links point.
         Author: suinevere
         Dependencies: flask, scene_tracks, scene_vocab
         Globals: N/A
-        Params: stem -- the story stem from the URL
-        Returns: rendered HTML; 404 for a story with no blessed tags
+        Params: stem -- a story stem for the navigation links, or None
+        Returns: rendered HTML
         """
-        from flask import abort
-        blessed, review = load(stem)
-        if not blessed and not review:
-            abort(404)
         data = scene_tracks.load(root)
-        resolved = scene_tracks.for_game(data, stem)
-        wanted = set(blessed.values())
-        rows = []
-        for scene in vocab.SCENES:
-            if scene not in wanted:
-                continue
-            rows.append({
-                "scene": scene,
-                "default": _csv(data.get("default", {}).get(scene)),
-                "override": _csv((data.get("games", {}).get(stem) or {}).get(scene)),
-                "effective": _csv(resolved.get(scene)),
-            })
+        inverted = scene_tracks.by_scene(data)
+        rows = [{"track": t, "scenes": _csv(data.get(t))}
+                for t in scene_tracks.tracks()]
+        plays = [{"scene": scene,
+                  "tracks": ", ".join(str(t) for t in inverted.get(scene, ()))}
+                 for scene in vocab.SCENES]
         return render_template_string(
-            TRACKS_PAGE, stem=stem, rows=rows, stale=stale_note(),
-            tmin=scene_tracks.TRACK_MIN, tmax=scene_tracks.TRACK_MAX)
+            TRACKS_PAGE, stem=stem, rows=rows, plays=plays, stale=stale_note(),
+            left=len(load(stem)[1]) if stem else 0)
 
     @app.route("/tracks", methods=["POST"])
     def tracks_write():
-        """Write one scene's tracks into one layer.
+        """Write one track's scene list.
 
-        Description: An empty value clears that layer rather than storing an
-            empty list, so "no override" has exactly one spelling. Rejects a
-            track outside the disc's range instead of dropping it silently --
-            a number that compiles to no bit would look authored on the page
-            and be silence on the disc.
+        Description: Replaces that track's list outright; a track names its
+            scenes and nothing else needs touching, which is the whole reason
+            the document is keyed this way round. An empty value drops the
+            track. Rejects an unknown scene rather than dropping it, since a
+            name that compiles to no bit would look authored on the page and
+            be silence on the disc.
         Author: suinevere
         Dependencies: flask, scene_tracks, scene_vocab
         Globals: N/A
-        Params: N/A -- reads {"story", "scene", "layer", "tracks"} from the body
-        Returns: the written value and the scene's new effective tracks; 400
-            for an unknown scene, unknown layer or out-of-range track
+        Params: N/A -- reads {"track", "scenes"} from the body
+        Returns: the written value and every scene's refreshed track list; 400
+            for an unknown scene or a track the disc does not have
         """
         d = request.get_json(force=True)
-        scene = d.get("scene")
-        if scene not in vocab.SCENE_INDEX:
-            return jsonify(error="unknown scene"), 400
-        if d.get("layer") not in ("default", "game"):
-            return jsonify(error="unknown layer"), 400
         try:
-            tracks = _parse_tracks(d.get("tracks"))
+            track = int(d.get("track"))
+        except (TypeError, ValueError):
+            return jsonify(error="not a track number"), 400
+        if not scene_tracks.TRACK_MIN <= track <= scene_tracks.TRACK_MAX:
+            return jsonify(error=f"track {track} is outside "
+                                 f"{scene_tracks.TRACK_MIN}.."
+                                 f"{scene_tracks.TRACK_MAX}"), 400
+        try:
+            scenes = _parse_scenes(d.get("scenes"))
         except ValueError as exc:
             return jsonify(error=str(exc)), 400
 
         data = scene_tracks.load(root)
-        if d["layer"] == "default":
-            data.setdefault("default", {})
-            if tracks:
-                data["default"][scene] = tracks
-            else:
-                data["default"].pop(scene, None)
+        if scenes:
+            data[track] = scenes
         else:
-            games = data.setdefault("games", {})
-            row = games.setdefault(d["story"], {})
-            if tracks:
-                row[scene] = tracks
-            else:
-                row.pop(scene, None)
+            data.pop(track, None)
         scene_tracks.save(root, data)
-        effective = scene_tracks.for_game(scene_tracks.load(root),
-                                          d["story"]).get(scene)
-        return jsonify(written=_csv(tracks), effective=_csv(effective),
-                       stale=stale_note())
+
+        inverted = scene_tracks.by_scene(scene_tracks.load(root))
+        return jsonify(
+            written=_csv(scenes), stale=stale_note(),
+            plays={scene: ", ".join(str(t) for t in inverted.get(scene, ()))
+                   for scene in vocab.SCENES})
 
     @app.route("/verdict", methods=["POST"])
     def verdict():

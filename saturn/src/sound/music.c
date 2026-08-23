@@ -431,8 +431,8 @@ static int pick_prefer_long(int cat) {
  ----------------------*/
 static int pick_dynamic_track(int kind, int cat) {
     if (kind == CAT_KIND_EVENT) return pick_prefer_long(cat);
-    if (kind == CAT_KIND_SCENE && g_game_idx >= 0) {
-        unsigned long mask = scene_track_mask(g_game_idx, cat);
+    if (kind == CAT_KIND_SCENE) {
+        unsigned long mask = scene_track_mask(cat);
         if (mask) return music_track_from_mask(mask, rng_next_pub());
     }
     return pick_prefer_long(MUSIC_POOL_NEUTRAL);
@@ -867,6 +867,34 @@ void music_note_output(const char* str, unsigned int len) {
  | Params: obj -- the current room's Z-machine object number
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | music_on_win
+ | Description: The story ended itself. Plays the win pool at once, without
+ |   the settle a room change gets: the settle exists so walking through a
+ |   corridor does not thrash the mix, and there is no next room to walk to.
+ |
+ |   Called from mojo_run when the interpreter's quit flag is set, which for
+ |   this build can only be the story's own ending routine -- a typed "quit"
+ |   is intercepted by soft_reset before it ever reaches the interpreter.
+ |   Losing arrives the other way, through music_on_turn's event scan, because
+ |   death is a turn like any other and the game carries on after it.
+ | Author: suinevere
+ | Dependencies: pick_dynamic_track, play_dyn
+ | Globals: g_mix_mode, g_active_kind, g_active_cat, g_event_cat,
+ |   g_pending_*, g_same_cat_rooms
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void music_on_win(void) {
+    g_event_cat = EV_WIN;
+    if (g_mix_mode != MIX_DYNAMIC) return;
+    g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1;
+    g_pending_track = 0; g_pending_rotate = 0; g_pending_frames = 0;
+    g_active_kind = CAT_KIND_EVENT; g_active_cat = EV_WIN;
+    g_same_cat_rooms = 0;
+    play_dyn(pick_dynamic_track(CAT_KIND_EVENT, EV_WIN), 1);
+}
+
 void music_on_turn(unsigned int obj) {
     if (g_mix_mode != MIX_DYNAMIC) { g_turn_len = 0; g_turn_text[0] = 0; return; }
 
@@ -913,14 +941,23 @@ void music_on_turn(unsigned int obj) {
             if (g_pending_rotate) {
                 g_pending_frames = g_debounce_frames;  /* still walking: keep settling */
             } else if (g_same_cat_rooms >= MUSIC_ROTATE_ROOMS) {
-                /* Three rooms of one mood. Move to another track in the same
+                /* Three rooms of one scene. Move to another track in the same
                    category -- pick_dynamic_track steers off what is sounding, so
-                   the change is audible -- and tell the art to move too. */
-                g_pending_kind   = g_active_kind;
-                g_pending_cat    = g_active_cat;
-                g_pending_track  = pick_dynamic_track(g_active_kind, g_active_cat);
-                g_pending_rotate = 1;
-                g_pending_frames = g_debounce_frames;
+                   the change is audible -- and tell the art to move too.
+                   A scene authored with a single track has nowhere to rotate:
+                   the pick comes back as the track already playing, and
+                   committing it would fade out and restart the same music
+                   every third room. Leave it looping. */
+                int next = pick_dynamic_track(g_active_kind, g_active_cat);
+                if (next != g_active_track) {
+                    g_pending_kind   = g_active_kind;
+                    g_pending_cat    = g_active_cat;
+                    g_pending_track  = next;
+                    g_pending_rotate = 1;
+                    g_pending_frames = g_debounce_frames;
+                } else {
+                    g_same_cat_rooms = 0;
+                }
             }
         }
     }

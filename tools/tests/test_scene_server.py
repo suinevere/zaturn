@@ -447,74 +447,89 @@ def test_no_warning_when_the_header_agrees_with_the_vocabulary(furnished):
     assert "gen_scene_tables.py" not in page
 
 
-def test_the_music_page_lists_only_the_scenes_the_game_is_tagged_with(furnished):
-    """Music for a scene no room was tagged with can never sound."""
+def test_the_music_page_lists_every_disc_track(furnished):
+    """One row per track, because that is the decision being made: you listen
+    to a track and say where it belongs."""
     app, _ = furnished
     page = app.test_client().get("/game/ZORK1/tracks").get_data(as_text=True)
-    assert "MAZE" in page
-    assert "SHIP_INT" not in page
+    for track in (2, 17, 32):
+        assert f'data-track="{track}"' in page
 
 
-def test_writing_a_single_track_is_reported_back_as_the_effective_music(furnished):
+def test_the_music_page_also_says_what_each_scene_will_play(furnished):
+    app, _ = furnished
+    page = app.test_client().get("/game/ZORK1/tracks").get_data(as_text=True)
+    assert 'id="plays-MAZE"' in page
+    assert "neutral pool" in page
+
+
+def test_naming_one_scene_on_one_track_is_written_and_reflected(furnished):
     app, tmp = furnished
     c = app.test_client()
-    r = c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                                "layer": "default", "tracks": "23"})
-    assert r.status_code == 200
-    assert r.get_json()["effective"] == "23"
+    r = c.post("/tracks", json={"track": 23, "scenes": "MAZE"})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["plays"]["MAZE"] == "23"
     doc = json.loads((tmp / "tools" / "assets" / "tracks.json").read_text())
-    assert doc["default"]["MAZE"] == [23]
+    assert doc == {"23": ["MAZE"]}
 
 
-def test_a_game_override_wins_on_the_page_and_in_the_file(furnished):
+def test_one_track_can_be_given_several_scenes(furnished):
     app, tmp = furnished
-    c = app.test_client()
-    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                            "layer": "default", "tracks": "18, 19"})
-    r = c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                                "layer": "game", "tracks": "23"})
-    assert r.get_json()["effective"] == "23"
+    r = app.test_client().post("/tracks",
+                               json={"track": 17, "scenes": "FOREST, ROCKY"})
+    assert r.get_json()["plays"]["FOREST"] == "17"
+    assert r.get_json()["plays"]["ROCKY"] == "17"
     doc = json.loads((tmp / "tools" / "assets" / "tracks.json").read_text())
-    assert doc["default"]["MAZE"] == [18, 19]
-    assert doc["games"]["ZORK1"]["MAZE"] == [23]
+    assert doc == {"17": ["FOREST", "ROCKY"]}
 
 
-def test_clearing_an_override_falls_back_to_the_default(furnished):
+def test_a_scene_named_by_two_tracks_reports_both(furnished):
     app, _ = furnished
     c = app.test_client()
-    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                            "layer": "default", "tracks": "18"})
-    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                            "layer": "game", "tracks": "23"})
-    r = c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                                "layer": "game", "tracks": ""})
-    assert r.get_json()["effective"] == "18"
+    c.post("/tracks", json={"track": 18, "scenes": "CAVE"})
+    r = c.post("/tracks", json={"track": 19, "scenes": "CAVE"})
+    assert r.get_json()["plays"]["CAVE"] == "18, 19"
+
+
+def test_clearing_a_track_retires_it(furnished):
+    app, tmp = furnished
+    c = app.test_client()
+    c.post("/tracks", json={"track": 23, "scenes": "MAZE"})
+    r = c.post("/tracks", json={"track": 23, "scenes": ""})
+    assert r.get_json()["plays"]["MAZE"] == ""
+    doc = json.loads((tmp / "tools" / "assets" / "tracks.json").read_text())
+    assert doc == {}
+
+
+def test_a_scene_name_is_accepted_in_any_case(furnished):
+    app, _ = furnished
+    r = app.test_client().post("/tracks", json={"track": 5, "scenes": "maze"})
+    assert r.status_code == 200
+    assert r.get_json()["written"] == "MAZE"
+
+
+def test_a_name_that_is_not_a_scene_is_refused_not_dropped(furnished):
+    """A name the page accepted and the vocabulary does not have would look
+    authored here and be silence on the disc."""
+    app, tmp = furnished
+    r = app.test_client().post("/tracks", json={"track": 5, "scenes": "SWAMP"})
+    assert r.status_code == 400
+    assert not (tmp / "tools" / "assets" / "tracks.json").exists()
 
 
 def test_a_track_the_disc_does_not_have_is_refused_not_dropped(furnished):
     """A number the page accepted and the disc cannot play is silence nobody
     would think to look for."""
     app, tmp = furnished
-    r = app.test_client().post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                                                "layer": "default", "tracks": "99"})
+    r = app.test_client().post("/tracks", json={"track": 99, "scenes": "MAZE"})
     assert r.status_code == 400
     assert not (tmp / "tools" / "assets" / "tracks.json").exists()
 
 
 def test_gibberish_in_the_track_field_is_refused(furnished):
     app, _ = furnished
-    r = app.test_client().post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                                                "layer": "default", "tracks": "seven"})
+    r = app.test_client().post("/tracks", json={"track": "seven", "scenes": "MAZE"})
     assert r.status_code == 400
-
-
-def test_an_unknown_scene_or_layer_is_refused(furnished):
-    app, _ = furnished
-    c = app.test_client()
-    assert c.post("/tracks", json={"story": "ZORK1", "scene": "NOPE",
-                                   "layer": "default", "tracks": "5"}).status_code == 400
-    assert c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                                   "layer": "elsewhere", "tracks": "5"}).status_code == 400
 
 
 def test_authoring_music_raises_the_regenerate_banner(furnished):
@@ -522,7 +537,6 @@ def test_authoring_music_raises_the_regenerate_banner(furnished):
     that follows is silence rather than an error."""
     app, _ = furnished
     c = app.test_client()
-    c.post("/tracks", json={"story": "ZORK1", "scene": "MAZE",
-                            "layer": "default", "tracks": "23"})
+    c.post("/tracks", json={"track": 23, "scenes": "MAZE"})
     page = c.get("/game/ZORK1/tracks").get_data(as_text=True)
     assert "gen_scene_tables.py" in page

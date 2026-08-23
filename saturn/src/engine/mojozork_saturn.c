@@ -52,16 +52,26 @@ void mojo_boot(uint8_t *story, uint32_t len, int seed) {
  | Description: Runs the interpreter until it sets quit, executing one instruction
  |   per iteration. Input/output happen inside the instructions via the wired
  |   hooks.
+ |
+ |   Reaching the end of that loop is the win signal. Only Z-code can set the
+ |   quit flag here: a typed "quit" is intercepted by soft_reset before the
+ |   interpreter sees it, so the story getting here means its own ending
+ |   routine ran to completion.
  | Author: suinevere
- | Dependencies: ../../mojozork.c (runInstruction, GState->quit)
+ | Dependencies: ../../mojozork.c (runInstruction, GState->quit),
+ |   music_on_win (declared locally, the way mojozork.c declares its own
+ |   Saturn hooks -- this unit is included into a C++ translation unit and a
+ |   header's extern "C" would conflict with those declarations)
  | Globals: GState
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void mojo_run(void) {
+    extern void music_on_win(void);
     while (!GState->quit) {
         runInstruction();
     }
+    music_on_win();
 }
 
 /*----------------------

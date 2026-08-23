@@ -76,17 +76,20 @@ const char *scene_name(int scene) {
 
 /*----------------------
  | scene_track_mask
- | Description: The authored track mask for one scene of one game. A zero
- |   mask means no tracks were authored, which the caller treats as "fall
- |   back to the neutral pool".
+ | Description: The authored track mask for one scene. A zero mask means no
+ |   tracks were authored, which the caller treats as "fall back to the
+ |   neutral pool".
+ |
+ |   Not per game. Art is duplicated per game because a picture is small; the
+ |   thirty-one CD-DA tracks are already most of the disc and every story
+ |   shares them, so a scene sounds the same whichever game is loaded.
  | Author: suinevere
  | Dependencies: game_tracks.inc
  | Globals: SCENE_TRACKS
- | Params: game -- a row index from scene_game_index; scene -- an SC_* value
- | Returns: the track mask, or 0 when either argument is out of range or the
- |   scene is unauthored
+ | Params: scene -- an SC_* value
+ | Returns: the track mask, or 0 when the scene is out of range or unauthored
  ----------------------*/
-unsigned long scene_track_mask(int game, int scene) {
-    if (game < 0 || game >= GAME_N || scene < 0 || scene >= SCENE_N) return 0UL;
-    return SCENE_TRACKS[game][scene];
+unsigned long scene_track_mask(int scene) {
+    if (scene < 0 || scene >= SCENE_N) return 0UL;
+    return SCENE_TRACKS[scene];
 }

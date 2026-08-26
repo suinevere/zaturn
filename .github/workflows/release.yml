@@ -50,26 +50,63 @@ jobs:
           bash tools/scripts/getcompiler.sh 14.2.0
           bash tools/scripts/getiso2raw.sh v0.2.2
 
-      # saturn/.gitignore ignores cd/data/MSC/*.PCM, so the boot music is not
-      # in the checkout -- it is generated from the committed .ogg sources.
-      # On Windows saturn/compile.bat does this for you; CI calls the SDK's
-      # make.sh directly and so must run pvms itself, before the build stages
-      # cd/data into the ISO. pvms warns rather than fails when sox is
-      # missing, so assert the outputs exist instead of trusting the exit code.
-      - name: Generate boot music PCM
-        run: |
-          set -e
-          bash tools/assets/pvms.bat
-          test -s "saturn/cd/data/MSC/WISDOM.PCM"
-          test -s "saturn/cd/data/MSC/LOADCD.PCM"
-
-      - name: Build Saturn disc (release)
+      # compile.bat is the same script a developer runs locally, and it is the only
+      # place that encodes netbin-first / CD-second. That order is not cosmetic: both
+      # configs write the same BuildDrop/<CD_NAME>.elf/.iso/.bin/.cue and only
+      # zaturn.netbin has a name of its own, so a CD-last run is what leaves the real
+      # disc on disk. It also calls pvms itself and skips the CD pass if the netbin
+      # fails. Calling it here rather than restating that order in YAML keeps the
+      # ordering and the reason for it in one file.
+      - name: Build netbin and Saturn disc (release)
         working-directory: saturn
+        run: bash compile.bat release
+
+      # pvms warns rather than fails when sox is missing, and the netbin's size limit
+      # is enforced inside post.makefile, so assert the artifacts rather than trusting
+      # either exit code. Existence alone can't catch a netbin-last overwrite: the
+      # netbin pass also produces a non-empty .iso/.bin/.cue under the same shared
+      # names, it's just netbin-linked content instead of the CD payload.
+      - name: Assert build outputs
         run: |
           set -e
-          export SRL_INSTALL_ROOT=../SaturnRingLib
-          bash ../SaturnRingLib/tools/scripts/make.sh release ../SaturnRingLib/Compiler
-          ls -la BuildDrop
+          test -s "saturn/cd/data/MSC/SPLASH.PCM"
+          test -s "saturn/cd/data/MSC/LOADCD.PCM"
+          test -s "saturn/BuildDrop/zaturn.netbin"
+          sz=$(stat -c%s "saturn/BuildDrop/zaturn.netbin")
+          echo "zaturn.netbin: $sz bytes"
+          test "$sz" -le 409600
+          test -s "saturn/BuildDrop/Zaturn (USA) (Netlink Edition).bin"
+          test -s "saturn/BuildDrop/Zaturn (USA) (Netlink Edition).cue"
+          test -s "saturn/BuildDrop/Zaturn (USA) (Netlink Edition).iso"
+
+      # The disc files above only prove packaging didn't silently fail -- a
+      # netbin-last overwrite also produces non-empty .iso/.bin/.cue under the
+      # same shared BuildDrop/<CD_NAME> names, so this is the check that actually
+      # tells a real CD build apart from a netbin overwrite. It deliberately does
+      # NOT use a measured size floor: an earlier version of this assertion
+      # compared the .iso's byte size against a value measured from one real
+      # build, but that number erodes as cd/data grows -- both orders' sizes grow
+      # together, so a size floor eventually stops discriminating without anyone
+      # noticing. This checks the ELF's actual link target instead, which does
+      # not drift with content: compile.bat's header records that the CD build
+      # links at the stock SaturnRingLib base 0x06004000 while the netbin build
+      # links at 0x06010000 via sgl-netbin.linker (saturn/sgl-netbin.linker:4).
+      # Both addresses were confirmed empirically, not trusted from the comment,
+      # by dumping `readelf -l` against the real BuildDrop/<CD_NAME>.elf from both
+      # a correct-order and a swapped-order run. The correct-order artifact is
+      # valid ELF with a LOAD segment at 0x06004000. The swapped-order artifact
+      # is not even parseable as ELF: because the SGL libraries linked here
+      # (LIBCPK.A, SEGA_SYS.A, LIBCD.A, LIBSGL.A, LIBSND.A) are original Sega COFF
+      # archives pulled in via `-Wl,-bcoff-sh`, when the netbin link (which uses
+      # sgl-netbin.linker and omits LIBSND.A) runs last, the linker leaves a COFF
+      # container at the .elf path instead of ELF -- readelf itself fails with
+      # "wrong magic bytes". So this assertion fails on a netbin-last overwrite
+      # either way: readelf errors outright, or if it somehow produced a readable
+      # file, that file's LOAD segment would not be 0x06004000.
+      - name: Assert CD ELF link address
+        run: |
+          set -e
+          readelf -l "saturn/BuildDrop/Zaturn (USA) (Netlink Edition).elf" | grep -q "0x06004000"
 
       - name: Package release zip
         id: package
@@ -159,3 +196,30 @@ jobs:
           fi
           gh release upload "$TAG" "${{ steps.package.outputs.zip_path }}" --clobber
           gh release upload "$TAG" "${{ steps.kit.outputs.zip_path }}" --clobber
+          gh release upload "$TAG" "saturn/BuildDrop/zaturn.netbin" --clobber
+
+      # Tells suin-uk a new pair is available. Deliberately last: a dispatch fired
+      # before the upload finished would send sync-zaturn.yml after an asset that is
+      # not there yet. `if: success()` is implicit, so a failed build never dispatches.
+      - name: Tell suin.uk a new pair is published
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          DISPATCH_TOKEN: ${{ secrets.SUIN_UK_PAT }}
+        run: |
+          set -e
+          if [ -z "$DISPATCH_TOKEN" ]; then
+            echo "SUIN_UK_PAT is unset; suin.uk will not learn about ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/dispatch.out -w '%{http_code}' \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $DISPATCH_TOKEN" \
+            https://api.github.com/repos/suinevere/suin-uk/dispatches \
+            -d "{\"event_type\":\"zaturn-release\",\"client_payload\":{\"tag\":\"${GITHUB_REF_NAME}\"}}")
+          echo "dispatch HTTP $code"
+          if [ "$code" != "204" ]; then
+            cat /tmp/dispatch.out >&2
+            echo "403 here means the PAT lacks Contents: read and write on suinevere/suin-uk, or has expired" >&2
+            exit 1
+          fi

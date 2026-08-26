@@ -1,1 +1,5 @@
 saturn/src/scene/** text eol=lf
+saturn/compile.bat        text eol=lf
+saturn/compile-cd.bat     text eol=lf
+saturn/compile-netbin.bat text eol=lf
+tools/assets/pvms.bat     text eol=lf

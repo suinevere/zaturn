@@ -40,7 +40,7 @@ jobs:
         run: |
           set -e
           bash tools/assets/pvms.bat
-          test -s "saturn/cd/data/MSC/WISDOM.PCM"
+          test -s "saturn/cd/data/MSC/SPLASH.PCM"
           test -s "saturn/cd/data/MSC/LOADCD.PCM"
 
       - name: Build base Saturn disc

@@ -36,7 +36,7 @@ foreach ($f in (Get-ChildItem -Path "../../saturn/cd/data/Z3/*.Z3" | Sort-Object
 }
 
 Write-Host "Generating overlay for $($gameArgs.Count / 2) games -> typeahead_solution.c"
-python gen_solution.py @gameArgs --out "../../saturn/src/typeahead_solution.c"
+python gen_solution.py @gameArgs --out "../../saturn/src/input/typeahead_solution.c"
 
 # The netbin links a Zork-I-only copy instead of the 25-game table: it serves
 # one game, and the full table is 64.8 KB against this slice's 3.8 KB. Same symbol,

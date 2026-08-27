@@ -104,6 +104,20 @@ int cr_dir_cell(int dir, int *row, int *col, int *len);
 int cr_dir_row(int dir);
 
 /*----------------------
+ | cr_dir_word
+ | Description: The canonical spelling of a direction as Infocom's parsers hold
+ |   it, so a rose selection can be submitted as a typed command. Duplicates
+ |   room_model.c's own table deliberately: this one carries no story dependency,
+ |   so a build with no interpreter can still name a direction.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: dir -- one of the RM_* direction indices
+ | Returns: the word, or "" when dir is out of range
+ ----------------------*/
+const char *cr_dir_word(int dir);
+
+/*----------------------
  | cr_enter
  | Description: The direction the cursor should land on when focus arrives in
  |   the module. Searches outward from `want_row` so the cursor keeps the row it

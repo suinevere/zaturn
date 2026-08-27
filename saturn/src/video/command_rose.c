@@ -329,3 +329,18 @@ int cr_move(const unsigned char *exits, int dir, int dx, int dy, int *out) {
     if (best >= 0 && out) *out = best;
     return 0;
 }
+
+/*----------------------
+ | CR_DIR_WORD
+ | Description: The direction spellings cr_dir_word returns, in RM_* index order.
+ | Author: suinevere
+ ----------------------*/
+static const char *CR_DIR_WORD[RM_DIR_N] = {
+    "north", "east", "west", "south", "ne", "nw", "se", "sw",
+    "up", "down", "in", "out"
+};
+
+const char *cr_dir_word(int dir) {
+    if (dir < 0 || dir >= RM_DIR_N) return "";
+    return CR_DIR_WORD[dir];
+}

@@ -36,7 +36,7 @@ SRL_INSTALL_ROOT ?= ../SaturnRingLib
 # multiple definition of main/is_reboot_command/is_quit_command/
 # soft_reset_chord_held/check_soft_reset/confirm_return_to_title. Whoever adds
 # the next netbin-only file must extend this list too.
-NETBIN_ONLY_SOURCES = src/main_netbin.cxx src/net/netbin_pages.cxx
+NETBIN_ONLY_SOURCES = src/main_netbin.cxx src/net/netbin_pages.cxx src/input/typeahead_solution_zork1.c
 SOURCES  = $(filter-out $(NETBIN_ONLY_SOURCES),$(patsubst ./%,%,$(shell find src/ -name '*.c')))
 SOURCES += $(filter-out $(NETBIN_ONLY_SOURCES),$(patsubst ./%,%,$(shell find src/ -name '*.cxx')))
 
@@ -47,10 +47,10 @@ SOURCES += $(filter-out $(NETBIN_ONLY_SOURCES),$(patsubst ./%,%,$(shell find src
 # docs/superpowers/specs/2026-07-25-netbin-minimal-design.md.
 #
 # The list is explicit rather than a `find`: the whole point of this target is
-# that 22 of the CD build's 41 objects are absent (19 netbin objects, 2 of
-# which -- main_netbin.cxx and netbin_pages.cxx -- are netbin-only and never
-# reach the CD build at all). tests/test_netbin_sources.py gates it against
-# the spec.
+# that 29 of the CD build's 53 objects are absent (27 netbin objects, 3 of
+# which -- main_netbin.cxx, netbin_pages.cxx and typeahead_solution_zork1.c --
+# are netbin-only and never reach the CD build at all). tests/test_netbin_sources.py
+# gates it against the spec.
 #
 # LDFILE cannot be set here: shared.mk:10 assigns it with `=` and this file is
 # included first, so the SDK would overwrite us. compile-netbin.bat passes it
@@ -67,6 +67,9 @@ SOURCES = src/main_netbin.cxx \
           src/video/display.c \
           src/video/text_map.cxx \
           src/video/glyph_invert.c \
+          src/video/command_rose.c \
+          src/video/rose_draw.cxx \
+          src/input/game_kb.c \
           src/menu/menu.cxx \
           src/menu/menu_layout.c \
           src/menu/options.cxx \
@@ -75,6 +78,9 @@ SOURCES = src/main_netbin.cxx \
           src/input/keyboard.c \
           src/input/numpad.c \
           src/input/typeahead.c \
+          src/input/typeahead_extract.c \
+          src/input/typeahead_solution_zork1.c \
+          src/input/netbin_story.c \
           src/system/saturn_backup.cxx \
           src/engine/app_state.cxx
 SRL_CUSTOM_CCFLAGS += -DNETBIN

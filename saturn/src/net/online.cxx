@@ -33,6 +33,7 @@ extern "C" {
 #include "typeahead.h"
 #include "typeahead_extract.h"
 #include "typeahead_solution.h"
+#include "netbin_story.h"
 #include "music.h"
 }
 #include "app_state.h"
@@ -189,12 +190,11 @@ extern "C" void online_typeahead_release(void) {
  |   first access. It starts no music of its own: on the boot path the menu track
  |   has not started, and kicking it off mid-preload would only have the next
  |   retry's read silence it again -- callers re-assert playback once the reads
- |   are done. Under NETBIN the rebuild is skipped entirely: the netbin embeds
- |   no story to scan, so it always runs on the bare trie built above, the same
- |   shape as the DIFF_HARD path.
+ |   are done. Under NETBIN the rebuild instead runs against the story embedded
+ |   in the netbin's .rodata, since there is no CD to read one from.
  | Author: suinevere
  | Dependencies: game_catalog.h (scan_z3_folder, CD-build only), typeahead.h,
- |   typeahead_extract.h, typeahead_solution.h, SRL
+ |   typeahead_extract.h, typeahead_solution.h, netbin_story.h, SRL
  | Globals: g_online_ta, g_online_diff, g_difficulty
  | Params: N/A
  | Returns: N/A
@@ -206,11 +206,11 @@ void ensure_online_typeahead(void) {
     g_online_diff = g_difficulty;
     if (g_difficulty == DIFF_HARD) return;
 #ifdef NETBIN
-    // The netbin embeds no story, so there is no dictionary to build from and
-    // the terminal runs against the bare trie -- exactly the DIFF_HARD path
-    // above, which is already a supported configuration. Restoring suggestions
-    // would mean embedding ZORK1.Z3 purely for its word list (~69 KB), nearly
-    // doubling the image.
+    // The story is a .rodata blob, and both builders take a const pointer, so it
+    // is read in place -- no allocation, and nothing to free afterward.
+    build_typeahead_from_story(g_online_ta, netbin_story_data(), netbin_story_size());
+    apply_solution_overlay(g_online_ta, netbin_story_data(), netbin_story_size());
+    typeahead_add_abbreviations(g_online_ta);
     return;
 #else
     char names[1][16];

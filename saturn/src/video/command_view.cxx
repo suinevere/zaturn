@@ -24,6 +24,7 @@
 #include <srl.hpp>
 #include "command_view.h"
 #include "command_rose.h"
+#include "rose_draw.h"
 #include "text_map.h"
 #include "console_view.h"
 #include "app_state.h"
@@ -668,41 +669,6 @@ static void cv_flatten_hard(const unsigned char *exits, unsigned char *out) {
 }
 
 /*----------------------
- | cv_draw_rose_row
- | Description: Composes and prints one rose row, then overprints the selected
- |   direction's label in reverse video when the travel module holds focus and
- |   that label sits on this row. The label text comes back out of the composed
- |   row rather than being rebuilt, so the highlight always carries the same
- |   case the rose drew -- uppercase for an open exit, lowercase for a
- |   conditional one.
- | Author: suinevere
- | Dependencies: command_rose.h, text_map.h
- | Globals: N/A
- | Params: row -- 0..CR_ROWS-1; exits -- the exits to draw; y -- text row;
- |   sel -- the selected RM_* direction, or -1 when travel is not focused
- | Returns: N/A
- ----------------------*/
-void cv_draw_rose_row(int row, const unsigned char *exits, int y, int sel) {
-    char buf[CR_COLS + 1];
-    int srow, scol, slen;
-    cr_row(exits, row, buf);
-    text_print(CV_TRAVEL_X, y, buf);
-    if (sel < 0 || !cr_dir_cell(sel, &srow, &scol, &slen) || srow != row) return;
-    /* A direction this room does not offer draws blank, and a blank highlight is
-       a floating black box: the cursor is placed on an available direction by
-       everything that moves it, and this is the backstop for the frame between a
-       room change and the next placement. */
-    if (buf[scol] == ' ') return;
-    {
-        char label[5];
-        int i;
-        for (i = 0; i < slen && i < (int) sizeof label - 1; i++) label[i] = buf[scol + i];
-        label[i] = '\0';
-        text_print_hl(CV_TRAVEL_X + scol, y, label);
-    }
-}
-
-/*----------------------
  | cv_pad_field
  | Description: Copies up to six characters of `text` into `field`, blank-
  |   padding to a fixed seven-column width so a shorter word erases whatever the
@@ -899,7 +865,7 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
  |   borders carry no highlight and no control hints -- both rows are the one
  |   CV_BORDER string.
  | Author: suinevere
- | Dependencies: command_rose.h, text_map.h, console_view.h
+ | Dependencies: command_rose.h, rose_draw.h, text_map.h, console_view.h
  | Globals: g_difficulty
  | Params: p -- panel state; m -- the room snapshot; w -- the current word page
  | Returns: N/A

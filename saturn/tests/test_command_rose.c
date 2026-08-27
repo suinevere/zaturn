@@ -279,6 +279,23 @@ static void test_enter_keeps_its_row(void) {
     assert(cr_enter(e, 6, 1) == RM_S);
 }
 
+static void test_dir_words(void) {
+    assert(strcmp(cr_dir_word(RM_N),    "north") == 0);
+    assert(strcmp(cr_dir_word(RM_E),    "east")  == 0);
+    assert(strcmp(cr_dir_word(RM_W),    "west")  == 0);
+    assert(strcmp(cr_dir_word(RM_S),    "south") == 0);
+    assert(strcmp(cr_dir_word(RM_NE),   "ne")    == 0);
+    assert(strcmp(cr_dir_word(RM_NW),   "nw")    == 0);
+    assert(strcmp(cr_dir_word(RM_SE),   "se")    == 0);
+    assert(strcmp(cr_dir_word(RM_SW),   "sw")    == 0);
+    assert(strcmp(cr_dir_word(RM_UP),   "up")    == 0);
+    assert(strcmp(cr_dir_word(RM_DOWN), "down")  == 0);
+    assert(strcmp(cr_dir_word(RM_IN),   "in")    == 0);
+    assert(strcmp(cr_dir_word(RM_OUT),  "out")   == 0);
+    assert(strcmp(cr_dir_word(-1), "") == 0);
+    assert(strcmp(cr_dir_word(RM_DIR_N), "") == 0);
+}
+
 int main(void) {
     test_rows();
     test_labels_land_where_drawn();
@@ -289,6 +306,7 @@ int main(void) {
     test_move_always_offers_a_way_out();
     test_move_never_picks_a_missing_direction();
     test_enter_keeps_its_row();
+    test_dir_words();
     printf("test_command_rose ok\n");
     return 0;
 }

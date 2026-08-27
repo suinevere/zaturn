@@ -17,6 +17,7 @@
 #include "app_state.h"
 #include "command_view.h"
 #include "command_rose.h"
+#include "rose_draw.h"
 #include "game_kb.h"
 #include "input.h"
 
@@ -412,13 +413,12 @@ static void draw_input_line(int row, const KeyboardState &k,
  |   suggestion or null; cw_len_out -- current word length
  | Returns: N/A
  ----------------------*/
-#ifndef NETBIN
 /*----------------------
  | g_kb_on_rose / g_kb_rose_dir
  | Description: The in-game keyboard's focus -- whether the picker sits on the
  |   compass rose left of the keys, and the RM_* direction it holds when it does.
  |   File-scope because the keyboard view is a singleton whose focus outlives one
- |   frame. Compiled out of the netbin/online build, which has no rose.
+ |   frame.
  | Author: suinevere
  ----------------------*/
 static bool g_kb_on_rose = false;
@@ -442,15 +442,29 @@ static int kb_grid_row(int rose_row) {
 }
 
 /*----------------------
- | kb_exits
- | Description: The current room's exit states as the rose draws them, flattened to
- |   conditional on Hard so the keyboard's rose gives no more away than the panel's.
+ | KB_EXITS_ALL / kb_exits
+ | Description: The exit states the keyboard's rose draws. With an interpreter in
+ |   hand that is the current room's own exits, flattened to conditional on Hard so
+ |   the rose gives no more away than the panel's. With the game on a remote server
+ |   there is no object tree to read and rooms share names with different exits, so
+ |   every direction is offered and the server refuses the ones that do not exist.
  | Author: suinevere
- | Dependencies: room_model.h
+ | Dependencies: room_model.h (RM_* constants; no link edge under NETBIN)
  | Globals: g_difficulty
  | Params: flat -- RM_DIR_N scratch the flattened copy is built in
- | Returns: flat on Hard, the room's own exits otherwise
+ | Returns: the exit states to draw
  ----------------------*/
+#ifdef NETBIN
+static const unsigned char KB_EXITS_ALL[RM_DIR_N] = {
+    RM_EXIT_OPEN, RM_EXIT_OPEN, RM_EXIT_OPEN, RM_EXIT_OPEN,
+    RM_EXIT_OPEN, RM_EXIT_OPEN, RM_EXIT_OPEN, RM_EXIT_OPEN,
+    RM_EXIT_OPEN, RM_EXIT_OPEN, RM_EXIT_OPEN, RM_EXIT_OPEN
+};
+static const unsigned char *kb_exits(unsigned char *flat) {
+    (void) flat;
+    return KB_EXITS_ALL;
+}
+#else
 static const unsigned char *kb_exits(unsigned char *flat) {
     const RoomModel *m = room_model_get();
     if (g_difficulty != DIFF_HARD) return m->exits;
@@ -458,6 +472,7 @@ static const unsigned char *kb_exits(unsigned char *flat) {
         flat[i] = (m->exits[i] == RM_EXIT_OPEN) ? RM_EXIT_MAYBE : m->exits[i];
     return flat;
 }
+#endif
 
 /*----------------------
  | game_kb_dpad
@@ -514,7 +529,7 @@ static void game_kb_dpad(KeyboardState &k) {
  |   does -- the direction's word fills the line and is submitted -- when it names
  |   an exit the room actually offers.
  | Author: suinevere
- | Dependencies: room_model.h, keyboard.h
+ | Dependencies: command_rose.h, keyboard.h
  | Globals: g_kb_rose_dir
  | Params: k -- keyboard state the direction word is written into
  | Returns: N/A
@@ -525,10 +540,9 @@ static void game_kb_travel(KeyboardState &k) {
     int d = g_kb_rose_dir;
     if (d < 0 || d >= RM_DIR_N) return;
     if (exits[d] != RM_EXIT_OPEN && exits[d] != RM_EXIT_MAYBE) return;
-    keyboard_load_line(&k, room_model_dir_word(d));
+    keyboard_load_line(&k, cr_dir_word(d));
     keyboard_submit(&k);
 }
-#endif /* NETBIN */
 
 void typeahead_edit(KeyboardState &k, TrieNode *root,
                     int &sug_index, char *sug_last,
@@ -544,10 +558,8 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
         // the grid cursor has to stand still for it too -- chord_shift_held is
         // the one place that knows which buttons those are.
         if (!chord_shift_held()) {
-#ifndef NETBIN
             if (g_in_game) game_kb_dpad(k);
             else
-#endif
             {
                 if (pad_fired(Button::Up))    keyboard_move(&k, 0, -1);
                 if (pad_fired(Button::Down))  keyboard_move(&k, 0,  1);
@@ -555,7 +567,6 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
                 if (pad_fired(Button::Right)) keyboard_move(&k,  1, 0);
             }
         }
-#ifndef NETBIN
         if (g_in_game) {
             if (g_kb_on_rose) {
                 if (pad_fired(face_button(FA_TYPE))) game_kb_travel(k);
@@ -567,7 +578,6 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
                 if (pad_fired(face_button(FA_BACK))) keyboard_backspace(&k);
             }
         } else
-#endif
         {
             if (pad_fired(face_button(FA_TYPE))) keyboard_type(&k);
             if (pad_fired(face_button(FA_BACK))) keyboard_backspace(&k);
@@ -674,7 +684,6 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
     cw_len_out = cw_len;
 }
 
-#ifndef NETBIN
 /*----------------------
  | KB_STRIP_BORDER
  | Description: The in-game keyboard strip's top and bottom border, 39 columns:
@@ -695,7 +704,7 @@ static const char *KB_STRIP_BORDER = "+-------------+-----------------------+";
  |   direction; the space bar instead blinks filled/blank on the caret phase, like
  |   the input-line cursor. CapsLock shows on the input row.
  | Author: suinevere
- | Dependencies: command_rose.h, command_view.h (cv_draw_rose_row), game_kb.h,
+ | Dependencies: command_rose.h, rose_draw.h (cv_draw_rose_row), game_kb.h,
  |   room_model.h, text_map.h
  | Globals: g_kb_on_rose, g_kb_rose_dir, g_difficulty
  | Params: k -- keyboard/input-line state; prediction -- selected completion or
@@ -761,7 +770,6 @@ static void render_game_keyboard(const KeyboardState &k, DictionaryWord *predict
         }
     }
 }
-#endif /* NETBIN */
 
 /*----------------------
  | render_keyboard
@@ -803,9 +811,7 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
         return;
     }
 
-#ifndef NETBIN
     if (g_in_game) { render_game_keyboard(k, prediction, current_word_len, block_on, base); return; }
-#endif
 
     /* Off the title screen's online terminal (no room, no rose): the original
        four-row grid, its picker cell in reverse video. */

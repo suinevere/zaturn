@@ -45,21 +45,6 @@
 void render_command_panel(const CommandPanel &p, const RoomModel &m, const CommandWords &w);
 
 /*----------------------
- | cv_draw_rose_row
- | Description: Composes and prints one compass-rose row at the strip's left
- |   module (column CV_TRAVEL_X), overprinting the selected direction's label in
- |   reverse video when `sel` names a direction drawn on this row. Shared with the
- |   keyboard view, whose rose sits in the same left column.
- | Author: suinevere
- | Dependencies: command_rose.h, text_map.h
- | Globals: N/A
- | Params: row -- 0..CR_ROWS-1; exits -- the exits to draw; y -- text row; sel --
- |   the selected RM_* direction, or -1 when the rose is not focused
- | Returns: N/A
- ----------------------*/
-void cv_draw_rose_row(int row, const unsigned char *exits, int y, int sel);
-
-/*----------------------
  | command_edit
  | Description: One frame of command-mode input. The D-pad walks the focused
  |   module and crosses into the next one when it runs off an edge, so the three

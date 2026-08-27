@@ -63,24 +63,22 @@ static bool    g_netbin_jmp_armed = false;
  |   through TYPEAHEAD_MALLOC/FREE (typeahead.h), so the names never appear in
  |   any .c file and the netbin's link edge into the dropped
  |   engine/saturn_glue.cxx hid from every source-level check until the real
- |   link ran. High Work RAM, not the Low Work RAM the CD build routes to: that
- |   choice exists because a full story trie is 89-318 KB, and this build never
- |   has one. online.cxx's ensure_online_typeahead returns straight after
- |   create_trie_node under NETBIN, so the only live allocation is a single
- |   empty root node -- a few dozen bytes, and HWRAM asks nothing of a zone the
- |   netbin's boot path never sets up.
+ |   link ran. Low Work RAM, matching engine/saturn_glue.cxx's choice for the CD
+ |   build: the Zork I trie is 4,722 allocations totalling about 77 KB, which does
+ |   not belong in the same High Work RAM heap the image and .bss already share.
+ |   LWRAM is otherwise unclaimed in this build.
  | Author: suinevere
- | Dependencies: srl.hpp (SRL::Memory::HighWorkRam)
+ | Dependencies: srl.hpp (SRL::Memory::LowWorkRam)
  | Globals: N/A
  | Params: size -- bytes to allocate / ptr -- allocation to release
  | Returns: the allocation, or NULL / N/A
  ----------------------*/
 extern "C" void *typeahead_malloc(unsigned int size) {
-    return SRL::Memory::HighWorkRam::Malloc((uint32_t) size);
+    return SRL::Memory::LowWorkRam::Malloc((uint32_t) size);
 }
 
 extern "C" void typeahead_free(void *ptr) {
-    if (ptr != nullptr) SRL::Memory::HighWorkRam::Free(ptr);
+    if (ptr != nullptr) SRL::Memory::LowWorkRam::Free(ptr);
 }
 
 /*----------------------
@@ -225,7 +223,7 @@ static void netbin_video_init(void) {
  | Dependencies: netbin_pages.h, online.h, net_connect.h, console.h, options.h,
  |   display.h, menu.h, input.h, SRL
  | Globals: g_display, g_pad, g_menu_page_fade, g_netbin_jmp, g_netbin_jmp_armed,
- |   g_menu_backing_depth
+ |   g_menu_backing_depth, g_in_game
  | Params: N/A
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
@@ -275,6 +273,7 @@ int main(void) {
     // image-suppressing window stuck on. Mirrors main.cxx's own post-setjmp
     // reset of the same global.
     g_menu_backing_depth = 0;
+    g_in_game = false;
 
     /* Straight onto the wire the first time: with a saved default number there is
        nothing to type, so auto-dial it instead of parking the player on the dial
@@ -286,7 +285,9 @@ int main(void) {
         menu_clear();
         if (!auto_dial) netbin_dial_page();
         auto_dial = false;
+        g_in_game = true;
         online_mode();
+        g_in_game = false;
     }
     return 0;
 }

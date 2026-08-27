@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assert the makefile's NETBIN source list is exactly the spec's 21 objects,
+"""Assert the makefile's NETBIN source list is exactly the spec's 27 objects,
 that the NETBIN block assigns SOURCES with a plain `=` (not `+=`, which would
 silently merge in the CD build's find-globbed objects and defeat the object
 scan below), and that the CD build's own find-based SOURCES lines
@@ -26,6 +26,9 @@ EXPECTED = {
     "src/video/display.c",
     "src/video/text_map.cxx",
     "src/video/glyph_invert.c",
+    "src/video/command_rose.c",
+    "src/video/rose_draw.cxx",
+    "src/input/game_kb.c",
     "src/menu/menu.cxx",
     "src/menu/menu_layout.c",
     "src/menu/options.cxx",
@@ -34,13 +37,17 @@ EXPECTED = {
     "src/input/keyboard.c",
     "src/input/numpad.c",
     "src/input/typeahead.c",
+    "src/input/typeahead_extract.c",
+    "src/input/typeahead_solution_zork1.c",
+    "src/input/netbin_story.c",
     "src/system/saturn_backup.cxx",
     "src/engine/app_state.cxx",
 }
 
-# The two files that only the netbin links -- the CD build's find-globbed
-# SOURCES must exclude both of them (CRITICAL 1).
-NETBIN_ONLY = {"src/main_netbin.cxx", "src/net/netbin_pages.cxx"}
+# The files that only the netbin links -- the CD build's find-globbed
+# SOURCES must exclude all of them (CRITICAL 1).
+NETBIN_ONLY = {"src/main_netbin.cxx", "src/net/netbin_pages.cxx",
+               "src/input/typeahead_solution_zork1.c"}
 
 
 def strip_comments(text):

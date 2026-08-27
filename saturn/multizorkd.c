@@ -150,6 +150,7 @@ struct Connection
     Instance *instance;
     char address[64];
     char username[16];
+    char pending_join[8];  // game code typed at the hello-sailor prompt, joined once a name exists.
     char inputbuf[128];
     uint32 inputbuf_used;
     int overlong_input;
@@ -1938,6 +1939,34 @@ static void inpfn_player_waiting(Connection *conn, const char *str)
     write_to_connection(conn, "If you get bored of waiting, you can type 'quit' to leave.");
 }
 
+/*----------------------
+ | find_live_instance_by_hash
+ | Description: Finds the instance a game code names, or NULL when no connected player is on it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: connections, num_connections
+ | Params: hash -- a six-character game code as typed by a player
+ | Returns: the Instance, or NULL when the code is the wrong length or names no live game
+ ----------------------*/
+static Instance *find_live_instance_by_hash(const char *hash)
+{
+    if (strlen(hash) != 6) {
+        return NULL;
+    }
+
+    // !!! FIXME: maintaining a list of instances means up to 4x less
+    // !!! FIXME:  searches than looking through the connections to
+    // !!! FIXME:  find it. A hashtable even more so.
+    for (size_t i = 0; i < num_connections; i++) {
+        Connection *c = connections[i];
+        if (c->instance && (strcmp(c->instance->hash, hash) == 0)) {
+            return c->instance;
+        }
+    }
+
+    return NULL;
+}
+
 static void inpfn_enter_instance_code_to_join(Connection *conn, const char *str)
 {
     Instance *inst = NULL;
@@ -1950,18 +1979,7 @@ static void inpfn_enter_instance_code_to_join(Connection *conn, const char *str)
         return;
     }
         
-    if (strlen(str) == 6) {
-        // !!! FIXME: maintaining a list of instances means up to 4x less
-        // !!! FIXME:  searches than looking through the connections to
-        // !!! FIXME:  find it. A hashtable even more so.
-        for (size_t i = 0; i < num_connections; i++) {
-            Connection *c = connections[i];
-            if (c->instance && (strcmp(c->instance->hash, str) == 0)) {
-                inst = c->instance;
-                break;
-            }
-        }
-    }
+    inst = find_live_instance_by_hash(str);
 
     if (inst == NULL) {
         write_to_connection(conn, "Sorry, I can't find that code. Try again or type 'quit'.");
@@ -2082,6 +2100,16 @@ static void inpfn_enter_name(Connection *conn, const char *str)
     write_to_connection(conn, "Okay, we're referring to you as '");
     write_to_connection(conn, conn->username);
     write_to_connection(conn, "' from now on.\n\n");
+
+    if (conn->pending_join[0]) {
+        char code[sizeof (conn->pending_join)];
+        snprintf(code, sizeof (code), "%s", conn->pending_join);
+        conn->pending_join[0] = '\0';
+        conn->inputfn = inpfn_enter_instance_code_to_join;
+        conn->inputfn(conn, code);
+        return;
+    }
+
     write_to_connection(conn, "Now that that's settled:\n\n");
     write_to_connection(conn, "1) start a new game\n");
     write_to_connection(conn, "2) join someone else's game\n");
@@ -2203,6 +2231,18 @@ static void inpfn_hello_sailor(Connection *conn, const char *str)
                 drop_connection(conn);
                 return;
             }
+        }
+
+        // the code a friend hands out names an instance, not a player, and it is the
+        //  only code a first-time arrival has. Take it here and get them a name first.
+        if (find_live_instance_by_hash(str) != NULL) {
+            snprintf(conn->pending_join, sizeof (conn->pending_join), "%s", str);
+            write_to_connection(conn, "That's a game code, not an access code, but I know where it goes.\n\n");
+            write_to_connection(conn, "What's your name? Keep it simple or I'll simplify it for you.\n");
+            write_to_connection(conn, "(sorry if your name isn't one word made up of english letters.\n");
+            write_to_connection(conn, " This is American tech from 1980, after all.)");
+            conn->inputfn = inpfn_enter_name;
+            return;
         }
 
         // look up player code.
@@ -2436,7 +2476,7 @@ static int accept_new_connection(const int listensock)
         write_to_connection(conn, conn->address);
         write_to_connection(conn, "\n\n" MULTIZORK_TRANSCRIPT_BASEURL "\n");
         write_to_connection(conn, "\n(version " MULTIZORKD_VERSION " built " __DATE__ " " __TIME__ ".)\n\n\n");
-        write_to_connection(conn, "Hello sailor!\n\nIf you are returning, go ahead and type in your access code.\nOtherwise, just press enter.\n\n>");
+        write_to_connection(conn, "Hello sailor!\n\nIf you are returning, type your access code. If a friend gave you a game\ncode to join, type that. Otherwise, just press enter.\n\n>");
     }
 
     return sock;

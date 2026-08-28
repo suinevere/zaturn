@@ -239,8 +239,16 @@ server the NetLink telnet path (above) does.
 
 ## Serving the transcripts site (nginx + PHP-FPM)
 
+> **The daemon no longer points here.** `MULTIZORK_TRANSCRIPT_BASEURL` is now
+> `https://suin.uk/zork`, and that deployment answers these three routes from Go rather
+> than PHP — see `src/transcripts/` in the `suin-uk` repository. This section describes
+> the host-nginx setup that the 2026-08-14 consolidation replaced; its `location /`
+> still proxies to GitHub Pages. If you revive it, the router below splits `PHP_SELF`
+> on `/` and takes the first segment as the operation, so it needs the `/zork` prefix
+> stripped before it reaches PHP.
+
 The daemon hands every departing player a URL like
-`https://suinevere.duckdns.org/game/<room>`. Three routes serve those, all from
+`https://suin.uk/zork/game/<room>`. Three routes serve those, all from
 the single file `saturn/multizork-transcripts.php`:
 
 | Path | Renders |

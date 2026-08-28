@@ -34,7 +34,10 @@
 #define MULTIZORKD_DEFAULT_BACKLOG 64
 #define MULTIZORKD_DEFAULT_EGID 0
 #define MULTIZORKD_DEFAULT_EUID 0
-#define MULTIZORK_TRANSCRIPT_BASEURL "https://suinevere.duckdns.org"
+#define MULTIZORK_SITE_BASEURL "https://suin.uk"
+/* Transcripts live under /zork with the rest of the game, so this is not just the site
+   base; the two are separate because the connect banner wants the front page, not this. */
+#define MULTIZORK_TRANSCRIPT_BASEURL MULTIZORK_SITE_BASEURL "/zork"
 #define MULTIZORK_BLOCKED_TIMEOUT (60 * 60 * 24)  /* 24 hours in seconds */
 #define MULTIZORK_AUTOSAVE_EVERY_X_MOVES 30
 #define MULTIZORK_SEATS_PER_GAME 4
@@ -3247,7 +3250,7 @@ static int accept_new_connection(const int listensock)
         drop_connection(conn);
     } else {
         write_to_connection(conn, conn->address);
-        write_to_connection(conn, "\n\n" MULTIZORK_TRANSCRIPT_BASEURL "\n");
+        write_to_connection(conn, "\n\n" MULTIZORK_SITE_BASEURL "\n");
         write_to_connection(conn, "\n(version " MULTIZORKD_VERSION " built " __DATE__ " " __TIME__ ".)\n\n");
         write_to_connection(conn, "username: ");
     }

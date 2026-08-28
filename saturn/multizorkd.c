@@ -37,6 +37,7 @@
 #define MULTIZORK_TRANSCRIPT_BASEURL "https://suinevere.duckdns.org"
 #define MULTIZORK_BLOCKED_TIMEOUT (60 * 60 * 24)  /* 24 hours in seconds */
 #define MULTIZORK_AUTOSAVE_EVERY_X_MOVES 30
+#define MULTIZORK_SEATS_PER_GAME 4
 
 /*----------------------
  | LOBBY_MAX_ROWS
@@ -145,7 +146,7 @@ typedef struct Instance
     int is_private;          // kept out of the lobby list; reachable only by name.
     int ghost_watch;         // switched on once start_instance is done building seats.
     uint8 ghost_logged;      // one bit per seat, so a wandering thief logs once and not every turn.
-    Player players[4];
+    Player players[MULTIZORK_SEATS_PER_GAME];
     int num_players;
     int current_player;   //  the player we're currently running the z-machine for.
     time_t savetime;
@@ -327,7 +328,9 @@ static size_t num_connections = 0;
     "delete from transcripts where player = $player and timestamp > $savetime;"
 
 #define SQL_MY_GAMES_SELECT \
-    "select i.id as id, i.hashid as hashid, i.savetime as savetime from instances i" \
+    "select i.id as id, i.hashid as hashid, i.savetime as savetime," \
+    " (select count(*) from players s where s.instance = i.id and s.claimed <> 0) as seats" \
+    " from instances i" \
     " join players p on p.instance = i.id" \
     " where p.username = $username and p.claimed <> 0 and i.crashed = 0" \
     " order by i.savetime desc limit $limit;"
@@ -775,6 +778,7 @@ typedef struct MyGameRow
     char name[ROOMNAME_MAX];
     sqlite3_int64 dbid;
     time_t savetime;
+    int claimed_seats;
 } MyGameRow;
 
 /*----------------------
@@ -806,6 +810,7 @@ static int db_select_my_games(const char *username, MyGameRow *rows, const int m
         snprintf(row->name, sizeof (row->name), "%s", SQLCOLUMN(text, GStmtMyGamesSelect, "hashid"));
         row->dbid = SQLCOLUMN(int64, GStmtMyGamesSelect, "id");
         row->savetime = (time_t) SQLCOLUMN(int64, GStmtMyGamesSelect, "savetime");
+        row->claimed_seats = SQLCOLUMN(int, GStmtMyGamesSelect, "seats");
         total++;
     }
 
@@ -1060,7 +1065,7 @@ static void drop_connection(Connection *conn)
     int players_still_connected = 0;
     if (inst != NULL) {
         char msg[128];
-        snprintf(msg, sizeof (msg), "\n\n*** %s has disconnected. If they come back, we'll let you know. ***\n\n\n>", conn->username);
+        snprintf(msg, sizeof (msg), "\n\n*** %s disconnected. ***\n\n\n>", conn->username);
         for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
             Connection *c = inst->players[i].connection;
             if (c == conn) {
@@ -1275,6 +1280,72 @@ static void writestr_multizork(const char *str, const uintptr slen)
 {
     Instance *inst = (Instance *) GState;  // this works because zmachine_state is the first field in Instance.
     write_to_connection_slen(get_current_player(inst)->connection, str, slen);
+}
+
+/*----------------------
+ | GRoomName / GRoomNameUsed
+ | Description: Where writestr_roomname parks what it caught. A single buffer is
+ |   enough because get_room_name fills and hands it back before its caller can
+ |   ask again; a caller wanting two names at once must copy the first.
+ | Author: suinevere
+ ----------------------*/
+static char GRoomName[64];
+static uintptr GRoomNameUsed = 0;
+
+/*----------------------
+ | writestr_roomname
+ | Description: Stands in for the Z-machine's output while a room's name is being
+ |   read, collecting the text into GRoomName instead of sending it to a player.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: GRoomName, GRoomNameUsed
+ | Params: str -- the text the Z-machine wanted to print
+ |   slen -- its length
+ | Returns: N/A
+ ----------------------*/
+static void writestr_roomname(const char *str, const uintptr slen)
+{
+    for (uintptr i = 0; (i < slen) && (GRoomNameUsed < (sizeof (GRoomName) - 1)); i++) {
+        GRoomName[GRoomNameUsed++] = str[i];
+    }
+    GRoomName[GRoomNameUsed] = '\0';
+}
+
+/*----------------------
+ | get_room_name
+ | Description: The printed name of a room, the "West of House" a player reads at
+ |   the top of a move. The story only knows how to print it, so this catches the
+ |   print. The result lives until the next call.
+ | Author: suinevere
+ | Dependencies: mojozork.c (getObjectPtr, print_zscii)
+ | Globals: GState, GRoomName, GRoomNameUsed
+ | Params: inst -- the instance whose story is read
+ |   objid -- the room's object id, as held in a player's gvar_location
+ | Returns: the name, or an empty string when objid names no printable object
+ ----------------------*/
+static const char *get_room_name(Instance *inst, const uint16 objid)
+{
+    ZMachineState *origstate = GState;
+
+    GRoomName[0] = '\0';
+    GRoomNameUsed = 0;
+
+    // getObjectPtr calls die() outside this range rather than returning NULL.
+    if ((objid > 0) && (objid <= 255)) {
+        GState = &inst->zmachine_state;
+
+        void (*origwritestr)(const char *, const uintptr) = GState->writestr;
+        GState->writestr = writestr_roomname;
+
+        const uint8 *ptr = getObjectPtr(objid) + 7;  // skip to the properties field.
+        const uint16 addr = READUI16(ptr);           // dereference to the property table.
+        print_zscii(GState->story + addr + 1, 0);
+
+        GState->writestr = origwritestr;
+        GState = origstate;
+    }
+
+    return GRoomName;
 }
 
 // see comments on getObjectProperty
@@ -1641,7 +1712,7 @@ static int step_instance(Instance *inst, const int playernum, const char *input)
         }
     } else {
         // uhoh, the Z-machine called die(). Kill this instance.
-        broadcast_to_instance(inst, "\n\n*** Oh no, this game instance had a fatal error, so we're jumping ship! ***\n\n\n");
+        broadcast_to_instance(inst, "\n\n*** Fatal Error. ***\n\n\n");
         free_instance(inst);
         retval = 0;
     }
@@ -1653,13 +1724,15 @@ static int step_instance(Instance *inst, const int playernum, const char *input)
 
 static void db_failed_at_instance_start(Instance *inst)
 {
-    broadcast_to_instance(inst, "\n\n*** Oh no, we failed to set up the database, so we're jumping ship! ***\n\n\n");
+    broadcast_to_instance(inst, "\n\n*** Failed to setup database. ***\n\n\n");
     inst->dbid = 0;
     inst->started = 0;  // don't try to archive this instance.
     free_instance(inst);
 }
 
 static void inpfn_ingame(Connection *conn, const char *str);
+static void inpfn_lobby(Connection *conn, const char *str);
+static void show_lobby(Connection *conn);
 static Player *reconnect_player(Connection *conn, const char *access_code);
 
 /*----------------------
@@ -1774,14 +1847,15 @@ static void start_instance(Instance *inst)
         dbokay = dbokay && generate_unique_hash(player->hash);  // assign a hash to the player while we're here so they can rejoin.
 
         if (conn) {
-            write_to_connection(conn, "\n\n");
-            write_to_connection(conn, "*** THE GAME IS STARTING ***\n");
-            write_to_connection(conn, "You can leave at any time by typing 'quit'.\n");
-            write_to_connection(conn, "You can speak to others in the same room with '!some text' or the whole game with '!!some text'.\n");
-            write_to_connection(conn, "If you get disconnected or leave, you can rejoin at any time\n");
-            write_to_connection(conn, " with this access code: '");
-            write_to_connection(conn, player->hash);
-            write_to_connection(conn, "'\n\n(Have fun!)\n\n\n");
+            write_to_connection(conn, "\n\nStarting.\n\n");
+            write_to_connection(conn, "               Common Commands\n\n");
+            write_to_connection(conn, "  - 'quit' - quit game.\n");
+            write_to_connection(conn, "  - '!some text' - private message to room.\n");
+            write_to_connection(conn, "  - '!!some text' - global message to every room.\n\n");
+            write_to_connection(conn, inst->is_private ? "Type '" : "Find '");
+            write_to_connection(conn, inst->hash);
+            write_to_connection(conn, "' in the Lobby to rejoin next session.\n\n");
+            write_to_connection(conn, "Good luck.\n\n\n");
             conn->inputfn = inpfn_ingame;
         }
     }
@@ -1922,7 +1996,7 @@ static void free_instance(Instance *inst)
         Player *player = &inst->players[i];
         Connection *conn = player->connection;
         if (conn) {
-            write_to_connection(conn, "\n\n\nTHIS INSTANCE IS BEING DESTROYED, SORRY, HANGING UP.\n\n\n\n");
+            write_to_connection(conn, "\n\n\n*** Disconnected. ***\n\n\n\n");
             conn->instance = NULL;  // so other players aren't alerted that you're "leaving" or we double-free.
             drop_connection(conn);
         }
@@ -1958,21 +2032,20 @@ static Player *find_connection_player(Connection *conn, int *_playernum)
 static void inpfn_confirm_quit(Connection *conn, const char *str)
 {
     Player *player = find_connection_player(conn, NULL);
-    if (strcasecmp(str, "y") == 0) {
+    if ((strcasecmp(str, "y") == 0) || (strcasecmp(str, "yes") == 0)) {
         if (player != NULL) {
-            write_to_connection(conn, "\nOkay, you can come back to this game in progress with this code:\n");
+            write_to_connection(conn, "\nCome back anytime to room:\n");
             write_to_connection(conn, "    ");
             write_to_connection(conn, player->hash);
-            write_to_connection(conn, "\n\n\n");
+            write_to_connection(conn, "\n\n");
             write_to_connection(conn, "And view transcripts from this game here:\n");
             write_to_connection(conn, "    ");
             write_to_connection(conn, MULTIZORK_TRANSCRIPT_BASEURL);
             write_to_connection(conn, "/game/");
             write_to_connection(conn, conn->instance->hash);
-            write_to_connection(conn, "\n\nAnd don't forget to toss a dollar at my Patreon if you liked this:\n");
-            write_to_connection(conn, "    https://patreon.com/icculus\n");
+            write_to_connection(conn, "\n");
         }
-        write_to_connection(conn, "\n\nGood bye!\n");
+        write_to_connection(conn, "\nGood bye!\n");
         drop_connection(conn);
     } else {
         write_to_connection(conn, "Ok.\n>");
@@ -1990,13 +2063,13 @@ static void inpfn_ingame(Connection *conn, const char *str)
 
     if (!player) {
         loginfo("Um, socket %d is trying to talk to instance '%s', which it is not a player on.", conn->sock, inst->hash);
-        write_to_connection(conn, "\n\n*** The server appears to be confused. This is a bug on our end. Sorry, dropping you now. ***\n\n\n");
+        write_to_connection(conn, "\n\nEmail suineverependragon@gmail.com.\n\n\n");
         drop_connection(conn);
         return;
     }
 
     if ((strcasecmp(str, "q") == 0) || (strncasecmp(str, "quit", 4) == 0)) {
-        write_to_connection(conn, "Do you wish to leave the game? (Y is affirmative):");
+        write_to_connection(conn, "Quit?:");
         conn->inputfn = inpfn_confirm_quit;
         return;  // don't transcribe this part.
     }
@@ -2021,15 +2094,15 @@ static void inpfn_ingame(Connection *conn, const char *str)
     }
 
     if (strncasecmp(str, "save", 4) == 0) {
-        write_to_connection(conn, "Requests to save the game are ignored, sorry.\n>");
+        write_to_connection(conn, "Ignored.\n>");
     } else if (strncasecmp(str, "restore", 7) == 0) {
-        write_to_connection(conn, "Requests to restore the game are ignored, sorry.\n>");
+        write_to_connection(conn, "Ignored.\n>");
     } else if (str[0] == '!') {
         if (str[1] == '!') { // broadcast to whole instance
-            snprintf(msg, sizeof (msg), "\n*** %s says to the whole dungeon, \"%s\" ***\n\n>", player->username, str + 2);
+            snprintf(msg, sizeof (msg), "\n*** %s voice echos \"%s\" ***\n\n>", player->username, str + 2);
             broadcast_to_instance(inst, msg);
         } else {
-            snprintf(msg, sizeof (msg), "\n*** %s says to the room, \"%s\" ***\n\n>", player->username, str + 1);
+            snprintf(msg, sizeof (msg), "\n*** %s said \"%s\" ***\n\n>", player->username, str + 1);
             broadcast_to_room(inst, player->gvar_location, msg);
         }
         // skip this output: the broadcast_* functions already transcribed it (current_player is still -1 since we aren't stepping the instance yet).
@@ -2045,9 +2118,9 @@ static void inpfn_ingame(Connection *conn, const char *str)
         const uint16 newloc = player->gvar_location;
         if (newloc != loc) { // player moved to a new room?
             player->gvar_location = 0;  // so we don't broadcast to ourselves.
-            snprintf(msg, sizeof (msg), "\n*** %s has left the area. ***\n>", player->username);
+            snprintf(msg, sizeof (msg), "\n*** %s left %s. ***\n>", player->username, get_room_name(inst, loc));
             broadcast_to_room(inst, loc, msg);
-            snprintf(msg, sizeof (msg), "\n*** %s has entered the area. ***\n>", player->username);
+            snprintf(msg, sizeof (msg), "\n*** %s entered %s. ***\n>", player->username, get_room_name(inst, newloc));
             broadcast_to_room(inst, newloc, msg);
             player->gvar_location = newloc;
         }
@@ -2066,77 +2139,194 @@ static void inpfn_ingame(Connection *conn, const char *str)
     }
 }
 
-static void inpfn_waiting_for_players(Connection *conn, const char *str)
+/*----------------------
+ | count_taken_seats
+ | Description: How many of a room's four seats are spoken for, whether by
+ |   someone sitting in one now or by someone who claimed one and walked away.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: inst -- the room to count
+ | Returns: 0 to MULTIZORK_SEATS_PER_GAME
+ ----------------------*/
+static int count_taken_seats(const Instance *inst)
 {
-    const int go = (strcmp(str, "go") == 0);
-    Instance *inst = conn->instance;
-    int num_players = 0;
-
-    if (strcmp(str, "quit") == 0) {
-        write_to_connection(conn, "Okay, maybe some other time. Bye!\n");
-        for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
-            Connection *c = inst->players[i].connection;
-            if ((c != NULL) && (c != conn)) {
-                write_to_connection(c, "\nSorry, ");
-                write_to_connection(c, conn->username);
-                write_to_connection(c, " decided to cancel the game. Try again later?\n");
-            }
-        }
-        free_instance(inst);
-        drop_connection(conn); // free_instance _should_ have handled this.
-        return;
-    }
-
-    write_to_connection(conn, "Your current guest list is:\n\n");
+    int total = 0;
     for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
-        const Connection *c = inst->players[i].connection;
-        if ((c != NULL) && (c != conn)) {
-            num_players++;
-            write_to_connection(conn, " - ");
-            write_to_connection(conn, c->username);
-            write_to_connection(conn, "\n");
-        }
+        const Player *p = &inst->players[i];
+        total += (p->claimed || (p->connection != NULL)) ? 1 : 0;
     }
-
-    if (num_players == 0) {
-        write_to_connection(conn, " ...apparently no one! Running solo, huh? Right on.\n");
-    }
-    write_to_connection(conn, "\n");
-
-    if (go) {
-        write_to_connection(conn, "Okay! Here we go! Buckle up.\n");
-        start_instance(inst);  // will move all players to new inputfn
-    } else {
-        write_to_connection(conn, "Still waiting for people to join '");
-        write_to_connection(conn, inst->hash);
-        write_to_connection(conn, "'.\n");
-        write_to_connection(conn, "Type 'go' to start with those currently present.\n");
-        write_to_connection(conn, "Type 'quit' to drop this game and anyone connected.\n");
-    }
+    return total;
 }
 
-static void inpfn_player_waiting(Connection *conn, const char *str)
+/*----------------------
+ | write_party_list
+ | Description: Prints who is presently in a room, one name to a line. The indent
+ |   is the caller's so the same list can sit centered or flush left.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the connection to print to
+ |   inst -- the room whose seats are read
+ |   indent -- written in front of every name
+ | Returns: N/A
+ ----------------------*/
+static void write_party_list(Connection *conn, const Instance *inst, const char *indent)
 {
-    if (strcmp(str, "quit") == 0) {
-        write_to_connection(conn, "Okay, maybe some other time. Bye!");
-        drop_connection(conn);
-        return;
-    }
-
-    Instance *inst = conn->instance;
-    write_to_connection(conn, "The current guest list is:\n\n");
     for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
         const Connection *c = inst->players[i].connection;
         if (c != NULL) {
-            write_to_connection(conn, " - ");
+            write_to_connection(conn, indent);
+            write_to_connection(conn, "- ");
             write_to_connection(conn, c->username);
             write_to_connection(conn, "\n");
         }
     }
-    write_to_connection(conn, "\n");
+}
 
-    write_to_connection(conn, "Waiting for the game to start (and maybe other people to arrive). Sit tight.\n");
-    write_to_connection(conn, "If you get bored of waiting, you can type 'quit' to leave.");
+/*----------------------
+ | leave_waiting_room
+ | Description: Takes one person out of a room that has not started and stands
+ |   them back at the lobby, disposing of the room once the last of them is out.
+ |   Safe to do without touching the database because a room owns nothing there
+ |   until start_instance runs.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the connection leaving, holding a seat in an unstarted room
+ | Returns: N/A
+ ----------------------*/
+static void leave_waiting_room(Connection *conn)
+{
+    Instance *inst = conn->instance;
+    int still_seated = 0;
+
+    assert(inst != NULL);
+    assert(!inst->started);
+
+    conn->instance = NULL;
+    conn->inputfn = inpfn_lobby;
+
+    for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
+        if (inst->players[i].connection == conn) {
+            inst->players[i].connection = NULL;
+        } else if (inst->players[i].connection != NULL) {
+            still_seated++;
+        }
+    }
+
+    if (!still_seated) {
+        free_instance(inst);
+    }
+
+    show_lobby(conn);
+}
+
+/*----------------------
+ | close_waiting_room
+ | Description: Shuts a room down at its host's word and returns everyone in it,
+ |   host included, to the lobby. Every seat is emptied before the room is freed
+ |   so free_instance finds nobody left to hang up on.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: host -- the connection that asked to close its unstarted room
+ | Returns: N/A
+ ----------------------*/
+static void close_waiting_room(Connection *host)
+{
+    Instance *inst = host->instance;
+    Connection *leaving[MULTIZORK_SEATS_PER_GAME];
+    size_t num_leaving = 0;
+    char msg[128];
+
+    assert(inst != NULL);
+    assert(!inst->started);
+
+    snprintf(msg, sizeof (msg), "\n\n%s terminated the game.\n", host->username);
+
+    for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
+        Connection *c = inst->players[i].connection;
+        if (c != NULL) {
+            if (c != host) {
+                write_to_connection(c, msg);
+            }
+            c->instance = NULL;
+            c->inputfn = inpfn_lobby;
+            inst->players[i].connection = NULL;
+            leaving[num_leaving++] = c;
+        }
+    }
+
+    free_instance(inst);
+
+    for (size_t i = 0; i < num_leaving; i++) {
+        show_lobby(leaving[i]);
+    }
+}
+
+/*----------------------
+ | inpfn_waiting_for_players
+ | Description: The host's view while a room fills up: who is here, and the two
+ |   words that end the wait. Closing the room sends everyone back to the lobby
+ |   rather than hanging up on them.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the host
+ |   str -- what they typed
+ | Returns: N/A
+ ----------------------*/
+static void inpfn_waiting_for_players(Connection *conn, const char *str)
+{
+    Instance *inst = conn->instance;
+    char line[64];
+
+    if (strcmp(str, "quit") == 0) {
+        write_to_connection(conn, "Bye.\n");
+        close_waiting_room(conn);
+        return;
+    } else if (strcmp(str, "go") == 0) {
+        write_to_connection(conn, "Okay, here we go.\n");
+        start_instance(inst);  // will move all players to new inputfn
+        return;
+    }
+
+    write_to_connection(conn, "Waiting...\n\n");
+    snprintf(line, sizeof (line), "(%d/%d seats)\n", count_taken_seats(inst), MULTIZORK_SEATS_PER_GAME);
+    write_to_connection(conn, line);
+    write_party_list(conn, inst, " ");
+    write_to_connection(conn, "\n'quit' - closes room\n'go' - starts game\n\n> ");
+}
+
+/*----------------------
+ | inpfn_player_waiting
+ | Description: A guest's view while the host's room fills up. There is nothing
+ |   to do but read the party and decide whether to stay.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the guest
+ |   str -- what they typed
+ | Returns: N/A
+ ----------------------*/
+static void inpfn_player_waiting(Connection *conn, const char *str)
+{
+    Instance *inst = conn->instance;
+    char line[64];
+
+    if (strcmp(str, "quit") == 0) {
+        leave_waiting_room(conn);
+        return;
+    }
+
+    write_to_connection(conn, "            ");
+    write_to_connection(conn, inst->hash);
+    write_to_connection(conn, "\n\n           Current Party\n");
+    snprintf(line, sizeof (line), "            (%d/%d seats)\n\n", count_taken_seats(inst), MULTIZORK_SEATS_PER_GAME);
+    write_to_connection(conn, line);
+    write_party_list(conn, inst, "           ");
+    write_to_connection(conn, "\n'quit' - leave room\n\n> ");
 }
 
 /*----------------------
@@ -2302,9 +2492,7 @@ static int enter_room_by_name(Connection *conn, const char *name)
         }
 
         if (!seat_available_for(inst)) {
-            write_to_connection(conn, inst->started ?
-                "That game is already under way and has no free seats. Sorry!\n" :
-                "That room appears to be full. Too popular!\n");
+            write_to_connection(conn, "Room is full!\n");
             return 0;
         }
 
@@ -2312,12 +2500,12 @@ static int enter_room_by_name(Connection *conn, const char *name)
         if (inst->started) {
             seatnum = claim_seat(conn, inst);
             if (seatnum < 0) {
-                write_to_connection(conn, "That game is already under way and has no free seats. Sorry!\n");
+                write_to_connection(conn, "Room is full!\n");
                 return 0;
             }
-            write_to_connection(conn, "\nYou slip into '");
+            write_to_connection(conn, "\nWelcome to '");
             write_to_connection(conn, inst->hash);
-            write_to_connection(conn, "', already in progress. The others are somewhere\nahead of you; you'll have to catch up.\n\n");
+            write_to_connection(conn, "'. The others are somewhere ahead of you; you'll have to find them!\n\n");
             write_to_connection(conn, "Rejoin any time with this access code: '");
             write_to_connection(conn, inst->players[seatnum].hash);
             write_to_connection(conn, "'\n\n");
@@ -2331,7 +2519,7 @@ static int enter_room_by_name(Connection *conn, const char *name)
             }
 
             if (conn->instance == NULL) {
-                write_to_connection(conn, "That room appears to be full. Too popular!\n");
+                write_to_connection(conn, "Room is full!\n");
                 return 0;
             }
         }
@@ -2363,16 +2551,16 @@ static int enter_room_by_name(Connection *conn, const char *name)
 
         inst = create_instance();
         if (!inst) {
-            write_to_connection(conn, "I know that room, but I seem to have run out of memory! Try again later.\n");
+            write_to_connection(conn, "Found it, but I am out of memory! Try again later.\n");
             return 0;
         } else if (!db_select_instance(inst, rows[i].dbid)) {
-            write_to_connection(conn, "I know that room, but I had trouble starting it up! Try again later.\n");
+            write_to_connection(conn, "Found it, but I cannot start it! Try again later.\n");
             free_instance(inst);
             return 0;
         }
 
         if (inst->crashed) {
-            write_to_connection(conn, "I know that room, but that game crashed before and can't be rejoined.\n");
+            write_to_connection(conn, "Found it, but that game state is crashed and can't be rejoined.\n");
             free_instance(inst);
             return 0;
         }
@@ -2383,7 +2571,8 @@ static int enter_room_by_name(Connection *conn, const char *name)
 
         Player *mine = find_own_seat(inst, conn->username);
         if (mine == NULL) {
-            write_to_connection(conn, "I know that room, but I can't find your seat in it. Sorry!\n");
+            loginfo("Instance '%s' matched a my-games row for '%s' but loaded without their seat.", inst->hash, conn->username);
+            write_to_connection(conn, "Found it, but its roster is missing your seat. This is a bug on our end.\n");
             free_instance(inst);
             return 0;
         }
@@ -2411,18 +2600,17 @@ typedef struct LobbyRow
 {
     char name[ROOMNAME_MAX];
     Instance *live;
-    int mine;
-    int in_progress;
-    int free_seats;
+    int taken_seats;
     int days_ago;
 } LobbyRow;
 
 /*----------------------
  | build_lobby_rows
  | Description: Collects the rooms a player may walk into and the games they
- |   already hold a seat in, in the order the lobby prints them. Both the print
- |   and the number-to-row lookup call this, so a typed number always means the
- |   row the player just read.
+ |   already hold a seat in, in the order the lobby prints them. Rooms the player
+ |   is already seated in come first, then rooms open to strangers, then games
+ |   only the database still holds. Both the print and the number-to-row lookup
+ |   call this, so a typed number always means the row the player just read.
  | Author: suinevere
  | Dependencies: sqlite3.h
  | Globals: connections, num_connections, GNow
@@ -2435,53 +2623,35 @@ static size_t build_lobby_rows(Connection *conn, LobbyRow *rows, const size_t ma
 {
     size_t total = 0;
 
-    for (size_t i = 0; (i < num_connections) && (total < maxrows); i++) {
-        Instance *inst = connections[i]->instance;
-        if ((inst == NULL) || inst->is_private || !seat_available_for(inst)) {
-            continue;
-        }
+    for (int pass = 0; pass < 2; pass++) {
+        for (size_t i = 0; (i < num_connections) && (total < maxrows); i++) {
+            Instance *inst = connections[i]->instance;
+            if (inst == NULL) {
+                continue;
+            }
 
-        int already = 0;
-        for (size_t j = 0; j < total; j++) {
-            already = already || (rows[j].live == inst);
-        }
-        if (already) {
-            continue;
-        }
+            const int is_mine = (find_own_seat(inst, conn->username) != NULL);
+            if (is_mine != (pass == 0)) {
+                continue;
+            } else if (!is_mine && (inst->is_private || !seat_available_for(inst))) {
+                continue;
+            }
 
-        LobbyRow *row = &rows[total];
-        memset(row, '\0', sizeof (*row));
-        snprintf(row->name, sizeof (row->name), "%s", inst->hash);
-        row->live = inst;
-        row->in_progress = inst->started;
-        for (size_t j = 0; j < ARRAYSIZE(inst->players); j++) {
-            const Player *p = &inst->players[j];
-            row->free_seats += (!p->claimed && (p->connection == NULL)) ? 1 : 0;
-        }
-        total++;
-    }
+            int already = 0;
+            for (size_t j = 0; j < total; j++) {
+                already = already || (rows[j].live == inst);
+            }
+            if (already) {
+                continue;
+            }
 
-    for (size_t i = 0; (i < num_connections) && (total < maxrows); i++) {
-        Instance *inst = connections[i]->instance;
-        if ((inst == NULL) || (find_own_seat(inst, conn->username) == NULL)) {
-            continue;
+            LobbyRow *row = &rows[total];
+            memset(row, '\0', sizeof (*row));
+            snprintf(row->name, sizeof (row->name), "%s", inst->hash);
+            row->live = inst;
+            row->taken_seats = count_taken_seats(inst);
+            total++;
         }
-
-        int already = 0;
-        for (size_t j = 0; j < total; j++) {
-            already = already || (rows[j].live == inst);
-        }
-        if (already) {
-            continue;
-        }
-
-        LobbyRow *row = &rows[total];
-        memset(row, '\0', sizeof (*row));
-        snprintf(row->name, sizeof (row->name), "%s", inst->hash);
-        row->live = inst;
-        row->mine = 1;
-        row->in_progress = 1;
-        total++;
     }
 
     MyGameRow mine[16];
@@ -2494,7 +2664,7 @@ static size_t build_lobby_rows(Connection *conn, LobbyRow *rows, const size_t ma
         LobbyRow *row = &rows[total];
         memset(row, '\0', sizeof (*row));
         snprintf(row->name, sizeof (row->name), "%s", mine[i].name);
-        row->mine = 1;
+        row->taken_seats = mine[i].claimed_seats;
         row->days_ago = (int) ((((sqlite3_int64) GNow) - ((sqlite3_int64) mine[i].savetime)) / (60 * 60 * 24));
         total++;
     }
@@ -2503,10 +2673,31 @@ static size_t build_lobby_rows(Connection *conn, LobbyRow *rows, const size_t ma
 }
 
 /*----------------------
+ | write_lobby_prompt
+ | Description: Asks for a room. Kept apart from show_lobby so a line the lobby
+ |   could not use can ask again without reprinting the list the player is still
+ |   reading the numbers off.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the connection to prompt
+ | Returns: N/A
+ ----------------------*/
+static void write_lobby_prompt(Connection *conn)
+{
+    write_to_connection(conn, "\nRoom : ");
+}
+
+/*----------------------
  | show_lobby
- | Description: Prints the lobby. Privacy keeps a room off the joinable list for
- |   strangers; a room the caller holds a seat in still appears under Your games,
- |   private or not.
+ | Description: Prints the lobby as one list: starting a room is always choice 1,
+ |   so the rows that follow print as their index plus two and inpfn_lobby undoes
+ |   that when a number comes back. A row's middle column says whether a live room
+ |   is listed publicly or how long ago a saved one was left, the two never being
+ |   true of the same row. Privacy keeps a room off the list for strangers; a room
+ |   the caller holds a seat in shows either way. The four columns are cut to add
+ |   up to the 40 the Saturn screen shows, which costs room names past sixteen
+ |   characters their tail.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -2517,54 +2708,29 @@ static void show_lobby(Connection *conn)
 {
     LobbyRow rows[LOBBY_MAX_ROWS];
     const size_t total = build_lobby_rows(conn, rows, ARRAYSIZE(rows));
-    int printed_joinable = 0;
-    int printed_mine = 0;
     char line[160];
 
-    for (size_t i = 0; i < total; i++) {
-        if (rows[i].mine) {
-            continue;
-        } else if (!printed_joinable) {
-            write_to_connection(conn, "\nGames you can join:\n");
-            printed_joinable = 1;
-        }
-
-        snprintf(line, sizeof (line), "  %d) %-22s%s%d seat%s free, ",
-                 (int) (i + 1), rows[i].name,
-                 rows[i].in_progress ? "(in progress) " : "",
-                 rows[i].free_seats, (rows[i].free_seats == 1) ? "" : "s");
-        write_to_connection(conn, line);
-        const char *sep = "";
-        for (size_t j = 0; j < ARRAYSIZE(rows[i].live->players); j++) {
-            Connection *c = rows[i].live->players[j].connection;
-            if (c != NULL) {
-                write_to_connection(conn, sep);
-                write_to_connection(conn, c->username);
-                sep = ", ";
-            }
-        }
-        write_to_connection(conn, "\n");
-    }
+    write_to_connection(conn, "\n           Lobby\n\n");
+    snprintf(line, sizeof (line), "%3d) <new room>\n", 1);
+    write_to_connection(conn, line);
 
     for (size_t i = 0; i < total; i++) {
-        if (!rows[i].mine) {
-            continue;
-        } else if (!printed_mine) {
-            write_to_connection(conn, "\nYour games:\n");
-            printed_mine = 1;
-        }
+        char middle[16];
 
-        if (rows[i].in_progress) {
-            snprintf(line, sizeof (line), "  %d) %-22s (in progress)\n", (int) (i + 1), rows[i].name);
+        if (rows[i].live != NULL) {
+            snprintf(middle, sizeof (middle), "(%s)", rows[i].live->is_private ? "private" : "public");
+        } else if (rows[i].days_ago <= 0) {
+            snprintf(middle, sizeof (middle), "(today)");
+        } else if (rows[i].days_ago > 99) {   // keeps the column inside its width.
+            snprintf(middle, sizeof (middle), "(100+ days)");
         } else {
-            snprintf(line, sizeof (line), "  %d) %-22s (left %d day%s ago)\n",
-                     (int) (i + 1), rows[i].name, rows[i].days_ago, (rows[i].days_ago == 1) ? "" : "s");
+            snprintf(middle, sizeof (middle), "(%d day%s old)", rows[i].days_ago,
+                     (rows[i].days_ago == 1) ? "" : "s");
         }
-        write_to_connection(conn, line);
-    }
 
-    if (!printed_joinable && !printed_mine) {
-        write_to_connection(conn, "\nNobody's playing right now. You could be the first.\n");
+        snprintf(line, sizeof (line), "%3d) %-16.15s%-14s(%d/%d)\n", (int) (i + 2), rows[i].name,
+                 middle, rows[i].taken_seats, MULTIZORK_SEATS_PER_GAME);
+        write_to_connection(conn, line);
     }
 
     conn->num_lobby_rows = total;
@@ -2572,8 +2738,7 @@ static void show_lobby(Connection *conn)
         snprintf(conn->lobby_rows[i], sizeof (conn->lobby_rows[i]), "%s", rows[i].name);
     }
 
-    write_to_connection(conn, "\nType a number, or a room name if someone gave you one.\n");
-    write_to_connection(conn, "  n) start a new room     q) quit\n\n> ");
+    write_lobby_prompt(conn);
 }
 
 /*----------------------
@@ -2591,28 +2756,39 @@ static void inpfn_new_room_privacy(Connection *conn, const char *str)
 {
     if ((strcasecmp(str, "y") == 0) || (strcasecmp(str, "yes") == 0)) {
         conn->instance->is_private = 0;
-        write_to_connection(conn, "Listed. Strangers can wander in.\n\n");
+        write_to_connection(conn, "Tell your friends to find '");
+        write_to_connection(conn, conn->instance->hash);
+        write_to_connection(conn, "' in the main Lobby.\n\n");
     } else if ((strcasecmp(str, "n") == 0) || (strcasecmp(str, "no") == 0)) {
         conn->instance->is_private = 1;
-        write_to_connection(conn, "Kept quiet. Only people you give the name to can get in.\n\n");
+        write_to_connection(conn, "Won't be listed, tell your friends to find '");
+        write_to_connection(conn, conn->instance->hash);
+        write_to_connection(conn, "' in the main Lobby.\n\n");
     } else {
         write_to_connection(conn, "Please answer 'y' or 'n'.\n\n> ");
         return;
     }
 
+    Instance *inst = conn->instance;
+    char line[64];
+
     conn->inputfn = inpfn_waiting_for_players;
-    write_to_connection(conn, "We'll wait for people now.\n");
-    write_to_connection(conn, "Type 'go' to begin when enough have arrived.\n");
-    write_to_connection(conn, "There's still room for three more people.\n");
-    write_to_connection(conn, "Type 'quit' to drop this room and anyone connected.\n");
-    write_to_connection(conn, "\n\nWhile we're waiting, let me say I built this for my patrons. If you like\n");
-    write_to_connection(conn, "this sort of thing, please send a dollar to https://patreon.com/icculus !\n\n> ");
+    write_to_connection(conn, "Waiting...\n");
+    write_to_connection(conn, "            ");
+    write_to_connection(conn, inst->hash);
+    write_to_connection(conn, "\n\n           Current Party\n");
+    snprintf(line, sizeof (line), "            (%d/%d seats)\n\n", count_taken_seats(inst), MULTIZORK_SEATS_PER_GAME);
+    write_to_connection(conn, line);
+    write_party_list(conn, inst, "           ");
+    write_to_connection(conn, "\n'quit' - closes room\n'go' - starts game\n\n> ");
 }
 
 /*----------------------
  | start_new_room
  | Description: Makes a room, names it, seats the host, and asks whether it
- |   should be listed.
+ |   should be listed. Neither way of failing costs the caller their connection:
+ |   only the room could not be built, and the lobby they came from still has
+ |   other people's rooms in it.
  | Author: suinevere
  | Dependencies: roomnames.h
  | Globals: N/A
@@ -2624,17 +2800,17 @@ static void start_new_room(Connection *conn)
     assert(!conn->instance);
     conn->instance = create_instance();
     if (!conn->instance) {
-        write_to_connection(conn, "Uhoh, we appear to be out of memory. Try again later?\n");
-        drop_connection(conn);
+        write_to_connection(conn, "I am out of memory! Try again later.\n");
+        write_lobby_prompt(conn);
         return;
     }
 
     if (!generate_unique_room_name(conn->instance->hash)) {
-        write_to_connection(conn, "Uhoh, we appear to be having a database problem. Try again later?\n");
+        write_to_connection(conn, "Database is down. Try again later.\n");
         Instance *inst = conn->instance;
         conn->instance = NULL;
-        db_failed_at_instance_start(inst);
-        drop_connection(conn);
+        free_instance(inst);
+        write_lobby_prompt(conn);
         return;
     }
 
@@ -2644,8 +2820,8 @@ static void start_new_room(Connection *conn)
 
     write_to_connection(conn, "\nYour room is called '");
     write_to_connection(conn, conn->instance->hash);
-    write_to_connection(conn, "'.\nTell your friends to telnet here and type that. Capitals don't matter.\n\n");
-    write_to_connection(conn, "Should I list it in the lobby, so strangers can wander in? (y/n)\n\n> ");
+    write_to_connection(conn, "'.\n\n");
+    write_to_connection(conn, "Should we list it publicly in the lobby for anyone to join? (y/n)\n\n> ");
     conn->inputfn = inpfn_new_room_privacy;
 }
 
@@ -2653,6 +2829,10 @@ static void start_new_room(Connection *conn)
  | inpfn_lobby
  | Description: Takes a list number, a room name, a player access code, or one of
  |   the two letter commands, and hands anything room-shaped to the dispatcher.
+ |   Choice 1 is always the new room the lobby offers, so a number naming a listed
+ |   room is two ahead of its row. An empty line prints the list again, which is
+ |   the only way to see it change, since a line the lobby cannot use answers with
+ |   the prompt alone.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -2662,8 +2842,13 @@ static void start_new_room(Connection *conn)
  ----------------------*/
 static void inpfn_lobby(Connection *conn, const char *str)
 {
+    if (*str == '\0') {
+        show_lobby(conn);
+        return;
+    }
+
     if (strcasecmp(str, "q") == 0) {
-        write_to_connection(conn, "\n\nOkay, bye for now!\n\n");
+        write_to_connection(conn, "Bye.\n");
         drop_connection(conn);
         return;
     } else if (strcasecmp(str, "n") == 0) {
@@ -2674,8 +2859,11 @@ static void inpfn_lobby(Connection *conn, const char *str)
     char picked[ROOMNAME_MAX];
     if (*str && (strspn(str, "0123456789") == strlen(str))) {
         const int choice = atoi(str);
-        if ((choice >= 1) && (((size_t) choice) <= conn->num_lobby_rows)) {
-            snprintf(picked, sizeof (picked), "%s", conn->lobby_rows[choice - 1]);
+        if (choice == 1) {
+            start_new_room(conn);
+            return;
+        } else if ((choice >= 2) && (((size_t) (choice - 1)) <= conn->num_lobby_rows)) {
+            snprintf(picked, sizeof (picked), "%s", conn->lobby_rows[choice - 2]);
             str = picked;
         }
     }
@@ -2688,7 +2876,7 @@ static void inpfn_lobby(Connection *conn, const char *str)
     if ((entered < 0) && (strlen(str) == 6)) {
         Player *player = reconnect_player(conn, str);
         if (player) {
-            write_to_connection(conn, "We found you! Here's where you left off:\n\n");
+            write_to_connection(conn, "Got it. Here's where you left off:\n\n");
             db_select_recap(player, 5);
             if (player->game_over) {
                 drop_connection(conn);
@@ -2698,10 +2886,10 @@ static void inpfn_lobby(Connection *conn, const char *str)
     }
 
     if ((entered < 0) && (strlen(str) != 6)) {
-        write_to_connection(conn, "I can't find a room by that name.\n");
+        write_to_connection(conn, "Wrong choice or room name.\n");
     }
 
-    show_lobby(conn);
+    write_lobby_prompt(conn);
 }
 
 static void inpfn_enter_name(Connection *conn, const char *str)
@@ -2719,14 +2907,14 @@ static void inpfn_enter_name(Connection *conn, const char *str)
             } else {
                 db_insert_blocked(conn->address);
             }
-            write_to_connection(conn, "Nice try.\n");
+            write_to_connection(conn, "Bye.\n");
             drop_connection(conn);
             return;
         }
     }
 
     if (*str == '\0') {  // just hit enter without a specific code?
-        write_to_connection(conn, "You have to enter a name. Try again.\n\nusername: ");
+        write_to_connection(conn, "username: ");
         return;
     }
 
@@ -2746,13 +2934,13 @@ static void inpfn_enter_name(Connection *conn, const char *str)
     }
 
     if (*conn->username == '\0') {
-        write_to_connection(conn, "Sorry, I couldn't use any of that name. Try again.\n\nusername: ");
+        write_to_connection(conn, "Invalid name.\n\nusername: ");
         return;
     }
 
-    write_to_connection(conn, "Okay, we're referring to you as '");
+    write_to_connection(conn, "Welcome to ZATURN '");
     write_to_connection(conn, conn->username);
-    write_to_connection(conn, "' from now on.\n\n");
+    write_to_connection(conn, "'.\n\n");
 
     conn->inputfn = inpfn_lobby;
     show_lobby(conn);
@@ -2761,7 +2949,7 @@ static void inpfn_enter_name(Connection *conn, const char *str)
 static Player *reconnect_player(Connection *conn, const char *access_code)
 {
     if (strlen(access_code) != 6) {
-        write_to_connection(conn, "Hmm, I can't find a game with that access code.\n");
+        write_to_connection(conn, "I can't find a game with that access code.\n");
         return NULL;  // not a valid code.
     }
 
@@ -2778,7 +2966,7 @@ static Player *reconnect_player(Connection *conn, const char *access_code)
                 if (!player->claimed) { continue; }
                 if (strcmp(player->hash, access_code) == 0) {
                     if (player->connection != NULL) {
-                        write_to_connection(conn, "Hmmm, that's a valid access code, but it's currently in use by another connection.\n");
+                        write_to_connection(conn, "Found it, but currently in use by another connection.\n");
                         return NULL;
                     }
                     player->connection = conn;   // just wire right back in and go.
@@ -2794,19 +2982,19 @@ static Player *reconnect_player(Connection *conn, const char *access_code)
     // Not found? Might be a game we archived because everyone left.
     const sqlite3_int64 instance_dbid = db_find_instance_by_player_hash(access_code);
     if (instance_dbid == 0) {  // if zero, nope, just a bogus code...
-        write_to_connection(conn, "Hmm, I can't find a game with that access code.\n");
+        write_to_connection(conn, "I can't find a game with that access code.\n");
         return NULL;
     }
 
     // !!! FIXME: assert this instance definitely isn't live right now.
     Instance *inst = create_instance();
     if (!inst) {
-        write_to_connection(conn, "Hmm, that's a valid access code, but I seem to have run out of memory! Try again later.\n");
+        write_to_connection(conn, "Found it, but I am out of memory! Try again later.\n");
         return NULL;
     }
 
     if (!db_select_instance(inst, instance_dbid)) {
-        write_to_connection(conn, "Hmm, that's a valid access code, but I had trouble starting the game! Try again later.\n");
+        write_to_connection(conn, "Found it, but I cannot start it! Try again later.\n");
         free_instance(inst);
         return NULL;
     }
@@ -2815,7 +3003,7 @@ static Player *reconnect_player(Connection *conn, const char *access_code)
     // !!! FIXME:  shouldn't overwrite the probably-good state that's already in the database, so
     // !!! FIXME:  the game can continue from that point instead.
     if (inst->crashed) {
-        write_to_connection(conn, "Hmm, that's a valid access code, but this game crashed before and can't be rejoined.\n");
+        write_to_connection(conn, "Found it, but that game state is crashed and can't be rejoined.\n");
         free_instance(inst);
         return NULL;
     }
@@ -2843,7 +3031,7 @@ static Player *reconnect_player(Connection *conn, const char *access_code)
     }
 
     assert(!"This shouldn't happen");
-    write_to_connection(conn, "Hmm, we found that access code, but something internal went wrong. Try again later?\n");
+    write_to_connection(conn, "Found it, but something internal went wrong. Try again later.\n");
     free_instance(inst);
     return NULL;
 }
@@ -2945,7 +3133,7 @@ static void recv_from_connection(Connection *conn)
         } else if (ch == '\n') {
             if (conn->overlong_input) {
                 loginfo("Overlong input from socket %d", conn->sock);
-                write_to_connection(conn, "Whoa, you're typing too much. Shorter commands, please.\n\n>");
+                write_to_connection(conn, "Buffer overflow, shorten command or face disconnection.\n\n>");
             } else {
                 process_connection_command(conn);
             }
@@ -3055,13 +3243,13 @@ static int accept_new_connection(const int listensock)
     const int block_length = (int) (((sqlite_int64) GNow) - blocked_timestamp);
     if (blocked_timestamp && (block_length < MULTIZORK_BLOCKED_TIMEOUT)) {
         loginfo("Address %s (socket %d) is blocked for %d more seconds, dropping.", conn->address, sock, MULTIZORK_BLOCKED_TIMEOUT - block_length);
-        write_to_connection(conn, "Sorry, this address is currently blocked.\n");
+        write_to_connection(conn, "ip banned.\n");
         drop_connection(conn);
     } else {
         write_to_connection(conn, conn->address);
         write_to_connection(conn, "\n\n" MULTIZORK_TRANSCRIPT_BASEURL "\n");
-        write_to_connection(conn, "\n(version " MULTIZORKD_VERSION " built " __DATE__ " " __TIME__ ".)\n\n\n");
-        write_to_connection(conn, "Welcome to MULTIZORK.\n\nWhat's your name? Keep it simple or I'll simplify it for you.\n(sorry if your name isn't one word made up of english letters.\n This is American tech from 1980, after all.)\n\nusername: ");
+        write_to_connection(conn, "\n(version " MULTIZORKD_VERSION " built " __DATE__ " " __TIME__ ".)\n\n");
+        write_to_connection(conn, "username: ");
     }
 
     return sock;
@@ -3321,7 +3509,7 @@ int main(int argc, char **argv)
 
             #if 0  // !!! FIXME: maybe add this?
             if ((conn->state == CONNSTATE_READY) && ((GNow - conn->last_activity) > IDLE_KICK_TIMEOUT))
-                write_to_connection(conn, "Dropping you because you seem to be AFK.");
+                write_to_connection(conn, "Disconnecting. User Input Timeout.");
                 drop_connection(conn);
             }
             #endif
@@ -3346,11 +3534,11 @@ int main(int argc, char **argv)
             for (size_t i = 0; i < num_connections; i++) {
                 Connection *conn = connections[i];
                 Instance *inst = conn->instance;
-                write_to_connection(conn, "\n\n\nThis server is shutting down!\n\n");
+                write_to_connection(conn, "\n\n\nServer Restarting.  Disconnecting.\n\n");
                 if (inst && inst->started) {
                     const Player *player = find_connection_player(conn, NULL);
                     if (player) {
-                        write_to_connection(conn, "When the server comes back up, you can rejoin this game with this code:\n");
+                        write_to_connection(conn, "Come back anytime to room:\n");
                         write_to_connection(conn, "    ");
                         write_to_connection(conn, player->hash);
                         write_to_connection(conn, "\n\n");
@@ -3359,9 +3547,10 @@ int main(int argc, char **argv)
                         write_to_connection(conn, MULTIZORK_TRANSCRIPT_BASEURL);
                         write_to_connection(conn, "/game/");
                         write_to_connection(conn, inst->hash);
-                        write_to_connection(conn, "\n\n");
+                        write_to_connection(conn, "\n");
                     }
                 }
+                write_to_connection(conn, "\nGood bye!\n");
             }
 
             for (size_t i = 0; i < num_connections; i++) {

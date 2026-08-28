@@ -73,7 +73,7 @@ def main():
     out = send(guest, "bob")
     fails += check("lobby lists the waiting room", room in out, out)
     out = send(guest, room)
-    fails += check("room name at the lobby joins", "guest list" in out.lower(), out)
+    fails += check("room name at the lobby joins", "current party" in out.lower(), out)
     out = drain(host)
     fails += check("host is told a guest joined", "has joined" in out, out)
     guest.close(); host.close()
@@ -82,20 +82,30 @@ def main():
     guest = connect(); drain(guest)
     send(guest, "bob")
     out = send(guest, room.upper())
-    fails += check("room name is case-insensitive", "guest list" in out.lower(), out)
+    fails += check("room name is case-insensitive", "current party" in out.lower(), out)
 
     out = send(host, "go")
+    fails += check("the game starts", "Starting." in out, out)
+    fails += check("and names the room as the way back in",
+                   f"'{room}' in the Lobby" in out, out)
+
+    # An access code is handed out when a newcomer sits down at a running game,
+    # which is the only place one is offered before you leave.
+    late = connect(); drain(late)
+    send(late, "cass")
+    out = send(late, room)
     m = re.search(r"access code: '(\w+)'", out)
-    fails += check("a started game hands the host an access code", bool(m), out)
+    fails += check("a newcomer to a running game is handed an access code", bool(m), out)
     if m:
-        host.close()
+        late.close()
+        time.sleep(1.0)
         again = connect(); drain(again)
-        send(again, "seanie")
+        send(again, "cass")
         out = send(again, m.group(1))
         fails += check("access code at the lobby still rejoins",
-                       "We found you" in out, out)
+                       "Got it." in out, out)
         again.close()
-    guest.close()
+    guest.close(); host.close()
 
     if fails:
         print(f"test_multizork_join: {fails} FAILED", file=sys.stderr)

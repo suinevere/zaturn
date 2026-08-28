@@ -48,8 +48,29 @@ telnet localhost 23            # "Hello sailor!" = working
 ```
 
 `docker-compose.yml` publishes **host 23 and 2323** (both map to container 2323),
-uses `restart: unless-stopped`, and persists state in the `multizork-data` volume.
-Some client ISPs block outbound port 23, so 2323 gives those players a way in.
+uses `restart: unless-stopped`, and persists state in a bind mount at
+`/srv/multizork` (override with `MULTIZORK_DATA`). Some client ISPs block
+outbound port 23, so 2323 gives those players a way in.
+
+The mount is a host directory rather than a named volume because the transcripts
+site runs under host nginx and has to read `multizork.sqlite3` out of it. Create
+it owned by the container's unprivileged user before the first start:
+
+```bash
+sudo mkdir -p /srv/multizork
+sudo chown 1000:1000 /srv/multizork
+sudo chmod 755 /srv/multizork
+```
+
+> **Upgrading from the old named volume?** Data in `multizork-data` will not
+> appear in the bind mount by itself. Copy it across once, with the stack down:
+> ```bash
+> docker compose down
+> docker run --rm -v docker_multizork-data:/from -v /srv/multizork:/to \
+>            debian:bookworm-slim cp -a /from/. /to/
+> sudo chown -R 1000:1000 /srv/multizork
+> docker compose up -d
+> ```
 
 ---
 
@@ -216,6 +237,75 @@ server the NetLink telnet path (above) does.
 
 ---
 
+## Serving the transcripts site (nginx + PHP-FPM)
+
+The daemon hands every departing player a URL like
+`https://suinevere.duckdns.org/game/<room>`. Three routes serve those, all from
+the single file `saturn/multizork-transcripts.php`:
+
+| Path | Renders |
+| --- | --- |
+| `/game/<room>` | The instance facts and links to each player's transcript |
+| `/player/<room>/<id>` | That player's transcript as styled HTML |
+| `/rawplayer/<room>/<id>` | The same transcript as plain text |
+
+They need no extra firewall rules — all three are paths on the 443 listener you
+already opened for `/zork`.
+
+### 1. Install PHP and deploy the file
+
+```bash
+sudo apt-get install -y php-fpm php-sqlite3
+sudo mkdir -p /var/www/multizork
+sudo cp saturn/multizork-transcripts.php /var/www/multizork/transcripts.php
+```
+
+The database path defaults to `/srv/multizork/multizork.sqlite3` and can be
+overridden per-vhost with the `MULTIZORK_DB` fastcgi param, which the shipped
+config sets. PHP opens it read-only, and the daemon uses SQLite's default
+rollback journal rather than WAL, so `www-data` needs no write access — only
+read on the file and traverse on the directory, which the `755` above gives.
+
+### 2. Check the socket path
+
+The config points at `unix:/run/php/php8.2-fpm.sock`. Confirm what your host
+actually runs and edit the `fastcgi_pass` line if it differs:
+
+```bash
+ls /run/php/
+```
+
+### 3. Provide the error pages
+
+The site answers a failure with an HTTP status and no body on purpose, leaving
+the page to nginx. `fastcgi_intercept_errors on` and the `error_page` lines are
+in the config; supply the documents they name, or a bad URL renders blank:
+
+```bash
+echo 'Not found.' | sudo tee /var/www/html/404.html
+echo 'Temporarily unavailable.' | sudo tee /var/www/html/503.html
+```
+
+### 4. Reload and verify
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+curl -sI https://suinevere.duckdns.org/game/does-not-exist   # expect 404
+```
+
+Then finish a real game and follow the link the daemon prints on the way out.
+
+> **Why `SCRIPT_NAME` is left alone and `SCRIPT_FILENAME` is hardcoded.** The
+> router reads `$_SERVER['PHP_SELF']` and splits it on `/`, so it needs
+> `PHP_SELF` to be the bare request path. With no `fastcgi_split_path_info` in
+> the location, `$fastcgi_script_name` is `$uri` and that is what arrives. Add a
+> path-info split — as the stock `snippets/fastcgi-php.conf` does — and
+> `PHP_SELF` becomes `/transcripts.php/game/<room>`, the router reads
+> `transcripts.php` as the operation, and every transcript URL 404s. That is why
+> the config spells the params out instead of including that snippet.
+
+---
+
 ## Routing the Saturn NetLink dial code to this server (DreamPi)
 
 **Play Online** dials NetLink into a **DreamPi** running the eaudunord Netlink
@@ -242,6 +332,6 @@ the full DreamPi steps.
 docker compose logs -f                 # live server log
 docker compose restart                 # restart
 docker compose build --no-cache && docker compose up -d   # rebuild latest source
-docker compose down                    # stop (keeps the volume)
-docker volume rm docker_multizork-data # wipe all game state + transcripts
+docker compose down                    # stop (keeps the data directory)
+sudo rm -rf /srv/multizork/*           # wipe all game state + transcripts
 ```

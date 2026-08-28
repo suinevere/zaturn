@@ -9,7 +9,10 @@
  */
 
 $baseurl = 'https://suinevere.duckdns.org';
-$dbname = 'multizork.sqlite3';
+$dbname = '/srv/multizork/multizork.sqlite3';
+if (!empty($_SERVER['MULTIZORK_DB'])) {
+    $dbname = $_SERVER['MULTIZORK_DB'];
+}
 $db = NULL;
 $title = 'multizork';
 

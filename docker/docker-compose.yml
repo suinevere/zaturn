@@ -10,9 +10,9 @@ services:
       - "23:2323"
       - "2323:2323"
     volumes:
-      - multizork-data:/data
+      # Bind mount, not a named volume: the transcripts site runs under host
+      # nginx and has to read multizork.sqlite3 from here. Must be owned by
+      # uid 1000, the container's unprivileged user.
+      - ${MULTIZORK_DATA:-/srv/multizork}:/data
     stdin_open: true
     tty: true
-
-volumes:
-  multizork-data:

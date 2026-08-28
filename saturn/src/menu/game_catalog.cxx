@@ -5,6 +5,11 @@
  |   traffic happens in preload_game_catalog so that the picker itself is pure
  |   RAM work -- the Saturn has one drive head, and any read here would silence
  |   the CD-DA menu track.
+ |
+ |   What each story is called comes from /Z3's GAME.INF, a manifest the injection
+ |   step writes alongside the games, in one read. Only a file that manifest does
+ |   not describe is opened for its header, which is what the whole catalogue used
+ |   to cost: one seek per game, thirty of them, in the middle of the intro.
  | Author: suinevere
  | Dependencies: game_catalog.h, menu.h (menu_select/menu_message/menu_wait/
  |   MenuBacking), menu_layout.h (MENU_ROW_TEXT_MAX), game_titles.h (game_title/
@@ -200,6 +205,106 @@ static int  g_catalog_count = 0;
 static bool g_catalog_ready = false;
 
 /*----------------------
+ | GAME_INFO_HDR / GAME_INFO_REC / GAME_INFO_NAME / GAME_INFO_LBL / g_info_buf /
+ | g_info_count
+ | Description: The disc's story manifest, written into /Z3 by
+ |   tools/gametitles/gen_game_info.py at the moment the games are injected, and
+ |   read here in one go. A 16-byte header -- magic "ZGI1", record count, record
+ |   size, reserved -- then one record per story: 16 bytes of filename, 32 of
+ |   display label, the GAME_CAT_* id, and three reserved. At MAX_GAMES the whole
+ |   file is 1680 bytes, so reading it is a single sector.
+ |
+ |   g_info_count is 0 whenever there is no usable manifest, which is the signal
+ |   every lookup falls back on.
+ | Author: suinevere
+ ----------------------*/
+static const int GAME_INFO_HDR  = 16;
+static const int GAME_INFO_REC  = 52;
+static const int GAME_INFO_NAME = 16;
+static const int GAME_INFO_LBL  = 32;
+static uint8_t   g_info_buf[GAME_INFO_HDR + MAX_GAMES * GAME_INFO_REC];
+static int       g_info_count = 0;
+
+/*----------------------
+ | load_game_info
+ | Description: Reads /Z3's GAME.INF into g_info_buf and validates its header,
+ |   leaving g_info_count at the number of records that can be trusted.
+ |
+ |   A disc without the file costs nothing: SRL::Cd::File resolves the name
+ |   against the directory table scan_z3_folder has already put in RAM, so the
+ |   miss never reaches the drive. A short read is clamped to the records that
+ |   did arrive rather than rejected outright, so a truncated manifest still
+ |   spares the games it does describe. The retry loop is read_game_info's, for
+ |   the same flaky first access.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: g_info_buf, g_info_count
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void load_game_info(void) {
+    g_info_count = 0;
+
+    SRL::Cd::File f("GAME.INF");
+    if (!f.Exists()) return;
+
+    int32_t want = f.Size.Bytes;
+    if (want <= 0 || want > (int32_t) sizeof(g_info_buf)) want = (int32_t) sizeof(g_info_buf);
+
+    int32_t got = -1;
+    for (int attempt = 0; attempt < 8; attempt++) {
+        got = f.LoadBytes(0, want, g_info_buf);
+        if (got >= GAME_INFO_HDR) break;
+        for (int i = 0; i < 4; i++) SRL::Core::Synchronize();
+    }
+    if (got < GAME_INFO_HDR) return;
+
+    if (g_info_buf[0] != 'Z' || g_info_buf[1] != 'G' ||
+        g_info_buf[2] != 'I' || g_info_buf[3] != '1') return;
+    if ((((int) g_info_buf[6] << 8) | (int) g_info_buf[7]) != GAME_INFO_REC) return;
+
+    int count = (((int) g_info_buf[4] << 8) | (int) g_info_buf[5]);
+    int avail = (int) (got - GAME_INFO_HDR) / GAME_INFO_REC;
+    if (count > avail)     count = avail;
+    if (count > MAX_GAMES) count = MAX_GAMES;
+    if (count < 0)         count = 0;
+    g_info_count = count;
+}
+
+/*----------------------
+ | info_lookup
+ | Description: Finds `filename` among the loaded records and hands back the label
+ |   and category the picker would otherwise have opened the story to learn. A
+ |   record carrying an empty label counts as a miss, so a malformed row falls
+ |   back to the header read instead of putting a blank row on the menu.
+ | Author: suinevere
+ | Dependencies: game_titles.h (GAME_CAT_*), menu_layout.h (MENU_ROW_TEXT_MAX)
+ | Globals: g_info_buf, g_info_count
+ | Params: filename -- a name from scan_z3_folder; label -- receives up to
+ |   MENU_ROW_TEXT_MAX characters and a NUL; cat -- receives the GAME_CAT_* id
+ | Returns: true when the manifest described this file
+ ----------------------*/
+static bool info_lookup(const char* filename, char* label, int* cat) {
+    for (int i = 0; i < g_info_count; i++) {
+        const uint8_t* rec = g_info_buf + GAME_INFO_HDR + i * GAME_INFO_REC;
+        int j = 0;
+        while (j < GAME_INFO_NAME && rec[j] && (char) rec[j] == filename[j]) j++;
+        if (j >= GAME_INFO_NAME || rec[j] != '\0' || filename[j] != '\0') continue;
+
+        const uint8_t* text = rec + GAME_INFO_NAME;
+        if (text[0] == '\0') return false;
+        int k = 0;
+        for (; k < GAME_INFO_LBL && k < MENU_ROW_TEXT_MAX && text[k]; k++) label[k] = (char) text[k];
+        label[k] = '\0';
+
+        int c = (int) rec[GAME_INFO_NAME + GAME_INFO_LBL];
+        *cat = (c < GAME_CAT_COUNT) ? c : GAME_CAT_OTHER;
+        return true;
+    }
+    return false;
+}
+
+/*----------------------
  | preload_game_catalog
  | Description: Scans the Z3 folder and reads every game's header once, guarded
  |   by g_catalog_ready so repeat calls are free. Labels are capped at
@@ -209,6 +314,10 @@ static bool g_catalog_ready = false;
  |   characters would overwrite that border. Every real title fits; the cap only
  |   guards the filename fallback and any future long entry. Once the deferred
  |   marquee lands, long titles can scroll instead of being clipped.
+ |
+ |   Titles come from GAME.INF where it covers them and from the story's own header
+ |   where it does not, so a disc built without the manifest -- or one a player has
+ |   added a game to by hand -- reads exactly what it always did and nothing more.
  | Author: suinevere
  | Dependencies: game_titles.h, menu_layout.h, SRL
  | Globals: names, labels, cats, g_catalog_count, g_catalog_ready
@@ -244,7 +353,9 @@ void preload_game_catalog(void) {
     if (g_catalog_ready) return;
     g_catalog_count = scan_z3_folder(names, MAX_GAMES);
     if (g_catalog_count > 0) {
+        load_game_info();
         for (int i = 0; i < g_catalog_count; i++) {
+            if (info_lookup(names[i], labels[i], &cats[i])) continue;
             const char* title = read_game_info(names[i], &cats[i]);
             int j = 0; const char* src = title ? title : names[i];
             for (; src[j] && j < MENU_ROW_TEXT_MAX; j++) labels[i][j] = src[j];

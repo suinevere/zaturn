@@ -43,7 +43,9 @@ int scan_z3_folder(char out[][16], int max);
  | preload_game_catalog
  | Description: Builds the in-memory catalogue -- one filename, display title and
  |   category per story file on the disc -- so that game_select can run without
- |   touching the drive. Idempotent; call it once during the title screen's silent
+ |   touching the drive. Titles are taken from /Z3's GAME.INF manifest in a single
+ |   read; a story the manifest does not name is opened for its header, as every
+ |   story once was. Idempotent; call it once during the title screen's silent
  |   window, because the CD reads it performs stop CD-DA playback.
  | Author: suinevere
  | Dependencies: game_titles.h, SRL

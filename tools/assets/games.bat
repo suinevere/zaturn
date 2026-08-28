@@ -37,6 +37,12 @@
 :; echo "Downloading ADVENT.Z3 into Z3..."
 :; curl -L -o "Z3/ADVENT.Z3" "$ADVENT_URL"
 :;
+:; echo "Writing the Z3/GAME.INF story manifest..."
+:; PY=python3; command -v python3 >/dev/null 2>&1 || PY=python
+:; if ! "$PY" ../gametitles/gen_game_info.py --z3 Z3; then
+:;     echo "WARNING: GAME.INF not written -- the Saturn will read every story header at boot"
+:; fi
+:;
 :; echo "Complete."
 :;
 :; . lib/games.sh
@@ -82,6 +88,12 @@ curl -L -o "Z3\LURKING.BLB" "%LURKING_URL%"
 
 ECHO Downloading ADVENT.Z3 into Z3...
 curl -L -o "Z3\ADVENT.Z3" "%ADVENT_URL%"
+
+ECHO Writing the Z3\GAME.INF story manifest...
+SET "PY=..\.venv\Scripts\python.exe"
+IF NOT EXIST "%PY%" SET "PY=python"
+"%PY%" "..\gametitles\gen_game_info.py" --z3 "Z3"
+IF ERRORLEVEL 1 ECHO WARNING: GAME.INF not written -- the Saturn will read every story header at boot
 
 ECHO Complete.
 

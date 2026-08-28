@@ -24,6 +24,7 @@
 #include <assert.h>
 
 #include "sqlite3.h"
+#include "roomnames.h"
 
 #define MULTIZORK 1
 #include "mojozork.c"
@@ -36,6 +37,14 @@
 #define MULTIZORK_TRANSCRIPT_BASEURL "https://suinevere.duckdns.org"
 #define MULTIZORK_BLOCKED_TIMEOUT (60 * 60 * 24)  /* 24 hours in seconds */
 #define MULTIZORK_AUTOSAVE_EVERY_X_MOVES 30
+
+/*----------------------
+ | LOBBY_MAX_ROWS
+ | Description: Lines the lobby will list, and the size of the snapshot a
+ |   connection keeps so a typed number resolves to the row that was printed.
+ | Author: suinevere
+ ----------------------*/
+#define LOBBY_MAX_ROWS 24
 
 typedef unsigned int uint;  // for cleaner printf casting.
 
@@ -99,6 +108,7 @@ typedef struct Player
     sqlite3_int64 dbid;
     char username[16];
     char hash[8];
+    int claimed;             // a real person owns this seat; connection says whether they are here now.
     uint32 next_logical_pc;  // next step_instance() should run this player from this z-machine program counter.
     uint32 next_logical_sp;  // next step_instance() should run this player from this z-machine stack pointer.
     uint16 next_logical_bp;  // next step_instance() should run this player from this z-machine base pointer.
@@ -131,7 +141,10 @@ typedef struct Instance
     ZMachineState zmachine_state;
     sqlite3_int64 dbid;
     int started;
-    char hash[8];
+    char hash[ROOMNAME_MAX];
+    int is_private;          // kept out of the lobby list; reachable only by name.
+    int ghost_watch;         // switched on once start_instance is done building seats.
+    uint8 ghost_logged;      // one bit per seat, so a wandering thief logs once and not every turn.
     Player players[4];
     int num_players;
     int current_player;   //  the player we're currently running the z-machine for.
@@ -150,7 +163,6 @@ struct Connection
     Instance *instance;
     char address[64];
     char username[16];
-    char pending_join[8];  // game code typed at the hello-sailor prompt, joined once a name exists.
     char inputbuf[128];
     uint32 inputbuf_used;
     int overlong_input;
@@ -159,6 +171,9 @@ struct Connection
     uint32 outputbuf_used;
     time_t last_activity;
     int blocked;
+    int saw_first_line;      // the blocklist only ever inspected a connection's opening line.
+    char lobby_rows[LOBBY_MAX_ROWS][ROOMNAME_MAX];  // room names as last printed to this connection.
+    size_t num_lobby_rows;
 };
 
 static Connection **connections = NULL;
@@ -257,8 +272,8 @@ static size_t num_connections = 0;
     "insert into used_hashes (hashid) values ($hashid);"
 
 #define SQL_INSTANCE_INSERT \
-    "insert into instances (hashid, num_players, starttime, savetime, instructions_run, dynamic_memory, story_filename)" \
-    " values ($hashid, $num_players, $starttime, $savetime, $instructions_run, $dynamic_memory, $story_filename);"
+    "insert into instances (hashid, num_players, starttime, savetime, instructions_run, dynamic_memory, story_filename, private)" \
+    " values ($hashid, $num_players, $starttime, $savetime, $instructions_run, $dynamic_memory, $story_filename, $private);"
 
 #define SQL_INSTANCE_UPDATE \
     "update instances set savetime=$savetime, instructions_run=$instructions_run, crashed=$crashed, dynamic_memory=$dynamic_memory where id=$id limit 1;"
@@ -270,25 +285,27 @@ static size_t num_connections = 0;
     "insert into players (hashid, instance, username, next_logical_pc, next_logical_sp, next_logical_bp," \
     " next_logical_inputbuf, next_logical_inputbuflen, next_operands_1, next_operands_2, againbuf, stack," \
     " object_table_data, property_table_data, touchbits, gvar_location, gvar_coffin_held, gvar_dead, gvar_deaths," \
-    " gvar_lit, gvar_alwayslit, gvar_verbose, gvar_superbrief, gvar_lucky, gvar_loadallowed, game_over" \
+    " gvar_lit, gvar_alwayslit, gvar_verbose, gvar_superbrief, gvar_lucky, gvar_loadallowed, game_over, claimed" \
     ") values ($hashid, $instance, $username, $next_logical_pc, $next_logical_sp, $next_logical_bp," \
     " $next_logical_inputbuf, $next_logical_inputbuflen, $next_operands_1, $next_operands_2, $againbuf, $stack," \
     " $object_table_data, $property_table_data, $touchbits, $gvar_location, $gvar_coffin_held, $gvar_dead, $gvar_deaths," \
-    " $gvar_lit, $gvar_alwayslit, $gvar_verbose, $gvar_superbrief, $gvar_lucky, $gvar_loadallowed, $game_over);"
+    " $gvar_lit, $gvar_alwayslit, $gvar_verbose, $gvar_superbrief, $gvar_lucky, $gvar_loadallowed, $game_over, $claimed);"
 
 #define SQL_PLAYER_UPDATE \
     "update players set" \
+    " username = $username," \
     " next_logical_pc = $next_logical_pc, next_logical_sp = $next_logical_sp, next_logical_bp = $next_logical_bp," \
     " next_logical_inputbuf = $next_logical_inputbuf, next_logical_inputbuflen = $next_logical_inputbuflen," \
     " next_operands_1 = $next_operands_1, next_operands_2 = $next_operands_2, againbuf = $againbuf, stack = $stack," \
     " object_table_data = $object_table_data, property_table_data = $property_table_data, touchbits = $touchbits," \
     " gvar_location = $gvar_location, gvar_coffin_held = $gvar_coffin_held, gvar_dead = $gvar_dead," \
     " gvar_deaths = $gvar_deaths, gvar_lit = $gvar_lit, gvar_alwayslit = $gvar_alwayslit, gvar_verbose = $gvar_verbose," \
-    " gvar_superbrief = $gvar_superbrief, gvar_lucky = $gvar_lucky, gvar_loadallowed = $gvar_loadallowed, game_over = $game_over" \
+    " gvar_superbrief = $gvar_superbrief, gvar_lucky = $gvar_lucky, gvar_loadallowed = $gvar_loadallowed, game_over = $game_over," \
+    " claimed = $claimed" \
     " where id=$id limit 1;"
 
 #define SQL_FIND_INSTANCE_BY_PLAYER_HASH \
-    "select instance from players where hashid=$hashid limit 1;"
+    "select instance from players where hashid=$hashid and claimed <> 0 limit 1;"
 
 #define SQL_PLAYERS_SELECT \
     "select * from players where instance=$instance order by id limit $limit;"
@@ -309,6 +326,18 @@ static size_t num_connections = 0;
 #define SQL_RECAP_TRIM \
     "delete from transcripts where player = $player and timestamp > $savetime;"
 
+#define SQL_MY_GAMES_SELECT \
+    "select i.id as id, i.hashid as hashid, i.savetime as savetime from instances i" \
+    " join players p on p.instance = i.id" \
+    " where p.username = $username and p.claimed <> 0 and i.crashed = 0" \
+    " order by i.savetime desc limit $limit;"
+
+#define SQL_ADD_INSTANCE_PRIVATE \
+    "alter table instances add column private integer not null default 0;"
+
+#define SQL_ADD_PLAYER_CLAIMED \
+    "alter table players add column claimed integer not null default 1;"
+
 
 static sqlite3 *GDatabase = NULL;
 static sqlite3_stmt *GStmtBegin = NULL;
@@ -327,6 +356,7 @@ static sqlite3_stmt *GStmtCrashInsert = NULL;
 static sqlite3_stmt *GStmtBlockedInsert = NULL;
 static sqlite3_stmt *GStmtBlockedSelect = NULL;
 static sqlite3_stmt *GStmtRecapTrim = NULL;
+static sqlite3_stmt *GStmtMyGamesSelect = NULL;
 
 
 static void db_log_error(const char *what)
@@ -447,6 +477,7 @@ static sqlite3_int64 db_insert_instance(const Instance *inst)
              (SQLBINDINT64(GStmtInstanceInsert, "instructions_run", (sqlite3_int64) inst->zmachine_state.instructions_run) == SQLITE_OK) &&
              (SQLBINDBLOB(GStmtInstanceInsert, "dynamic_memory", inst->zmachine_state.story, inst->zmachine_state.header.staticmem_addr) == SQLITE_OK) &&
              (SQLBINDTEXT(GStmtInstanceInsert, "story_filename", inst->zmachine_state.story_filename) == SQLITE_OK) &&
+             (SQLBINDINT(GStmtInstanceInsert, "private", inst->is_private) == SQLITE_OK) &&
              (sqlite3_step(GStmtInstanceInsert) == SQLITE_DONE) ) ? sqlite3_last_insert_rowid(GDatabase) : 0;
     if (!retval) { db_log_error("insert instance"); }
     return retval;
@@ -509,6 +540,7 @@ static sqlite3_int64 db_insert_player(const Instance *inst, const int playernum)
              (SQLBINDINT(GStmtPlayerInsert, "gvar_lucky", (int) player->gvar_lucky) == SQLITE_OK) &&
              (SQLBINDINT(GStmtPlayerInsert, "gvar_loadallowed", (int) player->gvar_loadallowed) == SQLITE_OK) &&
              (SQLBINDINT(GStmtPlayerInsert, "game_over", player->game_over) == SQLITE_OK) &&
+             (SQLBINDINT(GStmtPlayerInsert, "claimed", inst->players[playernum].claimed) == SQLITE_OK) &&
              (sqlite3_step(GStmtPlayerInsert) == SQLITE_DONE) ) ? sqlite3_last_insert_rowid(GDatabase) : 0;
     if (!retval) { db_log_error("insert player"); }
     return retval;
@@ -529,6 +561,7 @@ static int db_update_player(const Instance *inst, const int playernum)
     assert(player->dbid != 0);
     const int retval =
            ( (sqlite3_reset(GStmtPlayerUpdate) == SQLITE_OK) &&
+             (SQLBINDTEXT(GStmtPlayerUpdate, "username", inst->players[playernum].username) == SQLITE_OK) &&
              (SQLBINDINT(GStmtPlayerUpdate, "next_logical_pc", (int) player->next_logical_pc) == SQLITE_OK) &&
              (SQLBINDINT(GStmtPlayerUpdate, "next_logical_sp", (int) player->next_logical_sp) == SQLITE_OK) &&
              (SQLBINDINT(GStmtPlayerUpdate, "next_logical_bp", (int) player->next_logical_bp) == SQLITE_OK) &&
@@ -552,6 +585,7 @@ static int db_update_player(const Instance *inst, const int playernum)
              (SQLBINDINT64(GStmtPlayerUpdate, "gvar_lucky", (int) player->gvar_lucky) == SQLITE_OK) &&
              (SQLBINDINT64(GStmtPlayerUpdate, "gvar_loadallowed", (int) player->gvar_loadallowed) == SQLITE_OK) &&
              (SQLBINDINT(GStmtPlayerUpdate, "game_over", (int) player->game_over) == SQLITE_OK) &&
+             (SQLBINDINT(GStmtPlayerUpdate, "claimed", inst->players[playernum].claimed) == SQLITE_OK) &&
              (SQLBINDINT64(GStmtPlayerUpdate, "id", player->dbid) == SQLITE_OK) &&
              (sqlite3_step(GStmtPlayerUpdate) == SQLITE_DONE) ) ? 1 : 0;
     if (!retval) { db_log_error("update player"); }
@@ -560,7 +594,7 @@ static int db_update_player(const Instance *inst, const int playernum)
 
 static sqlite3_int64 db_find_instance_by_player_hash(const char *hashid)
 {
-    //"select instance from players where hashid=$hashid limit 1;"
+    //"select instance from players where hashid=$hashid and claimed <> 0 limit 1;"
     int rc = SQLITE_ERROR;
     if ( (sqlite3_reset(GStmtFindInstanceByPlayerHash) != SQLITE_OK) ||
          (SQLBINDTEXT(GStmtFindInstanceByPlayerHash, "hashid", hashid) != SQLITE_OK) ||
@@ -589,6 +623,7 @@ static int db_select_instance(Instance *inst, const sqlite3_int64 dbid)
     inst->dbid = dbid;
     snprintf(inst->hash, sizeof (inst->hash), "%s", SQLCOLUMN(text, GStmtInstanceSelect, "hashid"));
     inst->num_players = SQLCOLUMN(int, GStmtInstanceSelect, "num_players");
+    inst->is_private = SQLCOLUMN(int, GStmtInstanceSelect, "private");
     inst->savetime = (time_t) SQLCOLUMN(int64, GStmtInstanceSelect, "savetime");
     inst->crashed = SQLCOLUMN(int64, GStmtInstanceSelect, "crashed");
     inst->zmachine_state.instructions_run = (uint32) SQLCOLUMN(int64, GStmtInstanceSelect, "instructions_run");
@@ -617,6 +652,7 @@ static int db_select_instance(Instance *inst, const sqlite3_int64 dbid)
         player->dbid = SQLCOLUMN(int, GStmtPlayersSelect, "id");
         snprintf(player->hash, sizeof (player->hash), "%s", SQLCOLUMN(text, GStmtPlayersSelect, "hashid"));
         snprintf(player->username, sizeof (player->username), "%s", SQLCOLUMN(text, GStmtPlayersSelect, "username"));
+        player->claimed = SQLCOLUMN(int, GStmtPlayersSelect, "claimed");
         player->next_logical_pc = (uint32) SQLCOLUMN(int, GStmtPlayersSelect, "next_logical_pc");
         player->next_logical_sp = (uint32) SQLCOLUMN(int, GStmtPlayersSelect, "next_logical_sp");
         player->next_logical_bp = (uint32) SQLCOLUMN(int, GStmtPlayersSelect, "next_logical_bp");
@@ -729,10 +765,59 @@ static sqlite3_int64 db_select_blocked(const char *address)
     return retval;
 }
 
+/*----------------------
+ | MyGameRow
+ | Description: One archived game a player has a seat in, as the lobby needs it.
+ | Author: suinevere
+ ----------------------*/
+typedef struct MyGameRow
+{
+    char name[ROOMNAME_MAX];
+    sqlite3_int64 dbid;
+    time_t savetime;
+} MyGameRow;
+
+/*----------------------
+ | db_select_my_games
+ | Description: Finds the games a username holds a claimed seat in, newest save
+ |   first. Liveness is not a database fact, so the caller filters out any row
+ |   that is currently loaded.
+ | Author: suinevere
+ | Dependencies: sqlite3.h
+ | Globals: GStmtMyGamesSelect
+ | Params: username -- the name typed at the first prompt
+ |   rows -- destination array
+ |   maxrows -- entries available at rows
+ | Returns: the number of rows written
+ ----------------------*/
+static int db_select_my_games(const char *username, MyGameRow *rows, const int maxrows)
+{
+    int total = 0;
+
+    if ( (sqlite3_reset(GStmtMyGamesSelect) != SQLITE_OK) ||
+         (SQLBINDTEXT(GStmtMyGamesSelect, "username", username) != SQLITE_OK) ||
+         (SQLBINDINT(GStmtMyGamesSelect, "limit", maxrows) != SQLITE_OK) ) {
+        db_log_error("select my games");
+        return 0;
+    }
+
+    while ((total < maxrows) && (sqlite3_step(GStmtMyGamesSelect) == SQLITE_ROW)) {
+        MyGameRow *row = &rows[total];
+        snprintf(row->name, sizeof (row->name), "%s", SQLCOLUMN(text, GStmtMyGamesSelect, "hashid"));
+        row->dbid = SQLCOLUMN(int64, GStmtMyGamesSelect, "id");
+        row->savetime = (time_t) SQLCOLUMN(int64, GStmtMyGamesSelect, "savetime");
+        total++;
+    }
+
+    sqlite3_reset(GStmtMyGamesSelect);
+    return total;
+}
+
 static void db_trim_recap(Instance *inst)
 {
     //"delete from transcripts where player = $player and timestamp > $savetime;"
     for (int i = 0; i < inst->num_players; i++) {
+        if (!inst->players[i].claimed) { continue; }
         if ( (sqlite3_reset(GStmtRecapTrim) != SQLITE_OK) ||
              (SQLBINDINT64(GStmtRecapTrim, "player", inst->players[i].dbid) != SQLITE_OK) ||
              (SQLBINDINT64(GStmtRecapTrim, "savetime", (sqlite3_int64) inst->savetime) != SQLITE_OK) ||
@@ -756,6 +841,15 @@ static void db_init(void)
 
     if (sqlite3_exec(GDatabase, SQL_CREATE_TABLES, NULL, NULL, &errmsg) != SQLITE_OK) {
         panic("Couldn't create database tables! %s", errmsg);
+    }
+
+    for (int i = 0; i < 2; i++) {
+        const char *sql = i ? SQL_ADD_PLAYER_CLAIMED : SQL_ADD_INSTANCE_PRIVATE;
+        char *addmsg = NULL;
+        if (sqlite3_exec(GDatabase, sql, NULL, NULL, &addmsg) != SQLITE_OK) {
+            loginfo("Column already present, continuing: %s", addmsg ? addmsg : "(no message)");
+        }
+        sqlite3_free(addmsg);
     }
 
     if (sqlite3_prepare_v2(GDatabase, "begin transaction;", -1, &GStmtBegin, NULL) != SQLITE_OK) {
@@ -821,6 +915,10 @@ static void db_init(void)
     if (sqlite3_prepare_v2(GDatabase, SQL_RECAP_TRIM, -1, &GStmtRecapTrim, NULL) != SQLITE_OK) {
         panic("Failed to create recap trim SQL statement! %s", sqlite3_errmsg(GDatabase));
     }
+
+    if (sqlite3_prepare_v2(GDatabase, SQL_MY_GAMES_SELECT, -1, &GStmtMyGamesSelect, NULL) != SQLITE_OK) {
+        panic("Failed to create my-games select SQL statement! %s", sqlite3_errmsg(GDatabase));
+    }
 }
 
 static void db_quit(void)
@@ -842,6 +940,7 @@ static void db_quit(void)
     FINALIZE_DB_STMT(GStmtBlockedInsert);
     FINALIZE_DB_STMT(GStmtBlockedSelect);
     FINALIZE_DB_STMT(GStmtRecapTrim);
+    FINALIZE_DB_STMT(GStmtMyGamesSelect);
     #undef FINALIZE_DB_STMT
 
     if (GDatabase) {
@@ -870,6 +969,32 @@ static int generate_unique_hash(char *hash)  // `hash` points to up to 8 bytes o
     } while (notunique); // not unique? Try again.
 
     return 1;  // we're good.
+}
+
+/*----------------------
+ | generate_unique_room_name
+ | Description: Picks a room name no instance has ever used, falling back to a
+ |   numbered form once plain pairs keep colliding so the search always ends.
+ | Author: suinevere
+ | Dependencies: roomnames.h, sqlite3.h
+ | Globals: N/A
+ | Params: name -- destination, at least ROOMNAME_MAX bytes
+ | Returns: 1 when name holds an unused name, 0 on a database problem
+ ----------------------*/
+static int generate_unique_room_name(char *name)
+{
+    for (int attempt = 0; attempt < 200; attempt++) {
+        const int suffix = (attempt < 20) ? 0 : ((int) ((((size_t) random()) % 99) + 1));
+        int notunique = 0;
+        roomname_compose(name, ROOMNAME_MAX, (size_t) random(), (size_t) random(), suffix);
+        if (db_insert_used_hash(name, &notunique)) {
+            return 1;
+        } else if (!notunique) {
+            return 0;
+        }
+    }
+    loginfo("Ran out of room names after 200 tries!");
+    return 0;
 }
 
 static size_t count_newlines(const char *str, const uintptr slen)
@@ -958,6 +1083,7 @@ static void broadcast_to_instance(Instance *inst, const char *str)
     if (inst) {
         for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
             Player *player = &inst->players[i];
+            if (!player->claimed) { continue; }
             write_to_connection(player->connection, str);
             if (i != inst->current_player) {  // these will transcribe with rest of buffer generated during inpfn_ingame.
                 db_insert_transcript(player->dbid, TT_SYSTEM_MESSAGE, str);
@@ -971,6 +1097,7 @@ static void broadcast_to_room(Instance *inst, const uint16 room, const char *str
     if (inst) {
         for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
             Player *player = &inst->players[i];
+            if (!player->claimed) { continue; }
             if (player->gvar_location == room) {
                 write_to_connection(player->connection, str);
                 if (i != inst->current_player) {  // these will transcribe with rest of buffer generated during inpfn_ingame.
@@ -1017,6 +1144,36 @@ static Player *get_current_player(Instance *inst)
 #define ZORK1_PLAYER_OBJID 4  // ZORK 1 SPECIFIC MAGIC
 #define ZORK1_EXTERN_MEM_OBJS_BASE 251  // ZORK 1 SPECIFIC MAGIC
 
+/*----------------------
+ | get_seat
+ | Description: Resolves a multiplayer object index to its seat, and notes the
+ |   first time the game reaches a seat nobody is sitting in. That can happen:
+ |   an unclaimed seat is on West of House's child list from the first turn, so
+ |   the thief on his rounds can find one. It is allowed, since it only makes the
+ |   game slightly easier, but it should not happen unobserved.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: GState
+ | Params: inst -- the instance owning the seat
+ |   seatnum -- the index, already relative to ZORK1_EXTERN_MEM_OBJS_BASE
+ |   objid -- the object id asked for, for the log line
+ | Returns: the seat; does not return when seatnum is out of range
+ ----------------------*/
+static Player *get_seat(Instance *inst, const int seatnum, const uint16 objid)
+{
+    if ((seatnum < 0) || (seatnum >= inst->num_players)) {
+        GState->die("Invalid multiplayer object id referenced");
+    }
+
+    Player *player = &inst->players[seatnum];
+    if (inst->ghost_watch && !player->claimed && !(inst->ghost_logged & (1 << seatnum))) {
+        inst->ghost_logged |= (uint8) (1 << seatnum);
+        loginfo("Instance '%s': game logic touched unclaimed seat %d (object %u)",
+                inst->hash, seatnum, (unsigned int) objid);
+    }
+    return player;
+}
+
 static uint16 remap_objectid(const uint16 objid)
 {
     Instance *inst = (Instance *) GState;  // this works because zmachine_state is the first field in Instance.
@@ -1035,7 +1192,7 @@ static uint8 *get_virtualized_mem_ptr(const uint16 offset)
         Instance *inst = (Instance *) GState;  // this works because zmachine_state is the first field in Instance.
         const uint16 base_offset = offset - fake_prop_base_addr;  // unconst.
         const int requested_player = (int) (base_offset / MULTIPLAYER_PROP_DATALEN);
-        ptr = inst->players[requested_player].property_table_data + base_offset;
+        ptr = get_seat(inst, requested_player, (uint16) (ZORK1_EXTERN_MEM_OBJS_BASE + requested_player))->property_table_data + (base_offset % MULTIPLAYER_PROP_DATALEN);
     }
     return ptr;
 }
@@ -1053,11 +1210,7 @@ static uint8 *getObjectPtr(const uint16 _objid)
     uint8 *ptr;
     if (objid >= external_mem_objects_base) {  // looking for a multiplayer character
         Instance *inst = (Instance *) GState;  // this works because zmachine_state is the first field in Instance.
-        const int requested_player = (int) (objid - external_mem_objects_base);
-        if (requested_player >= inst->num_players) {
-            GState->die("Invalid multiplayer object id referenced");
-        }
-        ptr = inst->players[requested_player].object_table_data;
+        ptr = get_seat(inst, (int) (objid - external_mem_objects_base), objid)->object_table_data;
     } else {  // looking for a standard object.
         ptr = GState->story + GState->header.objtab_addr;
         ptr += 31 * sizeof (uint16);  // skip properties defaults table
@@ -1086,11 +1239,7 @@ static uint8 *getObjectProperty(const uint16 _objid, const uint32 propid, uint8 
         const uint16 external_mem_objects_base = ZORK1_EXTERN_MEM_OBJS_BASE;  // ZORK 1 SPECIFIC MAGIC
         if (objid >= external_mem_objects_base) {  // looking for a multiplayer character
             Instance *inst = (Instance *) GState;  // this works because zmachine_state is the first field in Instance.
-            const int requested_player = (int) (objid - external_mem_objects_base);
-            if (requested_player >= inst->num_players) {
-                GState->die("Invalid multiplayer object id referenced");
-            }
-            ptr = inst->players[requested_player].property_table_data;
+            ptr = get_seat(inst, (int) (objid - external_mem_objects_base), objid)->property_table_data;
         } else {
             ptr = getObjectPtr(objid);
             ptr += 7;  // skip to properties address field.
@@ -1142,11 +1291,9 @@ static void opcode_get_prop_addr_multizork(void)
     if (objid >= external_mem_objects_base) {  // looking for a multiplayer character
         const uint16 fake_prop_base_addr = (uint16) (0x10000 - (MULTIPLAYER_PROP_DATALEN * 5));
         const int requested_player = (int) (objid - external_mem_objects_base);
-        if (requested_player >= inst->num_players) {
-            GState->die("Invalid multiplayer object id referenced");
-        }
+        const Player *seat = get_seat(inst, requested_player, objid);
         result = fake_prop_base_addr + (MULTIPLAYER_PROP_DATALEN * requested_player);  // we give each player FAKE bytes at the end of the address space.
-        result += (uint16) ((size_t) (ptr - inst->players[requested_player].property_table_data));
+        result += (uint16) ((size_t) (ptr - seat->property_table_data));
     } else {
         result = ptr ? ((uint16) (ptr-GState->story)) : 0;
     }
@@ -1162,11 +1309,7 @@ static void opcode_print_obj_multizork(void)
     if (GState->header.version <= 3) {
         const uint8 *ptr;
         if (objid >= external_mem_objects_base) {  // looking for a multiplayer character
-            const int requested_player = (int) (objid - external_mem_objects_base);
-            if (requested_player >= inst->num_players) {
-                GState->die("Invalid multiplayer object id referenced");
-            }
-            ptr = inst->players[requested_player].property_table_data + 1;
+            ptr = get_seat(inst, (int) (objid - external_mem_objects_base), objid)->property_table_data + 1;
         } else {
             ptr = getObjectPtr(GState->operands[0]);
             ptr += 7;  // skip to properties field.
@@ -1517,26 +1660,23 @@ static void db_failed_at_instance_start(Instance *inst)
 }
 
 static void inpfn_ingame(Connection *conn, const char *str);
+static Player *reconnect_player(Connection *conn, const char *access_code);
 
-static void start_instance(Instance *inst)
+/*----------------------
+ | write_player_name_property
+ | Description: Builds a seat's property table: its ZSCII-encoded short name
+ |   followed by a fresh copy of the pristine player object's properties. Called
+ |   once per seat when a game starts, and again when a late arrival claims one,
+ |   so a seat's name can change without the properties behind it drifting.
+ | Author: suinevere
+ | Dependencies: mojozork.c
+ | Globals: GState
+ | Params: player -- the seat whose table is being written
+ |   name -- lowercase ASCII short name, at most 15 characters
+ | Returns: N/A
+ ----------------------*/
+static void write_player_name_property(Player *player, const char *name)
 {
-    // Flatten out the players list so there aren't any blanks in the middle.
-    size_t num_players = 0;
-    Player players[ARRAYSIZE(inst->players)];
-    for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
-        Connection *conn = inst->players[i].connection;
-        if (conn) {
-            memcpy(&players[num_players], &inst->players[i], sizeof (Player));
-            num_players++;
-        }
-    }
-    memset(inst->players, '\0', sizeof (inst->players));
-    memcpy(inst->players, players, num_players * sizeof (Player));
-    inst->num_players = num_players;
-
-    // !!! FIXME: split this out to a separate function.
-    GState = &inst->zmachine_state;
-    uint16 *globals = (uint16 *) (GState->story + GState->header.globals_addr);
     const uint8 *playerptr = GState->story + GState->header.objtab_addr;
     playerptr += 31 * sizeof (uint16);  // skip properties defaults table
     playerptr += 9 * (ZORK1_PLAYER_OBJID-1);  // find object in object table  // ZORK 1 SPECIFIC MAGIC
@@ -1551,8 +1691,55 @@ static void start_instance(Instance *inst)
         propsize += (((propptr[propsize] >> 5) & 0x7) + 1) + 1;
     }
 
-    assert(propsize < sizeof (inst->players[0].property_table_data));
+    memset(player->property_table_data, '\0', sizeof (player->property_table_data));
 
+    uint8 *propdst = player->property_table_data;
+    propdst++;  // text-length (number of 2-byte words). Skip for now.
+
+    // Encode the player's name to ZSCII. We cheat and only let you have
+    // lowercase letters for now (!!! FIXME: but a better ZSCII encoder here would open options)
+    uint8 numwords = 0;
+    const char *str = name;
+    while (*str) {
+        const uint16 zch1 = (uint8) ((*(str++) - 'a') + 6);
+        const uint16 zch2 = *str ? ((uint8) ((*(str++) - 'a') + 6)) : 5;  // 5 is a padding character at end of string.
+        const uint16 zch3 = *str ? ((uint8) ((*(str++) - 'a') + 6)) : 5;  // 5 is a padding character at end of string.
+        const uint16 termbit = ((*str == '\0') || (zch2 == 5) || (zch3 == 5)) ? (1 << 15) : 0;
+        const uint16 zword = (zch1 << 10) | (zch2 << 5) | zch3 | termbit;
+        WRITEUI16(propdst, zword);
+        numwords++;
+    }
+    *player->property_table_data = numwords;
+
+    assert((propsize + (numwords * 2) + 1) <= sizeof (player->property_table_data));
+    memcpy(propdst, propptr, propsize);
+}
+
+static void start_instance(Instance *inst)
+{
+    size_t num_players = 0;
+    Player players[ARRAYSIZE(inst->players)];
+    const uint32 entrypoint = inst->players[0].next_logical_pc;
+    memset(players, '\0', sizeof (players));
+    for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
+        Connection *conn = inst->players[i].connection;
+        if (conn) {
+            memcpy(&players[num_players], &inst->players[i], sizeof (Player));
+            players[num_players].claimed = 1;
+            num_players++;
+        }
+    }
+    const size_t num_claimed = num_players;
+    for (size_t i = num_players; i < ARRAYSIZE(players); i++) {
+        players[i].next_logical_pc = entrypoint;
+        num_players++;
+    }
+    memcpy(inst->players, players, sizeof (inst->players));
+    inst->num_players = (int) num_players;
+
+    // !!! FIXME: split this out to a separate function.
+    GState = &inst->zmachine_state;
+    uint16 *globals = (uint16 *) (GState->story + GState->header.globals_addr);
     const uint16 external_mem_objects_base = ZORK1_EXTERN_MEM_OBJS_BASE;  // ZORK 1 SPECIFIC MAGIC
 
     int dbokay = 1;
@@ -1572,47 +1759,31 @@ static void start_instance(Instance *inst)
         player->gvar_loadallowed = globals[133];
         player->gvar_coffin_held = globals[139];
 
-        snprintf(player->username, sizeof (player->username), "%s", conn->username);
-
-        // Copy the original player object for each player.
-        memcpy(player->object_table_data, playerptr, sizeof (player->object_table_data));
-
-        // Build a custom property table for each player.
-        uint8 *propdst = player->property_table_data;
-        propdst++;  // text-length (number of 2-byte words). Skip for now.
-
-        // Encode the player's name to ZSCII. We cheat and only let you have
-        // lowercase letters for now (!!! FIXME: but a better ZSCII encoder here would open options)
-        uint8 numwords = 0;
-        const char *str = player->username;
-        while (*str) {
-            const uint16 zch1 = (uint8) ((*(str++) - 'a') + 6);
-            const uint16 zch2 = *str ? ((uint8) ((*(str++) - 'a') + 6)) : 5;  // 5 is a padding character at end of string.
-            const uint16 zch3 = *str ? ((uint8) ((*(str++) - 'a') + 6)) : 5;  // 5 is a padding character at end of string.
-            const uint16 termbit = ((*str == '\0') || (zch2 == 5) || (zch3 == 5)) ? (1 << 15) : 0;
-            const uint16 zword = (zch1 << 10) | (zch2 << 5) | zch3 | termbit;
-            WRITEUI16(propdst, zword);
-            numwords++;
+        if (conn) {
+            snprintf(player->username, sizeof (player->username), "%s", conn->username);
+        } else {
+            player->username[0] = '\0';
         }
-        *player->property_table_data = numwords;
 
-        assert((propsize + (numwords * 2) + 1) <= sizeof (player->property_table_data));
-        memcpy(propdst, propptr, propsize);
+        memcpy(player->object_table_data, GState->story + GState->header.objtab_addr +
+               (31 * sizeof (uint16)) + (9 * (ZORK1_PLAYER_OBJID-1)), sizeof (player->object_table_data));
+        write_player_name_property(player, player->claimed ? player->username : "guest");
 
         snprintf(player->againbuf, sizeof (player->againbuf), "verbose");  // typing "again" as the first command appears to do "verbose". Beats me.
 
         dbokay = dbokay && generate_unique_hash(player->hash);  // assign a hash to the player while we're here so they can rejoin.
 
-        snprintf(player->username, sizeof (player->username), "%s", conn->username);
-        write_to_connection(conn, "\n\n");
-        write_to_connection(conn, "*** THE GAME IS STARTING ***\n");
-        write_to_connection(conn, "You can leave at any time by typing 'quit'.\n");
-        write_to_connection(conn, "You can speak to others in the same room with '!some text' or the whole game with '!!some text'.\n");
-        write_to_connection(conn, "If you get disconnected or leave, you can rejoin at any time\n");
-        write_to_connection(conn, " with this access code: '");
-        write_to_connection(conn, player->hash);
-        write_to_connection(conn, "'\n\n(Have fun!)\n\n\n");
-        conn->inputfn = inpfn_ingame;
+        if (conn) {
+            write_to_connection(conn, "\n\n");
+            write_to_connection(conn, "*** THE GAME IS STARTING ***\n");
+            write_to_connection(conn, "You can leave at any time by typing 'quit'.\n");
+            write_to_connection(conn, "You can speak to others in the same room with '!some text' or the whole game with '!!some text'.\n");
+            write_to_connection(conn, "If you get disconnected or leave, you can rejoin at any time\n");
+            write_to_connection(conn, " with this access code: '");
+            write_to_connection(conn, player->hash);
+            write_to_connection(conn, "'\n\n(Have fun!)\n\n\n");
+            conn->inputfn = inpfn_ingame;
+        }
     }
 
     if (!dbokay) {
@@ -1629,7 +1800,7 @@ static void start_instance(Instance *inst)
     uint32 outputbuf_used_at_start[ARRAYSIZE(inst->players)];
 
     // run a step right now, so they get the intro text and their next input will be for the game.
-    for (int i = 0; i < num_players; i++) {
+    for (int i = 0; i < (int) num_claimed; i++) {
         outputbuf_used_at_start[i] = inst->players[i].connection ? inst->players[i].connection->outputbuf_used : 0;
         // just this once, reset the Z-Machine between each player, so that we end up with
         //  one definite state and things like intro text gets run...
@@ -1649,13 +1820,13 @@ static void start_instance(Instance *inst)
             ptr[5] = (j < (num_players-1)) ? (external_mem_objects_base + j + 1) : orig_start_room_child;
             assert(ptr[6] == 0);  // assume player object has no initial children
 
-            // ZORK 1 SPECIFIC MAGIC: mark the player as visible so other players see him.
+            // ZORK 1 SPECIFIC MAGIC: show the seats real people took, hide the rest.
             GState->operands[0] = external_mem_objects_base + j;
             GState->operands[1] = 0x07;  // INVISIBLE bit
-            opcode_clear_attr();
+            if (inst->players[j].claimed) { opcode_clear_attr(); } else { opcode_set_attr(); }
             GState->operands[0] = external_mem_objects_base + j;
             GState->operands[1] = 0x0E;  // NDESCBIT bit
-            opcode_clear_attr();
+            if (inst->players[j].claimed) { opcode_clear_attr(); } else { opcode_set_attr(); }
         }
         startroomptr[6] = external_mem_objects_base;  // make players start of child list for start room.
         GState = NULL;
@@ -1667,8 +1838,32 @@ static void start_instance(Instance *inst)
 
         // Run until the READ instruction, then gameplay officially starts.
         if (!step_instance(inst, i, NULL)) {
-            break;  // instance failed, don't access it further.
+            return;  // instance failed and freed itself, don't access it further.
         }
+    }
+
+    for (size_t i = num_claimed; i < ARRAYSIZE(inst->players); i++) {
+        Player *seat = &inst->players[i];
+        const Player *src = &inst->players[num_claimed - 1];
+        seat->next_logical_pc = src->next_logical_pc;
+        seat->next_logical_sp = src->next_logical_sp;
+        seat->next_logical_bp = src->next_logical_bp;
+        seat->next_inputbuf = src->next_inputbuf;
+        seat->next_inputbuflen = src->next_inputbuflen;
+        seat->next_operands[0] = src->next_operands[0];
+        seat->next_operands[1] = src->next_operands[1];
+        memcpy(seat->stack, src->stack, sizeof (seat->stack));
+        memcpy(seat->againbuf, src->againbuf, sizeof (seat->againbuf));
+        seat->gvar_location = src->gvar_location;
+        seat->gvar_coffin_held = src->gvar_coffin_held;
+        seat->gvar_dead = src->gvar_dead;
+        seat->gvar_deaths = src->gvar_deaths;
+        seat->gvar_lit = src->gvar_lit;
+        seat->gvar_alwayslit = src->gvar_alwayslit;
+        seat->gvar_verbose = src->gvar_verbose;
+        seat->gvar_superbrief = src->gvar_superbrief;
+        seat->gvar_lucky = src->gvar_lucky;
+        seat->gvar_loadallowed = src->gvar_loadallowed;
     }
 
     dbokay = dbokay && db_begin_transaction();
@@ -1676,7 +1871,7 @@ static void start_instance(Instance *inst)
         inst->savetime = GNow;
         inst->dbid = db_insert_instance(inst);
         dbokay = dbokay && (inst->dbid != 0);
-        for (int i = 0; i < num_players; i++) {
+        for (int i = 0; i < inst->num_players; i++) {
             Player *player = &inst->players[i];
             if (dbokay) {
                 player->dbid = db_insert_player(inst, i);
@@ -1693,7 +1888,10 @@ static void start_instance(Instance *inst)
 
     if (!dbokay) {
         db_failed_at_instance_start(inst);
+        return;
     }
+
+    inst->ghost_watch = 1;
 }
 
 static void save_instance(Instance *inst)
@@ -1909,7 +2107,9 @@ static void inpfn_waiting_for_players(Connection *conn, const char *str)
         write_to_connection(conn, "Okay! Here we go! Buckle up.\n");
         start_instance(inst);  // will move all players to new inputfn
     } else {
-        write_to_connection(conn, "Still waiting for people to join.\n");
+        write_to_connection(conn, "Still waiting for people to join '");
+        write_to_connection(conn, inst->hash);
+        write_to_connection(conn, "'.\n");
         write_to_connection(conn, "Type 'go' to start with those currently present.\n");
         write_to_connection(conn, "Type 'quit' to drop this game and anyone connected.\n");
     }
@@ -1940,17 +2140,19 @@ static void inpfn_player_waiting(Connection *conn, const char *str)
 }
 
 /*----------------------
- | find_live_instance_by_hash
- | Description: Finds the instance a game code names, or NULL when no connected player is on it.
+ | find_live_instance_by_name
+ | Description: Finds the instance a room name points at, or NULL when no
+ |   connected player is in a room by that name. Case is ignored because the
+ |   name is meant to be read aloud and typed back.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: connections, num_connections
- | Params: hash -- a six-character game code as typed by a player
- | Returns: the Instance, or NULL when the code is the wrong length or names no live game
+ | Params: name -- a room name as typed by a player
+ | Returns: the Instance, or NULL when the name is empty or names no live room
  ----------------------*/
-static Instance *find_live_instance_by_hash(const char *hash)
+static Instance *find_live_instance_by_name(const char *name)
 {
-    if (strlen(hash) != 6) {
+    if (*name == '\0') {
         return NULL;
     }
 
@@ -1959,7 +2161,7 @@ static Instance *find_live_instance_by_hash(const char *hash)
     // !!! FIXME:  find it. A hashtable even more so.
     for (size_t i = 0; i < num_connections; i++) {
         Connection *c = connections[i];
-        if (c->instance && (strcmp(c->instance->hash, hash) == 0)) {
+        if (c->instance && (strcasecmp(c->instance->hash, name) == 0)) {
             return c->instance;
         }
     }
@@ -1967,113 +2169,564 @@ static Instance *find_live_instance_by_hash(const char *hash)
     return NULL;
 }
 
-static void inpfn_enter_instance_code_to_join(Connection *conn, const char *str)
+/*----------------------
+ | seat_available_for
+ | Description: Answers whether a stranger may sit down in this room. Privacy is
+ |   not consulted here, so entering a private room by name uses the same seat
+ |   rule as picking a listed one out of the lobby.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: inst -- the room being considered
+ | Returns: 1 when a seat is free, 0 otherwise
+ ----------------------*/
+static int seat_available_for(const Instance *inst)
 {
-    Instance *inst = NULL;
+    if (inst->crashed) {
+        return 0;
+    }
 
+    for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
+        const Player *player = &inst->players[i];
+        if (!player->claimed && (player->connection == NULL)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/*----------------------
+ | find_own_seat
+ | Description: Finds the seat in a room that belongs to a username and has
+ |   nobody sitting in it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: inst -- the room to look in
+ |   username -- the name to match
+ | Returns: the Player, or NULL when no vacant seat carries that name
+ ----------------------*/
+static Player *find_own_seat(Instance *inst, const char *username)
+{
+    for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
+        Player *player = &inst->players[i];
+        if (player->claimed && (player->connection == NULL) && (strcmp(player->username, username) == 0)) {
+            return player;
+        }
+    }
+    return NULL;
+}
+
+/*----------------------
+ | claim_seat
+ | Description: Wakes an unclaimed seat for a new arrival: gives it their name,
+ |   rewrites its property table so the other players see them, and clears the
+ |   two attributes that were hiding it. The seat's Z-machine state is untouched,
+ |   because it has been parked on a READ instruction since the game started.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: GState
+ | Params: conn -- the arriving connection, with its username set
+ |   inst -- the room they are joining
+ | Returns: the claimed seat's index, or -1 when none was free
+ ----------------------*/
+static int claim_seat(Connection *conn, Instance *inst)
+{
+    int seatnum = -1;
+    for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
+        if (!inst->players[i].claimed && (inst->players[i].connection == NULL)) {
+            seatnum = (int) i;
+            break;
+        }
+    }
+
+    if (seatnum < 0) {
+        return -1;
+    }
+
+    Player *player = &inst->players[seatnum];
+    player->claimed = 1;
+    player->connection = conn;
+    conn->instance = inst;
+    snprintf(player->username, sizeof (player->username), "%s", conn->username);
+
+    GState = &inst->zmachine_state;
+    write_player_name_property(player, player->username);
+
+    const int previous_player = inst->current_player;
+    inst->current_player = seatnum;
+    GState->operands[0] = ZORK1_EXTERN_MEM_OBJS_BASE + seatnum;
+    GState->operands[1] = 0x07;  // INVISIBLE bit
+    opcode_clear_attr();
+    GState->operands[0] = ZORK1_EXTERN_MEM_OBJS_BASE + seatnum;
+    GState->operands[1] = 0x0E;  // NDESCBIT bit
+    opcode_clear_attr();
+    inst->current_player = previous_player;
+    GState = NULL;
+
+    conn->inputfn = inpfn_ingame;
+    return seatnum;
+}
+
+/*----------------------
+ | enter_room_by_name
+ | Description: Puts a connection into the room a name points at, whether that
+ |   room is live, private, or archived. Every route into a game goes through
+ |   here, so a name a friend read out works in the lobby and nowhere else has
+ |   to know how rooms are found.
+ | Author: suinevere
+ | Dependencies: sqlite3.h
+ | Globals: N/A
+ | Params: conn -- the connection asking, with its username already set
+ |   name -- the room name as typed
+ | Returns: 1 when conn was placed and its inputfn moved, 0 when the room was
+ |   found but refused with a message already written, -1 when no such room exists
+ ----------------------*/
+static int enter_room_by_name(Connection *conn, const char *name)
+{
     assert(conn->instance == NULL);
 
-    if (strcmp(str, "quit") == 0) {
-        write_to_connection(conn, "Okay, maybe some other time. Bye!");
-        drop_connection(conn);
-        return;
-    }
-        
-    inst = find_live_instance_by_hash(str);
+    Instance *inst = find_live_instance_by_name(name);
 
-    if (inst == NULL) {
-        write_to_connection(conn, "Sorry, I can't find that code. Try again or type 'quit'.");
-    } else {
-        write_to_connection(conn, "Found it!\n");
-
-        if ((inst->started) || (inst->crashed)) {
-            write_to_connection(conn, "...but it appears to have already started without you. Sorry!\n");
-            write_to_connection(conn, "You can enter a different code or type 'quit'\n");
-            return;
+    if (inst != NULL) {
+        Player *mine = find_own_seat(inst, conn->username);
+        if (mine != NULL) {
+            mine->connection = conn;
+            conn->instance = inst;
+            conn->inputfn = inpfn_ingame;
+            write_to_connection(conn, "Welcome back to '");
+            write_to_connection(conn, inst->hash);
+            write_to_connection(conn, "'. Here's where you left off:\n\n");
+            db_select_recap(mine, 5);
+            return 1;
         }
 
-        for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
-            if (inst->players[i].connection == NULL) {
-                inst->players[i].connection = conn;
-                conn->instance = inst;
-                break;
+        if (!seat_available_for(inst)) {
+            write_to_connection(conn, inst->started ?
+                "That game is already under way and has no free seats. Sorry!\n" :
+                "That room appears to be full. Too popular!\n");
+            return 0;
+        }
+
+        int seatnum = -1;
+        if (inst->started) {
+            seatnum = claim_seat(conn, inst);
+            if (seatnum < 0) {
+                write_to_connection(conn, "That game is already under way and has no free seats. Sorry!\n");
+                return 0;
             }
-        }
-
-        if (conn->instance == NULL) {
-            write_to_connection(conn, "...but it appears to be full. Too popular!\n");
-            write_to_connection(conn, "You can enter a different code or type 'quit'\n");
+            write_to_connection(conn, "\nYou slip into '");
+            write_to_connection(conn, inst->hash);
+            write_to_connection(conn, "', already in progress. The others are somewhere\nahead of you; you'll have to catch up.\n\n");
+            write_to_connection(conn, "Rejoin any time with this access code: '");
+            write_to_connection(conn, inst->players[seatnum].hash);
+            write_to_connection(conn, "'\n\n");
         } else {
             for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
-                Connection *c = inst->players[i].connection;
-                if (c != conn) {
-                    write_to_connection(c, "\n*** ");
-                    write_to_connection(c, conn->username);
-                    write_to_connection(c, " has joined this game! ***\n>");
+                if (!inst->players[i].claimed && (inst->players[i].connection == NULL)) {
+                    inst->players[i].connection = conn;
+                    conn->instance = inst;
+                    break;
                 }
             }
 
-            conn->inputfn = inpfn_player_waiting;
-            conn->inputfn(conn, "");  // call this now just to print the guest list.
-
-            write_to_connection(conn, "\n\nWhile we're waiting, let me say I built this for my patrons. If you like\n");
-            write_to_connection(conn, "this sort of thing, please send a dollar to https://patreon.com/icculus !\n\n");
+            if (conn->instance == NULL) {
+                write_to_connection(conn, "That room appears to be full. Too popular!\n");
+                return 0;
+            }
         }
+
+        for (size_t i = 0; i < ARRAYSIZE(inst->players); i++) {
+            Connection *c = inst->players[i].connection;
+            if ((c != NULL) && (c != conn)) {
+                write_to_connection(c, "\n*** ");
+                write_to_connection(c, conn->username);
+                write_to_connection(c, " has joined this game! ***\n>");
+            }
+        }
+
+        if (inst->started) {
+            step_instance(inst, seatnum, "look");
+        } else {
+            conn->inputfn = inpfn_player_waiting;
+            conn->inputfn(conn, "");
+        }
+        return 1;
     }
+
+    MyGameRow rows[16];
+    const int total = db_select_my_games(conn->username, rows, (int) ARRAYSIZE(rows));
+    for (int i = 0; i < total; i++) {
+        if (strcasecmp(rows[i].name, name) != 0) {
+            continue;
+        }
+
+        inst = create_instance();
+        if (!inst) {
+            write_to_connection(conn, "I know that room, but I seem to have run out of memory! Try again later.\n");
+            return 0;
+        } else if (!db_select_instance(inst, rows[i].dbid)) {
+            write_to_connection(conn, "I know that room, but I had trouble starting it up! Try again later.\n");
+            free_instance(inst);
+            return 0;
+        }
+
+        if (inst->crashed) {
+            write_to_connection(conn, "I know that room, but that game crashed before and can't be rejoined.\n");
+            free_instance(inst);
+            return 0;
+        }
+
+        db_trim_recap(inst);
+        loginfo("Rehydrated archived instance '%s'", inst->hash);
+        inst->started = 1;
+
+        Player *mine = find_own_seat(inst, conn->username);
+        if (mine == NULL) {
+            write_to_connection(conn, "I know that room, but I can't find your seat in it. Sorry!\n");
+            free_instance(inst);
+            return 0;
+        }
+
+        mine->connection = conn;
+        conn->instance = inst;
+        conn->inputfn = inpfn_ingame;
+        write_to_connection(conn, "Picking '");
+        write_to_connection(conn, inst->hash);
+        write_to_connection(conn, "' back up. Here's where you left off:\n\n");
+        db_select_recap(mine, 5);
+        return 1;
+    }
+
+    return -1;
 }
 
-static void inpfn_new_game_or_join(Connection *conn, const char *str)
+/*----------------------
+ | LobbyRow
+ | Description: One line of the lobby, whether it names a live room or a game
+ |   sitting in the database.
+ | Author: suinevere
+ ----------------------*/
+typedef struct LobbyRow
 {
-    if (strcmp(str, "1") == 0) {  // new game
-        assert(!conn->instance);
-        conn->instance = create_instance();
-        if (!conn->instance) {
-            write_to_connection(conn, "Uhoh, we appear to be out of memory. Try again later?\n");
-            drop_connection(conn);
-            return;
+    char name[ROOMNAME_MAX];
+    Instance *live;
+    int mine;
+    int in_progress;
+    int free_seats;
+    int days_ago;
+} LobbyRow;
+
+/*----------------------
+ | build_lobby_rows
+ | Description: Collects the rooms a player may walk into and the games they
+ |   already hold a seat in, in the order the lobby prints them. Both the print
+ |   and the number-to-row lookup call this, so a typed number always means the
+ |   row the player just read.
+ | Author: suinevere
+ | Dependencies: sqlite3.h
+ | Globals: connections, num_connections, GNow
+ | Params: conn -- the connection asking, with its username set
+ |   rows -- destination array
+ |   maxrows -- entries available at rows
+ | Returns: the number of rows written
+ ----------------------*/
+static size_t build_lobby_rows(Connection *conn, LobbyRow *rows, const size_t maxrows)
+{
+    size_t total = 0;
+
+    for (size_t i = 0; (i < num_connections) && (total < maxrows); i++) {
+        Instance *inst = connections[i]->instance;
+        if ((inst == NULL) || inst->is_private || !seat_available_for(inst)) {
+            continue;
         }
 
-        if (!generate_unique_hash(conn->instance->hash)) {
-            write_to_connection(conn, "Uhoh, we appear to be having a database problem. Try again later?\n");
-            Instance *inst = conn->instance;
-            conn->instance = NULL;
-            db_failed_at_instance_start(inst);
-            drop_connection(conn);
-            return;
+        int already = 0;
+        for (size_t j = 0; j < total; j++) {
+            already = already || (rows[j].live == inst);
+        }
+        if (already) {
+            continue;
         }
 
-        loginfo("Created new instance '%s'", conn->instance->hash);
+        LobbyRow *row = &rows[total];
+        memset(row, '\0', sizeof (*row));
+        snprintf(row->name, sizeof (row->name), "%s", inst->hash);
+        row->live = inst;
+        row->in_progress = inst->started;
+        for (size_t j = 0; j < ARRAYSIZE(inst->players); j++) {
+            const Player *p = &inst->players[j];
+            row->free_seats += (!p->claimed && (p->connection == NULL)) ? 1 : 0;
+        }
+        total++;
+    }
 
-        conn->instance->players[0].connection = conn;
-        write_to_connection(conn, "Okay! Tell your friends to telnet here, too, and join game '");
-        write_to_connection(conn, conn->instance->hash);
-        write_to_connection(conn, "'.\n\n");
-        write_to_connection(conn, "We'll wait for them now.\n");
-        write_to_connection(conn, "You can type 'go' to begin when enough have arrived.\n");
-        write_to_connection(conn, "There's still room for three more people.\n");
-        write_to_connection(conn, "Once you type 'go' no more will be admitted.\n");
-        write_to_connection(conn, "Type 'quit' to drop this game and anyone connected.\n");
+    for (size_t i = 0; (i < num_connections) && (total < maxrows); i++) {
+        Instance *inst = connections[i]->instance;
+        if ((inst == NULL) || (find_own_seat(inst, conn->username) == NULL)) {
+            continue;
+        }
 
-        write_to_connection(conn, "\n\nWhile we're waiting, let me say I built this for my patrons. If you like\n");
-        write_to_connection(conn, "this sort of thing, please send a dollar to https://patreon.com/icculus !\n\n");
+        int already = 0;
+        for (size_t j = 0; j < total; j++) {
+            already = already || (rows[j].live == inst);
+        }
+        if (already) {
+            continue;
+        }
 
-        conn->inputfn = inpfn_waiting_for_players;
-    } else if (strcmp(str, "2") == 0) {  // join an existing game
-        write_to_connection(conn, "Okay! The person that started the game has a code for you to enter.\n");
-        write_to_connection(conn, "Please type it here.");
-        conn->inputfn = inpfn_enter_instance_code_to_join;
-    } else if (strcmp(str, "3") == 0) {  // quit
+        LobbyRow *row = &rows[total];
+        memset(row, '\0', sizeof (*row));
+        snprintf(row->name, sizeof (row->name), "%s", inst->hash);
+        row->live = inst;
+        row->mine = 1;
+        row->in_progress = 1;
+        total++;
+    }
+
+    MyGameRow mine[16];
+    const int nmine = db_select_my_games(conn->username, mine, (int) ARRAYSIZE(mine));
+    for (int i = 0; (i < nmine) && (total < maxrows); i++) {
+        if (find_live_instance_by_name(mine[i].name) != NULL) {
+            continue;
+        }
+
+        LobbyRow *row = &rows[total];
+        memset(row, '\0', sizeof (*row));
+        snprintf(row->name, sizeof (row->name), "%s", mine[i].name);
+        row->mine = 1;
+        row->days_ago = (int) ((((sqlite3_int64) GNow) - ((sqlite3_int64) mine[i].savetime)) / (60 * 60 * 24));
+        total++;
+    }
+
+    return total;
+}
+
+/*----------------------
+ | show_lobby
+ | Description: Prints the lobby. Privacy keeps a room off the joinable list for
+ |   strangers; a room the caller holds a seat in still appears under Your games,
+ |   private or not.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the connection to print to, with its username set
+ | Returns: N/A
+ ----------------------*/
+static void show_lobby(Connection *conn)
+{
+    LobbyRow rows[LOBBY_MAX_ROWS];
+    const size_t total = build_lobby_rows(conn, rows, ARRAYSIZE(rows));
+    int printed_joinable = 0;
+    int printed_mine = 0;
+    char line[160];
+
+    for (size_t i = 0; i < total; i++) {
+        if (rows[i].mine) {
+            continue;
+        } else if (!printed_joinable) {
+            write_to_connection(conn, "\nGames you can join:\n");
+            printed_joinable = 1;
+        }
+
+        snprintf(line, sizeof (line), "  %d) %-22s%s%d seat%s free, ",
+                 (int) (i + 1), rows[i].name,
+                 rows[i].in_progress ? "(in progress) " : "",
+                 rows[i].free_seats, (rows[i].free_seats == 1) ? "" : "s");
+        write_to_connection(conn, line);
+        const char *sep = "";
+        for (size_t j = 0; j < ARRAYSIZE(rows[i].live->players); j++) {
+            Connection *c = rows[i].live->players[j].connection;
+            if (c != NULL) {
+                write_to_connection(conn, sep);
+                write_to_connection(conn, c->username);
+                sep = ", ";
+            }
+        }
+        write_to_connection(conn, "\n");
+    }
+
+    for (size_t i = 0; i < total; i++) {
+        if (!rows[i].mine) {
+            continue;
+        } else if (!printed_mine) {
+            write_to_connection(conn, "\nYour games:\n");
+            printed_mine = 1;
+        }
+
+        if (rows[i].in_progress) {
+            snprintf(line, sizeof (line), "  %d) %-22s (in progress)\n", (int) (i + 1), rows[i].name);
+        } else {
+            snprintf(line, sizeof (line), "  %d) %-22s (left %d day%s ago)\n",
+                     (int) (i + 1), rows[i].name, rows[i].days_ago, (rows[i].days_ago == 1) ? "" : "s");
+        }
+        write_to_connection(conn, line);
+    }
+
+    if (!printed_joinable && !printed_mine) {
+        write_to_connection(conn, "\nNobody's playing right now. You could be the first.\n");
+    }
+
+    conn->num_lobby_rows = total;
+    for (size_t i = 0; i < total; i++) {
+        snprintf(conn->lobby_rows[i], sizeof (conn->lobby_rows[i]), "%s", rows[i].name);
+    }
+
+    write_to_connection(conn, "\nType a number, or a room name if someone gave you one.\n");
+    write_to_connection(conn, "  n) start a new room     q) quit\n\n> ");
+}
+
+/*----------------------
+ | inpfn_new_room_privacy
+ | Description: Asks whether a freshly made room should appear in the lobby, then
+ |   drops the host into the waiting room either way.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the host, already holding a seat in the new room
+ |   str -- their answer
+ | Returns: N/A
+ ----------------------*/
+static void inpfn_new_room_privacy(Connection *conn, const char *str)
+{
+    if ((strcasecmp(str, "y") == 0) || (strcasecmp(str, "yes") == 0)) {
+        conn->instance->is_private = 0;
+        write_to_connection(conn, "Listed. Strangers can wander in.\n\n");
+    } else if ((strcasecmp(str, "n") == 0) || (strcasecmp(str, "no") == 0)) {
+        conn->instance->is_private = 1;
+        write_to_connection(conn, "Kept quiet. Only people you give the name to can get in.\n\n");
+    } else {
+        write_to_connection(conn, "Please answer 'y' or 'n'.\n\n> ");
+        return;
+    }
+
+    conn->inputfn = inpfn_waiting_for_players;
+    write_to_connection(conn, "We'll wait for people now.\n");
+    write_to_connection(conn, "Type 'go' to begin when enough have arrived.\n");
+    write_to_connection(conn, "There's still room for three more people.\n");
+    write_to_connection(conn, "Type 'quit' to drop this room and anyone connected.\n");
+    write_to_connection(conn, "\n\nWhile we're waiting, let me say I built this for my patrons. If you like\n");
+    write_to_connection(conn, "this sort of thing, please send a dollar to https://patreon.com/icculus !\n\n> ");
+}
+
+/*----------------------
+ | start_new_room
+ | Description: Makes a room, names it, seats the host, and asks whether it
+ |   should be listed.
+ | Author: suinevere
+ | Dependencies: roomnames.h
+ | Globals: N/A
+ | Params: conn -- the connection asking for a new room
+ | Returns: N/A
+ ----------------------*/
+static void start_new_room(Connection *conn)
+{
+    assert(!conn->instance);
+    conn->instance = create_instance();
+    if (!conn->instance) {
+        write_to_connection(conn, "Uhoh, we appear to be out of memory. Try again later?\n");
+        drop_connection(conn);
+        return;
+    }
+
+    if (!generate_unique_room_name(conn->instance->hash)) {
+        write_to_connection(conn, "Uhoh, we appear to be having a database problem. Try again later?\n");
+        Instance *inst = conn->instance;
+        conn->instance = NULL;
+        db_failed_at_instance_start(inst);
+        drop_connection(conn);
+        return;
+    }
+
+    loginfo("Created new instance '%s'", conn->instance->hash);
+    conn->instance->players[0].connection = conn;
+    conn->instance->is_private = 1;
+
+    write_to_connection(conn, "\nYour room is called '");
+    write_to_connection(conn, conn->instance->hash);
+    write_to_connection(conn, "'.\nTell your friends to telnet here and type that. Capitals don't matter.\n\n");
+    write_to_connection(conn, "Should I list it in the lobby, so strangers can wander in? (y/n)\n\n> ");
+    conn->inputfn = inpfn_new_room_privacy;
+}
+
+/*----------------------
+ | inpfn_lobby
+ | Description: Takes a list number, a room name, a player access code, or one of
+ |   the two letter commands, and hands anything room-shaped to the dispatcher.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: conn -- the connection at the lobby
+ |   str -- what they typed
+ | Returns: N/A
+ ----------------------*/
+static void inpfn_lobby(Connection *conn, const char *str)
+{
+    if (strcasecmp(str, "q") == 0) {
         write_to_connection(conn, "\n\nOkay, bye for now!\n\n");
         drop_connection(conn);
-    } else {
-        write_to_connection(conn, "Please type '1', '2', or '3'");
+        return;
+    } else if (strcasecmp(str, "n") == 0) {
+        start_new_room(conn);
+        return;
     }
+
+    char picked[ROOMNAME_MAX];
+    if (*str && (strspn(str, "0123456789") == strlen(str))) {
+        const int choice = atoi(str);
+        if ((choice >= 1) && (((size_t) choice) <= conn->num_lobby_rows)) {
+            snprintf(picked, sizeof (picked), "%s", conn->lobby_rows[choice - 1]);
+            str = picked;
+        }
+    }
+
+    const int entered = enter_room_by_name(conn, str);
+    if (entered > 0) {
+        return;
+    }
+
+    if ((entered < 0) && (strlen(str) == 6)) {
+        Player *player = reconnect_player(conn, str);
+        if (player) {
+            write_to_connection(conn, "We found you! Here's where you left off:\n\n");
+            db_select_recap(player, 5);
+            if (player->game_over) {
+                drop_connection(conn);
+            }
+            return;
+        }
+    }
+
+    if ((entered < 0) && (strlen(str) != 6)) {
+        write_to_connection(conn, "I can't find a room by that name.\n");
+    }
+
+    show_lobby(conn);
 }
 
 static void inpfn_enter_name(Connection *conn, const char *str)
 {
+    const int first_line = !conn->saw_first_line;
+    conn->saw_first_line = 1;
+    static const char *hacker_commands[] = { "system", "shell", "sh", "enable", "admin", "root", "Administrator", "runshellcmd", "linuxshell", "start-shell", "start start-shell", "start-shell bash" };
+    for (int i = 0; first_line && (i < ARRAYSIZE(hacker_commands)); i++) {
+        if (strcmp(str, hacker_commands[i]) == 0) {
+            const char *addr = conn->address;
+            loginfo("Socket %d (%s) is probably malicious, blocked and dropped.", conn->sock, addr);
+            conn->blocked = 1;
+            if ((strcmp(addr, "127.0.0.1") == 0) || (strcmp(addr, "::ffff:127.0.0.1") == 0) || (strcmp(addr, "::1") == 0)) {
+                loginfo("(not actually blocking localhost.)");
+            } else {
+                db_insert_blocked(conn->address);
+            }
+            write_to_connection(conn, "Nice try.\n");
+            drop_connection(conn);
+            return;
+        }
+    }
+
     if (*str == '\0') {  // just hit enter without a specific code?
-        write_to_connection(conn, "You have to enter a name. Try again.");
+        write_to_connection(conn, "You have to enter a name. Try again.\n\nusername: ");
         return;
     }
 
@@ -2093,7 +2746,7 @@ static void inpfn_enter_name(Connection *conn, const char *str)
     }
 
     if (*conn->username == '\0') {
-        write_to_connection(conn, "Sorry, I couldn't use any of that name. Try again.");
+        write_to_connection(conn, "Sorry, I couldn't use any of that name. Try again.\n\nusername: ");
         return;
     }
 
@@ -2101,20 +2754,8 @@ static void inpfn_enter_name(Connection *conn, const char *str)
     write_to_connection(conn, conn->username);
     write_to_connection(conn, "' from now on.\n\n");
 
-    if (conn->pending_join[0]) {
-        char code[sizeof (conn->pending_join)];
-        snprintf(code, sizeof (code), "%s", conn->pending_join);
-        conn->pending_join[0] = '\0';
-        conn->inputfn = inpfn_enter_instance_code_to_join;
-        conn->inputfn(conn, code);
-        return;
-    }
-
-    write_to_connection(conn, "Now that that's settled:\n\n");
-    write_to_connection(conn, "1) start a new game\n");
-    write_to_connection(conn, "2) join someone else's game\n");
-    write_to_connection(conn, "3) quit\n");
-    conn->inputfn = inpfn_new_game_or_join;
+    conn->inputfn = inpfn_lobby;
+    show_lobby(conn);
 }
 
 static Player *reconnect_player(Connection *conn, const char *access_code)
@@ -2134,6 +2775,7 @@ static Player *reconnect_player(Connection *conn, const char *access_code)
         if (inst) {
             for (int i = 0; i < inst->num_players; i++) {
                 Player *player = &inst->players[i];
+                if (!player->claimed) { continue; }
                 if (strcmp(player->hash, access_code) == 0) {
                     if (player->connection != NULL) {
                         write_to_connection(conn, "Hmmm, that's a valid access code, but it's currently in use by another connection.\n");
@@ -2188,6 +2830,7 @@ static Player *reconnect_player(Connection *conn, const char *access_code)
 
     for (int i = 0; i < inst->num_players; i++) {
         Player *player = &inst->players[i];
+        if (!player->claimed) { continue; }
         if (strcmp(player->hash, access_code) == 0) {
             assert(player->connection == NULL);
             player->connection = conn;   // just wire right back in and go.
@@ -2203,64 +2846,6 @@ static Player *reconnect_player(Connection *conn, const char *access_code)
     write_to_connection(conn, "Hmm, we found that access code, but something internal went wrong. Try again later?\n");
     free_instance(inst);
     return NULL;
-}
-
-// First prompt after connecting.
-static void inpfn_hello_sailor(Connection *conn, const char *str)
-{
-    if (*str == '\0') {  // just hit enter without a specific code?
-        write_to_connection(conn, "Okay, let's get you set up.\n\n");
-        write_to_connection(conn, "What's your name? Keep it simple or I'll simplify it for you.\n");
-        write_to_connection(conn, "(sorry if your name isn't one word made up of english letters.\n");
-        write_to_connection(conn, " This is American tech from 1980, after all.)");
-        conn->inputfn = inpfn_enter_name;
-    } else {
-        // popular bots that troll telnet ports looking to pop a shell will send these as first commands. Dump them.
-        static const char *hacker_commands[] = { "system", "shell", "sh", "enable", "admin", "root", "Administrator", "runshellcmd", "linuxshell", "start-shell", "start start-shell", "start-shell bash" };
-        for (int i = 0; i < ARRAYSIZE(hacker_commands); i++) {
-            if (strcmp(str, hacker_commands[i]) == 0) {
-                const char *addr = conn->address;
-                loginfo("Socket %d (%s) is probably malicious, blocked and dropped.", conn->sock, addr);
-                conn->blocked = 1;  // drop this connection's further input.
-                if ((strcmp(addr, "127.0.0.1") == 0) || (strcmp(addr, "::ffff:127.0.0.1") == 0) || (strcmp(addr, "::1") == 0)) {
-                    loginfo("(not actually blocking localhost.)");
-                } else {
-                    db_insert_blocked(conn->address);
-                }
-                write_to_connection(conn, "Nice try.\n");
-                drop_connection(conn);
-                return;
-            }
-        }
-
-        // the code a friend hands out names an instance, not a player, and it is the
-        //  only code a first-time arrival has. Take it here and get them a name first.
-        if (find_live_instance_by_hash(str) != NULL) {
-            snprintf(conn->pending_join, sizeof (conn->pending_join), "%s", str);
-            write_to_connection(conn, "That's a game code, not an access code, but I know where it goes.\n\n");
-            write_to_connection(conn, "What's your name? Keep it simple or I'll simplify it for you.\n");
-            write_to_connection(conn, "(sorry if your name isn't one word made up of english letters.\n");
-            write_to_connection(conn, " This is American tech from 1980, after all.)");
-            conn->inputfn = inpfn_enter_name;
-            return;
-        }
-
-        // look up player code.
-        Player *player = reconnect_player(conn, str);
-        if (!player) {
-            write_to_connection(conn, "Try another code, or just press enter.\n");
-            return;
-        }
-
-        write_to_connection(conn, "We found you! Here's where you left off:\n\n");
-        db_select_recap(player, 5);
-        assert(player->connection == conn);
-        assert(player->connection->inputfn == inpfn_ingame);
-
-        if (player->game_over) {  // their game has already ended, drop them.
-            drop_connection(conn);
-        }
-    }
 }
 
 // dump whitespace on both sides of a string.
@@ -2457,7 +3042,7 @@ static int accept_new_connection(const int listensock)
     num_connections++;
 
     conn->sock = sock;
-    conn->inputfn = inpfn_hello_sailor;
+    conn->inputfn = inpfn_enter_name;
     conn->last_activity = GNow;
 
     if (getnameinfo((struct sockaddr *) &addr, addrlen, conn->address, sizeof (conn->address), NULL, 0, NI_NUMERICHOST|NI_NUMERICSERV) != 0) {
@@ -2476,7 +3061,7 @@ static int accept_new_connection(const int listensock)
         write_to_connection(conn, conn->address);
         write_to_connection(conn, "\n\n" MULTIZORK_TRANSCRIPT_BASEURL "\n");
         write_to_connection(conn, "\n(version " MULTIZORKD_VERSION " built " __DATE__ " " __TIME__ ".)\n\n\n");
-        write_to_connection(conn, "Hello sailor!\n\nIf you are returning, type your access code. If a friend gave you a game\ncode to join, type that. Otherwise, just press enter.\n\n>");
+        write_to_connection(conn, "Welcome to MULTIZORK.\n\nWhat's your name? Keep it simple or I'll simplify it for you.\n(sorry if your name isn't one word made up of english letters.\n This is American tech from 1980, after all.)\n\nusername: ");
     }
 
     return sock;

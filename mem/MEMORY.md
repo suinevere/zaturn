@@ -7,3 +7,4 @@
 - [Room art pipeline handoff (2026-08-07)](2026-08-07-room-art-pipeline-handoff.md) — PARTLY STALE: the `.env` bug is closed and sitting 1 shipped 120 backgrounds; the calibration warnings and the two owner decisions still stand.
 - [Room categorization handoff (2026-08-05)](2026-08-05-room-categorization-handoff.md) — STALE: that work merged to main; `blessed.inc` has since been re-blessed twice. Kept for the corpus-gate reasoning only.
 - [Merge order: fallback-mood before tiers](2026-08-05-merge-order-constraint.md) — DISCHARGED: both branches merged in the required order. Kept for the bug class, not as a live constraint.
+- [Multizork lobby and four seats](2026-08-27-multizork-lobby-and-four-seats-handoff.md) — branch multizork-lobby: named-room lobby plus mid-game seat claiming, twelve tasks reviewed, never built or run.

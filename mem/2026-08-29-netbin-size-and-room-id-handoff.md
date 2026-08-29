@@ -12,8 +12,8 @@ from two seconds to three — was already on the remote and is untouched.
 The design is in
 `docs/superpowers/specs/2026-08-29-netbin-server-room-id-design.md`, marked implemented with
 hardware verification outstanding. The commits carry the what. This file carries the numbers they
-were built on, the negative results worth not repeating, a bug found and deliberately not fixed,
-and the recipes that made it testable.
+were built on, the negative results worth not repeating, and a bug found and deliberately not
+fixed.
 
 Related: [[game-load-time-handoff]] for the load-time work these sit on top of,
 [[command-panel-and-dim-handoff]] and [[controls-and-panel-interface-handoff]] for the panel this
@@ -24,7 +24,7 @@ put on the netbin, [[multizork-prompt-rewording-handoff]] and
 
 Every client-side claim is link-time or host-test evidence. The panel's on-screen geometry, the
 rose changing as you walk, and the three-second dial gap have all never been seen. The server half
-*has* run — see the live-daemon recipe below — but only in a container on this machine.
+*has* run, under `tests/test_multizork_room_id.py`, but only in a container on this machine.
 
 ## The size trail, measured on clean rebuilds
 
@@ -73,36 +73,27 @@ representation has migration consequences that belong in their own change. The r
 routes around it by reading the two bytes big-endian directly, which is why it reports 180/81/75
 rather than 46080/20736/19200.
 
-## Recipes
+## Running the server side
 
-### Build and run multizorkd without a Linux box
+`tests/test_multizork_room_id.py` builds and runs its own daemon in Docker and tears it down, so
+there is no recipe to follow: run it. multizorkd is POSIX-only and mingw cannot compile it, which
+is why the test reaches for a container rather than a local build. The image caches, so only the
+first run is slow.
 
-It is POSIX-only, so mingw cannot compile it. Docker can, and Docker Desktop is installed:
-
-```
-docker run --rm -v "${PWD}\saturn:/src:ro" gcc:13 bash -c \
-  "apt-get update -qq && apt-get install -y -qq libsqlite3-dev && \
-   cd /tmp && cp /src/*.c /src/*.h . && gcc -O2 -Wall -o multizorkd multizorkd.c -lsqlite3"
-```
+That test also carries the two things that used to need writing down here — the four-input lobby
+walk, and the fact that reaching a game at all is a precondition rather than an assertion. It
+skips, never fails, on anything that is the environment's fault.
 
 Two pre-existing `-Wformat-truncation` warnings in `show_lobby`/`build_lobby_rows` are noise.
 
-To drive it, run the same container detached with `-p 2324:23`, copying `ZORK1.Z3` in beside the
-binary, then point the socket tests at `MULTIZORK_ADDR=127.0.0.1:2324`.
+**Do not point it at a daemon you did not start.** It plays the game, which writes rows into that
+daemon's sqlite database. The first version of it defaulted to `127.0.0.1:2323` and would have
+quietly littered the owner's own server with junk games every run.
 
-### The lobby walk, which is not obvious
-
-Reaching an in-game prompt takes four inputs, not two: username, then `1` (the `<new room>` row),
-then `n` (do not list it publicly), then `go`. Pressing enter at the room prompt only redraws the
-lobby — an early version of `tests/test_multizork_room_id.py` passed its no-frames check for that
-reason, having never reached a game. That is why the test now asserts it saw `West of House` or
-`Starting` before it checks anything.
-
-### Room ids worth reusing as fixtures
-
-Captured from a live daemon walking north, north, south from the start: **180** West of House,
-**81** North of House, **75** Forest Path. `tests/test_room_model_static.c` pins their exit tables
-and, more usefully, that the map joins up — 180's north is 81 and 81's west is 180.
+Room ids worth reusing as fixtures, captured from a live daemon walking north, north, south from
+the start: **180** West of House, **81** North of House, **75** Forest Path.
+`tests/test_room_model_static.c` pins their exit tables and, more usefully, that the map joins up
+— 180's north is 81 and 81's west is 180.
 
 ## Environment traps
 

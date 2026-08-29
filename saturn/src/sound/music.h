@@ -137,6 +137,21 @@ int music_track_from_mask(unsigned long mask, unsigned int r);
  ----------------------*/
 int  music_transition_active(void);
 void music_transition_flush(void);
+
+/*----------------------
+ | music_transition_skip_fade
+ | Description: Commits an armed mood change with no ramp at all -- for a caller
+ |   that knows there is nothing on screen for a ramp to move, which in practice
+ |   means the opening room before the game has been revealed. The picture is
+ |   still swapped and the track still started, in that order; only the fade is
+ |   skipped. A no-op if nothing is armed, or if a ramp is already running.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void music_transition_skip_fade(void);
 void music_refresh(void);   /* re-assert the current room's track (after a preview) */
 void music_seed(unsigned int s);            /* seed the track-pool RNG */
 int  music_category_track(int category);    /* random track from the category pool; 0 if none */

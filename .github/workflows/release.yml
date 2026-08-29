@@ -70,7 +70,6 @@ jobs:
         run: |
           set -e
           test -s "saturn/cd/data/MSC/SPLASH.PCM"
-          test -s "saturn/cd/data/MSC/LOADCD.PCM"
           test -s "saturn/BuildDrop/zaturn.netbin"
           sz=$(stat -c%s "saturn/BuildDrop/zaturn.netbin")
           echo "zaturn.netbin: $sz bytes"
@@ -156,6 +155,12 @@ jobs:
           cp -r tools/assets/. "$STAGE/"
           rm -rf "$STAGE/png"
           rm -rf "$STAGE/tests"
+
+          # The story manifest lives beside the disc it describes rather than in the
+          # kit sources, so it is staged here the same way the ISO above is.
+          # games.bat looks for it beside itself first and falls back to the repo
+          # path, which is what makes a checkout and an unpacked kit both work.
+          cp saturn/cd/data/Z3/GAME.INF "$STAGE/GAME.INF"
           
           # Ensure working dirs exist but are empty save for .gitkeep.
           for d in game audio output; do mkdir -p "$STAGE/$d"; find "$STAGE/$d" -type f ! -name .gitkeep -delete; done

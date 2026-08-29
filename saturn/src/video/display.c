@@ -534,9 +534,10 @@ int display_scene_image_count(int scene) {
  |   showing slot -- it only moves where the pool is pointing, so the caller
  |   decides whether and when that becomes visible.
  |
- |   Exists for display_warm_cache_scenes (title.cxx), which wants a random pick
- |   from each scene rather than the scene's own current rotor position when it
- |   warms the art cache at game start. Kept here rather than done by the caller
+ |   Written for the art warm that used to run at game start, which wanted a random
+ |   pick from each scene rather than the scene's own current rotor position. That
+ |   warm is gone and this currently has no caller. Kept here rather than done by
+ |   the caller
  |   because g_scene_rot is what display_scene_image reads, and a caller picking
  |   its own filename would leave the pool pointing somewhere else -- a later
  |   read of the same scene would then resolve to a different picture than the

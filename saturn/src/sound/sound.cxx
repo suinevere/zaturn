@@ -101,6 +101,14 @@ static SliceCache g_cache[NCACHE];
  |   LoadBytes: it loads the sector span covering [off, off+len) into a scratch
  |   buffer and copies out the sub-range. `len` is always small (<= the parser
  |   window), so two sectors suffice. Retries the flaky first-access read.
+ |
+ |   The name is checked against the directory table before that retry loop is
+ |   entered, because a name that is not on the disc is not a flaky read and will
+ |   not become one: without the check, a game with no .BLB beside it -- which is
+ |   every game on the disc but one -- spent the full 60 attempts at 8 fields each
+ |   here, 480 fields of the load, waiting for a file that was never there.
+ |   GFS_NameToId reads the directory table already in RAM, so the check itself
+ |   costs no drive access.
  | Author: suinevere
  | Dependencies: SRL (Cd::File)
  | Globals: g_blb, g_secbuf
@@ -114,6 +122,7 @@ static int cd_reader(unsigned int off, unsigned int len, unsigned char* out) {
     unsigned int secoff = off % CD_SECTOR;
     unsigned int rbytes = ((secoff + len + CD_SECTOR - 1) / CD_SECTOR) * CD_SECTOR;
     if (rbytes > sizeof g_secbuf) return 0;
+    if (GFS_NameToId((int8_t *) g_blb) < 0) return 0;
     for (int attempt = 0; attempt < 60; attempt++) {
         SRL::Cd::File f(g_blb);
         int32_t got = f.LoadBytes((size_t) sec, (int32_t) rbytes, g_secbuf);
@@ -132,7 +141,9 @@ static int cd_reader(unsigned int off, unsigned int len, unsigned char* out) {
  |   same sector-addressed load as cd_reader (Seek() is broken on-device): it reads
  |   the sector span covering [off, off+len) straight into the buffer, shifts the
  |   sample down to the buffer start, then pads to slPCMOn's 0x900 minimum with
- |   silence. Retries the flaky first-access read.
+ |   silence. Retries the flaky first-access read, behind the same absent-name
+ |   check cd_reader carries: a .BLB that goes missing mid-session would otherwise
+ |   stall play for eight seconds per sample asked for.
  | Author: suinevere
  | Dependencies: SRL (Cd::File, Memory)
  | Globals: g_blb
@@ -140,6 +151,7 @@ static int cd_reader(unsigned int off, unsigned int len, unsigned char* out) {
  | Returns: the allocated buffer (caller/cache owns it), or nullptr on failure
  ----------------------*/
 static int8_t* load_slice(unsigned int off, unsigned int len) {
+    if (GFS_NameToId((int8_t *) g_blb) < 0) return nullptr;
     uint32_t play   = len < 0x900 ? 0x900 : len;
     unsigned int sec    = off / CD_SECTOR;
     unsigned int secoff = off % CD_SECTOR;

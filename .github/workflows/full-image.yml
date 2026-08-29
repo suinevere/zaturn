@@ -41,7 +41,6 @@ jobs:
           set -e
           bash tools/assets/pvms.bat
           test -s "saturn/cd/data/MSC/SPLASH.PCM"
-          test -s "saturn/cd/data/MSC/LOADCD.PCM"
 
       - name: Build base Saturn disc
         working-directory: saturn
@@ -68,14 +67,18 @@ jobs:
           set -e
           test -s Z3/GAME.INF
           python3 - <<'PY'
-          import glob, struct
+          import glob, os, struct
           blob = open("Z3/GAME.INF", "rb").read()
           assert blob[:4] == b"ZGI1", "Z3/GAME.INF is not a story manifest"
           count, size = struct.unpack(">HH", blob[4:8])
-          games = len({p.lower() for p in glob.glob("Z3/*.Z3") + glob.glob("Z3/*.z3")})
-          print(f"{count} records of {size} bytes for {games} stories")
           assert len(blob) == 16 + count * size, "GAME.INF is the wrong length for its header"
-          assert count == games, "GAME.INF misses a game -- the menu would read that header at boot"
+          named = {blob[16 + i*size : 16 + i*size + 16].split(b"\0")[0].decode().upper()
+                   for i in range(count)}
+          present = {os.path.basename(p).upper()
+                     for p in glob.glob("Z3/*.Z3") + glob.glob("Z3/*.z3")}
+          print(f"{count} records of {size} bytes; {len(present)} stories on the disc")
+          missing = sorted(present - named)
+          assert not missing, f"GAME.INF does not describe {missing} -- the menu would read those headers at boot"
           PY
 
       - name: Download audio + split + merge

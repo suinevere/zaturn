@@ -37,10 +37,19 @@
 :; echo "Downloading ADVENT.Z3 into Z3..."
 :; curl -L -o "Z3/ADVENT.Z3" "$ADVENT_URL"
 :;
-:; echo "Writing the Z3/GAME.INF story manifest..."
-:; PY=python3; command -v python3 >/dev/null 2>&1 || PY=python
-:; if ! "$PY" ../gametitles/gen_game_info.py --z3 Z3; then
-:;     echo "WARNING: GAME.INF not written -- the Saturn will read every story header at boot"
+:; # The story manifest is copied, never generated here: its contents follow from
+:; # VERSIONS.ndjson, which is fixed, so there is nothing to compute on your
+:; # machine and no interpreter to install to compute it with. Beside this script
+:; # in the release kit, where release.yml stages it; up beside the disc it
+:; # describes in a repo checkout. tools/gametitles/gen_game_info.py rebuilds it
+:; # when VERSIONS.ndjson changes, and that is the only place it is made.
+:; echo "Staging the GAME.INF story manifest..."
+:; MANIFEST="GAME.INF"
+:; [ -f "$MANIFEST" ] || MANIFEST="../../saturn/cd/data/Z3/GAME.INF"
+:; if [ -f "$MANIFEST" ]; then
+:;     cp "$MANIFEST" "Z3/GAME.INF"
+:; else
+:;     echo "WARNING: GAME.INF missing -- the Saturn will read every story header at boot" >&2
 :; fi
 :;
 :; echo "Complete."
@@ -89,11 +98,18 @@ curl -L -o "Z3\LURKING.BLB" "%LURKING_URL%"
 ECHO Downloading ADVENT.Z3 into Z3...
 curl -L -o "Z3\ADVENT.Z3" "%ADVENT_URL%"
 
-ECHO Writing the Z3\GAME.INF story manifest...
-SET "PY=..\.venv\Scripts\python.exe"
-IF NOT EXIST "%PY%" SET "PY=python"
-"%PY%" "..\gametitles\gen_game_info.py" --z3 "Z3"
-IF ERRORLEVEL 1 ECHO WARNING: GAME.INF not written -- the Saturn will read every story header at boot
+REM The story manifest is copied, never generated here: its contents follow from
+REM VERSIONS.ndjson, which is fixed, so there is nothing to compute on your machine
+REM and no interpreter to install to compute it with. Beside this script in the
+REM release kit; up beside the disc it describes in a repo checkout.
+ECHO Staging the GAME.INF story manifest...
+SET "MANIFEST=GAME.INF"
+IF NOT EXIST "%MANIFEST%" SET "MANIFEST=..\..\saturn\cd\data\Z3\GAME.INF"
+IF EXIST "%MANIFEST%" (
+    COPY /Y "%MANIFEST%" "Z3\GAME.INF" >NUL
+) ELSE (
+    ECHO WARNING: GAME.INF missing -- the Saturn will read every story header at boot
+)
 
 ECHO Complete.
 

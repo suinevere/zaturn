@@ -308,7 +308,8 @@ static void submit_command(KeyboardState &k, const char *cmd) {
  |   first render_console after this is what finally puts the new text on it.
  |
  |   Costs the player the fade before they can type. That is the ask, and
- |   MUSIC_FADE_FRAMES in main.cxx is the number to cut if it reads sluggish.
+ |   MUSIC_FADE_FRAMES in main.cxx is the number to cut if it reads sluggish --
+ |   except on the opening room, which skips the ramp entirely (see below).
  | Author: suinevere
  | Dependencies: music.h, SRL
  | Globals: N/A
@@ -317,6 +318,14 @@ static void submit_command(KeyboardState &k, const char *cmd) {
  ----------------------*/
 static void run_room_transition(void) {
     if (!music_transition_active()) return;
+
+    // The opening room is a special case: main() holds the screen black until the
+    // first prompt reveals it, so the forty fields this would otherwise spend are
+    // spent fading black into black. Commit it outright instead -- the picture is
+    // still swapped and the track still started, so what the reveal uncovers is
+    // the same screen, just arrived at without the wait.
+    if (g_intro_reveal) { music_transition_skip_fade(); return; }
+
     music_transition_flush();
     int guard = 0;
     while (music_transition_active() && guard < 600) {

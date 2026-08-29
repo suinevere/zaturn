@@ -103,8 +103,8 @@ static int32_t boot_music_span_frames(uint32_t bytes) {
  |   shapes the output level rather than the sample, so no part is pre-ducked and
  |   none has to be skipped.
  |
- |   The stop and the restart are deliberately a frame apart, matching
- |   loading_music_vblank. Doing both in one pass sounds wrong: StopSound does not
+ |   The stop and the restart are deliberately a frame apart. Doing both in one
+ |   pass sounds wrong: StopSound does not
  |   flush what the driver has already staged, so the fresh Play bleeds the tail of
  |   the pass that just ended over the head of the next one. Spending one field
  |   with the channel stopped is what makes the seam a seam rather than an overlap.
@@ -294,14 +294,13 @@ extern "C" void boot_music_set_level(int level) {
  |   It reaches all the way to the loading screen because nothing in between clears
  |   it. The splash runs five seconds against a 16.6-second sample (two if the
  |   player skips), so this cut lands with some eleven seconds still staged, and the
- |   only thing that plays between here and LOADCD.PCM is CD-DA -- separate
- |   hardware, which never touches a PCM stream. The stale buffer survives the whole
- |   title menu intact.
+ |   only thing that plays after it is CD-DA -- separate hardware, which never
+ |   touches a PCM stream. The stale buffer survives the whole title menu intact.
  |
  |   So the buffer is emptied the only way this codebase can reach it: by zeroing
  |   the sample the driver is already streaming from and giving it frames to carry
  |   those zeros through. No new allocation, and no second slPCMOn to race the
- |   still-pending slPCMOff (see the same-field note in loading_music.cxx). The
+ |   still-pending slPCMOff. The
  |   master volume stays where the fade-out left it throughout, and is restored
  |   afterwards, so the scrub itself is inaudible -- the reverse of the old order,
  |   which restored full volume while the stream was still live and the pending

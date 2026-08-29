@@ -125,8 +125,58 @@ def test_a_full_disc_stays_inside_one_sector():
     assert g.HDR_SIZE + g.MAX_GAMES * g.REC_SIZE <= 2048
 
 
-def test_the_shipped_manifest_matches_the_shipped_games():
+def test_the_staged_manifest_covers_every_staged_game():
+    """Every story in the staging folder has a record.
+
+    Coverage, not equality. The manifest describes the full injected set, while
+    the folder holds only the stories the repo ships plus whatever a developer
+    has dropped in to build a local disc -- so it names more than is there, and
+    that is harmless: game_catalog scans the directory for the list and only
+    consults the manifest for names it already found, so a record for an absent
+    file is never looked up. A story with no record is the failure worth
+    catching, because that one silently costs a header read at boot.
+    """
     z3 = REPO / "saturn" / "cd" / "data" / "Z3"
     blob = (z3 / "GAME.INF").read_bytes()
-    on_disc = sorted(p.name.upper() for p in z3.glob("*.Z3"))
-    assert [name for name, _, _ in records(blob)] == on_disc
+    present = {p.name.upper() for p in z3.glob("*.Z3")}
+    named = {name for name, _, _ in records(blob)}
+    assert named, "the staged manifest describes no games at all"
+    assert present <= named, f"manifest misses staged games: {sorted(present - named)}"
+
+
+def test_the_manifest_matches_versions_ndjson():
+    """The one committed manifest is what games.bat copies onto the disc.
+
+    It is committed rather than generated during games.bat because the release
+    kit is shell, curl and two bundled binaries -- no interpreter -- and its
+    contents follow entirely from VERSIONS.ndjson. Which makes it exactly the
+    kind of generated-and-committed file that goes stale silently, so:
+    regenerate and compare.
+    """
+    versions = REPO / "tools" / "assets" / "VERSIONS.ndjson"
+    shipped = REPO / "saturn" / "cd" / "data" / "Z3" / "GAME.INF"
+    table = g.load_titles(TITLES)
+    rebuilt = g.collect_from_versions(str(versions), table)
+    out = shipped.parent / "GAME.INF.check"
+    try:
+        g.emit(rebuilt, out)
+        assert out.read_bytes() == shipped.read_bytes(), (
+            "tools/assets/GAME.INF is stale against VERSIONS.ndjson -- rerun "
+            "gen_game_info.py --versions")
+    finally:
+        if out.exists():
+            out.unlink()
+
+
+def test_the_manifest_names_every_downloaded_story():
+    """Every .Z3 games.bat will place in Z3 has a record."""
+    import json
+    versions = REPO / "tools" / "assets" / "VERSIONS.ndjson"
+    wanted = set()
+    for line in versions.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            name = str(json.loads(line)["title"]).upper()
+            if name.endswith(".Z3"):
+                wanted.add(name)
+    blob = (REPO / "saturn" / "cd" / "data" / "Z3" / "GAME.INF").read_bytes()
+    assert {name for name, _, _ in records(blob)} == wanted

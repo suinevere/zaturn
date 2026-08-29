@@ -16,12 +16,26 @@ The record for a story the table does not know carries the filename as its
 label and category Other -- exactly what the runtime would have settled on after
 reading the header -- so an unknown game costs no drive access either.
 
+There are two ways in. --z3 scans a folder of story files and reads each
+header, which is what a locally staged disc wants. --versions reads
+tools/assets/VERSIONS.ndjson instead, whose "version"/"release" fields are the
+same header release and serial, and whose "title" is the filename the injection
+step writes -- so the manifest for the downloaded set can be built with no story
+files present at all, and committed once, beside the disc it describes.
+
+That committed file is the only one there is. games.bat copies it into Z3
+rather than generating it, because the release kit is bash/cmd, curl and two
+bundled binaries -- adding a Python dependency to a disc-patching script users
+run on their own machines is not a trade worth making for a file whose contents
+are known in advance. release.yml stages it into the kit the same way it stages
+the ISO.
+
 Usage:
-  python gen_game_info.py --z3 ../../saturn/cd/data/Z3
-  python gen_game_info.py --z3 Z3 --titles ../../saturn/src/menu/game_titles.c
+  python gen_game_info.py --versions tools/assets/VERSIONS.ndjson
+  python gen_game_info.py --z3 some/other/Z3
 """
 
-import argparse, glob, os, re, struct, sys
+import argparse, glob, json, os, re, struct, sys
 
 # Must match game_catalog.cxx: the magic it checks, the record size it insists
 # on, and MENU_ROW_TEXT_MAX (31) plus its NUL. A record is
@@ -82,6 +96,31 @@ def collect(z3dir, titles):
     return records
 
 
+def collect_from_versions(path, titles):
+    """One record per .Z3 line of VERSIONS.ndjson, without touching a story file.
+
+    The fields are the same key game_titles.c is written against: "version" is
+    the header release word and "release" the six-character serial.
+    """
+    records = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            name = str(row["title"]).upper()
+            if not name.endswith(".Z3"):
+                continue
+            if len(name) >= NAME_MAX:
+                print(f"  skipped (name too long for the menu): {name}")
+                continue
+            label, cat = titles.get((int(row["version"]), str(row["release"])),
+                                    (name, GAME_CAT_OTHER))
+            records.append((name, label[:LABEL_MAX - 1], cat))
+    return sorted(records, key=lambda r: r[0])
+
+
 def emit(records, out):
     blob = MAGIC + struct.pack(">HH", len(records), REC_SIZE) + bytes(HDR_SIZE - 8)
     for name, label, cat in records:
@@ -95,33 +134,44 @@ def emit(records, out):
 
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
-    default_titles = os.path.join(here, "..", "..", "saturn", "src", "menu", "game_titles.c")
+    repo = os.path.join(here, "..", "..")
+    default_titles = os.path.join(repo, "saturn", "src", "menu", "game_titles.c")
+    default_out = os.path.join(repo, "saturn", "cd", "data", "Z3", "GAME.INF")
 
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--z3", required=True, help="folder of .Z3 story files bound for the disc")
+    ap.add_argument("--z3", help="folder of .Z3 story files bound for the disc")
+    ap.add_argument("--versions", help="VERSIONS.ndjson to build the manifest from instead")
     ap.add_argument("--titles", default=default_titles, help="generated game_titles.c to read titles from")
-    ap.add_argument("--out", help="output file (default: GAME.INF inside --z3)")
+    ap.add_argument("--out", help="output file (default: the staged disc's Z3/GAME.INF, "
+                                  "or GAME.INF inside --z3 when scanning one)")
     args = ap.parse_args()
 
-    if not os.path.isdir(args.z3):
+    if bool(args.z3) == bool(args.versions):
+        print("ERROR: pass exactly one of --z3 or --versions", file=sys.stderr)
+        return 1
+    if args.z3 and not os.path.isdir(args.z3):
         print(f"ERROR: no such folder: {args.z3}", file=sys.stderr)
+        return 1
+    if args.versions and not os.path.isfile(args.versions):
+        print(f"ERROR: no such file: {args.versions}", file=sys.stderr)
         return 1
     if not os.path.isfile(args.titles):
         print(f"ERROR: no title table: {args.titles}", file=sys.stderr)
         return 1
-
     titles = load_titles(args.titles)
-    records = collect(args.z3, titles)
+    records = (collect(args.z3, titles) if args.z3
+               else collect_from_versions(args.versions, titles))
     if not records:
-        print(f"ERROR: no .Z3 files in {args.z3}", file=sys.stderr)
+        print(f"ERROR: no games found in {args.z3 or args.versions}", file=sys.stderr)
         return 1
     if len(records) > MAX_GAMES:
         print(f"ERROR: {len(records)} games exceeds MAX_GAMES ({MAX_GAMES}); "
               f"raise it in game_catalog.cxx and here together", file=sys.stderr)
         return 1
 
-    out = args.out or os.path.join(args.z3, "GAME.INF")
+    out = args.out or (os.path.join(args.z3, "GAME.INF") if args.z3 else default_out)
+
     size = emit(records, out)
     named = sum(1 for _, label, _ in records if not label.endswith(".Z3"))
     print(f"{len(records)} games ({named} named, {len(records) - named} by filename), "

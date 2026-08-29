@@ -294,8 +294,8 @@ struct TgaImage {
  |
  |   The other LWRAM residents are why the slot count is what it is, and none of them
  |   is permanent. SPLASH.PCM (~453 KB) is held across the splash and the title
- |   screen and freed before the mode menu. LOADCD.PCM (~172 KB) is held only across
- |   a load. The local game's typeahead trie is several hundred KB and lives for the
+ |   screen and freed before the mode menu. The local game's typeahead trie is
+ |   several hundred KB and lives for the
  |   session, released by soft_reset_to_title. The save/restore scratch is ~47 KB
  |   while a save is written. The online trie is larger than any of them, but it is
  |   only built once the player actually dials (see ensure_online_typeahead), so it
@@ -303,15 +303,15 @@ struct TgaImage {
  |   below came from.
  |
  |   Only one reserve is needed, because the cache is now filled at a moment when
- |   nothing else is still owed: display_warm_cache_scenes runs at game start with
- |   both cues freed AND the trie already built (main.cxx builds it first, precisely
- |   so this reading is honest). TGA_CACHE_FLOOR is therefore just the save scratch
+ |   nothing else is still owed. TGA_CACHE_FLOOR is therefore just the save scratch
  |   plus a margin, and the free-space check spends everything else on pictures.
  |
- |   The splash's own fill is the poor relation and is capped separately: the jingle
- |   is still resident there and the trie does not exist yet, so it takes a couple of
- |   slots at most and its real job is the title's own house. Anything it misses the
- |   game-start warm picks up.
+ |   Nothing pre-fills this at game start any more: a picture the cache does not
+ |   hold is read at the bottom of a mood fade, where the volume is at zero and the
+ |   screen has gone with it, so the miss costs frames nobody can perceive. The
+ |   splash's own fill is capped separately -- the jingle is still resident there and
+ |   the trie does not exist yet, so it takes a couple of slots at most and its real
+ |   job is the title's own house.
  | Author: suinevere
  ----------------------*/
 #define LWRAM_TOTAL        (1024u * 1024u)
@@ -764,8 +764,8 @@ const char *title_art_random(unsigned int seed) {
  |   below both call it, with the jingle resident and before any game's
  |   typeahead trie exists, so the free space it can see is not the free space
  |   that will be left; filling the cache for actual gameplay is
- |   display_warm_cache_scenes's job, at game start, where the reading is
- |   honest. A no-op at TITLE_ART_N 0.
+ |   left to the rooms themselves, which read what they need when they need it.
+ |   A no-op at TITLE_ART_N 0.
  | Author: suinevere
  | Dependencies: title_art_file, SRL
  | Globals: g_cache_count
@@ -817,64 +817,6 @@ void title_bg_cache_release(void) {
         g_cache[i].LastUse = 0;
     }
     g_cache_count = 0;
-}
-
-/*----------------------
- | display_warm_cache_scenes
- | Description: Fills the art cache to its budget at game start, one randomly chosen
- |   picture from each of the CURRENT GAME's scenes, the scenes themselves taken in
- |   a random order. Runs where display_set_game has already selected the running
- |   story, unlike title_preload_art above, which runs at boot with no game chosen.
- |
- |   This is where the cache is meant to be filled. Every other claimant on Low Work
- |   RAM has either taken its space or given it back by the time this runs: the
- |   jingle was freed at the title, LOADCD.PCM at the end of the load, and main.cxx
- |   builds the typeahead trie immediately before calling this so that it, too, is
- |   already accounted for. The free-space figure is therefore honest and every slot
- |   the zone can actually spare goes to pictures.
- |
- |   Random, and random per scene rather than a random pick over all art, because
- |   the cache is only useful when what is in it is what gets asked for. Shuffling
- |   the scene first means the picture cached IS the one that scene will show for
- |   the rest of the session -- a random picture from the whole disc would be a cache
- |   entry nothing ever requests.
- |
- |   Reads the disc once per slot it takes. It must therefore be called with the loading
- |   screen still up and CD-DA not yet started -- reading is inaudible there, and it
- |   is the last chance before music_start puts the head to work.
- | Author: suinevere
- | Dependencies: display.h (display_shuffle_scene, display_scene_image),
- |   scene/scene_map.h (SCENE_N), SRL
- | Globals: g_cache_count
- | Params: seed -- stirs both the scene order and the pick within each
- | Returns: N/A
- ----------------------*/
-void display_warm_cache_scenes(unsigned int seed) {
-    int order[SCENE_N];
-    for (int i = 0; i < SCENE_N; i++) order[i] = i;
-
-    unsigned int r = seed | 1u;
-    for (int i = SCENE_N - 1; i > 0; i--) {
-        r = r * 1103515245u + 12345u;
-        int j = (int) ((r >> 16) % (unsigned int) (i + 1));
-        int t = order[i]; order[i] = order[j]; order[j] = t;
-    }
-
-    for (int i = 0; i < SCENE_N; i++) {
-        if (g_cache_count >= TGA_CACHE_SLOTS) break;
-        if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
-
-        r = r * 1103515245u + 12345u;
-        display_shuffle_scene(order[i], r);
-
-        const char *file = display_scene_image(order[i]);
-        if (file == nullptr) continue;
-        if (tga_cache_find(file) != nullptr) continue;
-        const int before = g_cache_count;
-        if (tga_cache_admit(file) == nullptr) break;
-        if (g_cache_count == before) break;   // evicting rather than growing
-    }
-    bitmap_read_end();
 }
 
 /*----------------------

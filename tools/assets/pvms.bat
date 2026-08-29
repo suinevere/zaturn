@@ -5,17 +5,14 @@
 :; # Load shared processing functions (resolve_music_source / convert_boot_music)
 :; . lib/pvms.sh
 :;
-:; # Parse Config. Each PCM cue has three keys: a local path, a URL, and a cache
-:; # path this script owns. SUINEVERE_MUSIC/_URL is the splash jingle
-:; # (-> SPLASH.PCM) and LOADING_MUSIC/_URL the post-selection loading cue
-:; # (-> LOADCD.PCM), all paths relative to this directory. Any format sox can
-:; # read will do; the conversion forces the raw 8-bit mono 22050 Hz the playback
-:; # code expects either way. resolve_music_source documents the precedence.
+:; # Parse Config. The cue has three keys: a local path, a URL, and a cache path
+:; # this script owns. SUINEVERE_MUSIC/_URL is the splash jingle (-> SPLASH.PCM),
+:; # paths relative to this directory. Any format sox can read will do; the
+:; # conversion forces the raw 8-bit mono 22050 Hz the playback code expects either
+:; # way. resolve_music_source documents the precedence.
 :; #
-:; # There is deliberately no local-path default for the splash jingle: an empty
-:; # SUINEVERE_MUSIC has to mean "use the URL", which a fallback filename would
-:; # quietly override. LOADING_MUSIC keeps its default because music/loadCD.ogg is
-:; # tracked -- it is the one audio source this repo ships, and its URL is empty.
+:; # There is deliberately no local-path default: an empty SUINEVERE_MUSIC has to
+:; # mean "use the URL", which a fallback filename would quietly override.
 :; #
 :; # `|| true` is not decoration. This block runs under `set -euo pipefail`, so a
 :; # cfg lookup that misses exits 1, pipefail propagates it out of the pipeline,
@@ -25,23 +22,17 @@
 :; cfg() { grep -m1 "^$1=" CONFIG.ME 2>/dev/null | cut -d'=' -f2- | tr -d '\r'; }
 :; SUINEVERE_MUSIC=$(cfg SUINEVERE_MUSIC || true)
 :; SUINEVERE_MUSIC_URL=$(cfg SUINEVERE_MUSIC_URL || true)
-:; LOADING_MUSIC=$(cfg LOADING_MUSIC || true); LOADING_MUSIC=${LOADING_MUSIC:-music/loadCD.ogg}
-:; LOADING_MUSIC_URL=$(cfg LOADING_MUSIC_URL || true)
 :;
-:; # Where a fetched cue is cached. Fixed names rather than ones derived from the
+:; # Where a fetched cue is cached. A fixed name rather than one derived from the
 :; # URL: pulling the basename out of an archive.org extract-from-zip URL means
 :; # unpicking %2F escapes, which is a nuisance in sh and genuinely awful in cmd,
 :; # and the two blocks have to agree exactly or they cache to different files.
-:; # Neither may collide with a tracked file -- LOADING_CACHE is deliberately not
-:; # music/loadCD.ogg, so a URL fetch can never overwrite the shipped source.
-:; # Point the matching *_MUSIC key at your own file for a different name.
+:; # Point SUINEVERE_MUSIC at your own file for a different name.
 :; SUINEVERE_CACHE="music/caltheme.wav"
-:; LOADING_CACHE="music/loadcd-fetched.ogg"
 :;
 :; BOOT_SRC=$(resolve_music_source "$SUINEVERE_MUSIC" "$SUINEVERE_MUSIC_URL" "$SUINEVERE_CACHE")
-:; LOAD_SRC=$(resolve_music_source "$LOADING_MUSIC" "$LOADING_MUSIC_URL" "$LOADING_CACHE")
 :;
-:; # Convert the two PCM cues. Run as part of the compile process
+:; # Convert the PCM cue. Run as part of the compile process
 :; # (saturn/compile.bat) so the committed PCMs always match their sources,
 :; # independent of the disc-audio download pipeline in music.bat.
 :; # Only reach for SaturnRingLib's bundled sox on a Windows shell (Git Bash/MSYS).
@@ -54,11 +45,6 @@
 :; else
 :;   echo "Warning: no splash jingle source (SUINEVERE_MUSIC / SUINEVERE_MUSIC_URL) -- SPLASH.PCM not rebuilt" >&2
 :; fi
-:; if [ -n "$LOAD_SRC" ]; then
-:;   convert_boot_music "$LOAD_SRC" "../../saturn/cd/data/MSC" "LOADCD.PCM"
-:; else
-:;   echo "Warning: no loading cue source (LOADING_MUSIC / LOADING_MUSIC_URL) -- LOADCD.PCM not rebuilt" >&2
-:; fi
 :; exit
 
 @ECHO OFF
@@ -66,14 +52,13 @@ REM === Windows Execution Block ===
 SETLOCAL
 CD /D "%~dp0"
 
-REM Parse Config. Each PCM cue has three keys: a local path, a URL, and a cache
-REM path this script owns. SUINEVERE_MUSIC/_URL is the splash jingle
-REM (-> SPLASH.PCM) and LOADING_MUSIC/_URL the post-selection loading cue
-REM (-> LOADCD.PCM), all paths relative to this directory. Any format sox can
-REM read will do; the conversion forces the raw 8-bit mono 22050 Hz the playback
-REM code expects either way. See the :resolve subroutine for the precedence.
+REM Parse Config. The cue has three keys: a local path, a URL, and a cache path
+REM this script owns. SUINEVERE_MUSIC/_URL is the splash jingle (-> SPLASH.PCM),
+REM paths relative to this directory. Any format sox can read will do; the
+REM conversion forces the raw 8-bit mono 22050 Hz the playback code expects either
+REM way. See the :resolve subroutine for the precedence.
 REM
-REM There is deliberately no local-path default for the splash jingle -- an empty
+REM There is deliberately no local-path default -- an empty
 REM SUINEVERE_MUSIC has to mean "use the URL", which a fallback filename would
 REM quietly override. Note SET "VAR=" leaves VAR *undefined* in cmd, so an empty
 REM config value and a missing key are the same state here, which is what we want.
@@ -83,23 +68,16 @@ REM more of them; usebackq is what allows the quoted filename.
 FOR /F "usebackq tokens=1,* delims==" %%A IN ("CONFIG.ME") DO (
     IF "%%A"=="SUINEVERE_MUSIC"     SET "SUINEVERE_MUSIC=%%B"
     IF "%%A"=="SUINEVERE_MUSIC_URL" SET "SUINEVERE_MUSIC_URL=%%B"
-    IF "%%A"=="LOADING_MUSIC"       SET "LOADING_MUSIC=%%B"
-    IF "%%A"=="LOADING_MUSIC_URL"   SET "LOADING_MUSIC_URL=%%B"
 )
 
-IF NOT DEFINED LOADING_MUSIC SET "LOADING_MUSIC=music/loadCD.ogg"
-
-REM Where a fetched cue is cached. Must match the sh block's *_CACHE values
+REM Where a fetched cue is cached. Must match the sh block's SUINEVERE_CACHE
 REM exactly, or the two platforms cache to different files; see the note there
-REM for why they are fixed rather than derived from the URL. Neither may collide
-REM with a tracked file -- LOADING_CACHE is deliberately not music\loadCD.ogg.
+REM for why it is fixed rather than derived from the URL.
 SET "SUINEVERE_CACHE=music\caltheme.wav"
-SET "LOADING_CACHE=music\loadcd-fetched.ogg"
 
 CALL :resolve BOOT_SRC "%SUINEVERE_MUSIC%" "%SUINEVERE_MUSIC_URL%" "%SUINEVERE_CACHE%"
-CALL :resolve LOAD_SRC "%LOADING_MUSIC%"   "%LOADING_MUSIC_URL%"   "%LOADING_CACHE%"
 
-REM Convert the two PCM cues. Run as part of the compile process
+REM Convert the PCM cue. Run as part of the compile process
 REM (saturn\compile.bat) so the committed PCMs always match their sources,
 REM independent of the disc-audio download pipeline in music.bat.
 SET "SRL_SOX=%~dp0..\..\SaturnRingLib\Compiler\msys2\usr\bin\sox.exe"
@@ -109,12 +87,6 @@ IF DEFINED BOOT_SRC (
     powershell -NoProfile -ExecutionPolicy Bypass -File ".\lib\pvms.ps1" -Sox "%SRL_SOX%" -InFile "%~dp0%BOOT_SRC%" -OutDir "%PCM_OUT%" -OutName "SPLASH.PCM"
 ) ELSE (
     ECHO Warning: no splash jingle source ^(SUINEVERE_MUSIC / SUINEVERE_MUSIC_URL^) -- SPLASH.PCM not rebuilt
-)
-
-IF DEFINED LOAD_SRC (
-    powershell -NoProfile -ExecutionPolicy Bypass -File ".\lib\pvms.ps1" -Sox "%SRL_SOX%" -InFile "%~dp0%LOAD_SRC%" -OutDir "%PCM_OUT%" -OutName "LOADCD.PCM"
-) ELSE (
-    ECHO Warning: no loading cue source ^(LOADING_MUSIC / LOADING_MUSIC_URL^) -- LOADCD.PCM not rebuilt
 )
 
 ENDLOCAL

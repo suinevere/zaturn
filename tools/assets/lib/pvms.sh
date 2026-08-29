@@ -37,7 +37,7 @@ resolve_music_source() {
 
 # convert_boot_music <src_audio> <out_dir> <out_name>
 # src_audio is whatever pvms.bat read out of CONFIG.ME (SUINEVERE_MUSIC or
-# LOADING_MUSIC) -- any format sox can read, .wav and .ogg both in use today.
+# SUINEVERE_MUSIC) -- any format sox can read, .wav and .ogg both in use today.
 # Converts the boot splash jingle to the raw 8-bit signed mono PCM format
 # saturn/src/sound/boot_music.cxx loads whole into Low Work RAM and plays
 # from memory during the Suinevere splash -- not CD-DA, so it never fights

@@ -126,7 +126,7 @@ void title_bg_fade_reset(void);
  | title_bg_fade_engage / title_bg_fade_level
  | Description: The screen-wide fade's two halves, for the fades that live in
  |   other files and run their own ramps -- the boot splash (splash.cxx), the
- |   menu ramps (menu.cxx) and the loading screen (loading_screen.cxx). engage
+ |   menu ramps (menu.cxx), including the one the story is read under. engage
  |   claims NBG3 on channel A and declares that a screen-wide fade owns the
  |   picture's brightness; level writes one step of that fade to both layers,
  |   composing the held wallpaper dim into the picture's half. Every engage must
@@ -259,23 +259,6 @@ const char *title_art_random(unsigned int seed);
  | Author: suinevere
  ----------------------*/
 void title_preload_art(int max_slots);
-
-/*----------------------
- | display_warm_cache_scenes
- | Description: Fills the background-art cache to its budget with one randomly
- |   chosen picture per scene of the CURRENT GAME, scenes visited in a random
- |   order, stopping when Low Work RAM will not spare another slot. Runs at
- |   GAME START, after display_set_game has selected the running story --
- |   unlike title_preload_art, which runs at boot with no game chosen yet.
- |
- |   Call at game start, with the loading screen still up and before music_start:
- |   it reads the disc up to nine times, and that is the last window where reading
- |   is inaudible. This is the fill that matters -- the splash's is a token one taken
- |   around the still-resident jingle. Shuffles each scene as it goes, so the
- |   picture cached is the one that scene will actually show.
- | Author: suinevere
- ----------------------*/
-void display_warm_cache_scenes(unsigned int seed);
 
 /*----------------------
  | title_bg_cache_release

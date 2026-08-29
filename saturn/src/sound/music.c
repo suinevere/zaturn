@@ -549,6 +549,31 @@ int music_transition_active(void) {
 }
 
 /*----------------------
+ | music_transition_skip_fade
+ | Description: Commits an armed mood change outright, with no ramp either side.
+ |   For the one moment a ramp has nothing to do: the opening room, where the
+ |   screen is still held black for the reveal, so the twenty fields down and the
+ |   twenty back up would be spent fading black into black.
+ |
+ |   Commits through commit_pending, the same call the bottom of a fade makes, so
+ |   the picture is notified before the track starts exactly as it always is and
+ |   the room's own background is up before anything is revealed. Refuses if a
+ |   ramp is already in flight, because that ramp owns g_fade_i and finishing it
+ |   from underneath would leave the counter describing a phase that has gone.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pending_cat, g_pending_frames, g_phase
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void music_transition_skip_fade(void) {
+    if (g_phase != MP_IDLE) return;
+    if (g_pending_cat < 0) return;
+    g_pending_frames = 0;
+    commit_pending();
+}
+
+/*----------------------
  | music_transition_flush
  | Description: Drops the remaining settle so an armed mood change starts fading on
  |   the next tick instead of waiting out MUSIC_DEBOUNCE_FRAMES.

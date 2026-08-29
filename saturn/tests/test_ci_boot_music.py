@@ -4,7 +4,7 @@ music PCM.
 
 On Windows the developer entry point is saturn/compile.bat, which calls
 tools/assets/pvms.bat (compile.bat:31, and compile.bat:1 for the POSIX
-polyglot line) before make, so SPLASH.PCM/LOADCD.PCM are regenerated from
+polyglot line) before make, so SPLASH.PCM is regenerated from
 the committed .ogg sources on every build. CI does NOT go through
 compile.bat -- it calls the SDK's tools/scripts/make.sh directly -- so
 pvms.bat never ran there. saturn/.gitignore:16 ignores cd/data/MSC/*.PCM,
@@ -57,7 +57,7 @@ def main():
         pvms = re.search(r"(?m)^.*\bbash\s+\S*pvms\.bat\b.*$", text)
         if not pvms:
             print(f"{name}: never invokes tools/assets/pvms.bat -- "
-                  f"SPLASH.PCM/LOADCD.PCM are gitignored, so the disc has no "
+                  f"SPLASH.PCM is gitignored, so the disc has no "
                   f"boot music", file=sys.stderr)
             fails += 1
             continue

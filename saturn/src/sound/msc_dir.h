@@ -1,10 +1,10 @@
 /*----------------------
  | msc_dir.h
- | Description: Shared CD-directory-entry helper for the /MSC folder, where
- |   both PCM cues in this codebase (boot_music.cxx's SPLASH.PCM,
- |   loading_music.cxx's LOADCD.PCM) live. Extracted from boot_music.cxx's
- |   original private copy once a second module needed the identical
- |   directory-table dance.
+ | Description: Shared CD-directory-entry helper for the /MSC folder, where this
+ |   codebase's PCM cue (boot_music.cxx's SPLASH.PCM) lives. Extracted from
+ |   boot_music.cxx's original private copy when a second module needed the
+ |   identical directory-table dance; that module has since gone, and this stays
+ |   because the split is the clearer shape either way.
  | Author: suinevere
  | Dependencies: none
  ----------------------*/

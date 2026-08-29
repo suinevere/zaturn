@@ -5,10 +5,10 @@ The cache is filled in two places. splash_show() calls title_preload_art(),
 walking the shared TITLE/ pictures (TITLE_ART_N of them) around the
 still-resident boot jingle and before any typeahead trie exists, so it is
 capped to a couple of slots and its real job is the title's own picture.
-display_warm_cache_scenes() at game start is the fill that matters: both PCM
-cues are freed by then and main.cxx has already built the game's trie, so it
-reads an honest free-space figure and spends the rest on art, one random
-picture from each of the current game's scenes.
+In game the cache fills on demand, one picture per room that asks for one, and
+that is the fill that matters: the jingle is freed by then and main.cxx has
+already built the game's trie, so what is left of the zone is what the art
+actually gets.
 
 Five things here can fail silently:
 
@@ -24,8 +24,8 @@ Five things here can fail silently:
      constant would be describing a cache that cannot exist, and eviction would
      start thrashing earlier than anyone reading title.cxx would expect.
 
-  3. display_warm_cache_scenes taking zero slots at game start. Every wallpaper
-     change would then read the disc over a playing track.
+  3. The cache holding zero slots in game. Every wallpaper change would then
+     re-read the disc, however recently that picture was shown.
 
   4. The boot jingle alone not fitting LWRAM even with the art cache emptied,
      which would come back to a silent title screen after a soft reset.
@@ -114,11 +114,10 @@ def compute_budget():
     title = SRC / "video" / "title.cxx"
     d = cdefines(title)
     d.update(cdefines(SRC / "sound" / "boot_music.cxx"))
-    d.update(cdefines(SRC / "sound" / "loading_music.cxx"))
 
     need = ["LWRAM_TOTAL", "TGA_CACHE_SLOTS", "TGA_PLANE_MAX",
             "TGA_PAL_BYTES", "TGA_SLOT_BYTES", "TGA_CACHE_FLOOR",
-            "BOOT_MUSIC_MAX_BYTES", "LOADING_MUSIC_MAX_BYTES"]
+            "BOOT_MUSIC_MAX_BYTES"]
     missing = [n for n in need if n not in d]
     if missing:
         raise RuntimeError(f"could not read {', '.join(missing)} from title.cxx")
@@ -128,11 +127,10 @@ def compute_budget():
     plane = d["TGA_PLANE_MAX"]
     slot_bytes = d["TGA_SLOT_BYTES"]
     floor = d["TGA_CACHE_FLOOR"]
-    # What each cue actually takes, not what its cap allows: both loaders allocate
+    # What the cue actually takes, not what its cap allows: the loader allocates
     # min(file size, cap), so a cap the file does not reach is headroom rather than
-    # residency. Missing files fall back to the cap, which is the safe direction.
+    # residency. A missing file falls back to the cap, which is the safe direction.
     jingle = pcm_bytes("SPLASH.PCM", d["BOOT_MUSIC_MAX_BYTES"])
-    cue = pcm_bytes("LOADCD.PCM", d["LOADING_MUSIC_MAX_BYTES"])
 
     # Mirror title_preload_art(): the splash walks TITLE_ART_N shared TITLE/
     # pictures around the still-resident jingle, stopping at whichever of
@@ -145,12 +143,12 @@ def compute_budget():
         free_now -= slot_bytes
         splash_slots += 1
 
-    # Mirror display_warm_cache_scenes(): at game start both cues are freed and the
+    # At game start the jingle is freed and the
     # trie is already built, so the only reserve left is the floor.
-    free_now, warm_slots = lwram - TRIE_RESERVE, 0
-    while warm_slots < slots and free_now >= slot_bytes + floor:
+    free_now, game_slots = lwram - TRIE_RESERVE, 0
+    while game_slots < slots and free_now >= slot_bytes + floor:
         free_now -= slot_bytes
-        warm_slots += 1
+        game_slots += 1
 
     if not TGA_DIR.is_dir():
         raise RuntimeError("no cd/data/TGA to measure")
@@ -172,8 +170,8 @@ def compute_budget():
 
     return {
         "lwram": lwram, "slots": slots, "plane": plane, "slot_bytes": slot_bytes,
-        "floor": floor, "pal_bytes": d["TGA_PAL_BYTES"], "jingle": jingle, "cue": cue,
-        "splash_slots": splash_slots, "warm_slots": warm_slots, "art": art,
+        "floor": floor, "pal_bytes": d["TGA_PAL_BYTES"], "jingle": jingle,
+        "splash_slots": splash_slots, "game_slots": game_slots, "art": art,
         "biggest": biggest, "biggest_span": biggest_span, "resident": resident,
     }
 
@@ -204,11 +202,11 @@ def test_cache_slots_fit_within_lwram(budget):
         "TGA_CACHE_SLOTS or TGA_CACHE_FLOOR in title.cxx.")
 
 
-def test_warm_cache_can_take_at_least_one_slot(budget):
-    assert budget["warm_slots"] >= 1, (
-        "display_warm_cache_scenes can take no slots at all at game start, with "
-        "both cues freed and only the trie and the floor in its way. Every "
-        "wallpaper change would then read the disc over a playing track. Lower "
+def test_cache_can_take_at_least_one_slot_in_game(budget):
+    assert budget["game_slots"] >= 1, (
+        "the art cache can hold nothing at all in game, with the jingle freed "
+        "and only the trie and the floor in its way. Every wallpaper change would "
+        "then re-read the disc, however recently that picture was shown. Lower "
         "TGA_CACHE_FLOOR.")
 
 
@@ -246,11 +244,10 @@ def _print_report(b):
     print("  largest of %d TGAs   %8d  (%s), against a %d plane"
           % (len(b["art"]), b["biggest_span"], b["biggest"].name, plane))
     print("  boot jingle         %8d  (splash + title only)" % b["jingle"])
-    print("  loading cue         %8d  (during a load only)" % b["cue"])
     print("  -> slots at the splash, beside the jingle: %d of %d"
           % (b["splash_slots"], slots))
-    print("  -> slots at game start, beside the trie:   %d of %d"
-          % (b["warm_slots"], slots))
+    print("  -> slots in game, beside the trie:        %d of %d"
+          % (b["game_slots"], slots))
     print("  -> full cache + largest trie: %8d  of %d"
           % (resident + TRIE_RESERVE, lwram))
     print("  -> jingle reload after cache release: %8d  of %d" % (b["jingle"], lwram))

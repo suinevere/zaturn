@@ -2,7 +2,7 @@
 # saturn/src/sound/boot_music.cxx loads whole into Low Work RAM and plays
 # from memory during the Suinevere splash -- not CD-DA, so it never fights
 # the splash's own CD reads for the drive. $InFile is whatever pvms.bat read out
-# of CONFIG.ME (SUINEVERE_MUSIC or LOADING_MUSIC) -- any format sox can read,
+# of CONFIG.ME (SUINEVERE_MUSIC) -- any format sox can read,
 # .wav and .ogg both in use today. Uses SaturnRingLib's bundled sox
 # (pvms.bat resolves $Sox to SaturnRingLib/Compiler/msys2/usr/bin/sox.exe).
 # Missing sox or a missing source file is a warning, not a hard failure, so

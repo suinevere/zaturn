@@ -15,6 +15,9 @@
 #include "text_map.h"
 
 #include "menu.h"
+#ifndef NETBIN
+#include "field_clock.h"
+#endif
 #include "app_state.h"
 #include "console_view.h"
 #include "input.h"
@@ -218,6 +221,60 @@ void menu_fade_out(int frames) {
     }
 }
 
+#ifndef NETBIN
+/*----------------------
+ | g_out_from / g_out_span / g_out_running
+ | Description: The clock-paced fade-out's state: the field it started on, how
+ |   many fields it runs for, and whether one is in flight.
+ | Author: suinevere
+ ----------------------*/
+static unsigned int g_out_from    = 0;
+static int          g_out_span    = 0;
+static bool         g_out_running = false;
+
+/*----------------------
+ | menu_fade_out_begin / menu_fade_out_tick / menu_fade_out_hold
+ | Description: See menu.h. The level comes from how many fields have actually
+ |   elapsed rather than from how many times tick was called, which is the whole
+ |   difference between this and menu_fade_out: a caller reading the CD blocks the
+ |   main line for whole frames at a time, and a ramp that stepped once per call
+ |   would simply be stretched by the reading instead of covering it.
+ | Author: suinevere
+ | Dependencies: field_clock.h, SRL
+ | Globals: g_out_from, g_out_span, g_out_running
+ | Params: frames -- ramp length in fields
+ | Returns: N/A
+ ----------------------*/
+void menu_fade_out_begin(int frames) {
+    menu_offset_engage();
+    menu_intro_level(0);
+    field_clock_start();
+    g_out_from    = field_clock_now();
+    g_out_span    = (frames < 1) ? 1 : frames;
+    g_out_running = true;
+}
+
+void menu_fade_out_tick(void) {
+    if (!g_out_running) return;
+    unsigned int done = field_clock_now() - g_out_from;
+    if (done >= (unsigned int) g_out_span) {
+        menu_intro_level(-255);
+        g_out_running = false;
+        return;
+    }
+    menu_intro_level(-(int) ((255u * done) / (unsigned int) g_out_span));
+}
+
+void menu_fade_out_hold(void) {
+    while (g_out_running) {
+        menu_fade_out_tick();
+        if (!g_out_running) break;
+        SRL::Core::Synchronize();
+    }
+    menu_intro_level(-255);
+}
+#endif /* NETBIN: no CD, no story, nothing to fade a load behind */
+
 /*----------------------
  | menu_fade_in / menu_fade_in_ex
  | Description: See menu.h. Ramps a held-black screen back to normal over
@@ -226,7 +283,7 @@ void menu_fade_out(int frames) {
  |   unmodified picture -- the release goes through title_bg_fade_reset, which is
  |   what leaves the dim in force on the far side of the ramp. The caller must
  |   have engaged the channels and held black already (via menu_fade_out,
- |   menu_intro_fade_arm, or loading_screen_end, which deliberately leaves them
+ |   menu_intro_fade_arm, or menu_fade_out_hold, which deliberately leaves them
  |   engaged) and drawn its first frame, or there is nothing to reveal.
  |
  |   The _ex form takes a per-frame callback handed the same 0..255 the picture is

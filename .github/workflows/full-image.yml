@@ -61,14 +61,15 @@ jobs:
         working-directory: tools/assets
         run: bash games.bat
 
-      - name: Check the story manifest covers every injected game
+      - name: Check the disc's story manifest covers every injected game
         working-directory: tools/assets
         run: |
           set -e
-          test -s Z3/GAME.INF
+          test -s ../../saturn/cd/data/Z3/GAME.INF
           python3 - <<'PY'
           import glob, os, struct
-          blob = open("Z3/GAME.INF", "rb").read()
+          # The manifest the disc carries: built into the base ISO, not staged here.
+          blob = open("../../saturn/cd/data/Z3/GAME.INF", "rb").read()
           assert blob[:4] == b"ZGI1", "Z3/GAME.INF is not a story manifest"
           count, size = struct.unpack(">HH", blob[4:8])
           assert len(blob) == 16 + count * size, "GAME.INF is the wrong length for its header"

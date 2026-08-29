@@ -37,21 +37,6 @@
 :; echo "Downloading ADVENT.Z3 into Z3..."
 :; curl -L -o "Z3/ADVENT.Z3" "$ADVENT_URL"
 :;
-:; # The story manifest is copied, never generated here: its contents follow from
-:; # VERSIONS.ndjson, which is fixed, so there is nothing to compute on your
-:; # machine and no interpreter to install to compute it with. Beside this script
-:; # in the release kit, where release.yml stages it; up beside the disc it
-:; # describes in a repo checkout. tools/gametitles/gen_game_info.py rebuilds it
-:; # when VERSIONS.ndjson changes, and that is the only place it is made.
-:; echo "Staging the GAME.INF story manifest..."
-:; MANIFEST="GAME.INF"
-:; [ -f "$MANIFEST" ] || MANIFEST="../../saturn/cd/data/Z3/GAME.INF"
-:; if [ -f "$MANIFEST" ]; then
-:;     cp "$MANIFEST" "Z3/GAME.INF"
-:; else
-:;     echo "WARNING: GAME.INF missing -- the Saturn will read every story header at boot" >&2
-:; fi
-:;
 :; echo "Complete."
 :;
 :; . lib/games.sh
@@ -60,6 +45,10 @@
 :; BASE_ISO=${BASE_ISO:-./Zaturn (USA) (Netlink Edition)/Zaturn (USA) (Netlink Edition).iso}
 :; DISC_NAME=${DISC_NAME:-Zaturn - Complete (USA) (Netlink Edition)}
 :; OUTPUT_DIR=${OUTPUT_DIR:-./$DISC_NAME}
+:; # Nothing here handles the story manifest. It is built into the base ISO from
+:; # saturn/cd/data/Z3/GAME.INF, and xorriso's -map merges into an existing /Z3
+:; # rather than replacing it, so the games injected below land alongside a
+:; # manifest that is already there.
 :; inject_games "$BASE_ISO" "Z3" "$OUTPUT_DIR" "$DISC_NAME"
 :; exit
 
@@ -98,19 +87,6 @@ curl -L -o "Z3\LURKING.BLB" "%LURKING_URL%"
 ECHO Downloading ADVENT.Z3 into Z3...
 curl -L -o "Z3\ADVENT.Z3" "%ADVENT_URL%"
 
-REM The story manifest is copied, never generated here: its contents follow from
-REM VERSIONS.ndjson, which is fixed, so there is nothing to compute on your machine
-REM and no interpreter to install to compute it with. Beside this script in the
-REM release kit; up beside the disc it describes in a repo checkout.
-ECHO Staging the GAME.INF story manifest...
-SET "MANIFEST=GAME.INF"
-IF NOT EXIST "%MANIFEST%" SET "MANIFEST=..\..\saturn\cd\data\Z3\GAME.INF"
-IF EXIST "%MANIFEST%" (
-    COPY /Y "%MANIFEST%" "Z3\GAME.INF" >NUL
-) ELSE (
-    ECHO WARNING: GAME.INF missing -- the Saturn will read every story header at boot
-)
-
 ECHO Complete.
 
 FOR /F "usebackq tokens=1,* delims==" %%A IN ("CONFIG.ME") DO (
@@ -143,6 +119,10 @@ IF NOT EXIST "%BASE_ISO%" (
     EXIT /B 1
 )
 
+REM Nothing here handles the story manifest. It is built into the base ISO from
+REM saturn\cd\data\Z3\GAME.INF, and xorriso's -map merges into an existing /Z3
+REM rather than replacing it, so the games injected below land alongside a
+REM manifest that is already there.
 powershell -NoProfile -ExecutionPolicy Bypass -File ".\lib\games.ps1" -BaseIso "%BASE_ISO%" -GamesDir "Z3" -OutDir "%OUTPUT_DIR%" -Name "%DISC_NAME%" -Xorriso ".\bin\win\xorriso.exe" -Iso2raw ".\bin\win\iso2raw.exe"
 IF ERRORLEVEL 1 ( ECHO ERROR: game injection failed & EXIT /B 1 )
 

@@ -23,12 +23,14 @@ same header release and serial, and whose "title" is the filename the injection
 step writes -- so the manifest for the downloaded set can be built with no story
 files present at all, and committed once, beside the disc it describes.
 
-That committed file is the only one there is. games.bat copies it into Z3
-rather than generating it, because the release kit is bash/cmd, curl and two
-bundled binaries -- adding a Python dependency to a disc-patching script users
-run on their own machines is not a trade worth making for a file whose contents
-are known in advance. release.yml stages it into the kit the same way it stages
-the ISO.
+That committed file is the only one there is, and nothing in the asset
+pipeline touches it: it is built into the base ISO along with the rest of
+saturn/cd/data, and xorriso's -map merges the downloaded stories into the
+existing /Z3 rather than replacing the directory, so the manifest is already
+on the disc the games are injected into. Which is the point -- the release kit
+is bash/cmd, curl and two bundled binaries, and adding a Python dependency to a
+disc-patching script users run on their own machines would be a poor trade for
+a file whose contents are known before the pipeline starts.
 
 Usage:
   python gen_game_info.py --versions tools/assets/VERSIONS.ndjson

@@ -37,6 +37,10 @@ extern "C" {
  |   phase and the vertical ones one per y & 3. The divider cell holds the frame
  |   of the module to its left and the two-pixel gap; the module to its right
  |   opens with DT_MODLEFT in the cell after it.
+ |
+ |   The DT_BOX_* set is the same bevel over transparency instead of over
+ |   marble, for the menu boxes: no field, so nothing to hold in register, so
+ |   one tile per edge rather than four.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -53,18 +57,23 @@ enum {
     DT_TOP_DIVIDER = 47, DT_BOTTOM_DIVIDER,
     DT_RULE0 = 49, DT_RULE1, DT_RULE2, DT_RULE3,
     DT_RULE_MODLEFT = 53, DT_RULE_RIGHT,
-    DT_N = 55
+    DT_BOX_TOP = 55, DT_BOX_BOTTOM, DT_BOX_LEFT, DT_BOX_RIGHT,
+    DT_BOX_TL, DT_BOX_TR, DT_BOX_BL, DT_BOX_BR,
+    DT_N = 63
 };
 
 /*----------------------
  | DASH_NONE .. DASH_VARIANT_N
- | Description: The panel's three shapes, plus the nothing-painted state the
- |   shadow starts in. PANEL and GAMEKB are the two in-game gamepad strips; LINE
- |   is the single bevelled row a real keyboard's prompt sits in.
+ | Description: The fixed panel shapes, the nothing-painted state the shadow
+ |   starts in, and the runtime rectangle. PANEL and GAMEKB are the two in-game
+ |   gamepad strips and OVERLAY is PANEL without its dividers. BOX is the odd
+ |   one out: its geometry is not in the table but supplied per call by
+ |   dash_box, and it paints a bevel with nothing inside it rather than a
+ |   marble field.
  | Author: suinevere
  ----------------------*/
 enum { DASH_NONE = 0, DASH_PANEL, DASH_GAMEKB, DASH_OVERLAY,
-       DASH_VARIANT_N };
+       DASH_BOX, DASH_VARIANT_N };
 
 /*----------------------
  | dash_build
@@ -81,6 +90,25 @@ enum { DASH_NONE = 0, DASH_PANEL, DASH_GAMEKB, DASH_OVERLAY,
  | Returns: N/A
  ----------------------*/
 void dash_build(int variant, int base_row);
+
+/*----------------------
+ | dash_box
+ | Description: Paints an arbitrary rectangle as a bevelled frame with a
+ |   transparent interior, for the menu boxes -- the DT_BOX_* tiles rather than
+ |   the panel's marble ones, so whatever the menu draws inside is untouched.
+ |   Takes the same rectangle menu_frame does, in the same units. Idempotent on
+ |   the whole rectangle, not just its top row, so a page may call it every
+ |   frame. Clears whatever was painted before, exactly as dash_build does: one
+ |   thing is on this layer at a time. Ignored for w or h below 2, which has no
+ |   frame to draw.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_map, g_variant, g_base, g_box, g_dirty_top, g_dirty_bottom,
+ |   g_touched
+ | Params: x -- left column; y -- top row; w -- width in cells; h -- height
+ | Returns: N/A
+ ----------------------*/
+void dash_box(int x, int y, int w, int h);
 
 /*----------------------
  | dash_cell

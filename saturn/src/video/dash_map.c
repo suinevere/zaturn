@@ -22,6 +22,7 @@ typedef struct {
     unsigned char ndiv;
     unsigned char div[2];
     signed char   rule_row;
+    unsigned char box;      /* 1 = bevel only, transparent inside */
 } DashGeom;
 
 /*----------------------
@@ -34,12 +35,36 @@ typedef struct {
  |   the inventory overlay's own box.
  | Author: suinevere
  ----------------------*/
-static const DashGeom g_geom[DASH_VARIANT_N] = {
-    { 0, 0,  0, 0, {  0, 0 }, -1 },
-    { 9, 0, 39, 2, { 14, 30 }, -1 },
-    { 9, 0, 38, 1, { 14,  0 },  2 },
-    { 9, 0, 39, 0, {  0, 0 }, -1 }
+static const DashGeom g_geom[DASH_BOX] = {
+    { 0, 0,  0, 0, {  0, 0 }, -1, 0 },
+    { 9, 0, 39, 2, { 14, 30 }, -1, 0 },
+    { 9, 0, 38, 1, { 14,  0 },  2, 0 },
+    { 9, 0, 39, 0, {  0, 0 }, -1, 0 }
 };
+
+/*----------------------
+ | g_box
+ | Description: DASH_BOX's geometry, written by dash_box rather than read from
+ |   g_geom. A menu is sized and placed at runtime by menu_box_fit, so its
+ |   rectangle cannot live in a table.
+ | Author: suinevere
+ ----------------------*/
+static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1, 1 };
+
+/*----------------------
+ | geom_of
+ | Description: The geometry a variant paints from -- the static table for the
+ |   fixed shapes, the runtime slot for DASH_BOX.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_geom, g_box
+ | Params: variant -- one of the DASH_* values
+ | Returns: a pointer to that variant's geometry
+ ----------------------*/
+static const DashGeom *geom_of(int variant)
+{
+    return (variant == DASH_BOX) ? &g_box : &g_geom[variant];
+}
 
 /*----------------------
  | g_map / g_variant / g_base / g_dirty_top / g_dirty_bottom / g_touched
@@ -115,6 +140,19 @@ static unsigned char cell_at(const DashGeom *g, int r, int x, int y)
     int bot  = (r == g->rows - 1);
     int rule = (g->rule_row >= 0 && r == g->rule_row + 1);
 
+    if (g->box) {
+        int left = (x == g->x0), right = (x == g->x1);
+        if (top && left)   return DT_BOX_TL;
+        if (top && right)  return DT_BOX_TR;
+        if (bot && left)   return DT_BOX_BL;
+        if (bot && right)  return DT_BOX_BR;
+        if (top)   return DT_BOX_TOP;
+        if (bot)   return DT_BOX_BOTTOM;
+        if (left)  return DT_BOX_LEFT;
+        if (right) return DT_BOX_RIGHT;
+        return DT_BLANK;
+    }
+
     if (x == g->x0) {
         if (top) return DT_CORNER_TL;
         if (bot) return DT_CORNER_BL;
@@ -156,29 +194,66 @@ static unsigned char cell_at(const DashGeom *g, int r, int x, int y)
  ----------------------*/
 static void clear_painted(void)
 {
-    const DashGeom *g = &g_geom[g_variant];
+    const DashGeom *g = geom_of(g_variant);
     int r, x;
     for (r = 0; r < g->rows; r++)
         for (x = g->x0; x <= g->x1; x++) put(x, g_base + r, DT_BLANK);
 }
 
+/*----------------------
+ | paint
+ | Description: Lays the current variant's tiles into the shadow at g_base.
+ |   Split out of dash_build because dash_box needs the same loop over a
+ |   rectangle it has just written into g_box.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_base, g_variant, g_map, g_touched
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void paint(void)
+{
+    const DashGeom *g = geom_of(g_variant);
+    int r, x;
+    for (r = 0; r < g->rows; r++)
+        for (x = g->x0; x <= g->x1; x++)
+            put(x, g_base + r, cell_at(g, r, x, g_base + r));
+    g_touched = 1;
+}
+
 void dash_build(int variant, int base_row)
 {
-    const DashGeom *g;
-    int r, x;
-
     if (variant < 0 || variant >= DASH_VARIANT_N) return;
+    // DASH_BOX carries no table geometry, so building it by name would paint
+    // whatever rectangle dash_box left behind. It has its own entry point.
+    if (variant == DASH_BOX) return;
     if (variant == g_variant && base_row == g_base) { g_touched = 1; return; }
 
     clear_painted();
     g_variant = variant;
     g_base = base_row;
-    g = &g_geom[variant];
+    paint();
+}
 
-    for (r = 0; r < g->rows; r++)
-        for (x = g->x0; x <= g->x1; x++)
-            put(x, base_row + r, cell_at(g, r, x, base_row + r));
-    g_touched = 1;
+void dash_box(int x, int y, int w, int h)
+{
+    if (w < 2 || h < 2) return;
+
+    // Keyed on the whole rectangle, not just its top row: two menu boxes of
+    // different widths at the same y are different pictures, and the panel's
+    // (variant, base) key cannot tell them apart.
+    if (g_variant == DASH_BOX && g_base == y &&
+        g_box.x0 == (unsigned char) x &&
+        g_box.x1 == (unsigned char) (x + w - 1) &&
+        g_box.rows == (unsigned char) h) { g_touched = 1; return; }
+
+    clear_painted();
+    g_box.rows = (unsigned char) h;
+    g_box.x0   = (unsigned char) x;
+    g_box.x1   = (unsigned char) (x + w - 1);
+    g_variant  = DASH_BOX;
+    g_base     = y;
+    paint();
 }
 
 unsigned char dash_cell(int x, int y)
@@ -209,6 +284,9 @@ void dash_reset(void)
         for (x = 0; x < DASH_COLS; x++) g_map[y][x] = DT_BLANK;
     g_variant = DASH_NONE;
     g_base = 0;
+    g_box.rows = 0;
+    g_box.x0 = 0;
+    g_box.x1 = 0;
     g_touched = 0;
     dash_dirty_clear();
 }

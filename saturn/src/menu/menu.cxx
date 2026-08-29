@@ -8,7 +8,7 @@
  | Author: suinevere
  | Dependencies: menu.h, menu_layout.c, app_state.h, console_view.cxx, input.h,
  |   saturn_keyboard.h, soft_reset.h (defined in main.cxx), sound.c, music.c,
- |   SRL
+ |   dash_view.h/dash_map.c (the NBG2 border), SRL
  ----------------------*/
 
 #include <srl.hpp>
@@ -23,6 +23,7 @@
 #include "input.h"
 #include "saturn_keyboard.h"
 #include "soft_reset.h"
+#include "dash_view.h"
 #ifndef NETBIN
 // The screen-wide fade primitives live in title.cxx, which this build links and
 // the netbin one does not. Netbin shows no wallpaper at all -- display_apply's
@@ -48,6 +49,24 @@ extern "C" {
 static MenuServiceFn g_menu_service     = nullptr;
 static void         *g_menu_service_ctx = nullptr;
 #endif
+
+/*----------------------
+ | g_box_x / g_box_y / g_box_w / g_box_h / g_box_live
+ | Description: The rectangle the last menu_frame handed to dash_box, and
+ |   whether a menu still owns it. menu_sync re-claims it every frame while a
+ |   MenuBacking is alive, because dash_frame_end takes the layer down on any
+ |   frame nobody claims it and a menu that has finished drawing does not draw
+ |   again -- menu_message paints once and menu_wait then holds the screen for
+ |   as long as the player takes to press a key. The printed border did not need
+ |   this: text stays on the screen until something overwrites it.
+ |
+ |   MenuBacking's refcount is the ownership signal because it is already
+ |   exactly "a menu page is open", so the border expires on the same event the
+ |   image-suppressing window does rather than on a rule of its own.
+ | Author: suinevere
+ ----------------------*/
+static int  g_box_x = 0, g_box_y = 0, g_box_w = 0, g_box_h = 0;
+static bool g_box_live = false;
 
 /*----------------------
  | menu_sync
@@ -80,6 +99,8 @@ void menu_sync(void) {
     sound_service();
     music_tick();
 #endif
+    if (g_box_live && g_menu_backing_depth > 0)
+        dash_box(g_box_x, g_box_y, g_box_w, g_box_h);
     SRL::Core::Synchronize();
 }
 
@@ -453,14 +474,23 @@ static void menu_backing_window_off(void) {
  | Returns: N/A
  ----------------------*/
 MenuBacking::~MenuBacking() {
-    if (--g_menu_backing_depth == 0) text_on_flush(&menu_backing_window_off);
+    if (--g_menu_backing_depth == 0) {
+        text_on_flush(&menu_backing_window_off);
+        // Stop re-claiming NBG2 here rather than at the next frame: unlike the
+        // window, whose deferral menu_backing_window_off explains, the border
+        // must expire with the page or it would outlive it over the game.
+        g_box_live = false;
+    }
 }
 
 /*----------------------
  | menu_frame
  | Description: Aims the image-suppressing window at (x0, y0, w, h) via
- |   menu_window_rect, draws the box's +--+ chrome one row at a time, and
- |   centers `title` on the second row.
+ |   menu_window_rect, draws the box's border, and centers `title` on the second
+ |   row. The border is an NBG2 bevel via dash_box when that layer is up and the
+ |   printed +--+ chrome when it is not; either way the interior is cleared to
+ |   spaces, so the two forms occupy the same cells and every caller's text
+ |   lands in the same place.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
@@ -470,10 +500,20 @@ MenuBacking::~MenuBacking() {
  ----------------------*/
 void menu_frame(int x0, int y0, int w, int h, const char *title) {
     menu_window_rect(x0, y0, w, h);
+    // The chrome comes from NBG2 when the layer is up and from the text font
+    // when it is not, exactly as the gamepad strip's border does. The printed
+    // form is not dead code: it is what a failed VRAM allocation falls back to.
+    bool chrome = (dash_ready() == 0);
+    if (!chrome) {
+        dash_box(x0, y0, w, h);
+        g_box_x = x0; g_box_y = y0; g_box_w = w; g_box_h = h;
+        g_box_live = true;
+    }
     for (int r = 0; r < h; r++) {
         char line[42]; int p = 0;
         for (int c = 0; c < w && p < (int) sizeof(line) - 1; c++)
-            line[p++] = (r == 0 || r == h - 1) ? ((c == 0 || c == w - 1) ? '+' : '-')
+            line[p++] = !chrome ? ' '
+                      : (r == 0 || r == h - 1) ? ((c == 0 || c == w - 1) ? '+' : '-')
                       : ((c == 0 || c == w - 1) ? '|' : ' ');
         line[p] = '\0';
         text_print(x0, y0 + r, "%s", line);
@@ -486,9 +526,12 @@ void menu_frame(int x0, int y0, int w, int h, const char *title) {
 
 /*----------------------
  | menu_wait
- | Description: Drops the current frame's edge with one Synchronize, then
- |   polls both the gamepad face/start buttons and the keyboard every frame
- |   until one of them fires.
+ | Description: Drops the current frame's edge with one menu_sync, then polls
+ |   both the gamepad face/start buttons and the keyboard every frame until one
+ |   of them fires. menu_sync rather than a bare Synchronize, which is what this
+ |   used to call: a loop that holds a screen has to service sound and re-claim
+ |   the menu's border, and this one holds it for however long the player takes
+ |   to press a key.
  | Author: suinevere
  | Dependencies: input.h, saturn_keyboard.h, SRL
  | Globals: g_pad
@@ -496,12 +539,12 @@ void menu_frame(int x0, int y0, int w, int h, const char *title) {
  | Returns: N/A
  ----------------------*/
 void menu_wait(void) {
-    SRL::Core::Synchronize();
+    menu_sync();
     for (;;) {
         if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::B) ||
             g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START)) return;
         if (saturn_keyboard_poll().kind != SATURN_KEY_NONE) return;
-        SRL::Core::Synchronize();
+        menu_sync();
     }
 }
 

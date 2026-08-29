@@ -24,6 +24,9 @@
 #include "input.h"
 #include "soft_reset.h"
 #include "game_catalog.h"
+#ifdef NETBIN
+#include "command_view.h"
+#endif
 extern "C" {
 #include "console.h"
 #include "keyboard.h"
@@ -209,8 +212,15 @@ void ensure_online_typeahead(void) {
     // The story is a .rodata blob, and both builders take a const pointer, so it
     // is read in place -- no allocation, and nothing to free afterward.
     build_typeahead_from_story(g_online_ta, netbin_story_data(), netbin_story_size());
-    apply_solution_overlay(g_online_ta, netbin_story_data(), netbin_story_size());
+    int have_solution = apply_solution_overlay(g_online_ta, netbin_story_data(),
+                                               netbin_story_size());
     typeahead_add_abbreviations(g_online_ta);
+    // Easy restricts context suggestions to the winning path, and it is a
+    // no-op unless this is called: typeahead.c holds the mode in file statics
+    // that start at zero, so a netbin that skipped this ranked as Normal
+    // whatever Options said. The overlay above was applied either way, so the
+    // links were there and unused. DIFF_HARD already returned above.
+    typeahead_set_easy(g_difficulty == DIFF_EASY, have_solution);
     return;
 #else
     char names[1][16];
@@ -342,6 +352,11 @@ void online_mode(void) {
     int sug_index = 0;
     char sug_last[256] = "";
     int last_scan_lines = -1;
+#ifdef NETBIN
+    CommandPanel cpanel; cp_reset(&cpanel);
+    g_cmd_mode = g_cmd_iface;
+    mode_toggle_reset();
+#endif
     for (;;) {
         term_service(&ts, tr, ZATURN_RX_BUDGET);
         if (term_output_settled(&ts, ONLINE_SETTLE_FRAMES)) console_scroll_to_output();
@@ -378,8 +393,29 @@ void online_mode(void) {
             break;
         }
 
+#ifdef NETBIN
+        /* The two interfaces keep their own buffers -- the panel draws
+           cpanel.line, the keyboard k.input -- so the swap carries the
+           half-built command across, exactly as saturn_glue.cxx does it for the
+           local game. */
+        if (g_kbd_visible && mode_toggle_fired()) {
+            if (g_cmd_mode == IFACE_PANEL) {
+                keyboard_load_line(&k, cpanel.line);
+                g_cmd_mode = IFACE_KEYBOARD;
+            } else {
+                cp_load_line(&cpanel, k.input);
+                g_cmd_mode = IFACE_PANEL;
+            }
+        }
+        bool panel = (g_kbd_visible && g_cmd_mode == IFACE_PANEL);
+        CommandWords cw;
+        DictionaryWord* selected = nullptr; int cw_len = 0;
+        if (panel) command_edit(k, cpanel, *room_model_get(), g_online_ta, ke, cw);
+        else       typeahead_edit(k, g_online_ta, sug_index, sug_last, ke, pad, selected, cw_len);
+#else
         DictionaryWord* selected; int cw_len;
         typeahead_edit(k, g_online_ta, sug_index, sug_last, ke, pad, selected, cw_len);
+#endif
         pad_scroll_update();
 
         bool did_submit = k.submitted;
@@ -395,11 +431,20 @@ void online_mode(void) {
                 confirm_return_to_title("reboot back to the title screen?");
 #endif
                 keyboard_reset(&k);
+#ifdef NETBIN
+                // The confirm ran its own poll loop, so the toggle button could
+                // have been pressed and released entirely while it owned the
+                // screen -- see mode_toggle_reset in input.h.
+                mode_toggle_reset();
+#endif
                 online_settle_input();
             } else {
                 term_submit_line(tr, &k);
                 g_output_start = console_total_lines();
                 term_mark_output(&ts);
+#ifdef NETBIN
+                cp_reset(&cpanel);
+#endif
             }
         }
 
@@ -411,7 +456,12 @@ void online_mode(void) {
         }
 
         render_console();
+#ifdef NETBIN
+        if (panel) render_command_panel(cpanel, *room_model_get(), cw);
+        else       render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);
+#else
         render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);
+#endif
         text_print(0, 28, "%s", hint("L/R=cycle  hold L+R=disconnect", "Esc=disconnect"));
         menu_sync();
     }

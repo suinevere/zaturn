@@ -19,6 +19,7 @@
 
 #include <srl.hpp>
 #include "text_map.h"
+#include "dash_view.h"
 #include <setjmp.h>
 
 extern "C" {
@@ -360,6 +361,8 @@ int main(void) {
     border_use_black();
     text_map_init();       // before anything prints: draws land in the shadow and
                            // reach VRAM on the vblank the next Synchronize waits for
+    dash_init();        // after text_map_init: VDP2 and the font are up, and a
+                        // failure here only means the printed borders stay
     title_bg_fade_arm();   // hold black over the pre-splash CD work below; the
                            // splash re-arms and owns the screen from there
     saturn_bup_init();

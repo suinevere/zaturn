@@ -13,6 +13,8 @@
  | Author: suinevere
  | Dependencies: saturn_glue.h, console.h + console_view.h (screen, on-screen
  |   keyboard, typeahead_edit), command_view.h (command-panel render/edit),
+ |   dash_view.h (holding the input strip's panel over frames no renderer draws),
+ |   text_map.h (text_clear_line, for blanking the strip's rows on a fatal halt),
  |   room_model.h (the room snapshot the panel reads), keyboard.h
  |   (KeyboardState), saturn_keyboard.h (key events), input.h (g_pad, pad
  |   repeat/scroll, history, mode_toggle_fired), typeahead.h +
@@ -35,6 +37,8 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 
 #include "console_view.h"
 #include "command_view.h"
+#include "dash_view.h"
+#include "text_map.h"
 #include "input.h"
 #include "menu.h"
 #include "menu_pages.h"
@@ -191,10 +195,33 @@ extern "C" void saturn_typeahead_build(void) {
 }
 
 /*----------------------
+ | strip_trailing_prompt
+ | Description: The length `str` should be written at once its own trailing
+ |   "> " prompt is peeled off: trailing spaces, then a single trailing '>',
+ |   then any spaces that preceded it. A chunk with no '>' at its (space-
+ |   trimmed) end is returned unchanged -- the strip only fires on the shape an
+ |   input request actually prints.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: str -- text to measure; slen -- its length
+ | Returns: the length to write, which may be 0
+ ----------------------*/
+static size_t strip_trailing_prompt(const char *str, size_t slen) {
+    size_t n = slen;
+    while (n > 0 && str[n - 1] == ' ') n--;
+    if (n == 0 || str[n - 1] != '>') return slen;
+    n--;
+    while (n > 0 && str[n - 1] == ' ') n--;
+    return n;
+}
+
+/*----------------------
  | saturn_writestr
- | Description: The interpreter's text-output hook: writes to the console and
- |   feeds the same text to the room-music classifier so Dynamic mix can react to
- |   what the room describes.
+ | Description: The interpreter's text-output hook: writes to the console,
+ |   with the story's own trailing "> " prompt stripped first since the input
+ |   line prints its own, and feeds the ORIGINAL, unstripped text to the
+ |   room-music classifier so Dynamic mix still sees what the room describes.
  | Author: suinevere
  | Dependencies: console.h, music.h
  | Globals: N/A
@@ -202,7 +229,8 @@ extern "C" void saturn_typeahead_build(void) {
  | Returns: N/A
  ----------------------*/
 extern "C" void saturn_writestr(const char *str, size_t slen) {
-    console_write(str, (unsigned int) slen);
+    size_t n = strip_trailing_prompt(str, slen);
+    if (n > 0) console_write(str, (unsigned int) n);
     music_note_output(str, (unsigned int) slen);
 }
 
@@ -310,8 +338,12 @@ static void submit_command(KeyboardState &k, const char *cmd) {
  |   Costs the player the fade before they can type. That is the ask, and
  |   MUSIC_FADE_FRAMES in main.cxx is the number to cut if it reads sluggish --
  |   except on the opening room, which skips the ramp entirely (see below).
+ |
+ |   The strip is the one thing that must not go with the old screen: its rows
+ |   survive on_text_category's wipe, so dash_hold keeps their panel under them
+ |   for every frame of the fade.
  | Author: suinevere
- | Dependencies: music.h, SRL
+ | Dependencies: music.h, dash_view.h (dash_hold), SRL
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
@@ -330,6 +362,7 @@ static void run_room_transition(void) {
     int guard = 0;
     while (music_transition_active() && guard < 600) {
         music_tick();
+        dash_hold();
         SRL::Core::Synchronize();
         guard++;
     }
@@ -384,7 +417,7 @@ static void run_room_transition(void) {
  | Author: suinevere
  | Dependencies: console.h, console_view.h, command_view.h, room_model.h,
  |   keyboard.h, saturn_keyboard.h, input.h, menu.h, menu_pages.h, soft_reset.h,
- |   sound.h, music.h, typeahead.h, SRL
+ |   sound.h, music.h, typeahead.h, dash_view.h (dash_hold), SRL
  | Globals: g_save_device, g_save_slot, g_last_device, g_last_slot,
  |   g_restore_device, g_restore_slot, g_autocmd, g_kbd_visible, g_cmd_mode,
  |   g_scroll, g_output_start, g_pad, g_typeahead_root
@@ -429,6 +462,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
     k.cursor = 0;
     k.submitted = 0;
     cp_reset(&cpanel);
+    dash_hold();
     SRL::Core::Synchronize();
     int sug_index = 0;
     char sug_last[256] = "";
@@ -548,6 +582,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
       while (k.input_len > 0 && k.input[k.input_len - 1] == ' ') k.input[--k.input_len] = '\0';
       g_scroll = 0;
       history_push(k.input);
+      console_write("> ", 2);
       console_write(k.input, (unsigned int) k.input_len);
       console_write("\n", 1);
       g_output_start = console_total_lines();
@@ -584,9 +619,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
  |   is safe and exact: SRL::Cd::File::Read stages whole sectors in its own work
  |   buffer and copies out exactly the byte count asked for. Save/restore ask for
  |   dynamic memory only -- roughly 12 KB of a 130 KB story -- which keeps both the
- |   scratch buffer and the seek time small.
+ |   scratch buffer and the seek time small. The retry delay calls dash_hold
+ |   before each Synchronize, since opcode_save reaches this before any menu
+ |   paints and would otherwise blank the still-displayed strip out from under
+ |   itself; dash_hold is a no-op on opcode_restore's already-cleared screen.
  | Author: suinevere
- | Dependencies: app_state.h (g_story_filename), SRL
+ | Dependencies: app_state.h (g_story_filename), dash_view.h (dash_hold), SRL
  | Globals: g_story_filename
  | Params: buf -- destination (>= want bytes); storylen -- expected whole-file
  |   length in bytes, used to validate the stat; want -- bytes to read from the
@@ -604,7 +642,7 @@ extern "C" int saturn_read_story_prefix(uint8_t *buf, uint32_t storylen, uint32_
                 if (got == (int32_t) want) { return 1; }
             }
         }
-        for (int i = 0; i < 8; i++) SRL::Core::Synchronize();
+        for (int i = 0; i < 8; i++) { dash_hold(); SRL::Core::Synchronize(); }
     }
     return 0;
 }
@@ -659,8 +697,15 @@ extern "C" void saturn_scratch_free(void *ptr) {
  |   made every fatal cause print the same line: a story the CD never found and a
  |   Z-machine fault were indistinguishable on screen, and "Could not load %s from
  |   CD" -- passed from main() precisely so it would be seen -- never was.
+ |
+ |   render_console only redraws the console's own rows, which stop short of the
+ |   gamepad strip's ten rows when it is up, so its last turn's rose/word/command
+ |   lists would otherwise sit there frameless forever. Blanked once before the
+ |   loop instead of held: the session is over, so nothing should look like a
+ |   live control surface under the halt message. Harmless when the strip was
+ |   never up (main()'s CD-load-failure path already cleared the screen).
  | Author: suinevere
- | Dependencies: console.h, console_view.h, SRL
+ | Dependencies: console.h, console_view.h, text_map.h, SRL
  | Globals: N/A
  | Params: fmt -- printf-style reason from the caller; may be NULL
  | Returns: N/A (does not return)
@@ -679,6 +724,7 @@ extern "C" void saturn_die(const char *fmt, ...) {
             console_write("\n", 1);
         }
     }
+    for (int r = TOP_MARGIN + console_height(); r <= 28; r++) text_clear_line(r);
     while (1) { render_console(); SRL::Core::Synchronize(); }
 }
 

@@ -38,6 +38,17 @@ extern bool g_kbd_visible;
 extern long g_output_start;
 
 /*----------------------
+ | TOP_MARGIN
+ | Description: One blank row kept at the top because TV overscan clips the
+ |   first text row on real hardware. Console content starts on row 1; menus
+ |   already draw from row 1+, so this is the base every renderer adds
+ |   console_height() to. Exported so dash_view.cxx's dash_hold can compute the
+ |   same base row the renderers use without a second copy of the constant.
+ | Author: suinevere
+ ----------------------*/
+extern const int TOP_MARGIN;
+
+/*----------------------
  | image_window_box / image_window_on / image_window_off
  | Description: VDP2 window 0, which suppresses the NBG0 wallpaper inside a
  |   rectangle so the back-plane colour shows there while NBG3 text still draws

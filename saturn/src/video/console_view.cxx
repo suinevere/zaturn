@@ -7,8 +7,8 @@
  |   one-frame input-editing pass with typeahead that the local prompt and the
  |   online terminal share.
  | Author: suinevere
- | Dependencies: console_view.h, app_state.h, command_view.h, input.h, console.c,
- |   keyboard.c, typeahead.c, SRL
+ | Dependencies: console_view.h, app_state.h, command_view.h, input.h, dash_view.h,
+ |   console.c, keyboard.c, typeahead.c, SRL
  ----------------------*/
 
 #include <srl.hpp>
@@ -20,6 +20,7 @@
 #include "rose_draw.h"
 #include "game_kb.h"
 #include "input.h"
+#include "dash_view.h"
 
 // ---- rendering -------------------------------------------------------------
 
@@ -36,10 +37,11 @@ static const int SCREEN_ROWS = 28;
  | TOP_MARGIN
  | Description: One blank row kept at the top because TV overscan clips the first
  |   text row on real hardware. Console content starts on row 1; menus already
- |   draw from row 1+, so this only affects the console layout.
+ |   draw from row 1+, so this only affects the console layout. Declared extern
+ |   in console_view.h so dash_view.cxx's dash_hold can share this single copy.
  | Author: suinevere
  ----------------------*/
-static const int TOP_MARGIN = 1;
+const int TOP_MARGIN = 1;
 
 /*----------------------
  | g_kbd_visible
@@ -334,22 +336,22 @@ void install_block_glyph(void) {
 
 /*----------------------
  | draw_input_line
- | Description: Prints "> {input}{ghost}" at (0,row). The ghost (the typeahead
- |   completion's remaining characters, case-matched to whatever the player was
- |   typing) is only appended when the caret sits at the end of the line -- a
- |   mid-line caret means the player is editing, so the completion is suppressed.
- |   The blinking block cursor overprints whichever cell it currently sits on:
- |   the character under the caret when mid-line, else the ghost's next character
- |   or a space; when the block is "off" that cell's real character prints
- |   instead, so it appears to blink. Only called from render_keyboard, so it
- |   stays file-local.
+ | Description: Prints "> {input}{ghost}" at (0,row). The ghost (the
+ |   typeahead completion's remaining characters, case-matched to whatever the
+ |   player was typing) is only appended when the caret sits at the end of the
+ |   line -- a mid-line caret means the player is editing, so the completion is
+ |   suppressed. The blinking block cursor overprints whichever cell it
+ |   currently sits on: the character under the caret when mid-line, else the
+ |   ghost's next character or a space; when the block is "off" that cell's
+ |   real character prints instead, so it appears to blink. Only called from
+ |   render_keyboard, so it stays file-local.
  | Author: suinevere
  | Dependencies: keyboard.c, SRL
  | Globals: N/A
- | Params: row -- console row to draw on; k -- current keyboard/input-line state;
- |   prediction -- the selected typeahead completion, or null; current_word_len --
- |   length of the word being completed; block_on -- whether the cursor block is
- |   in its "on" blink phase
+ | Params: row -- console row to draw on; k -- current keyboard/input-line
+ |   state; prediction -- the selected typeahead completion, or null;
+ |   current_word_len -- length of the word being completed; block_on --
+ |   whether the cursor block is in its "on" blink phase
  | Returns: N/A
  ----------------------*/
 static void draw_input_line(int row, const KeyboardState &k,
@@ -719,6 +721,9 @@ static void render_game_keyboard(const KeyboardState &k, DictionaryWord *predict
     int content0 = border_top + 1;
     int border_bottom = content0 + CR_ROWS;
 
+    int dash = dash_ready();
+    dash_set(DASH_GAMEKB, border_top);
+
     image_window_box(0, border_top, 40, border_bottom - border_top + 1);
     image_window_on();
 
@@ -726,8 +731,12 @@ static void render_game_keyboard(const KeyboardState &k, DictionaryWord *predict
     draw_input_line(input_row, k, prediction, current_word_len, block_on);
     if (keyboard_get_caps()) text_print(35, input_row, "CAPS");
 
-    text_clear_line(border_top);    text_print(0, border_top, KB_STRIP_BORDER);
-    text_clear_line(border_bottom); text_print(0, border_bottom, KB_STRIP_BORDER);
+    text_clear_line(border_top);
+    text_clear_line(border_bottom);
+    if (!dash) {
+        text_print(0, border_top, KB_STRIP_BORDER);
+        text_print(0, border_bottom, KB_STRIP_BORDER);
+    }
 
     unsigned char flat[RM_DIR_N];
     const unsigned char *exits = kb_exits(flat);
@@ -737,11 +746,13 @@ static void render_game_keyboard(const KeyboardState &k, DictionaryWord *predict
     for (int r = 0; r < CR_ROWS; r++) {
         int y = content0 + r;
         text_clear_line(y);
-        text_print(0, y, "|");
+        if (!dash) text_print(0, y, "|");
         cv_draw_rose_row(r, exits, y, sel);
-        text_print(14, y, "|");
-        text_print(38, y, "|");
-        if (r == 2) { text_print(15, y, "-----------------------"); continue; }
+        if (!dash) { text_print(14, y, "|"); text_print(38, y, "|"); }
+        if (r == 2) {
+            if (!dash) text_print(15, y, "-----------------------");
+            continue;
+        }
         int gr = kb_grid_row(r);
         if (gr == GKB_SPACE_ROW) {
             bool selected = !g_kb_on_rose && k.cursor_row == GKB_SPACE_ROW;

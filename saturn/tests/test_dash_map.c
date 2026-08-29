@@ -1,0 +1,159 @@
+/* Build:
+     gcc -O2 -I saturn/src -o /tmp/tdm saturn/tests/test_dash_map.c \
+         saturn/src/video/dash_map.c && /tmp/tdm
+   dash_map.c is deliberately free of SRL includes so this links on the host. */
+#include "../src/video/dash_map.h"
+#include <assert.h>
+#include <stdio.h>
+
+static int row_all(int y, unsigned char t) {
+    int x;
+    for (x = 0; x < DASH_COLS; x++) if (dash_cell(x, y) != t) return 0;
+    return 1;
+}
+
+int main(void) {
+    int x, y;
+
+    dash_reset();
+
+    /* Nothing is painted before the first build. */
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+    assert(dash_dirty_bottom() < dash_dirty_top());
+
+    /* An out-of-range variant is ignored rather than trusted. */
+    dash_build(99, 19);
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+
+    /* The command panel: nine rows from 19 to 27, closing at column 39. */
+    dash_build(DASH_PANEL, 19);
+    assert(dash_cell(0, 19)  == DT_CORNER_TL);
+    assert(dash_cell(39, 19) == DT_CORNER_TR);
+    assert(dash_cell(0, 27)  == DT_CORNER_BL);
+    assert(dash_cell(39, 27) == DT_CORNER_BR);
+    assert(row_all(18, DT_BLANK));
+    assert(row_all(28, DT_BLANK));
+
+    /* Every frame tile carries the field's marble behind it, so a horizontal
+       run picks its tile by column and a vertical one by row. */
+    assert(dash_cell(20, 19) == DT_TOP0 + (20 & 3));
+    assert(dash_cell(21, 19) == DT_TOP0 + (21 & 3));
+    assert(dash_cell(20, 27) == DT_BOTTOM0 + (20 & 3));
+    assert(dash_cell(0, 22)  == DT_LEFT0 + (22 & 3));
+    assert(dash_cell(0, 23)  == DT_LEFT0 + (23 & 3));
+    assert(dash_cell(39, 22) == DT_RIGHT0 + (22 & 3));
+
+    /* The field is addressed by the cell's own screen coordinates, so the
+       stone is continuous across the panel and repeats every four cells. */
+    assert(dash_cell(20, 22) == DT_FIELD0 + ((22 & 3) << 2) + (20 & 3));
+    assert(dash_cell(24, 26) == DT_FIELD0 + ((26 & 3) << 2) + (24 & 3));
+    assert(dash_cell(20, 22) == dash_cell(24, 26));
+
+    /* Each module is its own box. A divider column closes the module on its
+       left and opens the one on its right; the ten pixels that takes do not fit
+       in one cell: the divider carries the left module's frame and the gap, and
+       the module after it opens with a frame of its own in the next cell. */
+    for (y = 20; y <= 26; y++) {
+        assert(dash_cell(14, y) == DT_DIVIDER0 + (y & 3));
+        assert(dash_cell(30, y) == DT_DIVIDER0 + (y & 3));
+        assert(dash_cell(13, y) == DT_FIELD0 + ((y & 3) << 2) + (13 & 3));
+        assert(dash_cell(15, y) == DT_MODLEFT0 + (y & 3));
+        assert(dash_cell(31, y) == DT_MODLEFT0 + (y & 3));
+    }
+    assert(dash_cell(14, 19) == DT_TOP_DIVIDER);
+    assert(dash_cell(14, 27) == DT_BOTTOM_DIVIDER);
+    assert(dash_cell(13, 19) == DT_TOP0 + (13 & 3));
+    assert(dash_cell(15, 19) == DT_TOP_MODLEFT);
+    assert(dash_cell(13, 27) == DT_BOTTOM0 + (13 & 3));
+    assert(dash_cell(15, 27) == DT_BOTTOM_MODLEFT);
+
+    /* The command panel has no inner rule. */
+    assert(dash_cell(20, 22) == DT_FIELD0 + ((22 & 3) << 2) + (20 & 3));
+
+    /* The dirty span is the nine rows painted. */
+    assert(dash_dirty_top() == 19);
+    assert(dash_dirty_bottom() == 27);
+
+    /* A repeat build with the same variant and base changes nothing. */
+    dash_dirty_clear();
+    dash_build(DASH_PANEL, 19);
+    assert(dash_dirty_bottom() < dash_dirty_top());
+    assert(dash_cell(0, 19) == DT_CORNER_TL);
+
+    /* The keyboard strip closes one column earlier, and column 39 stays clear. */
+    dash_build(DASH_GAMEKB, 19);
+    assert(dash_cell(38, 19) == DT_CORNER_TR);
+    assert(dash_cell(38, 27) == DT_CORNER_BR);
+    assert(dash_cell(38, 21) == DT_RIGHT0 + (21 & 3));
+    for (y = 19; y <= 27; y++) assert(dash_cell(39, y) == DT_BLANK);
+
+    /* It has one divider and one inner rule, at screen row 22 -- content row 2,
+       where render_game_keyboard used to print "-----". The rule belongs to the
+       module right of the divider and stops at its frame. */
+    assert(dash_cell(14, 22) == DT_DIVIDER0 + (22 & 3));
+    assert(dash_cell(15, 22) == DT_RULE_MODLEFT);
+    for (x = 16; x <= 37; x++) assert(dash_cell(x, 22) == DT_RULE0 + (x & 3));
+    assert(dash_cell(38, 22) == DT_RULE_RIGHT);
+
+    /* Left of the divider the rule row is ordinary content, so the rose keeps
+       its marble and its left frame. */
+    assert(dash_cell(0, 22) == DT_LEFT0 + (22 & 3));
+    assert(dash_cell(7, 22) == DT_FIELD0 + ((22 & 3) << 2) + (7 & 3));
+
+    /* The overlay is the panel's rectangle with no dividers at all, so the
+       inventory box drawn over it meets one unbroken field. */
+    dash_build(DASH_OVERLAY, 19);
+    assert(dash_cell(0, 19)  == DT_CORNER_TL);
+    assert(dash_cell(39, 19) == DT_CORNER_TR);
+    for (y = 20; y <= 26; y++)
+        for (x = 1; x <= 38; x++)
+            assert(dash_cell(x, y) == DT_FIELD0 + ((y & 3) << 2) + (x & 3));
+
+    /* Moving the panel clears the rows it left. */
+    dash_build(DASH_PANEL, 19);
+    dash_build(DASH_PANEL, 15);
+    for (y = 24; y <= 27; y++) assert(row_all(y, DT_BLANK));
+    assert(dash_cell(0, 15) == DT_CORNER_TL);
+
+    /* A frame in which a renderer claimed the panel leaves it up. */
+    dash_build(DASH_PANEL, 19);
+    dash_dirty_clear();
+    dash_frame_end();
+    assert(dash_cell(0, 19) == DT_CORNER_TL);
+    assert(dash_dirty_bottom() < dash_dirty_top());
+
+    /* A frame in which nobody claimed it takes it down -- this is what keeps
+       the marble from sitting behind a menu or the title screen. */
+    dash_frame_end();
+    for (y = 19; y <= 27; y++) assert(row_all(y, DT_BLANK));
+    assert(dash_dirty_top() == 19);
+    assert(dash_dirty_bottom() == 27);
+
+    /* Once down it stays down, and costs nothing to keep down. */
+    dash_dirty_clear();
+    dash_frame_end();
+    assert(dash_dirty_bottom() < dash_dirty_top());
+
+    /* And it comes back when a renderer claims it again. */
+    dash_build(DASH_GAMEKB, 19);
+    dash_frame_end();
+    assert(dash_cell(0, 19) == DT_CORNER_TL);
+    assert(dash_cell(38, 19) == DT_CORNER_TR);
+
+    /* A renderer redrawing the same variant and base every frame keeps the
+       panel up: the idempotent early return must set g_touched too, not just
+       the full repaint path, or the panel would be torn down underneath a
+       renderer that never changed what it was drawing. The first build here
+       is a genuine repaint (the panel was left showing DASH_GAMEKB above), so
+       it is the second -- the one that lands on dash_build's idempotent early
+       return -- whose g_touched matters to the frame_end that follows it. */
+    dash_build(DASH_PANEL, 19);
+    dash_frame_end();
+    dash_build(DASH_PANEL, 19);
+    dash_frame_end();
+    assert(dash_cell(0, 19) == DT_CORNER_TL);
+    assert(dash_cell(39, 19) == DT_CORNER_TR);
+
+    printf("test_dash_map: ok\n");
+    return 0;
+}

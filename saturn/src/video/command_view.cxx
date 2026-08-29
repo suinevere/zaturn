@@ -29,6 +29,7 @@
 #include "console_view.h"
 #include "app_state.h"
 #include "input.h"
+#include "dash_view.h"
 
 /*----------------------
  | CV_TOP_MARGIN
@@ -831,19 +832,24 @@ static void cv_overlay_row_text(const RoomModel &m, int idx, char *out) {
  |   around the cursor, and a bottom border, with the selected row in reverse
  |   video.
  | Author: suinevere
- | Dependencies: room_model.h, text_map.h, command_panel.h
+ | Dependencies: room_model.h, text_map.h, command_panel.h, dash_view.h
  | Globals: N/A
  | Params: p -- panel state; m -- the room snapshot; top_y -- the row the
- |   overlay's top border is drawn on (the strip's first content row)
+ |   overlay's top border is drawn on (the strip's first content row); dash --
+ |   1 when the dashboard panel is up, so the border rows are skipped and the
+ |   overlay sits on the marble instead of drawing a second frame over it; the
+ |   rows stay blank either way, since the caller clears them first
  | Returns: N/A
  ----------------------*/
-static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y) {
+static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y, int dash) {
     char border[CV_OVERLAY_W + 1];
     char row_text[CV_OVERLAY_W + 1];
     int window, i;
 
-    cv_overlay_border(border);
-    text_print(CV_OVERLAY_X, top_y, border);
+    if (!dash) {
+        cv_overlay_border(border);
+        text_print(CV_OVERLAY_X, top_y, border);
+    }
 
     window = (p.cursor / CV_OVERLAY_ROWS) * CV_OVERLAY_ROWS;
     for (i = 0; i < CV_OVERLAY_ROWS; i++) {
@@ -854,7 +860,7 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
         else                 text_print(CV_OVERLAY_X, y, row_text);
     }
 
-    text_print(CV_OVERLAY_X, top_y + 1 + CV_OVERLAY_ROWS, border);
+    if (!dash) text_print(CV_OVERLAY_X, top_y + 1 + CV_OVERLAY_ROWS, border);
 }
 
 /*----------------------
@@ -863,9 +869,12 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
  |   either the inventory overlay or the compass rose/word page/command list,
  |   highlighting the focused module's selected entry in reverse video. The
  |   borders carry no highlight and no control hints -- both rows are the one
- |   CV_BORDER string.
+ |   CV_BORDER string. The overlay takes the divider-less dashboard variant,
+ |   since its box spans all three modules and the grooves would otherwise show
+ |   through the item list.
  | Author: suinevere
- | Dependencies: command_rose.h, rose_draw.h, text_map.h, console_view.h
+ | Dependencies: command_rose.h, rose_draw.h, text_map.h, console_view.h,
+ |   dash_view.h
  | Globals: g_difficulty
  | Params: p -- panel state; m -- the room snapshot; w -- the current word page
  | Returns: N/A
@@ -878,11 +887,12 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     int border_bottom = content0 + CR_ROWS;
     int row;
 
-    /* Black behind the box, the way a menu box is black: NBG3 leaves palette
-       entry 0 transparent, so over a wallpaper the rose and the lists would
-       otherwise be read against the picture. The rectangle is the two border
-       rows and everything between them -- the command line above the top border
-       is outside the box and keeps the wallpaper, like console text does. */
+    int dash = dash_ready();
+    dash_set(p.overlay ? DASH_OVERLAY : DASH_PANEL, border_top);
+
+    /* Black behind the box on the fallback path, the way a menu box is black:
+       NBG3 leaves palette entry 0 transparent, so over a wallpaper the rose and
+       the lists would otherwise be read against the picture. */
     image_window_box(0, border_top, 40, border_bottom - border_top + 1);
     image_window_on();
 
@@ -890,12 +900,12 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     text_print(0, input_row, "> %s", p.line);
 
     text_clear_line(border_top);
-    text_print(0, border_top, CV_BORDER);
+    if (!dash) text_print(0, border_top, CV_BORDER);
 
     if (p.overlay) {
         int y;
         for (y = content0; y < border_bottom; y++) text_clear_line(y);
-        cv_draw_overlay(p, m, content0);
+        cv_draw_overlay(p, m, content0, dash);
     } else {
         unsigned char flat[RM_DIR_N];
         const unsigned char *exits;
@@ -911,22 +921,22 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
             int y = content0 + row;
             int inner = row - CV_LIST_ROW0;
             text_clear_line(y);
-            text_print(0, y, "|");
+            if (!dash) text_print(0, y, "|");
             cv_draw_rose_row(row, exits, y, sel);
-            text_print(14, y, "|");
+            if (!dash) text_print(14, y, "|");
             if (inner >= 0 && inner < CP_WORD_ROWS) {
                 cv_draw_word_row(inner, p, w, y);
-                text_print(30, y, "|");
+                if (!dash) text_print(30, y, "|");
                 cv_draw_cmd_row(inner, p, y);
             } else {
-                text_print(30, y, "|");
+                if (!dash) text_print(30, y, "|");
             }
-            text_print(39, y, "|");
+            if (!dash) text_print(39, y, "|");
         }
     }
 
     text_clear_line(border_bottom);
-    text_print(0, border_bottom, CV_BORDER);
+    if (!dash) text_print(0, border_bottom, CV_BORDER);
 }
 
 // ---- pad-driven editing ------------------------------------------------------

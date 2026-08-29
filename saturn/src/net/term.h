@@ -19,6 +19,31 @@
  ----------------------*/
 #define ZATURN_RX_BUDGET 512
 
+/*----------------------
+ | ZATURN_TELOPT / TERM_OOB_START / TERM_OOB_END / TERM_OOB_MAX
+ | Description: The private telnet option this client negotiates to ask
+ |   multizorkd for out-of-band room ids, the bytes that frame one, and the
+ |   longest payload the parser will buffer before giving up on a frame. Must
+ |   match multizorkd.c's constants of the same names -- there is no shared
+ |   header between the Saturn build and the server.
+ | Author: suinevere
+ ----------------------*/
+#define ZATURN_TELOPT   178
+#define TERM_OOB_START  0x01
+#define TERM_OOB_END    0x02
+#define TERM_OOB_MAX    8
+
+/*----------------------
+ | TERM_OOB_DRAIN_MAX
+ | Description: How many bytes past a start marker the parser keeps waiting for
+ |   the terminator before deciding this was never a frame. Without a bound a
+ |   single corrupted byte that happened to be 0x01 would swallow the rest of the
+ |   session in silence, which is far worse than printing a few stray characters.
+ |   Generous against the seven-byte frame it is guarding.
+ | Author: suinevere
+ ----------------------*/
+#define TERM_OOB_DRAIN_MAX 32
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,6 +63,12 @@ typedef struct {
     int armed;
     int saw_output;
     int quiet;
+    int          oob_active;   /* inside a frame, between the two markers */
+    int          oob_len;      /* bytes kept, or -1 once the frame ran too long */
+    int          oob_seen;     /* bytes since the start marker, for the give-up bound */
+    char         oob[TERM_OOB_MAX];
+    unsigned int room_id;      /* last id the server sent */
+    int          room_id_fresh;/* set on arrival, cleared by whoever acts on it */
 } TermState;
 
 /*----------------------
@@ -48,6 +79,20 @@ typedef struct {
  | Author: suinevere
  ----------------------*/
 void term_init(TermState *t);
+
+/*----------------------
+ | term_request_room_id
+ | Description: Sends the one-time IAC WILL that asks the server to start
+ |   reporting room ids. Costs three bytes and is safe against any server: one
+ |   that does not know the option either ignores it or answers IAC WONT, which
+ |   term_service already swallows. Call once, right after the link opens.
+ | Author: suinevere
+ | Dependencies: cui_transport.h
+ | Globals: N/A
+ | Params: tr -- the open transport
+ | Returns: N/A
+ ----------------------*/
+void term_request_room_id(const cui_transport_t *tr);
 int  term_service(TermState *t, const cui_transport_t *tr, int max_bytes);
 void term_submit_line(const cui_transport_t *tr, KeyboardState *k);
 

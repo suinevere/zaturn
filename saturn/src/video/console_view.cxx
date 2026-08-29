@@ -462,6 +462,11 @@ static const unsigned char KB_EXITS_ALL[RM_DIR_N] = {
 };
 static const unsigned char *kb_exits(unsigned char *flat) {
     (void) flat;
+    /* Once multizorkd has named the room, the story in .rodata knows its real
+       exits; until then it does not, and a model that has been bound but never
+       refreshed reports every direction as NONE -- a rose with no way out at
+       all, which is a worse lie than offering all twelve. */
+    if (room_model_has_room()) return room_model_get()->exits;
     return KB_EXITS_ALL;
 }
 #else

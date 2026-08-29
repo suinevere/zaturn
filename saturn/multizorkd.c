@@ -32,6 +32,24 @@
 #define MULTIZORKD_VERSION "0.1.0"
 #define MULTIZORKD_DEFAULT_PORT 23  /* telnet! */
 #define MULTIZORKD_DEFAULT_BACKLOG 64
+
+/*----------------------
+ | ZATURN_TELOPT / ZATURN_OOB_START / ZATURN_OOB_END
+ | Description: The private telnet option a Zaturn netbin negotiates to ask for
+ |   out-of-band room ids, and the bytes that frame one. 178 is picked out of the
+ |   unassigned option space, avoiding both the IANA-registered low numbers and
+ |   the de-facto MUD options (69/70 MSDP/MSSP, 85/86 MCCP, 90/91 MSP/MXP,
+ |   93 ZMP, 200/201 ATCP/GMCP) that a real client might send -- this channel
+ |   must never switch on for someone playing with stock telnet.
+ |
+ |   SOH/STX frame the payload because the Z-machine never prints either, so a
+ |   frame that ever escapes to a client that did not ask for it shows up as
+ |   visible garbage rather than silently corrupting a word.
+ | Author: suinevere
+ ----------------------*/
+#define ZATURN_TELOPT     178
+#define ZATURN_OOB_START  0x01
+#define ZATURN_OOB_END    0x02
 #define MULTIZORKD_DEFAULT_EGID 0
 #define MULTIZORKD_DEFAULT_EUID 0
 #define MULTIZORK_SITE_BASEURL "https://suin.uk"
@@ -178,6 +196,9 @@ struct Connection
     int saw_first_line;      // the blocklist only ever inspected a connection's opening line.
     char lobby_rows[LOBBY_MAX_ROWS][ROOMNAME_MAX];  // room names as last printed to this connection.
     size_t num_lobby_rows;
+    int wants_room_id;         // client negotiated ZATURN_TELOPT; send it room ids out of band.
+    int room_id_sent;          // whether last_room_id_sent holds a value yet.
+    uint16 last_room_id_sent;  // suppress the frame when the player has not moved.
 };
 
 static Connection **connections = NULL;
@@ -1052,6 +1073,40 @@ static void write_to_connection(Connection *conn, const char *str)
     write_to_connection_slen(conn, str, strlen(str));
 }
 
+/*----------------------
+ | write_room_id
+ | Description: Sends one out-of-band room-id frame to a player who asked for
+ |   the channel. Silent for every connection that did not negotiate
+ |   ZATURN_TELOPT, which is every stock telnet client, and silent again when
+ |   the id has not changed since the last frame -- a turn spent examining
+ |   something costs nothing on the wire.
+ |
+ |   Four hex digits rather than two so a story with more than 255 objects does
+ |   not need a new frame, and so no payload byte can ever collide with telnet
+ |   IAC.
+ | Author: suinevere
+ | Dependencies: write_to_connection
+ | Globals: N/A
+ | Params: player -- the player whose client is told; room -- the room object id
+ | Returns: N/A
+ ----------------------*/
+static void write_room_id(Player *player, const uint16 room)
+{
+    Connection *conn = player->connection;
+    char frame[8];
+
+    if (conn == NULL) return;
+    if (!conn->wants_room_id) return;
+    if (conn->room_id_sent && (conn->last_room_id_sent == room)) return;
+
+    snprintf(frame, sizeof (frame), "%cR%04X%c",
+             (int) ZATURN_OOB_START, (unsigned int) room, (int) ZATURN_OOB_END);
+    write_to_connection(conn, frame);
+
+    conn->last_room_id_sent = room;
+    conn->room_id_sent = 1;
+}
+
 static void free_instance(Instance *inst);
 
 static void drop_connection(Connection *conn)
@@ -1423,6 +1478,23 @@ static void opcode_read_multizork(void)
     dbg("max parse: %u\n", (unsigned int) parselen);
     if (parselen < 4)
         GState->die("parse buffer is too small for reading");  // happens on buffer overflow.
+
+    // The turn's output is printed and the game is about to read the next
+    // command, so this is the moment the room is settled. Read globals[0] and
+    // not player->gvar_location: the latter is only swapped back out after the
+    // step finishes, so it still holds where the player was *last* turn.
+    //
+    // Read the two bytes big-endian, the way the Z-machine's own varAddress +
+    // READUI16 path does (mojozork.c:57,198), and NOT the way the code around
+    // here reads globals: those sites cast to uint16* and read natively
+    // (:1623, :1721), which on a little-endian host is the byte-swap of the
+    // real object id. That swap is self-consistent for gvar_location -- it is
+    // written back through the same cast -- but it is not an object id, and
+    // this frame promises one.
+    {
+        const uint8 *g0 = GState->story + GState->header.globals_addr;
+        write_room_id(player, (uint16) ((((uint16) g0[0]) << 8) | ((uint16) g0[1])));
+    }
 
     player->next_inputbuf = input;
     player->next_inputbuflen = inputlen;
@@ -3127,6 +3199,19 @@ static void recv_from_connection(Connection *conn)
                     if (i < br) {
                         const unsigned char wont[4] = { 255, 252, (unsigned char) buf[i], 0 };  // WONT do requested action.
                         write_to_connection(conn, (const char *) wont);
+                    }
+                } else if (((unsigned char) buf[i]) == 251) {  // WILL
+                    i++;
+                    // !!! FIXME: fails on a buffer edge.
+                    if (i < br) {
+                        // A Zaturn netbin asking for out-of-band room ids. This
+                        // is the only WILL we answer; everything else stays
+                        // ignored, as it always was.
+                        if (((unsigned char) buf[i]) == ZATURN_TELOPT) {
+                            const unsigned char doit[4] = { 255, 253, ZATURN_TELOPT, 0 };
+                            conn->wants_room_id = 1;
+                            write_to_connection(conn, (const char *) doit);
+                        }
                     }
                 } else if (((unsigned char) buf[i]) >= 250) {  // ignore everything else.
                     i++;

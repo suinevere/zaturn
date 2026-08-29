@@ -80,6 +80,41 @@ typedef struct {
 int room_model_bind(const unsigned char *story, unsigned int len);
 
 /*----------------------
+ | room_model_set_exits_only
+ | Description: Stops refresh_room after the exit properties, leaving `here` and
+ |   `carried` empty and skipping the player-object inference entirely.
+ |
+ |   For a client bound to a *static* story image while the game runs elsewhere.
+ |   The exits it decodes are compile-time properties and stay true; the room's
+ |   contents are whatever the story shipped with and go stale the moment anyone
+ |   picks something up, and the inferred player is a guess. A model that reports
+ |   the mailbox forever, or invents an inventory, is worse than one that admits
+ |   it knows only the doorways. The CD build, refreshing against a live story,
+ |   never sets this.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_exits_only
+ | Params: on -- nonzero to report exits and nothing else
+ | Returns: N/A
+ ----------------------*/
+void room_model_set_exits_only(int on);
+
+/*----------------------
+ | room_model_has_room
+ | Description: Whether a room has actually been named yet -- true once
+ |   refresh_room has been given a nonzero id. Distinct from
+ |   room_model_available(), which only says a story is bound: between binding
+ |   and the first refresh every exit reads NONE, and a caller that drew that
+ |   would show a room with no way out at all.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_model
+ | Params: N/A
+ | Returns: nonzero once a room is known
+ ----------------------*/
+int room_model_has_room(void);
+
+/*----------------------
  | room_model_available
  | Description: Whether the last bind produced a usable model.
  | Author: suinevere

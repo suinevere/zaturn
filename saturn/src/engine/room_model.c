@@ -744,6 +744,28 @@ void room_model_refresh(void) {
  | Params: room -- the room object number
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | g_exits_only
+ | Description: Set by room_model_set_exits_only. See room_model.h for why a
+ |   static-image client must not report contents or inventory.
+ | Author: suinevere
+ ----------------------*/
+static int g_exits_only = 0;
+
+/*----------------------
+ | room_model_set_exits_only / room_model_has_room
+ | Description: The mode switch and the "do we know a room yet" test. See
+ |   room_model.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_exits_only, g_model
+ | Params: on -- nonzero to report exits and nothing else
+ | Returns: N/A / nonzero once a room is known
+ ----------------------*/
+void room_model_set_exits_only(int on) { g_exits_only = on ? 1 : 0; }
+
+int room_model_has_room(void) { return g_model.room != 0; }
+
 void room_model_refresh_room(unsigned short room) {
     unsigned int a;
     int i;
@@ -775,6 +797,10 @@ void room_model_refresh_room(unsigned short room) {
         }
         a += 1u + (unsigned int) plen;
     }
+
+    /* Exits are all a client bound to a static image may honestly report; see
+       room_model_set_exits_only in room_model.h. */
+    if (g_exits_only) return;
 
     g_model.nhere = collect_children(room, g_model.here, RM_HERE_MAX);
 

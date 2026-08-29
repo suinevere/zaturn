@@ -2,9 +2,14 @@
  | term.c
  | Description: A minimal telnet terminal over a cui_transport: drains received
  |   bytes to the console (defensively swallowing any telnet IAC command
- |   sequences, which the multizork server never actually sends) and sends a typed
- |   line to the server with its trailing newline. Platform-independent -- all I/O
- |   goes through the transport and the console.
+ |   sequences, which the multizork server only sends in reply to our own) and
+ |   sends a typed line to the server with its trailing newline.
+ |   Platform-independent -- all I/O goes through the transport and the console.
+ |
+ |   Also strips multizorkd's out-of-band frames out of the stream and publishes
+ |   what they carried. This file owns the byte stream and therefore the framing;
+ |   it deliberately does not know what a room id means. It parks a number in
+ |   TermState and whoever cares decides -- see online.cxx.
  | Author: suinevere
  | Dependencies: term.h, console.h (console_write), string.h
  ----------------------*/
@@ -29,6 +34,69 @@ void term_init(TermState *t) {
     t->armed = 0;
     t->saw_output = 0;
     t->quiet = 0;
+    t->oob_active = 0;
+    t->oob_len = 0;
+    t->oob_seen = 0;
+    t->oob[0] = 0;
+    t->room_id = 0;
+    t->room_id_fresh = 0;
+}
+
+/*----------------------
+ | term_request_room_id
+ | Description: Asks the server for out-of-band room ids. See term.h.
+ | Author: suinevere
+ | Dependencies: cui_transport.h
+ | Globals: N/A
+ | Params: tr -- the open transport
+ | Returns: N/A
+ ----------------------*/
+void term_request_room_id(const cui_transport_t *tr) {
+    static const uint8_t will[3] = { TELNET_IAC, 251 /* WILL */, ZATURN_TELOPT };
+    cui_transport_send(tr, will, 3);
+}
+
+/*----------------------
+ | hexval
+ | Description: One uppercase hex digit's value, or -1 for anything else. Used
+ |   to reject a malformed frame rather than silently decoding it as a room the
+ |   server never named.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: c -- the character
+ | Returns: 0..15, or -1
+ ----------------------*/
+static int hexval(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+/*----------------------
+ | oob_finish
+ | Description: Decodes a completed out-of-band frame. Only one form exists --
+ |   'R' followed by four hex digits, a room object id -- and anything else is
+ |   dropped without comment, so a future server that adds a frame type does not
+ |   make an older client print garbage.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: t -- terminal state holding the captured payload
+ | Returns: N/A
+ ----------------------*/
+static void oob_finish(TermState *t) {
+    unsigned int v = 0;
+    int i;
+    if (t->oob_len == 5 && t->oob[0] == 'R') {
+        for (i = 1; i <= 4; i++) {
+            int d = hexval(t->oob[i]);
+            if (d < 0) return;
+            v = (v << 4) | (unsigned int) d;
+        }
+        t->room_id = v;
+        t->room_id_fresh = 1;
+    }
 }
 
 /*----------------------
@@ -87,6 +155,34 @@ int term_service(TermState *t, const cui_transport_t *tr, int max_bytes) {
         }
         if (c == TELNET_IAC) {
             t->iac_skip = 2;
+            continue;
+        }
+        /* Out-of-band frame. Nothing between the markers reaches the console --
+           an unterminated one is abandoned at the buffer cap and its bytes are
+           dropped rather than replayed, because replaying them would put the
+           very control characters this framing exists to hide onto the screen. */
+        if (t->oob_active) {
+            if (c == TERM_OOB_END) {
+                if (t->oob_len >= 0) oob_finish(t);
+                t->oob_active = 0;
+            } else if (++t->oob_seen > TERM_OOB_DRAIN_MAX) {
+                /* No terminator in sight, so this was never a frame -- give up
+                   and let the bytes after it print. A stray 0x01 costs a few
+                   swallowed characters instead of the rest of the session. */
+                t->oob_active = 0;
+            } else if (t->oob_len >= 0) {
+                /* Too long to be the frame we understand. Keep discarding to the
+                   terminator rather than resuming mid-payload, which would put
+                   the frame's own tail on screen. */
+                if (t->oob_len >= TERM_OOB_MAX) t->oob_len = -1;
+                else t->oob[t->oob_len++] = (char) c;
+            }
+            continue;
+        }
+        if (c == TERM_OOB_START) {
+            t->oob_active = 1;
+            t->oob_len = 0;
+            t->oob_seen = 0;
             continue;
         }
         {

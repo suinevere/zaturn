@@ -28,6 +28,9 @@
 #include "command_view.h"
 #endif
 extern "C" {
+#include "room_model.h"
+}
+extern "C" {
 #include "console.h"
 #include "keyboard.h"
 #include "saturn_keyboard.h"
@@ -253,6 +256,41 @@ void ensure_online_typeahead(void) {
 #endif
 }
 
+#ifdef NETBIN
+/*----------------------
+ | netbin_room
+ | Description: The room snapshot the command panel draws. Once multizorkd has
+ |   named a room this is the real decode; before that it is a stand-in with all
+ |   twelve directions open, because room_model reports every exit as NONE
+ |   between being bound and being refreshed, and a rose showing a room with no
+ |   way out is a worse lie than one offering directions the server will refuse.
+ |
+ |   Contents and inventory stay empty in both: room_model is in exits-only mode
+ |   here, and this build has no business claiming either.
+ | Author: suinevere
+ | Dependencies: room_model.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the snapshot to draw and edit against
+ ----------------------*/
+static const RoomModel *netbin_room(void) {
+    static RoomModel all_open;
+    static bool built = false;
+    if (room_model_has_room()) return room_model_get();
+    if (!built) {
+        for (int i = 0; i < RM_DIR_N; i++) {
+            all_open.exits[i] = RM_EXIT_OPEN;
+            all_open.dest[i]  = 0;
+        }
+        all_open.room = 0;
+        all_open.nhere = 0;
+        all_open.ncarried = 0;
+        built = true;
+    }
+    return &all_open;
+}
+#endif
+
 /*----------------------
  | online_mode
  | Description: Dials first and builds the typeahead only once the carrier is up,
@@ -356,6 +394,15 @@ void online_mode(void) {
     CommandPanel cpanel; cp_reset(&cpanel);
     g_cmd_mode = g_cmd_iface;
     mode_toggle_reset();
+    /* The rose can show this game's real exits, but only the exits: the story
+       is the one in .rodata and the game is on the server, so its room contents
+       are whatever Zork shipped with and its inventory is a guess. Ask for the
+       ids, bind the decoder to the embedded image, and tell it to stop at the
+       doorways. Until the first id lands, room_model_has_room() is false and
+       both roses keep offering all twelve directions. */
+    term_request_room_id(tr);
+    room_model_bind(netbin_story_data(), netbin_story_size());
+    room_model_set_exits_only(1);
 #endif
     for (;;) {
         term_service(&ts, tr, ZATURN_RX_BUDGET);
@@ -377,6 +424,12 @@ void online_mode(void) {
         }
 
         check_soft_reset();
+#ifdef NETBIN
+        if (ts.room_id_fresh) {
+            room_model_refresh_room((unsigned short) ts.room_id);
+            ts.room_id_fresh = 0;
+        }
+#endif
         SaturnKeyEvent ke = saturn_keyboard_poll();
         if (ke.kind != SATURN_KEY_NONE) g_kbd_visible = false;
         bool pad = (ke.kind == SATURN_KEY_NONE);
@@ -410,7 +463,7 @@ void online_mode(void) {
         bool panel = (g_kbd_visible && g_cmd_mode == IFACE_PANEL);
         CommandWords cw;
         DictionaryWord* selected = nullptr; int cw_len = 0;
-        if (panel) command_edit(k, cpanel, *room_model_get(), g_online_ta, ke, cw);
+        if (panel) command_edit(k, cpanel, *netbin_room(), g_online_ta, ke, cw);
         else       typeahead_edit(k, g_online_ta, sug_index, sug_last, ke, pad, selected, cw_len);
 #else
         DictionaryWord* selected; int cw_len;
@@ -457,7 +510,7 @@ void online_mode(void) {
 
         render_console();
 #ifdef NETBIN
-        if (panel) render_command_panel(cpanel, *room_model_get(), cw);
+        if (panel) render_command_panel(cpanel, *netbin_room(), cw);
         else       render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);
 #else
         render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);

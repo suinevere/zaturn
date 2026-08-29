@@ -42,7 +42,7 @@ EXPECTED = {
     "src/input/netbin_story.c",
     "src/system/saturn_backup.cxx",
     "src/system/netbin_nocd.c",
-    "src/engine/netbin_room_model.c",
+    "src/engine/room_model.c",
     "src/input/command_panel.c",
     "src/video/command_view.cxx",
     "src/engine/app_state.cxx",
@@ -52,8 +52,7 @@ EXPECTED = {
 # SOURCES must exclude all of them (CRITICAL 1).
 NETBIN_ONLY = {"src/main_netbin.cxx", "src/net/netbin_pages.cxx",
                "src/input/typeahead_solution_zork1.c",
-               "src/system/netbin_nocd.c",
-               "src/engine/netbin_room_model.c"}
+               "src/system/netbin_nocd.c"}
 
 
 def strip_comments(text):

@@ -1116,20 +1116,27 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
  | Description: Type Word in the command module: overwrites the sentence in
  |   progress with the selected entry's submit word and marks it submitted --
  |   these are whole standalone commands, not sentence-slot picks. "invent" is
- |   the one exception: with the room model available there is a carried set
- |   to show, so it opens the overlay instead of submitting; unavailable, it
- |   falls through and submits "inventory" like a typed command, since there
- |   is nothing to browse.
+ |   the one exception: with a model that actually holds carried objects there is
+ |   a set to browse, so it opens the overlay; with nothing carried -- or no
+ |   model at all -- it falls through and submits "inventory" like a typed
+ |   command and lets the game answer.
  | Author: suinevere
  | Dependencies: command_panel.h, room_model.h
  | Globals: N/A
- | Params: p -- panel state
+ | Params: p -- panel state; m -- the room snapshot, for what is carried
  | Returns: N/A
  ----------------------*/
-static void cv_cmd_accept(CommandPanel &p) {
+static void cv_cmd_accept(CommandPanel &p, const RoomModel &m) {
     const char *cmd;
     int i = 0;
-    if (p.cursor == 0 && room_model_available()) { cp_overlay_open(&p); return; }
+    /* Browse only when there is something to browse. An empty box tells the
+       player nothing; the game's own "You are empty-handed" tells them the
+       thing they asked. It also keeps the netbin honest, where the model is
+       bound to a static story and can never have an inventory to show. */
+    if (p.cursor == 0 && room_model_available() && m.ncarried > 0) {
+        cp_overlay_open(&p);
+        return;
+    }
     cmd = CV_CMD_WORD[p.cursor];
     while (cmd[i] != '\0' && i < CP_LINE_MAX - 1) { p.line[i] = cmd[i]; i++; }
     p.line[i] = '\0';
@@ -1279,7 +1286,7 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
                     cp_pick(&p, room_model_dir_word(d), 0);
             }
             else if (p.box == CP_BOX_WORD) cv_word_accept(p, w, m, root);
-            else if (p.box == CP_BOX_CMD)  cv_cmd_accept(p);
+            else if (p.box == CP_BOX_CMD)  cv_cmd_accept(p, m);
         }
         if (pad_fired(face_button(FA_ACCEPT))) cp_submit(&p);
         if (pad_fired(face_button(FA_BACK))) {

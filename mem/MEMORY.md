@@ -9,3 +9,4 @@
 - [Merge order: fallback-mood before tiers](2026-08-05-merge-order-constraint.md) — DISCHARGED: both branches merged in the required order. Kept for the bug class, not as a live constraint.
 - [Multizork lobby and four seats](2026-08-27-multizork-lobby-and-four-seats-handoff.md) — branch multizork-lobby: named-room lobby plus mid-game seat claiming, twelve tasks reviewed, never built or run.
 - [Multizork prompt rewording (2026-08-28)](2026-08-28-multizork-prompt-rewording-handoff.md) — every player-facing prompt in multizorkd reworded to dictation, the lobby rebuilt as one 40-column numbered list, the transcripts site cut to transcripts; squashed to main as dc453f3, never built or run.
+- [Game load time handoff (2026-08-29)](2026-08-29-game-load-time-handoff.md) — the wait between picking a game and playing it cut from a measured 23.4s to a projected ~2s; squashed to main as a077383, 2df5e0a unpushed, and nothing yet seen on hardware.

@@ -1,0 +1,110 @@
+---
+name: game-load-time-handoff
+description: The wait between picking a game and playing it cut from a measured 23.4s to a projected ~2s by deleting the loading screen and reading the story under the menu's fade-out; squashed to main as a077383, with 2df5e0a unpushed and nothing yet seen on hardware.
+metadata:
+  type: project
+---
+
+Squashed to `main` as `a077383` and **pushed**. One later commit, `2df5e0a`, is committed and
+**not pushed**. `6f07e58` (the GAME.INF manifest) was already on the remote before the squash, so
+it stayed its own commit — folding it in would have meant a force-push over published history.
+
+The commits carry the what. This file carries the measurements they were built on, the things
+that are still unverified, and the environment traps that cost time.
+
+## Nothing here has run on hardware
+
+Every figure below came off the owner's emulator. Its CD is roughly **750 KB/s** — inferred from
+`cue load` reading 642,560 bytes in 51 fields — against a real Saturn 2× drive's **~300 KB/s**.
+The CD-bound terms (story read, first room's picture) will be materially slower there; the fade
+lengths will not move. The design self-adjusts — `menu_fade_out_hold` returns immediately if the
+read outlasted the ramp, so a slow drive holds black longer rather than tearing — but **that path
+has never been seen run**.
+
+The projected ~2s is: 1.5s fade-out with the load underneath + ~0.1s first picture + 0.5s reveal.
+
+## The measurements the work was driven by
+
+Read off an on-screen phase table (a `load_timer` module, since deleted in `e5c7f30` — inside
+`a077383`). Colossal Cave, emulator, in video fields:
+
+| phase | before | after the .BLB fix |
+|---|---|---|
+| cue load (LOADCD.PCM, 642,560 B) | 51 | — deleted |
+| typing | 580 | — deleted |
+| story read | 70 | 70 |
+| **sound init** | **480** | **0** |
+| trie build | 21 | 21 |
+| art warm | 158 → 19 | — deleted |
+| **total** | **1406 (23.4s)** | ~92 (1.5s) of real work |
+
+`sound init` at 480 fields was **exactly** 60 attempts × 8 frames in `cd_reader`'s retry loop:
+every game but Lurking Horror has no `.BLB`, and the loop retried an absent filename sixty times.
+The 19-field art warm was not a speed-up but a **failure** — it warmed zero slots, because
+`category_art.inc` had been regenerated against a partial local TGA set.
+
+Two of my own estimates were wrong before this table existed: I costed the story file and ignored
+the two reads that dominated, and I called the cue load ~2s when it was 0.8s. **Measure this path,
+do not reason about it.**
+
+## The one non-obvious mechanism
+
+`Core::Synchronize` waits for the *frame boundary*, so a CD read inside a frame just makes that
+frame long. Anything paced by counting its own Synchronize calls therefore **adds** its full
+length to a load instead of covering any of it. That is why the old typing cost 9.6s on top of
+the load rather than hiding it, and why `field_clock.h` (a free-running V-blank counter) exists.
+Its box states this; `menu_fade_out_begin/tick/hold` in `menu.cxx` is the only consumer.
+
+## Verified empirically, not assumed
+
+`xorriso -map <dir> /Z3` **merges** into an existing `/Z3` rather than replacing it. Tested with
+the bundled `tools/assets/bin/win/xorriso.exe`: injected a folder holding only `TESTGAME.Z3` into
+the base ISO and `GAME.INF` survived alongside it. That is the whole basis for `2df5e0a` removing
+the manifest handling from the pipeline — if it is ever doubted, re-run that test rather than
+reading the xorriso docs.
+
+## Open
+
+- **`2df5e0a` is unpushed.**
+- **Hardware run.** The whole point is unconfirmed. Watch for: the fade landing before the load on
+  a slow drive, and the opening room's picture arriving before the reveal.
+- **`test_ci_boot_music` fails, and did before this work.** `release.yml` has no literal
+  `bash … pvms.bat` line — it calls `compile.bat`, which invokes pvms itself. Pre-existing, left
+  alone.
+- **`display_shuffle_scene` now has no caller** — it existed for the deleted art warm. Its doc
+  boxes in `display.c` / `display.h` say so. Left rather than widening the change.
+- **`room-art-pipeline` still holds `ac739ea`**, the original load-timer commit cherry-picked to
+  main early on and since deleted. Obsolete; nothing depends on it.
+- **The `full-image.yml` manifest check was kept** through `2df5e0a` as verification rather than
+  generation. The owner may still want it gone; it is a two-line deletion.
+- **The owner's `saturn/cd/data/Z3/` holds all 31 stories**, not the three the repo ships. The
+  committed `GAME.INF` describes all 31 — agreed as harmless, since `scan_z3_folder` builds the
+  list and records for absent files are never looked up.
+
+## Environment traps that cost real time
+
+- **Bash heredocs mangle backslashes.** `'\0'` in a quoted heredoc reached the file as a literal
+  NUL byte and compiled to `' '`. Write patch scripts to a file with the Write tool and run them;
+  do not pipe Python through a heredoc.
+- **`category_art.inc` is regenerated by every build** from whatever TGAs are staged locally.
+  It is tracked. `git checkout --` it before every commit; committing it ships a degraded table.
+- **`make` from Git Bash fails** with `Cannot create temporary file in C:\WINDOWS\`. Build with
+  `compile.bat` through the PowerShell tool instead. For one-off compiles, add `-pipe`.
+- **pytest is not installed.** Tests were run through a stub that fakes `pytest.fixture`/`mark`
+  and calls each `test_*` directly, supplying a `tempfile` dir for `tmp_path`.
+- Git has `core.autocrlf=true` and most sources are LF in the repo. Patch scripts should detect
+  CRLF, normalise, edit, and write back in the original ending.
+
+## Suggested skills
+
+- **`superpowers:verification-before-completion`** — the recurring failure here was claiming a
+  figure without measuring it. Nothing about this work should be called done on reasoning.
+- **`diagnosing-bugs`** — if the hardware run disappoints, the answer is another phase table, not
+  another estimate. `field_clock.h` is still in the tree; re-adding marks is cheap.
+- **`superpowers:test-driven-development`** — for any further change to the manifest format, whose
+  layout is asserted against the C constants in `tools/tests/test_gen_game_info.py`.
+
+## Related
+
+[[scene-tagged-art-handoff]] owns the art the deleted warm used to prefetch.
+[[multizork-prompt-rewording-handoff]] is unrelated work on the same `main`.

@@ -1,9 +1,10 @@
 /*----------------------
  | netbin_pages.h
- | Description: The netbin build's three screens -- the dialer (which is also
- |   its root screen) and, reached from it, the gamepad and keyboard Controls
- |   pages. Lifted from menu_pages.cxx so the netbin links these three rather
- |   than the whole Options page set; see
+ | Description: The netbin build's own screens -- the dialer (which is also its
+ |   root screen), the gamepad and keyboard Controls pages reached from it, and
+ |   the in-session pause menu with its Display and Gameplay pages. Lifted from
+ |   menu_pages.cxx so the netbin links these rather than the whole Options page
+ |   set; see
  |   docs/superpowers/specs/2026-07-25-netbin-minimal-design.md.
  | Author: suinevere
  | Dependencies: menu.h, input.h, console_view.h, options.h, app_state.h,
@@ -34,6 +35,29 @@ extern "C" {
  | Returns: N/A -- returns only once g_dialnum holds a committed valid number
  ----------------------*/
 void netbin_dial_page(void);
+
+/*----------------------
+ | netbin_pause_menu
+ | Description: The in-session pause menu, opened with Start from the telnet
+ |   terminal: Resume, Display, Gameplay, Controls, Restart. Resume, B and Start
+ |   all close it; there is nothing here to cancel, since each page commits or
+ |   discards its own edits before returning. Display and Gameplay are the
+ |   menu_pages.cxx pages minus what the netbin has no use for -- no Dynamic
+ |   palette, no dimming. Restart runs the same confirm the soft-reset chord
+ |   does and, if accepted, never returns.
+ |
+ |   The session stays live behind it. Nothing is paused: the server keeps
+ |   playing and bytes keep arriving, so the caller must register a
+ |   menu_set_service pump before opening this or the UART's FIFO overruns
+ |   within a dozen bytes.
+ | Author: suinevere
+ | Dependencies: menu.h (menu_set_service), display.h, options.h, app_state.h,
+ |   soft_reset.h
+ | Globals: g_display, g_difficulty, g_verbosity
+ | Params: N/A
+ | Returns: N/A -- returns when the player resumes, or not at all on Restart
+ ----------------------*/
+void netbin_pause_menu(void);
 
 #ifdef __cplusplus
 }

@@ -26,6 +26,7 @@
 #include "game_catalog.h"
 #ifdef NETBIN
 #include "command_view.h"
+#include "netbin_pages.h"
 #endif
 extern "C" {
 #include "room_model.h"
@@ -57,6 +58,30 @@ using namespace SRL::Types;
  | Returns: bytes that would have been written
  ----------------------*/
 extern "C" int snprintf(char *str, size_t size, const char *fmt, ...);
+
+#ifdef NETBIN
+/*----------------------
+ | PauseSvc / pause_service
+ | Description: The RX pump menu_sync runs on the netbin's behalf while the
+ |   pause menu and anything under it holds the screen. Nothing about that menu
+ |   pauses the game -- it is a telnet session, the server plays on, and
+ |   transport_uart.c reads the 16550's FIFO with no software ring behind it, so
+ |   a page that stops calling term_service loses output after a dozen or so
+ |   bytes. Draining into the console rather than the wire is enough: the
+ |   scrollback the player returns to is the whole point.
+ | Author: suinevere
+ | Dependencies: term.c
+ | Globals: N/A
+ | Params: ctx -- the PauseSvc holding the live TermState and transport
+ | Returns: N/A
+ ----------------------*/
+struct PauseSvc { TermState *ts; const cui_transport_t *tr; };
+
+static void pause_service(void *ctx) {
+    PauseSvc *s = (PauseSvc *) ctx;
+    term_service(s->ts, s->tr, ZATURN_RX_BUDGET);
+}
+#endif
 
 /*----------------------
  | ONLINE_DIAL_ATTEMPTS
@@ -447,6 +472,43 @@ void online_mode(void) {
         }
 
 #ifdef NETBIN
+        /* Start opens the pause menu. It is free here: Esc and a held L+R are
+           disconnect, L/R alone cycles suggestions, and the interface toggle is
+           a Y/Z-class tap (g_toggle_btn), so nothing else in this loop claims
+           it. The menu runs its own poll loop, so register the RX pump for as
+           long as it owns the screen and clear it before touching the wire
+           again -- Restart never comes back, and main()'s landing clears it for
+           that path. */
+        if (g_pad->WasPressed(Button::START)) {
+            int verb_was = g_verbosity;
+            PauseSvc svc = { &ts, tr };
+            menu_set_service(pause_service, &svc);
+            netbin_pause_menu();
+            menu_set_service(nullptr, nullptr);
+            /* The toggle button can be pressed and released entirely while the
+               menu owns the screen -- see mode_toggle_reset in input.h. */
+            mode_toggle_reset();
+            menu_clear();
+            SRL::Core::Synchronize();
+            /* Room text is the parser's own state and the parser is on the
+               server, so a change only takes hold by being typed at it -- the
+               same handling saturn_glue.cxx gives the CD build's Options menu.
+               The half-built line is put back afterwards, since
+               term_submit_line resets the keyboard it sends from. */
+            if (g_verbosity != verb_was) {
+                char pending[KB_INPUT_MAX];
+                int i = 0;
+                for (; k.input[i] != '\0' && i < KB_INPUT_MAX - 1; i++) pending[i] = k.input[i];
+                pending[i] = '\0';
+                keyboard_load_line(&k, verbosity_command());
+                term_submit_line(tr, &k);
+                g_output_start = console_total_lines();
+                term_mark_output(&ts);
+                keyboard_load_line(&k, pending);
+            }
+            continue;
+        }
+
         /* The two interfaces keep their own buffers -- the panel draws
            cpanel.line, the keyboard k.input -- so the swap carries the
            half-built command across, exactly as saturn_glue.cxx does it for the

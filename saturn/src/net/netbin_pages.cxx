@@ -1,11 +1,14 @@
 /*----------------------
  | netbin_pages.cxx
- | Description: Implements the netbin build's three screens: the dial-number
- |   editor that is its root page, and the gamepad and physical-keyboard
- |   Controls pages that controls_dispatch switches between as the active input
- |   device changes. The bodies are lifted verbatim from menu_pages.cxx apart
- |   from the dialer, which trades its Cancel row for a Controls row -- the
- |   netbin has no title screen behind this page to cancel back to. Every page
+ | Description: Implements the netbin build's own screens: the dial-number
+ |   editor that is its root page, the gamepad and physical-keyboard Controls
+ |   pages that controls_dispatch switches between as the active input device
+ |   changes, and the pause menu online_mode opens over a live session, with the
+ |   Display and Gameplay pages under it. The bodies are lifted verbatim from
+ |   menu_pages.cxx apart from two: the dialer trades its Cancel row for a
+ |   Controls row -- the netbin has no title screen behind this page to cancel
+ |   back to -- and the Display page drops the Dynamic palette's dimming row and
+ |   image-slot pinning, which is what keeps title.cxx out of the link. Every page
  |   constructs a MenuBacking on entry (menu.h) and drops the input edge that
  |   opened it with an initial SRL::Core::Synchronize() before entering its poll
  |   loop, so the press that opened the page cannot also act inside it.
@@ -654,4 +657,279 @@ static bool keyboard_controls_page(void) {
 static void controls_dispatch(void) {
     bool again;
     do { again = g_kbd_visible ? controls_page() : keyboard_controls_page(); } while (again);
+}
+
+/*----------------------
+ | display_options_page
+ | Description: The netbin's Display page: Palette, Background and Text, over
+ |   Ok and Cancel. Lifted from menu_pages.cxx minus everything that serves the
+ |   Dynamic palette -- the pin/unpin of the wallpaper's image slot, and the
+ |   Dimming row, which only ever appeared under Dynamic because it offsets a
+ |   picture. Dynamic is unreachable in this build anyway (display_image_count()
+ |   is 0 with no game selected, so display_cycle_palette already steps past it,
+ |   and display_apply's image branch is #ifndef NETBIN), but dropping the calls
+ |   rather than relying on that is what keeps title.cxx out of the link.
+ |   Cancel restores the entry snapshot; Ok and Start persist via options_save.
+ | Author: suinevere
+ | Dependencies: display.c (cycle/name helpers), options.c (display_cycle_row,
+ |   display_apply, options_save), menu.c, console_view.c, input.c,
+ |   saturn_keyboard.h, soft_reset.h
+ | Globals: g_display, g_kbd_visible, g_menu_page_fade
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void display_options_page(void) {
+    MenuBacking backing;
+    enum { DR_PALETTE, DR_BG, DR_TEXT, DR_OK, DR_CANCEL };
+    static const int NROWS = 5;
+    int rows[NROWS];
+
+    int sel = 0;
+    DisplayState snapshot = g_display;
+    SRL::Core::Synchronize();
+    bool need_fade_in = true;
+    for (;;) {
+        int nrows = 0;
+        rows[nrows++] = DR_PALETTE;
+        rows[nrows++] = DR_BG;
+        rows[nrows++] = DR_TEXT;
+        rows[nrows++] = DR_OK;
+        rows[nrows++] = DR_CANCEL;
+
+        check_soft_reset();
+        SaturnKeyEvent ke = saturn_keyboard_poll();
+        note_input_device(ke);
+        pad_repeat_update();
+        if (g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + nrows) % nrows;
+        if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % nrows;
+        bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
+        bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
+        bool ok   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
+                  || ke.kind == SATURN_KEY_ENTER;
+        bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
+        bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
+        if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+        int row = rows[sel];
+
+        if (cancel || (ok && row == DR_CANCEL)) {
+            g_display = snapshot;
+            display_apply();
+            break;
+        }
+        if (commit) { options_save(); break; }
+        int dir = right ? 1 : (left ? -1 : 0);
+        if (dir != 0) {
+            if      (row == DR_PALETTE) display_cycle_row(DCR_PALETTE, dir);
+            else if (row == DR_BG)      display_cycle_row(DCR_BG,      dir);
+            else if (row == DR_TEXT)    display_cycle_row(DCR_TEXT,    dir);
+        }
+        if (ok && row == DR_OK) { options_save(); break; }
+
+        menu_clear();
+        int fx, fy, fw, fh;
+        menu_box_fit("DISPLAY", 36, NROWS + 5, &fx, &fy, &fw, &fh);
+        menu_frame(fx, fy, fw, fh, "DISPLAY");
+        int x = fx + 2, y = fy + 4;
+        bool nums = !g_kbd_visible;
+        for (int i = 0; i < nrows; i++) {
+            char cur = (i == sel) ? '>' : ' ';
+            switch (rows[i]) {
+                case DR_PALETTE:
+                    if (nums) text_print(x, y, "%c %d) Palette", cur, i + 1);
+                    else      text_print(x, y, "%c    Palette", cur);
+                    text_print(x + 17, y++, "< %s >", display_palette_name(&g_display));
+                    break;
+                case DR_BG:
+                    if (nums) text_print(x, y, "%c %d) Background", cur, i + 1);
+                    else      text_print(x, y, "%c    Background", cur);
+                    text_print(x + 17, y++, "< %s >", display_bg_name(&g_display));
+                    break;
+                case DR_TEXT:
+                    if (nums) text_print(x, y, "%c %d) Text", cur, i + 1);
+                    else      text_print(x, y, "%c    Text", cur);
+                    text_print(x + 17, y++, "< %s >", display_text_name(g_display.text));
+                    break;
+                case DR_OK:
+                    y++;
+                    if (nums) text_print(x, y++, "%c %d) Ok", cur, i + 1);
+                    else      text_print(x, y++, "%c    Ok", cur);
+                    break;
+                case DR_CANCEL:
+                    if (nums) text_print(x, y++, "%c %d) Cancel", cur, i + 1);
+                    else      text_print(x, y++, "%c    Cancel", cur);
+                    break;
+            }
+        }
+        y += 2;
+        text_print(x, y++, "%s", hint("A/C/Start=Ok  B=Cancel","Enter/Esc=Ok  Bksp=Cancel"));
+        menu_sync();
+        if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
+    }
+    page_fade_out(g_menu_page_fade);
+    SRL::Core::Synchronize();
+}
+
+/*----------------------
+ | gameplay_page
+ | Description: Difficulty (which picks the typeahead's ranking mode) over Room
+ |   text (the parser verbosity). Lifted verbatim from menu_pages.cxx, which is
+ |   what tests/test_netbin_lift.py checks. Difficulty takes effect here the way
+ |   it does in the CD build, through g_difficulty; Room text does not, because
+ |   the story is running on the server -- online_mode compares g_verbosity
+ |   across the pause menu and types the verbosity command at the parser, the
+ |   same handling saturn_glue.cxx gives the CD build's Options menu.
+ | Author: suinevere
+ | Dependencies: app_state.c (g_difficulty/g_verbosity), options.c
+ |   (options_save), menu.c, console_view.c, input.c, saturn_keyboard.h,
+ |   soft_reset.h
+ | Globals: g_difficulty, g_verbosity, g_kbd_visible, g_menu_page_fade
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void gameplay_page(void) {
+    MenuBacking backing;
+    static const char *const NAMES[] = { "Easy", "Medium", "Hard" };
+    static const char *const DESC[]  = { "Typeahead by Walkthrough",
+                                         "Typeahead by Valid Words",
+                                         "Typeahead Off" };
+    static const char *const VNAMES[] = { "Superbrief", "Brief", "Verbose" };
+    static const char *const VDESC[]  = { "Room names only",
+                                          "Full text on first visit",
+                                          "Full text every visit" };
+    enum { GR_DIFF, GR_VERB, GR_OK, GR_CANCEL };
+    const int nrows = 4;
+    int sel = 0;
+    int diff  = g_difficulty;
+    int verb  = g_verbosity;
+    SRL::Core::Synchronize();
+    bool need_fade_in = true;
+    for (;;) {
+        check_soft_reset();
+        SaturnKeyEvent ke = saturn_keyboard_poll();
+        note_input_device(ke);
+        pad_repeat_update();
+        if (g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + nrows) % nrows;
+        if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % nrows;
+        bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
+        bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
+        bool ok   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
+                  || ke.kind == SATURN_KEY_ENTER;
+        bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
+        bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
+        if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+
+        if (cancel || (ok && sel == GR_CANCEL)) break;
+        if (commit || (ok && sel == GR_OK)) {
+            if (diff != g_difficulty || verb != g_verbosity) {
+                g_difficulty = diff; g_verbosity = verb;
+                options_save();
+            }
+            break;
+        }
+        if (sel == GR_DIFF) { if (left && diff > DIFF_EASY) diff--; if (right && diff < DIFF_HARD) diff++; }
+        else if (sel == GR_VERB) { if (left && verb > VERB_SUPERBRIEF) verb--; if (right && verb < VERB_VERBOSE) verb++; }
+
+        menu_clear();
+        int fx, fy, fw, fh;
+        menu_box_fit("GAMEPLAY", 34, 12, &fx, &fy, &fw, &fh);
+        menu_frame(fx, fy, fw, fh, "GAMEPLAY");
+        int x = fx + 2, y = fy + 4;
+        bool nums = !g_kbd_visible;
+        char dmark = sel == GR_DIFF ? '>' : ' ';
+        if (nums) text_print(x, y, "%c 1) Difficulty: %s %s %s", dmark,
+                          diff > DIFF_EASY ? "<" : " ", NAMES[diff], diff < DIFF_HARD ? ">" : " ");
+        else      text_print(x, y, "%c    Difficulty: %s %s %s", dmark,
+                          diff > DIFF_EASY ? "<" : " ", NAMES[diff], diff < DIFF_HARD ? ">" : " ");
+        text_print(x + 4, y + 1, "%s", DESC[diff]);
+        y += 3;
+        char vmark = sel == GR_VERB ? '>' : ' ';
+        // Two spaces after the colon, so the value column lines up under
+        // Difficulty's despite the shorter label.
+        if (nums) text_print(x, y, "%c 2) Room text:  %s %s %s", vmark,
+                          verb > VERB_SUPERBRIEF ? "<" : " ", VNAMES[verb], verb < VERB_VERBOSE ? ">" : " ");
+        else      text_print(x, y, "%c    Room text:  %s %s %s", vmark,
+                          verb > VERB_SUPERBRIEF ? "<" : " ", VNAMES[verb], verb < VERB_VERBOSE ? ">" : " ");
+        text_print(x + 4, y + 1, "%s", VDESC[verb]);
+        y += 3;
+        if (nums) text_print(x, y++, "%c 3) Ok", sel == GR_OK ? '>' : ' ');
+        else      text_print(x, y++, "%c    Ok", sel == GR_OK ? '>' : ' ');
+        if (nums) text_print(x, y++, "%c 4) Cancel", sel == GR_CANCEL ? '>' : ' ');
+        else      text_print(x, y++, "%c    Cancel", sel == GR_CANCEL ? '>' : ' ');
+        y += 2;
+        text_print(x, y++, "%s", hint(" A/C/Start=Ok  B=Cancel",
+                                             "Enter/Esc=Ok  Bksp=Cancel"));
+        menu_sync();
+        if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
+    }
+    page_fade_out(g_menu_page_fade);
+    SRL::Core::Synchronize();
+}
+
+/*----------------------
+ | netbin_pause_menu
+ | Description: See netbin_pages.h.
+ | Author: suinevere
+ | Dependencies: menu.c, menu_layout.c, console_view.c, input.c,
+ |   saturn_keyboard.h, soft_reset.h (check_soft_reset,
+ |   confirm_return_to_title)
+ | Globals: g_kbd_visible, g_menu_page_fade
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void netbin_pause_menu(void) {
+    MenuBacking backing;
+    enum { PI_RESUME, PI_DISPLAY, PI_GAMEPLAY, PI_CONTROLS, PI_RESTART, PI_N };
+    static const char *const LABEL[PI_N] = {
+        "Resume", "Display", "Gameplay", "Controls", "Restart"
+    };
+
+    int x0, y0, w, h;
+    menu_box_fit("PAUSED", 18, PI_N + 4, &x0, &y0, &w, &h);
+
+    int sel = 0;
+    SRL::Core::Synchronize();
+    bool need_fade_in = true;
+    for (;;) {
+        check_soft_reset();
+        SaturnKeyEvent ke = saturn_keyboard_poll();
+        note_input_device(ke);
+        if (g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + PI_N) % PI_N;
+        if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % PI_N;
+        bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
+        bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
+        bool act = menu_digit_row(ke, PI_N, sel, left, right)
+                 || g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
+                 || ke.kind == SATURN_KEY_ENTER;
+        bool back = g_pad->WasPressed(Button::B) || g_pad->WasPressed(Button::START)
+                  || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE;
+        if (back) break;
+        if (act) {
+            if (sel == PI_RESUME) break;   // exactly what backing out does
+            else if (sel == PI_DISPLAY)  { page_fade_out(g_menu_page_fade); display_options_page(); menu_clear(); need_fade_in = true; }
+            else if (sel == PI_GAMEPLAY) { page_fade_out(g_menu_page_fade); gameplay_page(); need_fade_in = true; }
+            else if (sel == PI_CONTROLS) { page_fade_out(g_menu_page_fade); controls_dispatch(); menu_clear(); need_fade_in = true; }
+            // Never returns if accepted: confirm_return_to_title longjmps to
+            // main()'s dial loop, which resets the backing depth and the
+            // menu service this page was opened under.
+            else if (sel == PI_RESTART)  { confirm_return_to_title("hang up and reboot back to the dial page?"); }
+        }
+
+        menu_clear();
+        menu_frame(x0, y0, w, h, "PAUSED");
+        bool nums = !g_kbd_visible;
+        int ay = y0 + 4;
+        for (int i = 0; i < PI_N; i++) {
+            char cur = (i == sel) ? '>' : ' ';
+            if (nums) text_print(x0 + 2, ay++, "%c %d) %s", cur, i + 1, LABEL[i]);
+            else      text_print(x0 + 2, ay++, "%c    %s", cur, LABEL[i]);
+        }
+        ay += 2;
+        text_print(x0 + 1, ay, "%s", hint("A/C=Ok  B/Start=Back", "Enter=Ok  Esc=Back"));
+        menu_sync();
+        if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
+    }
+    page_fade_out(g_menu_page_fade);
+    while (g_pad->IsHeld(Button::B) || g_pad->IsHeld(Button::A) ||
+           g_pad->IsHeld(Button::C) || g_pad->IsHeld(Button::START))
+        menu_sync();
 }

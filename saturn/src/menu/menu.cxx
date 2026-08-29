@@ -38,6 +38,17 @@ extern "C" {
 #include "display.h"
 }
 
+#ifdef NETBIN
+/*----------------------
+ | g_menu_service / g_menu_service_ctx
+ | Description: The callback menu_sync runs each frame and its context. Null
+ |   unless a caller has registered one; see menu_set_service.
+ | Author: suinevere
+ ----------------------*/
+static MenuServiceFn g_menu_service     = nullptr;
+static void         *g_menu_service_ctx = nullptr;
+#endif
+
 /*----------------------
  | menu_sync
  | Description: Services looping PCM sound (sound_service) and advances the
@@ -58,15 +69,35 @@ extern "C" {
  | Returns: N/A
  |   Under NETBIN both service calls are compiled out: that build links no
  |   sound or music object at all, and the loops that call this hold a dial
- |   page or a telnet terminal, neither of which has audio to starve.
+ |   page or a telnet terminal, neither of which has audio to starve. What that
+ |   build has instead is a carrier to starve, so the registered service runs in
+ |   the same slot -- see menu_set_service.
  ----------------------*/
 void menu_sync(void) {
-#ifndef NETBIN
+#ifdef NETBIN
+    if (g_menu_service != nullptr) g_menu_service(g_menu_service_ctx);
+#else
     sound_service();
     music_tick();
 #endif
     SRL::Core::Synchronize();
 }
+
+#ifdef NETBIN
+/*----------------------
+ | menu_set_service
+ | Description: See menu.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_menu_service, g_menu_service_ctx
+ | Params: fn -- the callback, or NULL to clear; ctx -- passed back to fn
+ | Returns: N/A
+ ----------------------*/
+void menu_set_service(MenuServiceFn fn, void *ctx) {
+    g_menu_service     = fn;
+    g_menu_service_ctx = ctx;
+}
+#endif
 
 /*----------------------
  | menu_clear

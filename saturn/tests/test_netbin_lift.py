@@ -5,9 +5,11 @@ The netbin links a three-screen slice of menu_pages.cxx rather than the whole
 51.7 KB file. That slice is a verbatim move, so any divergence is either a
 transcription error or an undocumented edit -- both worth failing on.
 
-network_page is deliberately NOT compared: it is renamed to netbin_dial_page
-and its row set changes (Cancel out, Controls in). Those checks are inline
-in main() below instead.
+Two bodies are deliberately NOT compared, and get inline checks in main()
+instead. network_page is renamed to netbin_dial_page and its row set changes
+(Cancel out, Controls in). display_options_page loses everything that serves
+the Dynamic palette -- the Dimming row and the wallpaper image-slot pinning --
+which is what keeps title.cxx out of the netbin's link.
 """
 import re, sys, pathlib
 
@@ -49,6 +51,7 @@ def main():
         ("bool keyboard_controls_page(void)",         "bool keyboard_controls_page(void)"),
         ("static void controls_dispatch(void)",       "static void controls_dispatch(void)"),
         ("static bool menu_digit_row(",               "static bool menu_digit_row("),
+        ("static void gameplay_page(void)",           "static void gameplay_page(void)"),
     ]
     fails = 0
     for a, b in pairs:
@@ -71,6 +74,46 @@ def main():
             print(f"MISSING in netbin_dial_page: {must}", file=sys.stderr); fails += 1
     if "Cancel" in dial:
         print("netbin_dial_page still offers a Cancel row", file=sys.stderr); fails += 1
+
+    # The Display page keeps the three rows it can honour and none of the
+    # Dynamic-palette machinery. display_pin_dynamic_slot is the one that
+    # matters most: title_bg_loaded_file lives in title.cxx, which this build
+    # does not link.
+    disp = body(new, "static void display_options_page(void)")
+    for must in ("DR_PALETTE", "DR_BG", "DR_TEXT", "display_cycle_row", "options_save"):
+        if must not in disp:
+            print(f"MISSING in netbin display_options_page: {must}", file=sys.stderr); fails += 1
+    for banned in ("DR_DIM", "display_pin_dynamic_slot", "display_dynamic_slot",
+                   "title_bg_loaded_file", "DISP_PAL_DYNAMIC"):
+        if banned in disp:
+            print(f"netbin display_options_page still carries {banned}", file=sys.stderr); fails += 1
+
+    # The pause menu offers exactly the five rows it is specified to offer, and
+    # reaches Restart through the same confirm the soft-reset chord uses.
+    pause = body(new, "void netbin_pause_menu(void)")
+    for must in ("PI_RESUME", "PI_DISPLAY", "PI_GAMEPLAY", "PI_CONTROLS", "PI_RESTART",
+                 "display_options_page", "gameplay_page", "controls_dispatch",
+                 "confirm_return_to_title"):
+        if must not in pause:
+            print(f"MISSING in netbin_pause_menu: {must}", file=sys.stderr); fails += 1
+    for banned in ("Save Game", "Load Game", "Sound", "Network", "Title Screen"):
+        if banned in pause:
+            print(f"netbin_pause_menu offers a {banned} row", file=sys.stderr); fails += 1
+
+    # Every modal the netbin opens over a live session runs its own poll loop,
+    # so online_mode has to hand menu_sync an RX pump for the duration or the
+    # UART FIFO overruns behind it -- transport_uart.c has no software ring.
+    online = (SRC / "net" / "online.cxx").read_text(encoding="utf-8")
+    if "menu_set_service(pause_service" not in online:
+        print("online_mode opens the pause menu without registering an RX pump",
+              file=sys.stderr); fails += 1
+    if "menu_set_service(nullptr, nullptr)" not in online:
+        print("online_mode never clears the RX pump", file=sys.stderr); fails += 1
+    # A longjmp out of the pause menu leaves that pointer aimed at a dead frame.
+    main_nb = (SRC / "main_netbin.cxx").read_text(encoding="utf-8")
+    if "menu_set_service(nullptr, nullptr)" not in main_nb:
+        print("main_netbin's soft-reset landing never clears the RX pump",
+              file=sys.stderr); fails += 1
 
     if fails:
         print(f"test_netbin_lift: {fails} FAILED", file=sys.stderr); sys.exit(1)

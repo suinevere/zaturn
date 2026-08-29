@@ -293,6 +293,10 @@ int main(void) {
     // image-suppressing window stuck on. Mirrors main.cxx's own post-setjmp
     // reset of the same global.
     g_menu_backing_depth = 0;
+    // Same reasoning for the menu service: online_mode registers its RX pump
+    // around the pause menu, and Restart longjmps out from inside it, leaving
+    // menu_sync holding a pointer into a frame that no longer exists.
+    menu_set_service(nullptr, nullptr);
     g_in_game = false;
 
     /* Straight onto the wire the first time: with a saved default number there is

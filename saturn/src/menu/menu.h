@@ -63,6 +63,36 @@ extern int g_menu_backing_depth;
  ----------------------*/
 void menu_sync(void);
 
+#ifdef NETBIN
+/*----------------------
+ | MenuServiceFn
+ | Description: A per-frame callback menu_sync runs for the netbin, in the slot
+ |   where the CD build services sound and music.
+ | Author: suinevere
+ | Params: ctx -- whatever menu_set_service was handed
+ | Returns: N/A
+ ----------------------*/
+typedef void (*MenuServiceFn)(void *ctx);
+
+/*----------------------
+ | menu_set_service
+ | Description: Registers the callback menu_sync runs each frame, or clears it
+ |   with a null fn. The netbin's modal pages hold the screen while a telnet
+ |   session is live, and transport_uart.c reads the 16550's own FIFO with no
+ |   software ring behind it -- a page that stops pumping drops bytes after a
+ |   dozen or so. online_mode registers its RX pump around any modal it opens.
+ |   Only one is ever installed; there is no stack, so a caller that registers
+ |   must clear before returning, and main()'s soft-reset landing clears it too,
+ |   since a longjmp out of a page leaves the pointer aimed at a dead frame.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: fn -- the callback, or NULL to clear; ctx -- passed back to fn
+ | Returns: N/A
+ ----------------------*/
+void menu_set_service(MenuServiceFn fn, void *ctx);
+#endif
+
 /*----------------------
  | menu_clear
  | Description: Blanks every console text row, so a menu page can redraw its

@@ -116,9 +116,11 @@ symptom of an embedded NUL, not corruption of the repo.
   property-table ranges of the 112 objects that decode with exits. A difference means the server
   must send exit states rather than an id.
 - **The endianness bug above**, if the empty room name is confirmed.
-- **The netbin has no difficulty UI.** Easy-mode ranking works now, but `g_difficulty` can only be
-  set from the CD build's Gameplay page; a netbin-only player is stuck with whatever backup RAM
-  holds, defaulting to `DIFF_EASY`. A row on the netbin's Controls page would be small.
+- ~~**The netbin has no difficulty UI.**~~ Closed by the Start-key pause menu — see
+  `docs/superpowers/specs/2026-08-29-netbin-pause-menu-design.md`. It went in as a Gameplay page
+  under a five-row PAUSED box rather than a row on Controls, for 12,688 bytes. Its own open items
+  are listed there; the one worth carrying forward is that changing Difficulty mid-session re-runs
+  the 4,722-allocation trie build, and nothing has confirmed the old trie is released.
 - **The CD build's online mode still holds a stale local room model** while a remote game runs.
   Named as a non-goal in the spec; it wants the same exits-only treatment.
 - **Four pre-existing test failures**, unchanged and unrelated: `test_ci_boot_music.py`,

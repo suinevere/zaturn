@@ -16,7 +16,7 @@
  | Author: suinevere
  | Dependencies: online.h, netbin_pages.h, net_connect.h, console.h,
  |   console_view.h, options.h, display.h, menu.h, input.h, app_state.h,
- |   saturn_keyboard.h, SRL
+ |   saturn_keyboard.h, dash_view.h, SRL
  ----------------------*/
 
 #include <srl.hpp>
@@ -32,6 +32,7 @@
 #include "app_state.h"
 #include "saturn_keyboard.h"
 #include "soft_reset.h"
+#include "dash_view.h"
 
 extern "C" {
 #include "console.h"
@@ -249,6 +250,9 @@ int main(void) {
     SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
     border_use_black();
     text_map_init();
+    dash_init();        // after text_map_init, as main.cxx:364 does it: VDP2 and
+                        // the font are up, and a failure here only means the
+                        // renderers keep printing their ASCII borders
 
     static MultiPad pads;
     g_pad = &pads;

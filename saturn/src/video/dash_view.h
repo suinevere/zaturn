@@ -2,8 +2,10 @@
  | dash_view.h
  | Description: The input dashboard's hardware half: NBG2 bring-up, and the
  |   vblank flush that copies dash_map's shadow into the pattern name table.
- |   Under NETBIN the whole interface collapses to no-ops, because that build
- |   links neither this file nor the wallpaper and keeps the printed borders.
+ |   Both builds link this now. The netbin carried the printed-ASCII fallback
+ |   instead until the panel was measured at 5,328 bytes there; see
+ |   docs/superpowers/specs/2026-08-29-netbin-dashboard-design.md. That fallback
+ |   is still the path a failed VRAM allocation takes, in either build.
  | Author: suinevere
  | Dependencies: dash_map.h, dash_tiles.h, srl.hpp
  ----------------------*/
@@ -12,38 +14,19 @@
 
 #include "dash_map.h"
 
-#ifdef NETBIN
-
-/*----------------------
- | dash_init / dash_set / dash_ready / dash_hold (NETBIN)
- | Description: The netbin has no dashboard. These fold to nothing at every call
- |   site, so the renderers keep printing their ASCII borders and the build gains
- |   neither a source file nor a byte. console_view.cxx is compiled into the
- |   netbin (it is in makefile's pinned 27-object source list), but dash_view.cxx
- |   is not, so dash_hold must be a header-only no-op here rather than a link
- |   edge to a file the netbin never builds.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: as the real declarations below
- | Returns: init returns false; ready returns 0; set/hold return N/A
- ----------------------*/
-static inline bool dash_init(void) { return false; }
-static inline void dash_set(int variant, int base_row) { (void) variant; (void) base_row; }
-static inline int  dash_ready(void) { return 0; }
-static inline void dash_hold(void) { }
-
-#else
-
 /*----------------------
  | dash_init
  | Description: Allocates NBG2's character patterns and pattern name table in
  |   VRAM bank B0, uploads the tile set, claims and loads its palette, orders the
  |   layers, and subscribes the flush to OnAfterSync. Call once, after
  |   text_map_init. A second call is a no-op. Bank B0 is named explicitly rather
- |   than left to SRL's auto-allocator because AutoAllocateMap would try A0 --
- |   full, the wallpaper's 512x256 8bpp bitmap owning the whole bank -- and then
- |   fall to B1, where SRL's own NBG3 font lives untracked.
+ |   than left to SRL's auto-allocator: AutoAllocateMap would try A0 first, which
+ |   in the CD build is full -- the wallpaper's 512x256 8bpp bitmap owns the
+ |   whole bank -- and then fall to B1, where SRL's own NBG3 font lives
+ |   untracked. The netbin has no wallpaper and so has A0 free, but it is named
+ |   B0 there too rather than split into two paths: B1 is the wrong answer in
+ |   both builds, and one allocation site is worth more than a bank nobody is
+ |   competing for.
  | Author: suinevere
  | Dependencies: srl.hpp, dash_map.h, dash_tiles.h
  | Globals: g_ready, g_cell, g_map_vram, g_char_base
@@ -101,5 +84,4 @@ int dash_ready(void);
  ----------------------*/
 void dash_hold(void);
 
-#endif /* NETBIN */
 #endif /* DASH_VIEW_H */

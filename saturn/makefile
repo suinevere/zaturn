@@ -47,10 +47,10 @@ SOURCES += $(filter-out $(NETBIN_ONLY_SOURCES),$(patsubst ./%,%,$(shell find src
 # docs/superpowers/specs/2026-07-25-netbin-minimal-design.md.
 #
 # The list is explicit rather than a `find`: the whole point of this target is
-# that 29 of the CD build's 53 objects are absent (27 netbin objects, 3 of
-# which -- main_netbin.cxx, netbin_pages.cxx and typeahead_solution_zork1.c --
-# are netbin-only and never reach the CD build at all). tests/test_netbin_sources.py
-# gates it against the spec.
+# that most of the CD build is absent -- 34 netbin objects against the CD's 54,
+# 3 of which (main_netbin.cxx, netbin_pages.cxx, typeahead_solution_zork1.c)
+# are netbin-only and never reach the CD build at all.
+# tests/test_netbin_sources.py gates it against the spec.
 #
 # LDFILE cannot be set here: shared.mk:10 assigns it with `=` and this file is
 # included first, so the SDK would overwrite us. compile-netbin.bat passes it
@@ -67,6 +67,9 @@ SOURCES = src/main_netbin.cxx \
           src/video/display.c \
           src/video/text_map.cxx \
           src/video/glyph_invert.c \
+          src/video/dash_map.c \
+          src/video/dash_tiles.c \
+          src/video/dash_view.cxx \
           src/video/command_rose.c \
           src/video/rose_draw.cxx \
           src/input/game_kb.c \

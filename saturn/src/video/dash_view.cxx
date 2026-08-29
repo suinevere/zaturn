@@ -14,8 +14,6 @@
 #include "console_view.h"
 #include "app_state.h"
 
-#ifndef NETBIN
-
 /*----------------------
  | DASH_MAP_PITCH / DASH_PAL_NO
  | Description: The hardware map's row pitch in cells, and the CRAM palette
@@ -116,6 +114,10 @@ bool dash_init(void)
         }
     }
 
+    // NBG2 above NBG0, and NBG3's own priority is left alone so the text stays
+    // above both. NBG0 carries the wallpaper in the CD build and nothing at all
+    // in the netbin, where this line orders an empty layer -- harmless, and
+    // cheaper than a second path for the sake of a register nobody reads.
     slPriorityNbg0(1);
     slPriorityNbg2(2);
 
@@ -144,4 +146,3 @@ void dash_hold(void)
     else                           dash_set(DASH_GAMEKB, border_top);
 }
 
-#endif /* NETBIN */

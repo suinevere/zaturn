@@ -163,6 +163,21 @@ extern "C" bool confirm_return_to_title(const char *question) {
 static const int SOFT_RESET_HOLD = 30;
 
 /*----------------------
+ | LINE_SETTLE_FRAMES
+ | Description: Frames held between dropping PlanetWeb's inherited data session
+ |   and this build's first dial. net_connect_reset() only gets as far as ATH0
+ |   answering OK; the hook is still releasing and the far end has not dropped
+ |   its carrier yet, so an ATDT sent straight after it dials over the browser's
+ |   own connection tone and trains against it. ~3s at 60Hz, long enough for
+ |   both ends to fall quiet and short enough to read as a pause rather than a
+ |   hang. Only the boot path waits: it sits above the reboot landing point, so
+ |   a reboot -- whose hangup was deliberate and whose line is already idle --
+ |   goes straight back to dialing.
+ | Author: suinevere
+ ----------------------*/
+static const int LINE_SETTLE_FRAMES = 600;
+
+/*----------------------
  | check_soft_reset
  | Description: Counts consecutive frames the chord is held (a file-static
  |   counter) and confirms/reboots once it reaches SOFT_RESET_HOLD. Called
@@ -249,6 +264,11 @@ int main(void) {
     // modem treats AT as payload and modem_probe() would fail on a perfectly
     // good modem, so escape and hang up before the first dial ever happens.
     net_connect_reset();
+
+    for (int f = 0; f < LINE_SETTLE_FRAMES; f++) {
+        menu_message("NETWORK", "Hanging up ...", "");
+        menu_sync();
+    }
 
     // Unlike the CD build, this one has no backdrop image for a fade to hide
     // behind, and online_mode() (src/net/online.cxx) has no fade-in to pair

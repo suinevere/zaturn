@@ -1,0 +1,32 @@
+{
+  "//": "Example MCP client config (Claude Desktop / Cursor). Runs all three servers together: this Saturn toolkit, the Textra JA->EN translator, and the Ghidra bridge. Adjust paths and credentials before use.",
+  "mcpServers": {
+    "saturn-translate": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/AI Sega Saturn Translation MCP Server", "saturn-translate-mcp"],
+      "env": {
+        "SATURN_WORKDIR": "/path/to/AI Sega Saturn Translation MCP Server/work",
+        "GHIDRA_MCP_URL": "http://127.0.0.1:8089",
+        "TEXTRA_API_KEY": "your_api_key",
+        "TEXTRA_API_SECRET": "your_api_secret",
+        "TEXTRA_USER_NAME": "your_login_id"
+      }
+    },
+
+    "textra-translator": {
+      "command": "uvx",
+      "args": ["python", "server.py", "--git", "https://github.com/hokupod/textra-ja-to-en-mcp.git"],
+      "env": {
+        "TEXTRA_API_KEY": "your_api_key",
+        "TEXTRA_API_SECRET": "your_api_secret",
+        "TEXTRA_USER_NAME": "your_login_id"
+      }
+    },
+
+    "ghidra": {
+      "//": "Start Ghidra, load the Saturn binary, then Tools > GhidraMCP > Start MCP Server (HTTP on :8089). This entry connects the MCP bridge to it.",
+      "command": "uv",
+      "args": ["run", "--script", "/path/to/ghidra-mcp/bridge_mcp_ghidra.py"]
+    }
+  }
+}

@@ -70,3 +70,18 @@ tools/assets/art_manifest.json.reverted-*
 /scene_server.err.log
 /art_server.log
 /art_server.err.log
+
+# --- Reference discs -------------------------------------------------------
+# cd/ holds original game discs used as read-only reference for the port.
+# The tracks live on disk but are never committed (the Zork I JP disc alone
+# is 621 MB across 32 .bin tracks).
+cd/**/*.bin
+cd/**/*.cue
+cd/**/*.img
+cd/**/*.iso
+cd/**/*.mds
+cd/**/*.mdf
+
+# Derived binary dumps from the reverse-engineering workflow (VDP1/VDP2 VRAM
+# captures, decompressed disc assets). All regenerable from cd/ plus a savestate.
+analysis/**/*.bin

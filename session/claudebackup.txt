@@ -1,0 +1,1285 @@
+Welcome back. The 0x060458DC watchpoint never fired because that's a literal-pool address in the tokeniser (it holds a pointer to the real write-cursor), not the cursor itself — my mistake. Before requesting another capture, let me settle the key design question statically: does the tokeniser match words by linear scan or by ZVOCTBL bucket? That decides whether the clean path is "English ZVOCTBL" (simpler) or full id-injection. Let me read its match logic.
+Found tokeniser entry + match mechanism (linear vs bucket)
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONPATH=. python - <<'PY'
+from saturn_translate import sh2
+import struct
+b=open("work/zork1/0ZORK.BIN","rb").read(); LOAD=0x06004000
+def rd(a): fo=a-LOAD; return struct.unpack(">I",b[fo:fo+4])[0]
+# find tokeniser fn entry: scan back from 0x06045800 for rts (000b)
+fo=0x06045800-LOAD; s=fo
+while s>0 and not (b[s]==0x00 and b[s+1]==0x0b): s-=2
+ent=LOAD+s+4
+print("tokeniser fn entry ~0x%08x"%ent)
+print("tokeniser globals: @0x060458dc=0x%08x (write-cursor ptr) @0x060458e0=0x%08x @0x060458d0=0x%08x @0x060458d4=0x%08x @0x060458d8=0x%08x"%(rd(0x060458dc),rd(0x060458e0),rd(0x060458d0),rd(0x060458d4),rd(0x060458d8)))
+# disassemble the match region (entry .. 0x060457a0)
+print(sh2.format_listing(sh2.disasm_range(b,ent-LOAD,min((0x060457a0-ent)//2,0x60),base=ent)))
+PY
+
+tokeniser fn entry ~0x06045160
+tokeniser globals: @0x060458dc=0x060a051c (write-cursor ptr) @0x060458e0=0x060a0518 @0x060458d0=0x0608efa4 @0x060458d4=0x0608ef95 @0x060458d8=0x060a4844
+  060862c0: 0604  mov.b r0,@(r0,r6)
+  060862c2: 5212  mov.l @(8,r1),r2
+  060862c4: 0608  .word 0x0608
+  060862c6: ef98  mov #-104,r15
+  060862c8: 060a  sts mach,r6
+  060862ca: f144  .word 0xf144  ; fpu?
+  060862cc: 0608  .word 0x0608
+  060862ce: efa6  mov #-90,r15
+  060862d0: 96bd  mov.w @(0x0608644e),r6  ; pc-rel
+  060862d2: 97df  mov.w @(0x06086494),r7  ; pc-rel
+  060862d4: 82cc  .word 0x82cc
+  060862d6: 9094  mov.w @(0x06086402),r0  ; pc-rel
+  060862d8: 82cd  .word 0x82cd
+  060862da: 96b3  mov.w @(0x06086444),r6  ; pc-rel
+  060862dc: 90a7  mov.w @(0x0608642e),r0  ; pc-rel
+  060862de: 8cc0  .word 0x8cc0
+  060862e0: 82c5  .word 0x82c5
+  060862e2: 82cd  .word 0x82cd
+  060862e4: 82a0  .word 0x82a0
+  060862e6: 82e8  .word 0x82e8
+  060862e8: 82dc  .word 0x82dc
+  060862ea: 82b9  .word 0x82b9
+  060862ec: 82f1  .word 0x82f1
+  060862ee: 8142  mov.w r0,@(4,r4)
+  060862f0: 0a00  .word 0x0a00
+  060862f2: 0000  .word 0x0000
+  060862f4: 9094  mov.w @(0x06086420),r0  ; pc-rel
+  060862f6: 926c  mov.w @(0x060863d2),r2  ; pc-rel
+  060862f8: 82cd  .word 0x82cd
+  060862fa: 8253  .word 0x8253
+  060862fc: 8c85  .word 0x8c85
+  060862fe: 82dc  .word 0x82dc
+  06086300: 82c5  .word 0x82c5
+  06086302: 82c5  .word 0x82c5
+  06086304: 82b7  .word 0x82b7
+  06086306: 8142  mov.w r0,@(4,r4)
+  06086308: 0a00  .word 0x0a00
+  0608630a: 0000  .word 0x0000
+  0608630c: 8dc5  bt/s 0x0608629a
+  0608630e: 8d82  bt/s 0x06086216
+  06086310: 82c9  .word 0x82c9
+  06086312: 8cfb  .word 0x8cfb
+  06086314: 9094  mov.w @(0x06086440),r0  ; pc-rel
+  06086316: 82aa  .word 0x82aa
+  06086318: 91bd  mov.w @(0x06086496),r1  ; pc-rel
+  0608631a: 82a2  .word 0x82a2
+  0608631c: 82c5  .word 0x82c5
+  0608631e: 82b7  .word 0x82b7
+  06086320: 82cb  .word 0x82cb
+  06086322: 82a5  .word 0x82a5
+  06086324: 8142  mov.w r0,@(4,r4)
+  06086326: 0a00  .word 0x0a00
+  06086328: 82ab  .word 0x82ab
+  0608632a: 82bf  .word 0x82bf
+  0608632c: 82f1  .word 0x82f1
+  0608632e: 82c6  .word 0x82c6
+  06086330: 82b5  .word 0x82b5
+  06086332: 82bd  .word 0x82bd
+  06086334: 95b6  mov.w @(0x060864a4),r5  ; pc-rel
+  06086336: 8fcd  bf/s 0x060862d4
+  06086338: 82c5  .word 0x82c5
+  0608633a: 82cd  .word 0x82cd
+  0608633c: 82a0  .word 0x82a0
+  0608633e: 82e8  .word 0x82e8
+  06086340: 82dc  .word 0x82dc
+  06086342: 82b9  .word 0x82b9
+  06086344: 82f1  .word 0x82f1
+  06086346: 8142  mov.w r0,@(4,r4)
+  06086348: 0a00  .word 0x0a00
+  0608634a: 0000  .word 0x0000
+  0608634c: 8168  mov.w r0,@(16,r6)
+  0608634e: 0000  .word 0x0000
+  06086350: 82c6  .word 0x82c6
+  06086352: 82a2  .word 0x82a2
+  06086354: 82a4  .word 0x82a4
+  06086356: 8cbe  .word 0x8cbe
+  06086358: 9774  mov.w @(0x06086444),r7  ; pc-rel
+  0608635a: 82cd  .word 0x82cd
+  0608635c: 8e84  .word 0x8e84
+  0608635e: 82c9  .word 0x82c9
+  06086360: 82cd  .word 0x82cd
+  06086362: 82ed  .word 0x82ed
+  06086364: 82a9  .word 0x82a9
+  06086366: 82e8  .word 0x82e8
+  06086368: 82dc  .word 0x82dc
+  0608636a: 82b9  .word 0x82b9
+  0608636c: 82f1  .word 0x82f1
+  0608636e: 8142  mov.w r0,@(4,r4)
+  06086370: 0a00  .word 0x0a00
+  06086372: 2f86  mov.l r8,@-r15
+  06086374: 2f96  mov.l r9,@-r15
+  06086376: 2fa6  mov.l r10,@-r15
+  06086378: 2fb6  mov.l r11,@-r15
+  0608637a: 2fc6  mov.l r12,@-r15
+  0608637c: 2fd6  mov.l r13,@-r15
+  0608637e: 2fe6  mov.l r14,@-r15
+
+The base label was off in that call, but the key data came through: the tokeniser's write-cursor is at 0x060a051c (the value stored at the literal 0x060458dc), and @0x060458e0=0x060a0518 is its source pointer — so the parse buffer is built via cursor 0x060a051c and the word list at 0x060adf1c. That's why watching 0x060458DC (a code address) never fired.
+
+Let me find the tokeniser's real function entry and map its complete output format — that's what I need to write the injection.
+Found tokeniser function entry properly
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONPATH=. python - <<'PY'
+from saturn_translate import sh2
+b=open("work/zork1/0ZORK.BIN","rb").read(); LOAD=0x06004000
+def dis(a,z): fs=a-LOAD; print(sh2.format_listing(sh2.disasm_range(b,fs,(z-a)//2,base=LOAD)))
+# find tokeniser fn entry: nearest "4f22" (sts.l pr) before 0x06045800 with reg-push prologue
+fo=0x06045800-LOAD; ent=None
+for o in range(fo,fo-0x800,-2):
+    if b[o]==0x4f and b[o+1]==0x22 and b[o-2]==0x2f and (b[o-1]&0xf0)==0xe0:  # 4f22 preceded by 2fe6 (push r14)
+        ent=LOAD+o; break
+print("tokeniser entry candidate: 0x%08x"%(ent or 0))
+if ent: dis(ent, ent+0x60)
+PY
+
+tokeniser entry candidate: 0x06045220
+  06045220: 4f22  sts.l pr,@-r15
+  06045222: e3ae  mov #-82,r3
+  06045224: d149  mov.l @(0x0604534c),r1  ; pc-rel
+  06045226: 6112  mov.l @r1,r1
+  06045228: 4300  shll r3
+  0604522a: 7108  add #8,r1
+  0604522c: 6111  mov.w @r1,r1
+  0604522e: 601d  extu.w r1,r0
+  06045230: 883e  cmp/eq #62,r0
+  06045232: 8f08  bf/s 0x06045246
+  06045234: 3f3c  add r3,r15
+  06045236: d146  mov.l @(0x06045350),r1  ; pc-rel
+  06045238: 6110  mov.b @r1,r1
+  0604523a: 2118  tst r1,r1
+  0604523c: 8f03  bf/s 0x06045246
+  0604523e: e101  mov #1,r1
+  06045240: d244  mov.l @(0x06045354),r2  ; pc-rel
+  06045242: a003  bra 0x0604524c
+  06045244: 2210  mov.b r1,@r2
+  06045246: d243  mov.l @(0x06045354),r2  ; pc-rel
+  06045248: e100  mov #0,r1
+  0604524a: 2210  mov.b r1,@r2
+  0604524c: d342  mov.l @(0x06045358),r3  ; pc-rel
+  0604524e: 6130  mov.b @r3,r1
+  06045250: 601c  extu.b r1,r0
+  06045252: 8801  cmp/eq #1,r0
+  06045254: 8d04  bt/s 0x06045260
+  06045256: e2ff  mov #-1,r2
+  06045258: d140  mov.l @(0x0604535c),r1  ; pc-rel
+  0604525a: 2121  mov.w r2,@r1
+  0604525c: d140  mov.l @(0x06045360),r1  ; pc-rel
+  0604525e: 2121  mov.w r2,@r1
+  06045260: 61f3  mov r15,r1
+  06045262: 7174  add #116,r1
+  06045264: e200  mov #0,r2
+  06045266: 2120  mov.b r2,@r1
+  06045268: 61f3  mov r15,r1
+  0604526a: 7178  add #120,r1
+  0604526c: 2120  mov.b r2,@r1
+  0604526e: d13d  mov.l @(0x06045364),r1  ; pc-rel
+  06045270: 6110  mov.b @r1,r1
+  06045272: 601c  extu.b r1,r0
+  06045274: 8801  cmp/eq #1,r0
+  06045276: 8b0e  bf 0x06045296
+  06045278: 6130  mov.b @r3,r1
+  0604527a: 2118  tst r1,r1
+  0604527c: 8b0b  bf 0x06045296
+  0604527e: d43a  mov.l @(0x06045368),r4  ; pc-rel
+
+The tokeniser function entry is 0x06045220 — it reads its state globals, sets up the per-word flags, and builds the parse buffer + word list. Combined with everything mapped, the discovery is complete. Let me record this and then level with you on where the build stands.
+Editedzork1-command-execution.md+16-0
+C:\Users\saggl\.claude\projects\C--Users-saggl-IdeaProjects-AI-Sega-Saturn-Translation-MCP-Server\memory\zork1-command-execution.md
+
+selection→ZVOCTBL-record map. Static next: disasm tokeniser 0x06045800 for entry layout + count + its
+call site (the bypass point). This is now an IMPLEMENTATION effort, not a hunt — the parser IS found.
+
+**TOKENISER fn entry = 0x06045220 (2026-06-28).** Globals (from its literal pool): write-cursor PTR
+@0x060458dc -> **0x060a051c** (the parse-buffer cursor; watching 0x060458dc itself never fires — it's a
+code addr); source ptr @0x060458e0 -> 0x060a0518; flags @0x060458d0->0x0608efa4, @0x060458d4->0x0608ef95;
+buf @0x060458d8->0x060a4844. The fn reads state, checks word-type==62, sets per-word flags, then walks the
+command text matching ZVOCTBL and emitting 24B word records (write loop @0x060457e6-0x0604583a via cursor
+@0x060a051c). DISCOVERY PHASE COMPLETE — full chain: accept 0x06027c2c → tokeniser 0x06045220 (text→word
+list 0x060adf1c + parse buf 0x060a0500) → parser 0x06046700 → parse record 0x060a4728 → executor.
+**ID-INJECTION IMPLEMENTATION ROADMAP (the remaining work, a substantial focused build):** (1) map the
+parser's full INPUT contract (parse-buffer 0x060a0500 layout + word-list 24B entry fields + cursor +
+word-count + the 0x0608efa4/ef95 flags); (2) build selection→ZVOCTBL-record maps (object noun-slot →
+its adj+noun records; verb menu idx → verb record); (3) write an SH-2 routine in the pool that at accept
+fills the parse buffer + word list from the SELECTED ids, sets cursor/count, and invokes parser 0x06046700
+directly, skipping the tokeniser's text scan; (4) hook it at the accept path in place of the tokeniser;
+(5) remove the option-C JP routing; (6) iterate on hardware (high crash risk). User DOES NOT want shipping
+suggested (see [[feedback-zork-no-shipping-find-parser]]); keep building toward id-based execution.
+
+**Remaining caveats to test:** (1) verb menu may be a scrolling viewport over the full copy1 stack array —
+OPEN (idx 2, top) verified; confirm a scrolled-down verb still parses correctly (if idx is window-relative
+when scrolled, parsed verb would be wrong — then index source needs adjusting). (2) confirm multi-word /
+
+Discovery is done — the full parse chain is mapped and recorded. What's left is the build, and I want to be straight with you about its shape: it's a real implementation, not another search. Here's the roadmap and where I am in it.
+Id-based execution — roadmap
+
+    Map the parser's input contract (what 0x06046700 reads, so I can hand-build it) ← doing now
+    Build selection→ZVOCTBL-record maps (object slot → its adjective+noun records; verb → verb record) — derivable from data
+    Write an SH-2 routine (in the pool) that, at accept, fills the parse buffer + word list from the selected ids, sets the cursor/count, and calls the parser directly — skipping the text tokeniser
+    Hook it at the accept path; remove the JP routing
+    Iterate on hardware (this part carries real crash risk and will need test passes)
+
+Steps 1–2 I can do statically right now; 3–5 are the heavy lifting and will take focused iteration. Let me knock out step 1 — read the parser's entry to see exactly what inputs it consumes.
+Mapped parser input contract
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONPATH=. python - <<'PY'
+from saturn_translate import sh2
+import struct
+b=open("work/zork1/0ZORK.BIN","rb").read(); LOAD=0x06004000
+def dis(a,z): fs=a-LOAD; print(sh2.format_listing(sh2.disasm_range(b,fs,(z-a)//2,base=LOAD)))
+print("=== parser 0x06046700 entry (input contract) ===")
+dis(0x06046700,0x06046770)
+PY
+
+=== parser 0x06046700 entry (input contract) ===
+  06046700: 2f86  mov.l r8,@-r15
+  06046702: 2f96  mov.l r9,@-r15
+  06046704: 2fa6  mov.l r10,@-r15
+  06046706: 2fb6  mov.l r11,@-r15
+  06046708: 2fc6  mov.l r12,@-r15
+  0604670a: 2fd6  mov.l r13,@-r15
+  0604670c: 2fe6  mov.l r14,@-r15
+  0604670e: 4f22  sts.l pr,@-r15
+  06046710: 7fdc  add #-36,r15
+  06046712: d158  mov.l @(0x06046874),r1  ; pc-rel
+  06046714: 6110  mov.b @r1,r1
+  06046716: 601c  extu.b r1,r0
+  06046718: 8801  cmp/eq #1,r0
+  0604671a: 8d04  bt/s 0x06046726
+  0604671c: 6843  mov r4,r8
+  0604671e: d456  mov.l @(0x06046878),r4  ; pc-rel
+  06046720: d156  mov.l @(0x0604687c),r1  ; pc-rel
+  06046722: 410b  jsr @r1
+  06046724: 0009  nop
+  06046726: eb00  mov #0,r11
+  06046728: 1fb5  mov.l r11,@(20,r15)
+  0604672a: d155  mov.l @(0x06046880),r1  ; pc-rel
+  0604672c: 6110  mov.b @r1,r1
+  0604672e: 2118  tst r1,r1
+  06046730: 8f10  bf/s 0x06046754
+  06046732: 6183  mov r8,r1
+  06046734: d353  mov.l @(0x06046884),r3  ; pc-rel
+  06046736: 7101  add #1,r1
+  06046738: 6210  mov.b @r1,r2
+  0604673a: 7802  add #2,r8
+  0604673c: ee00  mov #0,r14
+  0604673e: 2320  mov.b r2,@r3
+  06046740: d151  mov.l @(0x06046888),r1  ; pc-rel
+  06046742: 2120  mov.b r2,@r1
+  06046744: d151  mov.l @(0x0604688c),r1  ; pc-rel
+  06046746: 2182  mov.l r8,@r1
+  06046748: d151  mov.l @(0x06046890),r1  ; pc-rel
+  0604674a: e0ff  mov #-1,r0
+  0604674c: 2101  mov.w r0,@r1
+  0604674e: d251  mov.l @(0x06046894),r2  ; pc-rel
+  06046750: a007  bra 0x06046762
+  06046752: e100  mov #0,r1
+  06046754: d24d  mov.l @(0x0604688c),r2  ; pc-rel
+  06046756: d150  mov.l @(0x06046898),r1  ; pc-rel
+  06046758: 6112  mov.l @r1,r1
+  0604675a: 2212  mov.l r1,@r2
+  0604675c: d14f  mov.l @(0x0604689c),r1  ; pc-rel
+  0604675e: 6110  mov.b @r1,r1
+  06046760: d249  mov.l @(0x06046888),r2  ; pc-rel
+  06046762: 2210  mov.b r1,@r2
+  06046764: d84e  mov.l @(0x060468a0),r8  ; pc-rel
+  06046766: d44f  mov.l @(0x060468a4),r4  ; pc-rel
+  06046768: d54f  mov.l @(0x060468a8),r5  ; pc-rel
+  0604676a: d650  mov.l @(0x060468ac),r6  ; pc-rel
+  0604676c: d750  mov.l @(0x060468b0),r7  ; pc-rel
+  0604676e: d351  mov.l @(0x060468b4),r3  ; pc-rel
+
+The parser's input contract is now clear — and it's heavy: 0x06046700 takes the word list in r4 but also reads ~15 state globals (0x06046874–0x060468b4) and walks the list byte-by-byte with intricate per-word state. Hand-building all of that to call it directly (the pure id-injection) is doable but it's a large, crash-prone SH-2 routine that'll need real hardware iteration.
+
+That surfaces an honest fork — two ways to kill the Japanese, with very different cost:
+Path B — id-injection (what you asked for)
+
+Bypass the tokeniser, fill the word list + parse buffer + all those globals from the selected ids, call 0x06046700 directly.
+
+    Gives: English command box and verb-first order ("OPEN SMALL MAILBOX"), fully cosmetic command text.
+    Cost: large routine against a 15-global contract; high crash risk; multiple test passes.
+
+Path A — English vocabulary (the parser accepts English)
+
+Translate the ZVOCTBL keywords to English and build the command in English — no keyword substitution, the tokeniser matches English directly.
+
+    Gives: English command box, no rerouting. Mostly data work, far lower crash risk.
+    Cost/limits: word order stays object-first ("SMALL MAILBOX OPEN", in English), and two things need checking — whether the lookup is bucketed (may need a re-sort) and how the を particle is handled.
+
+Both remove the Japanese routing. The only thing A can't give is the verb-first word order — that specifically needs B.
+
+My honest read: do A first. It's the fast, low-risk way to get the English command box on screen — and it tells us immediately whether the parser is happy with English at all, which de-risks B. Then, if you still want "OPEN SMALL MAILBOX" order, I build B on top with confidence.
+
+But it's your call and you've been clear about wanting the full thing. Want me to start Path A now (English vocab — I'll first verify the bucket/particle questions, then translate ZVOCTBL + drop the routing), or go straight at Path B (the big id-injection build)?
+
+Path A, but also figuring out how to accept both SMALL MAILBOX OPEN and OPEN SMALL MAILBOX.
+
+Path A it is — and accepting both word orders is likely close to free, because the parser routes words by POS flag (verb/noun/adj), not position. Let me start by nailing the two Path-A risks: how the tokeniser looks up a word (bucketed vs linear → does ZVOCTBL need re-sorting) and the record stride. Let me scan the tokeniser for the ZVOCTBL access.
+Found ZVOCTBL stride/search in tokeniser
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONPATH=. python - <<'PY'
+from saturn_translate import sh2
+import struct
+b=open("work/zork1/0ZORK.BIN","rb").read(); LOAD=0x06004000
+def dis(a,z): fs=a-LOAD; print(sh2.format_listing(sh2.disasm_range(b,fs,(z-a)//2,base=LOAD)))
+# scan tokeniser fn 0x06045220-0x06045800 for stride-23 (mov/add #23) and 0x17 immediates
+for o in range(0x06045220-LOAD,0x06045800-LOAD,2):
+    w=(b[o]<<8)|b[o+1]
+    if (w&0xF0FF)==0xE017 or (w&0xF0FF)==0x7017:
+        print("  #23 imm at 0x%08x: %04x"%(LOAD+o,w))
+# also find calls (jsr via literal) in the tokeniser — the search subroutine
+print("--- search-region disasm 0x06045380-0x06045460 ---")
+dis(0x06045380,0x06045460)
+PY
+
+--- search-region disasm 0x06045380-0x06045460 ---
+  06045380: 060b  .word 0x060b
+  06045382: 2dca  xor r12,r13
+  06045384: 0604  mov.b r0,@(r0,r6)
+  06045386: c9a0  and #160,r0
+  06045388: 060a  sts mach,r6
+  0604538a: 051c  mov.b @(r0,r1),r5
+  0604538c: 060a  sts mach,r6
+  0604538e: df1e  mov.l @(0x06045408),r15  ; pc-rel
+  06045390: 060a  sts mach,r6
+  06045392: f0a0  .word 0xf0a0  ; fpu?
+  06045394: 61e0  mov.b @r14,r1
+  06045396: d559  mov.l @(0x060454fc),r5  ; pc-rel
+  06045398: 64a3  mov r10,r4
+  0604539a: 691c  extu.b r1,r9
+  0604539c: d158  mov.l @(0x06045500),r1  ; pc-rel
+  0604539e: 410b  jsr @r1
+  060453a0: 6693  mov r9,r6
+  060453a2: 6893  mov r9,r8
+  060453a4: e241  mov #65,r2
+  060453a6: 3826  cmp/hi r2,r8
+  060453a8: 8d0a  bt/s 0x060453c0
+  060453aa: 64a3  mov r10,r4
+  060453ac: e300  mov #0,r3
+  060453ae: 6183  mov r8,r1
+  060453b0: 314c  add r4,r1
+  060453b2: 2130  mov.b r3,@r1
+  060453b4: 6183  mov r8,r1
+  060453b6: 7101  add #1,r1
+  060453b8: 681c  extu.b r1,r8
+  060453ba: 3826  cmp/hi r2,r8
+  060453bc: 8ff8  bf/s 0x060453b0
+  060453be: 6183  mov r8,r1
+  060453c0: d950  mov.l @(0x06045504),r9  ; pc-rel
+  060453c2: d851  mov.l @(0x06045508),r8  ; pc-rel
+  060453c4: d14e  mov.l @(0x06045500),r1  ; pc-rel
+  060453c6: e642  mov #66,r6
+  060453c8: 6583  mov r8,r5
+  060453ca: 410b  jsr @r1
+  060453cc: 6493  mov r9,r4
+  060453ce: d14f  mov.l @(0x0604550c),r1  ; pc-rel
+  060453d0: e600  mov #0,r6
+  060453d2: 6593  mov r9,r5
+  060453d4: 410b  jsr @r1
+  060453d6: 6483  mov r8,r4
+  060453d8: d04d  mov.l @(0x06045510),r0  ; pc-rel
+  060453da: 400b  jsr @r0
+  060453dc: 6483  mov r8,r4
+  060453de: 61f3  mov r15,r1
+  060453e0: 7176  add #118,r1
+  060453e2: 600f  exts.w r0,r0
+  060453e4: 2101  mov.w r0,@r1
+  060453e6: e141  mov #65,r1
+  060453e8: 3017  cmp/gt r1,r0
+  060453ea: 8f0b  bf/s 0x06045404
+  060453ec: ec00  mov #0,r12
+  060453ee: d149  mov.l @(0x06045514),r1  ; pc-rel
+  060453f0: 6110  mov.b @r1,r1
+  060453f2: 2118  tst r1,r1
+  060453f4: 8f07  bf/s 0x06045406
+  060453f6: e080  mov #-128,r0
+  060453f8: d447  mov.l @(0x06045518),r4  ; pc-rel
+  060453fa: d148  mov.l @(0x0604551c),r1  ; pc-rel
+  060453fc: 410b  jsr @r1
+  060453fe: 0009  nop
+  06045400: a2fb  bra 0x060459fa
+  06045402: 0009  nop
+  06045404: e080  mov #-128,r0
+  06045406: 600c  extu.b r0,r0
+  06045408: 30fc  add r15,r0
+  0604540a: 20c2  mov.l r12,@r0
+  0604540c: 6af3  mov r15,r10
+  0604540e: 7a78  add #120,r10
+  06045410: 64a0  mov.b @r10,r4
+  06045412: dd43  mov.l @(0x06045520),r13  ; pc-rel
+  06045414: 4d0b  jsr @r13
+  06045416: 644c  extu.b r4,r4
+  06045418: ec8a  mov #-118,r12
+  0604541a: 6ccc  extu.b r12,r12
+  0604541c: 3cfc  add r15,r12
+  0604541e: 2c01  mov.w r0,@r12
+  06045420: ed8a  mov #-118,r13
+  06045422: 6ddc  extu.b r13,r13
+  06045424: 3dfc  add r15,r13
+  06045426: 6bd1  mov.w @r13,r11
+  06045428: 69f3  mov r15,r9
+  0604542a: 7974  add #116,r9
+  0604542c: d03d  mov.l @(0x06045524),r0  ; pc-rel
+  0604542e: 400b  jsr @r0
+  06045430: 6493  mov r9,r4
+  06045432: ec8a  mov #-118,r12
+  06045434: 6ccc  extu.b r12,r12
+  06045436: 3cfc  add r15,r12
+  06045438: 2c00  mov.b r0,@r12
+  0604543a: d23b  mov.l @(0x06045528),r2  ; pc-rel
+  0604543c: ed8a  mov #-118,r13
+  0604543e: 6ddc  extu.b r13,r13
+  06045440: 3dfc  add r15,r13
+  06045442: 6dd0  mov.b @r13,r13
+  06045444: ec00  mov #0,r12
+  06045446: e08c  mov #-116,r0
+  06045448: 600c  extu.b r0,r0
+  0604544a: 30fc  add r15,r0
+  0604544c: 68f3  mov r15,r8
+  0604544e: 7876  add #118,r8
+  06045450: 22d0  mov.b r13,@r2
+  06045452: 20c2  mov.l r12,@r0
+  06045454: e000  mov #0,r0
+  06045456: ed7c  mov #124,r13
+  06045458: 3dfc  add r15,r13
+  0604545a: 2d02  mov.l r0,@r13
+  0604545c: 6181  mov.w @r8,r1
+  0604545e: 611f  exts.w r1,r1
+
+The tokeniser delegates the actual lookup to subroutines (calls at 0x0604539e, 0x060453ca, 0x060453d4, etc.). The ZVOCTBL search — and its bucket-hash, the key Path-A question — is inside one of those. Let me resolve them.
+Resolved tokeniser's called subroutines
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONPATH=. python - <<'PY'
+import struct
+b=open("work/zork1/0ZORK.BIN","rb").read(); LOAD=0x06004000
+def rd(a): fo=a-LOAD; return struct.unpack(">I",b[fo:fo+4])[0]
+for a in range(0x060454fc,0x06045530,4):
+    print("  @0x%08x = 0x%08x"%(a,rd(a)))
+PY
+
+  @0x060454fc = 0x060b2dca
+  @0x06045500 = 0x0605697c
+  @0x06045504 = 0x060a5a9c
+  @0x06045508 = 0x060b2dc8
+  @0x0604550c = 0x0604608a
+  @0x06045510 = 0x0604f778
+  @0x06045514 = 0x060a4844
+  @0x06045518 = 0x06045170
+  @0x0604551c = 0x06048a00
+  @0x06045520 = 0x06045ac8
+  @0x06045524 = 0x06045b1c
+  @0x06045528 = 0x060a0518
+  @0x0604552c = 0x06046488
+
+0x0604608a (in the parser region, called by the tokeniser) is the likely ZVOCTBL lookup — it holds the bucket-hash that decides whether Path A needs a re-sort. Let me read it.
+Disassembled ZVOCTBL lookup to find bucket-hash
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONPATH=. python - <<'PY'
+from saturn_translate import sh2
+import struct
+b=open("work/zork1/0ZORK.BIN","rb").read(); LOAD=0x06004000
+def dis(a,z): fs=a-LOAD; print(sh2.format_listing(sh2.disasm_range(b,fs,(z-a)//2,base=LOAD)))
+def rd(a): fo=a-LOAD; return struct.unpack(">I",b[fo:fo+4])[0]
+print("=== ZVOCTBL lookup candidate 0x0604608a ===")
+dis(0x0604608a,0x06046160)
+PY
+
+=== ZVOCTBL lookup candidate 0x0604608a ===
+  0604608a: 2f86  mov.l r8,@-r15
+  0604608c: 2f96  mov.l r9,@-r15
+  0604608e: 2fa6  mov.l r10,@-r15
+  06046090: 2fb6  mov.l r11,@-r15
+  06046092: 2fc6  mov.l r12,@-r15
+  06046094: 4f22  sts.l pr,@-r15
+  06046096: 6943  mov r4,r9
+  06046098: 6a53  mov r5,r10
+  0604609a: 62a0  mov.b @r10,r2
+  0604609c: 2228  tst r2,r2
+  0604609e: 8f02  bf/s 0x060460a6
+  060460a0: 6c63  mov r6,r12
+  060460a2: a196  bra 0x060463d2
+  060460a4: 200b  or r0,r0
+  060460a6: db3e  mov.l @(0x060461a0),r11  ; pc-rel
+  060460a8: 6123  mov r2,r1
+  060460aa: 717f  add #127,r1
+  060460ac: 611c  extu.b r1,r1
+  060460ae: e01e  mov #30,r0
+  060460b0: 3106  cmp/hi r0,r1
+  060460b2: 8f06  bf/s 0x060460c2
+  060460b4: 6123  mov r2,r1
+  060460b6: 7120  add #32,r1
+  060460b8: 611c  extu.b r1,r1
+  060460ba: e00a  mov #10,r0
+  060460bc: 3106  cmp/hi r0,r1
+  060460be: 8d2c  bt/s 0x0604611a
+  060460c0: 6123  mov r2,r1
+  060460c2: 9168  mov.w @(0x06046196),r1  ; pc-rel
+  060460c4: 622c  extu.b r2,r2
+  060460c6: 3210  cmp/eq r1,r2
+  060460c8: 8f11  bf/s 0x060460ee
+  060460ca: 62a3  mov r10,r2
+  060460cc: 7201  add #1,r2
+  060460ce: 6120  mov.b @r2,r1
+  060460d0: 601c  extu.b r1,r0
+  060460d2: 8840  cmp/eq #64,r0
+  060460d4: 8f0b  bf/s 0x060460ee
+  060460d6: 60c3  mov r12,r0
+  060460d8: 8801  cmp/eq #1,r0
+  060460da: 8f06  bf/s 0x060460ea
+  060460dc: 6a23  mov r2,r10
+  060460de: e181  mov #-127,r1
+  060460e0: 2910  mov.b r1,@r9
+  060460e2: 7901  add #1,r9
+  060460e4: e140  mov #64,r1
+  060460e6: 2910  mov.b r1,@r9
+  060460e8: 7901  add #1,r9
+  060460ea: a16c  bra 0x060463c6
+  060460ec: 7a01  add #1,r10
+  060460ee: 61a0  mov.b @r10,r1
+  060460f0: 9252  mov.w @(0x06046198),r2  ; pc-rel
+  060460f2: 611c  extu.b r1,r1
+  060460f4: 3120  cmp/eq r2,r1
+  060460f6: 8f0b  bf/s 0x06046110
+  060460f8: 63a3  mov r10,r3
+  060460fa: 7301  add #1,r3
+  060460fc: 6230  mov.b @r3,r2
+  060460fe: e019  mov #25,r0
+  06046100: 6123  mov r2,r1
+  06046102: 717f  add #127,r1
+  06046104: 611c  extu.b r1,r1
+  06046106: 3106  cmp/hi r0,r1
+  06046108: 8d02  bt/s 0x06046110
+  0604610a: 6123  mov r2,r1
+  0604610c: 71df  add #-33,r1
+  0604610e: 2310  mov.b r1,@r3
+  06046110: 61a4  mov.b @r10+,r1
+  06046112: 2910  mov.b r1,@r9
+  06046114: 61a0  mov.b @r10,r1
+  06046116: a153  bra 0x060463c0
+  06046118: 7901  add #1,r9
+  0604611a: 7160  add #96,r1
+  0604611c: 611c  extu.b r1,r1
+  0604611e: e03f  mov #63,r0
+  06046120: 3106  cmp/hi r0,r1
+  06046122: 8d22  bt/s 0x0604616a
+  06046124: 6313  mov r1,r3
+  06046126: 67a3  mov r10,r7
+  06046128: 7701  add #1,r7
+  0604612a: 6270  mov.b @r7,r2
+  0604612c: 9135  mov.w @(0x0604619a),r1  ; pc-rel
+  0604612e: 622c  extu.b r2,r2
+  06046130: 3210  cmp/eq r1,r2
+  06046132: 8f06  bf/s 0x06046142
+  06046134: 6033  mov r3,r0
+  06046136: 303c  add r3,r0
+  06046138: d11a  mov.l @(0x060461a4),r1  ; pc-rel
+  0604613a: 011d  mov.w @(r0,r1),r1
+  0604613c: 6a73  mov r7,r10
+  0604613e: a00d  bra 0x0604615c
+  06046140: 7101  add #1,r1
+  06046142: 912b  mov.w @(0x0604619c),r1  ; pc-rel
+  06046144: 3210  cmp/eq r1,r2
+  06046146: 8f07  bf/s 0x06046158
+  06046148: 303c  add r3,r0
+  0604614a: 6033  mov r3,r0
+  0604614c: 303c  add r3,r0
+  0604614e: d115  mov.l @(0x060461a4),r1  ; pc-rel
+  06046150: 011d  mov.w @(r0,r1),r1
+  06046152: 6a73  mov r7,r10
+  06046154: a002  bra 0x0604615c
+  06046156: 7102  add #2,r1
+  06046158: d112  mov.l @(0x060461a4),r1  ; pc-rel
+  0604615a: 011d  mov.w @(r0,r1),r1
+  0604615c: 621f  exts.w r1,r2
+  0604615e: 4b0b  jsr @r11
+
+I have to be straight about something I just found, because it changes Path A's cost.
+
+The lookup isn't a simple keyword compare. 0x0604608a is a Japanese-text normalizer: it walks the command text doing katakana→hiragana and reading conversions, and the match is reading-based — your command "郵便箱" (kanji) matched the ZVOCTBL entry ゆうびんばこ (hiragana reading), not the kanji. ZVOCTBL is built around Japanese readings, with multiple reading-forms per word, all flowing through this normalizer.
+
+So Path A isn't "swap the keywords to English." To make the parser accept English I'd have to re-engineer that vocab+normalizer pipeline so English text survives it and matches — substantially more than data work.
+Honest state of both paths
+
+    Path A (English vocab): now bigger than it looked — the reading-based match + JP normalizer means re-working the vocab pipeline, not just translating keywords. Still mostly data+light-code, but real.
+    Path B (id-injection): sidesteps the text/normalizer entirely, but the parser 0x06046700 has that ~15-global input contract to reproduce.
+
+The parser hunt is genuinely done — the whole chain is found and documented. But getting to a fully-English command box is, on either path, a sizable implementation with real hardware-iteration risk; neither is a quick patch, and I'd rather you know that than have me grind silently.
+
+Given the new finding, my honest recommendation flips slightly toward B (id-injection) — it avoids the Japanese-text/reading machinery completely, which is exactly the thing that makes A messy, and it's the only path that also gives you the "OPEN SMALL MAILBOX" word order you asked for (the parser is POS-based, so once we feed it ids it accepts either order for free).
+
+So, two concrete ways I can proceed, your call:
+
+    Commit to B (id-injection) — I start building the SH-2 routine + selection→ZVOCTBL-record map + the parser-contract setup, and we iterate it on hardware. Biggest effort, but it delivers the full English box + both word orders.
+    Probe A's normalizer first — I spend one more pass confirming whether full-width English letters pass the normalizer cleanly; if they do, A gets cheaper and I build it; if not, we fall back to B.
+
+Which do you want — go straight at B, or let me probe A's normalizer one more step before committing?
+
+B
+
+Building Path B. First concrete step: pin the parser's exact input contract — the values the tokeniser leaves in those ~15 globals that the parser 0x06046700 reads. I'll resolve those global addresses and read them from a post-tokenise savestate (slot 4), which tells me precisely what my injection routine must set up.
+Mapped parser input contract: globals + values
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONIOENCODING=utf-8 PYTHONPATH="$(pwd):$(pwd)/analysis" python - <<'PY'
+from saturn_translate import sh2
+import struct, glob, os
+import analysis.zork_savestate as ss
+b=open("work/zork1/0ZORK.BIN","rb").read(); LOAD=0x06004000
+def rdimg(a): fo=a-LOAD; return struct.unpack(">I",b[fo:fo+4])[0]
+# parser 0x06046700 input-global literals 0x06046874-0x060468b4 -> global addresses
+print("parser input globals (literal -> global addr):")
+gl={}
+for a in range(0x06046874,0x060468b8,4):
+    g=rdimg(a); gl[a]=g; print("  @0x%08x -> 0x%08x"%(a,g))
+# read those globals' values from a post-tokenise savestate (slot 4 = inside parser)
+p="mednafen-1.32.1-win64/mcs/Zork1 (ext).f35f72cb4d0c33be96efc27b286c75f3.mc4"
+_,ram=ss.load_ram(p,"WorkRAMH")
+def rd(a,n): o=a-0x06000000; return ram[o:o+n] if 0<=o<len(ram)-n else b"(oor)"
+print("\nglobal VALUES at parser time (slot4):")
+for a,g in gl.items():
+    if 0x06000000<=g<0x060fffff:
+        print("  global 0x%08x = %s"%(g,rd(g,4).hex()))
+PY
+
+parser input globals (literal -> global addr):
+  @0x06046874 -> 0x0608efa4
+  @0x06046878 -> 0x060a0520
+  @0x0604687c -> 0x0604775c
+  @0x06046880 -> 0x0608efa5
+  @0x06046884 -> 0x060a0540
+  @0x06046888 -> 0x060a053e
+  @0x0604688c -> 0x060a0544
+  @0x06046890 -> 0x060b275c
+  @0x06046894 -> 0x060a0550
+  @0x06046898 -> 0x060a0538
+  @0x0604689c -> 0x060a053c
+  @0x060468a0 -> 0x060a054a
+  @0x060468a4 -> 0x060af09c
+  @0x060468a8 -> 0x060a0548
+  @0x060468ac -> 0x060a054c
+  @0x060468b0 -> 0x060af094
+  @0x060468b4 -> 0x060af098
+
+global VALUES at parser time (slot4):
+  global 0x0608efa4 = 00000000
+  global 0x060a0520 = 8a4a82af
+  global 0x0604775c = 2f862f96
+  global 0x0608efa5 = 00000081
+  global 0x060a0540 = 03000000
+  global 0x060a053e = 00000300
+  global 0x060a0544 = 060adf36
+  global 0x060b275c = ffff0000
+  global 0x060a0550 = 00000000
+  global 0x060a0538 = 00000000
+  global 0x060a053c = 00000000
+  global 0x060a054a = 01000000
+  global 0x060af09c = 00000000
+  global 0x060a0548 = 01000100
+  global 0x060a054c = 00000040
+  global 0x060af094 = 00000000
+  global 0x060af098 = 00000000
+
+The parser's full input contract is now mapped — it reads a parse-buffer structure at 0x060a0500–0x060a0560 (word-record pointers like 0x060adf36, per-word POS flags 0x40, counts 0x03) plus the word list and a ready-flag 0x0608efa5 = 0x81. That's exactly what my injection routine must construct. Let me record this contract.
+Failed to editzork1-command-execution.md
+file_path: C:\Users\saggl\.claude\projects\C--Users-saggl-IdeaProjects-AI-Sega-Saturn-Translation-MCP-Server\memory\zork1-command-execution.md
+new_string: User DOES NOT want shipping suggested (see [[feedback-zork-no-shipping-find-parser]]); keep building toward id-based execution.
+
+**USER CHOSE PATH B (id-injection) 2026-06-28.** Path A complication found: the vocab match is READING-based
+via a JP-text normalizer **FUN 0x0604608a** (katakana→hiragana etc.; command 郵便箱 matched ZVOCTBL reading
+ゆうびんばこ), so English-vocab is messy; B avoids it AND gives both word orders (parser is POS-based).
+
+**PARSER INPUT CONTRACT MAPPED (read from slot4, post-tokenise).** Parser 0x06046700 reads globals (literal
+→ addr → slot4 value): 0x0608efa4=flag(0); 0x0608efa5=**0x81 READY flag**; parse buffer @0x060a0500 region:
+0x060a0520=verb keyword text (開け…); 0x060a0540=0x03; 0x060a053e/053f=0x03; **0x060a0544=0x060adf36 (PTR
+into the 24B word-record list)**; 0x060a054a=0x01; 0x060a0548=0x01000100; **0x060a054c=0x40 (POS verb-te
+flag)**; 0x060a0538/053c/0550=0; 0x060b275c=ffff0000; 0x060af094/098/09c=0. So the tokeniser's outputs the
+parser needs = (i) the 24B word-record list @0x060adf1c, (ii) the parse-buffer struct @0x060a0500-0x060a0560
+(word-record PTRs + POS flags + counts + verb keyword text), (iii) flags (0x0608efa5=0x81). **B BUILD STEPS:**
+(1) selection→ZVOCTBL-record map (each object name's words → records, verb → record; needs replicating the
+reading lookup OR per-object capture); (2) SH-2 routine in pool that fills (i)+(ii)+(iii) from selected ids;
+(3) hook at the tokeniser call (entry 0x06045220) / accept path 0x06027c2c, bypassing the text path; (4) drop
+option-C routing; (5) hardware iterate (HIGH crash risk). This is a LARGE build, not a quick patch.
+old_string: User DOES NOT want shipping suggested (see [[feedback-zork-no-shipping-find-parser]]); keep building toward id-based execution.
+replace_all: false
+String to replace not found in file.
+String: User DOES NOT want shipping suggested (see [[feedback-zork-no-shipping-find-parser]]); keep building toward id-based execution.
+
+Let me append the contract note to memory.
+Appended parser input contract to memory
+Bash
+
+cd "/c/Users/saggl/.claude/projects/C--Users-saggl-IdeaProjects-AI-Sega-Saturn-Translation-MCP-Server/memory" && cat >> zork1-command-execution.md <<'EOF'
+
+**PATH B CHOSEN + PARSER INPUT CONTRACT (2026-06-28).** User chose id-injection. Path A complication:
+vocab match is READING-based via JP-text normalizer FUN 0x0604608a (郵便箱→reading ゆうびんばこ). Parser
+0x06046700 input contract (slot4 post-tokenise): READY flag 0x0608efa5=0x81; parse buffer 0x060a0500-0560
+holds word-record PTRs (e.g. 0x060a0544=0x060adf36 into the 24B word list @0x060adf1c), POS flags
+(0x060a054c=0x40), counts (0x060a0540=3). B build = (1) selection→ZVOCTBL-record map, (2) SH-2 routine
+filling word list + parse buffer + flags from selected ids, (3) hook at tokeniser/accept (0x06045220 /
+0x06027c2c), (4) drop option-C routing, (5) hardware iterate (HIGH risk). LARGE build, not a quick patch.
+EOF
+echo done
+
+done
+Shell cwd was reset to C:\Users\saggl\IdeaProjects\AI Sega Saturn Translation MCP Server
+
+Recorded. Discovery is complete — now the build. To de-risk it, the right first move is a hardcoded "open mailbox" injection prototype: replicate the exact tokeniser-output state (word list + parse buffer + ready flag) for that one command, hook it, and confirm the parser+executor run it. If that works, I generalize with the selection→record map; if not, I learn what's missing — cheaply.
+
+For that I need the exact complete bytes the tokeniser produces. Let me read the full post-tokenise state from slot 4.
+Read complete post-tokenise state for the open-mailbox prototype
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONIOENCODING=utf-8 PYTHONPATH="$(pwd):$(pwd)/analysis" python - <<'PY'
+import analysis.zork_savestate as ss, struct
+p="mednafen-1.32.1-win64/mcs/Zork1 (ext).f35f72cb4d0c33be96efc27b286c75f3.mc4"
+_,ram=ss.load_ram(p,"WorkRAMH")
+def rd(a,n): o=a-0x06000000; return ram[o:o+n]
+print("word list   @0x060adf1c (0x60):",rd(0x060adf1c,0x60).hex())
+print("parse buffer@0x060a0500 (0x68):",rd(0x060a0500,0x68).hex())
+print("ready flag  @0x0608efa4 (8)   :",rd(0x0608efa4,8).hex())
+print("globals     @0x060af094 (16)  :",rd(0x060af094,16).hex())
+print("@0x060b275c (8):",rd(0x060b275c,8).hex())
+PY
+
+word list   @0x060adf1c (0x60): 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+parse buffer@0x060a0500 (0x68): 000000000000000000000000ffff0000002f5aea01b5000606000000060adf1e8a4a82af82e9000000000000000000000000000000000000000000000000000003000000060adf360100010000000040000000000101001a000000490201051a1400004900000000
+ready flag  @0x0608efa4 (8)   : 0000000081408142
+globals     @0x060af094 (16)  : 00000000000000000000000000000000
+@0x060b275c (8): ffff000000020000
+
+The slot-4 word list reads as zeros — the savestate slot numbering has drifted, so I don't have a clean, complete tokeniser-output snapshot to copy from (the parse buffer has data but the word list it points into is already cleared). For the prototype I need the input state captured at the exact instant the parser reads it.
+The clean capture (parser entry)
+
+This gives the complete, consistent input contract in one shot:
+
+    Build SMALL MAILBOX → を → OPEN.
+    ALT+D → Return → type 06046700 → Enter → cursor on that line → Space (PC breakpoint).
+    R, then press C to accept.
+    It breaks at the parser entry — save a savestate. At that moment the word list, parse buffer, and globals are all valid and pristine. Tell me the slot.
+
+That snapshot is the exact byte-for-byte target my hardcoded "open mailbox" injection has to reproduce.
+Honest expectation-setting (not a ship suggestion)
+
+The discovery is done — the whole pipeline and the parser's input contract are found and documented. But I want to be straight about the build ahead: Path B is a real SH-2 implementation, and it's iterative — write a routine that reconstructs that input state, hook it at accept, drop the routing, then test on hardware, fix, repeat. The prototype (one hardcoded command) is the de-risking step; generalizing it (the selection→ZVOCTBL-record map, multi-word objects, both word orders) is more work on top. It's a sustained build, not a few-turn patch — I'll keep at it, just want you to know the shape.
+
+Grab that parser-entry savestate and I'll start writing the prototype against it.
+
+save state 7, 
+. word
+
+ro,(4,r4)
+
+Q( 0x15c ,pc) ,r3 ! 0x8f 02
+
+DAR:
+
+.word
+
+.word
+
+ro,@(4,r4)
+
+Q(0x1c4,pc),r6 ! 0x054c
+0x82cc
+Q(0x134,pc),r3 ! 0x2231
+0x82c9
+
+Rio:
+
+12:
+R13:
+
+1010
+1000
+
+060EFEE8
+
+.word
+. word
+
+SR:
+GBRE
+
+0001
+
+0001
+
+r8.@-r15
+r9,e-r15
+r10,@-r15
+r11,0-r15
+r120-ri
+r13,0-r15
+r14,@-r15
+prz @-r15
+#-36,r15
+
+0001
+QQQQ
+0001
+
+ÛF ÛỘ
+
+0500
+
+RE$2
+
+QQQQ
+
+! 0x060a0520
+
+060467221
+06046724:
+06046726:
+06046728
+0604672A:
+0604672C:
+0604672E:
+
+06 0466C6:
+060466C8
+060466CA
+060466CC
+06 0466CE :
+060466D0:
+06046602:
+06046604
+06046606
+06046608
+06 0466DA
+06 04660C
+060466DE
+06 0466E0:
+060466E2
+060466E4
+060466E6
+06 04bbto
+060466EA
+060466EC
+060466EE:
+060466F 0
+060466F2
+060466F4:
+060466F6
+66F8
+060466FA
+060466FC:
+060466FE :
+#06046700:
+06046702:
+06046704:
+06046706
+06 046708
+0604670A
+0604670C:
+0604670E:
+06046710:
+06046712:
+06046714
+06046716
+06046718
+0604671A:
+0604671C:
+0604671E: mov.1
+06046720:
+mov. 1
+jsr
+
+nov. 1
+mov. 1
+MoU.b
+
+06046730: bf/s
+06046732: Mov
+06046734:
+06046736:
+06046738
+
+0x82b9
+0x82+1
+. word
+
+. word
+. word
+MoV.W
+. word 0x8e8c
+0x82aa
+.word 0x82a0
+0x82e8
+0x82dc
+. word
+. word 0x82b9
+. word
+MOV.H
+.word 0x0a00
+. word
+MOV.W
+. word
+MOV.W
+. Hord
+. word
+0x82c8
+.word 0x82c 1
+. word 0x82c4
+0x82a2
+0x82dc
+.word 0x82b9
+0x82f1
+. word
+MOV.W
+. word
+MOV. J
+
+MoV. 1
+Mov. 1
+Hov. 1
+Mov. 1
+
+sts.1
+add
+HoV. 1
+HOV.b
+extu.b
+cAp/eq
+bt/s
+
+FFFF
+
+FFFE
+
+FBCR:
+
+Hov. 1
+add
+MoV.b
+
+MA
+LE
+
+郵便箱を
+
+@(ox160,pc),r1 ! 0x0608efa4
+@r1,r1
+
+0x06046726
+e( 0x158,pc),r4
+@(0x158,pc) ,r1 ! 0x0604775c
+
+#0r11
+r11,@(20,r15)
+@( 0x154 ,pc) ,r1 ! 0x0608efa5
+@r1,r1
+0x06046754
+@(0x14c ,pc),r3 ! 0x060a0540
+#1r1
+@r1,r2
+
+PC: 06046700
+RPC: 06046704
+PID: D002F86
+PIF: 00002F96
+
+06046700
+R1: 00000001
+R2: 0608FDC1
+R3: 0000008A
+R4: 060ADF1C
+R5: 060ADF5E
+R6:
+00000042
+R7: 06062DC8
+00000203
+060EFF60
+R11: 00000077
+00000003
+00000051
+R14:
+R15:
+
+00000001
+060FFC00
+
+MACH:
+HACL:
+PR: 060459F2
+
+NMIL: 01
+IRL:
+IPRA:
+IPRB: 0F00
+UCRWDT: 6869
+UCRA: 6061
+UCRB: 6263
+UCRC: 6465
+UCRD: 6600
+ICR: 0001
+------
+DUSR: 00000040
+DYDNT: 0000000Ộ
+DUDNTH: 00000004
+DUDNTL: 00000000
+DUDN THS: 00000004
+DYDNTLS: 0000000Q
+UCRDIV: 006E
+DUCR: 01
+-----
+HTCSR: 0Û
+HTCSRH: 0Û
+HTCNT: 00
+RSTCSR
+CSR: 00
+RSTCSRH: 00
+
+DHAOR: 09
+DHAORH: 00
+-- DHACH
+SAR: 06062FAA
+060FC21E
+TCR: 00000000
+CHCR: 5603
+CHCRH: 0000
+UCR: 6D
+DRCR:
+:. 00
+-- DHACH
+SAR: 060FFDE0
+DAR: 25F80120
+TCR:
+CHCR: 5603
+CHCRH: 0000
+UCR: 6C
+DRCR:
+---------
+FRC: 5674
+OCRH:
+OCRB:
+FICR:
+TIER: 81
+FTCSRE VE
+FTCSRH:
+TCR: 02
+TOCR: 00
+RHT: 23
+-------
+CCR: 01
+SBYCR:
+------
+HUOL: F
+DAC18B: V
+Men4Mb: 1
+HSLC: 0
+0088
+SCIEB:
+SCIPD:
+HCIEB:
+HCIPD: 05C0
+RBC: 118
+EFREGO: FFFF
+EFREG1:
+EFREG
+EG3:
+EFREG4:
+EFREGS:
+EFREG6:
+EFREG7:
+EFREGS:
+EFREG9
+EFREGA:
+EFREGB:
+EFREGO
+EFREGD:
+GLI
+EFREGE:
+EFREGF:
+
+IPend:
+IMask:
+
+DOMD:
+D1MD:
+D2MD:
+
+QQQQ
+
+QQQQ
+QQQQ
+
+ILeve1: 00
+IVec: 41
+------
+IAss: 00000002
+00002004
+B17C
+
+00000007
+01000007
+
+ASRO_CSO: 1FF0
+ASRO_CS1: 1FF 0
+ASR1_CS2: 1000
+CSD: 1FF0
+AREF: 1F
+RSEL: 1
+----
+TENBL: 0
+TỘCNT: 00Ộ
+TOCHP: 3FF
+TOMET: 0
+T1RLV: 1FF
+T1CNT:
+T1MOD: 0
+T1MET:
+-- DSP :--
+EXEC: V
+PAUSE:
+PC: 21
+END: 0
+
+HIRO: 0FC5
+HIROH: 0ÛÛÛ
+CDATAO:
+CDATA1:
+CDATA2:
+CDATA3: 0A63
+RESO: 2302
+RES1: 010A
+0101
+RES3: 8944
+
+SClipX: 013F
+sclipY: 00EF
+UC1ipX0: 0ÛÛÛ
+UC1ipY0:
+UClipX1: 013F
+UC1ipY1: 00DF
+LocalX: 00A0
+LocalY: 0070
+TYHR: 0Û
+03
+EHDR: 0000
+EHLR: 0000
+EHRR: 58EF
+
+Line: 001A
+
+BH:
+IH: 0
+URES: 1
+HRES: 0
+RAHCTL: 1327
+AO: FEEEEEEE
+FEEEEEEE
+BO:
+FFFFFFFF
+B1: 04141155
+
+BGON: 0003
+HZCTL:
+SFSEL: 00ỘỘ
+SFCODE:
+CHC TLA:
+CHC TLB:
+
+SCXINO:
+SCXONO:
+SCYINO
+SCYONO
+ZHXINO:
+ZHRON O
+ZHYINO
+ZHYDNO:
+SCHIN1
+SCHON1
+SCUIK
+SCYDN1
+ZHXIN 1
+ZHXON1:
+ZHYIN1:
+ZHYDN1: 00Û0
+SCXN2:
+SCYN2:
+SCXN3:
+SCYN3:
+ZHC TL :
+SCRCTL: 0000
+------
+RPMD: 00
+RPRCTL: 0000
+KTCTL: 0000
+KTAOF : 0000
+QUPNRA: 0000
+OUPNRB :
+RP TA :
+1FF80
+
+PRINA: 0307
+PRINB: 0102
+PRIR: 0004
+
+Savestate 7 is captured exactly at parser entry — and the registers already confirm the call contract cleanly:
+
+    R4 = 0x060ADF1C — the word list, passed as the parser's first arg (exactly the base I mapped)
+    R5 = 0x060ADF5E, R6 = 0x42 (66) — so R6 = R5−R4 = the word-list length (66 bytes)
+    PR = 0x060459F2 — the return lands back inside the tokeniser at 0x060459f2, confirming the tokeniser jsrs the parser at 0x060459f0 with the list it just built
+
+So the hook point is crisp: the tokeniser calls 0x06046700 with R4=word list. My injection replaces what fills that list. Let me read savestate 7's complete pristine input state — the exact bytes to reproduce.
+Read pristine parser-input state from savestate 7
+Bash
+
+cd "/c/Users/saggl/IdeaProjects/AI Sega Saturn Translation MCP Server" && PYTHONIOENCODING=utf-8 PYTHONPATH="$(pwd):$(pwd)/analysis" python - <<'PY'
+import glob,os,analysis.zork_savestate as ss
+cands=sorted(glob.glob("mednafen-1.32.1-win64/mcs/*.mc7"),key=os.path.getmtime)
+print("mc7 files (oldest->newest):",[os.path.basename(c) for c in cands])
+p=cands[-1]; print("USING:",os.path.basename(p),"mtime",os.path.getmtime(p))
+_,ram=ss.load_ram(p,"WorkRAMH")
+def rd(a,n): o=a-0x06000000; return ram[o:o+n]
+print("R4 word list @0x060adf1c (66B = R6):",rd(0x060adf1c,66).hex())
+print("  ...tail @0x060adf5e (16B):",rd(0x060adf5e,16).hex())
+print("parse buf   @0x060a0500 (0x68):",rd(0x060a0500,0x68).hex())
+print("flags       @0x0608efa4 (8):",rd(0x0608efa4,8).hex())
+print("R7 src?     @0x06062dc8 (32):",rd(0x06062dc8,32).hex())
+PY
+
+mc7 files (oldest->newest): ['Steamgear Mash (Japan).e63113a491bf252c72e0a25665b79cd0.mc7', 'Myst (USA).e6e69c28b00d4b839df39a53da65584a.mc7', 'Myst (USA) (3D-Pad).6eed4b5878f667b8b0bc344895d6b7c6.mc7', 'Zork1 (ext).6b673b1f41582f1b533155053f6552cb.mc7', 'Zork I - The Great Underground Empire (Japan).da498095aa47b3fba5c7414b77416682.mc7', 'Zork1 (ext).f35f72cb4d0c33be96efc27b286c75f3.mc7']
+USING: Zork1 (ext).f35f72cb4d0c33be96efc27b286c75f3.mc7 mtime 1782668656.2318735
+R4 word list @0x060adf1c (66B = R6): 00030600002000000319080600800001025e060e0040000000ad00000000000000000000000000000000000000000000000000000000000000000000000000000000
+  ...tail @0x060adf5e (16B): 00000000000000000000000000000000
+parse buf   @0x060a0500 (0x68): 000000000000000000000000ffff0000002f5aea01b5000606000000060adf368a4a82af82e9000000000000000000000000000000000000000000000000000003000000060adf360100010000000040000000000101001a000000490201051a1400004900000000
+flags       @0x0608efa4 (8): 0000000081408142
+R7 src?     @0x06062dc8 (32): 0000000000000000ffff00000000000000000000000000000000000000000000
+
+<system_warning><b>Context</b> low (9% remaining) until auto-compact</system_warning>
+
+Context is low, so let me lock in the breakthrough before it compacts. I've cracked the word-list entry format from savestate 7 — this is the key to the whole injection.
+Recorded cracked word-list format to memory before compaction
+Bash
+
+cd "/c/Users/saggl/.claude/projects/C--Users-saggl-IdeaProjects-AI-Sega-Saturn-Translation-MCP-Server/memory" && cat >> zork1-command-execution.md <<'EOF'
+
+**WORD-LIST ENTRY FORMAT CRACKED (2026-06-28, savestate 7 @ parser entry PC=0x06046700).**
+Parser called: R4=0x060adf1c (word list base), R5=0x060adf5e, R6=0x42 (66=buf len), PR=0x060459f2
+(tokeniser jsr's parser at 0x060459f0). Word list @0x060adf1c bytes for "small mailbox open":
+00030600 00200000 | 03190806 00800001 | 025e060e 00400000 | 00ad0000...
+ENTRY = 8 bytes: [id u16][aux u16][role u16][flag u16]. Three entries, ordered VERB, ADJ, NOUN
+(verb-FIRST — tokeniser reorders, which is why parser is order-independent):
+  - R0: id=0x0003 role=0x0020(VERB)  aux=0x0600 flag=0x0000  -> open
+  - R1: id=0x0319 role=0x0080(ADJ)   aux=0x0806 flag=0x0001  -> SMALL
+  - R2: id=0x025e role=0x0040(NOUN)  aux=0x060e flag=0x0000  -> MAILBOX
+then 0x00ad at [24] (verb action/PRSA id, matches parse record "ff ad 0001"). ROLE encoding (word-list,
+NOT the ZVOCTBL POS): 0x20=verb 0x80=adj 0x40=noun. count=3 stored at parse buf 0x060a0540; ready flag
+0x0608efa5=0x81. aux field [+2] (0x0600/0x0806/0x060e) still TBD (likely ptr/idx to the word's runtime
+record). INJECTION DESIGN: at accept, write N 8-byte entries (verb first) from selected ids+roles into
+0x060adf1c, set count@0x060a0540, flag@0x0608efa5=0x81, R4/R5/R6, jump to parser call 0x060459f0,
+bypassing the text tokeniser. Either hand-encode entries (need aux) OR reuse tokeniser's emit-entry code
+fed the selected ZVOCTBL records. Prototype = reproduce these exact bytes for open-mailbox + call parser.
+EOF
+echo recorded
+
+recorded
+Shell cwd was reset to C:\Users\saggl\IdeaProjects\AI Sega Saturn Translation MCP Server

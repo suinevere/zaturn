@@ -1,0 +1,134 @@
+{
+  "_note": "Steamgear Mash 0.BIN UI strings. Fill 'translation' (ASCII, <= budget-1 chars). offset=0.BIN file offset; addr=HWRAM (=0x06004000+offset). Blank keeps original. Apply: saturn_translate.sgtext.apply_worklist_file().",
+  "load_base": 100679680,
+  "strings": [
+    {
+      "offset": 284280,
+      "addr": 100963960,
+      "text": "PROGRAMMED BY TAMSOFT",
+      "kind": "ui",
+      "budget": 24,
+      "translation": ""
+    },
+    {
+      "offset": 284304,
+      "addr": 100963984,
+      "text": "HIT ANY KEY TO START",
+      "kind": "ui",
+      "budget": 48,
+      "translation": "PRESS START BUTTON"
+    },
+    {
+      "offset": 284352,
+      "addr": 100964032,
+      "text": "HOUR   MIN   SEC",
+      "kind": "ui",
+      "budget": 20,
+      "translation": ""
+    },
+    {
+      "offset": 284376,
+      "addr": 100964056,
+      "text": "GAME",
+      "kind": "ui",
+      "budget": 20,
+      "translation": ""
+    },
+    {
+      "offset": 284396,
+      "addr": 100964076,
+      "text": "TYPE 1",
+      "kind": "ui",
+      "budget": 8,
+      "translation": ""
+    },
+    {
+      "offset": 284404,
+      "addr": 100964084,
+      "text": "TYPE 2",
+      "kind": "ui",
+      "budget": 8,
+      "translation": ""
+    },
+    {
+      "offset": 284412,
+      "addr": 100964092,
+      "text": "TYPE 3",
+      "kind": "ui",
+      "budget": 6292,
+      "translation": ""
+    },
+    {
+      "offset": 290704,
+      "addr": 100970384,
+      "text": "REQUEST NO.",
+      "kind": "ui",
+      "budget": 12,
+      "translation": ""
+    },
+    {
+      "offset": 290716,
+      "addr": 100970396,
+      "text": "A BUTTON SE CALL",
+      "kind": "ui",
+      "budget": 20,
+      "translation": ""
+    },
+    {
+      "offset": 290736,
+      "addr": 100970416,
+      "text": "B BUTTON SE STOP",
+      "kind": "ui",
+      "budget": 20,
+      "translation": ""
+    },
+    {
+      "offset": 290756,
+      "addr": 100970436,
+      "text": "C BUTTON SE NO. RESET",
+      "kind": "ui",
+      "budget": 24,
+      "translation": ""
+    },
+    {
+      "offset": 290780,
+      "addr": 100970460,
+      "text": "CHANGE MOVE LEVER",
+      "kind": "ui",
+      "budget": 7800,
+      "translation": ""
+    },
+    {
+      "offset": 298580,
+      "addr": 100978260,
+      "text": "STAGE_NO = ",
+      "kind": "ui",
+      "budget": 12,
+      "translation": ""
+    },
+    {
+      "offset": 298592,
+      "addr": 100978272,
+      "text": " ROOM_NO = ",
+      "kind": "ui",
+      "budget": 1028,
+      "translation": ""
+    },
+    {
+      "offset": 970212,
+      "addr": 101649892,
+      "text": "CPK Version 1.10 1995-03-31",
+      "kind": "ui",
+      "budget": 300,
+      "translation": ""
+    },
+    {
+      "offset": 970512,
+      "addr": 101650192,
+      "text": "cnt_return_s",
+      "kind": "ui",
+      "budget": 154,
+      "translation": ""
+    }
+  ]
+}

@@ -1,0 +1,319 @@
+{
+  "_note": "Steamgear Mash 2-byte menu strings (FUN_06005020, code=glyph*4). Fill 'translation' (ASCII). {gNNN}=kana glyph index — render with render_menu.py to read. Budget is BYTES (2/char + 2-byte NUL). kind=wide. Apply: saturn_translate.sgtext.apply_worklist_file().",
+  "load_base": 100679680,
+  "strings": [
+    {
+      "offset": 302224,
+      "addr": 100981904,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        249,
+        276,
+        45,
+        224,
+        45,
+        270,
+        231,
+        237,
+        45,
+        246
+      ],
+      "text": " {g249}{g276}-{g224}-{g270}{g231}{g237}-{g246}",
+      "budget": 24,
+      "translation": " NEW GAME"
+    },
+    {
+      "offset": 302248,
+      "addr": 100981928,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        266,
+        237,
+        286,
+        233,
+        243,
+        246
+      ],
+      "text": " {g266}{g237}{g286}{g233}{g243}{g246}",
+      "budget": 16,
+      "translation": " BUTTON"
+    },
+    {
+      "offset": 302264,
+      "addr": 100981944,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        227,
+        211,
+        286,
+        247,
+        272,
+        45,
+        247
+      ],
+      "text": " {g227}{g211}{g286}{g247}{g272}-{g247}",
+      "budget": 18,
+      "translation": " SOUND"
+    },
+    {
+      "offset": 302282,
+      "addr": 100981962,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        231,
+        244,
+        45,
+        230,
+        32,
+        233,
+        282,
+        221,
+        246
+      ],
+      "text": " {g231}{g244}-{g230} {g233}{g282}{g221}{g246}",
+      "budget": 22,
+      "translation": " STAGE SEL"
+    },
+    {
+      "offset": 302304,
+      "addr": 100981984,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        284,
+        45,
+        261,
+        153,
+        129,
+        144,
+        206,
+        168,
+        149
+      ],
+      "text": " {g284}-{g261}{g153}{g129}{g144}{g206}{g168}{g149}",
+      "budget": 22,
+      "translation": ""
+    },
+    {
+      "offset": 302326,
+      "addr": 100982006,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        260,
+        281,
+        45,
+        224,
+        45,
+        230,
+        32,
+        182,
+        199,
+        168,
+        129
+      ],
+      "text": " {g260}{g281}-{g224}-{g230} {g182}{g199}{g168}{g129}",
+      "budget": 26,
+      "translation": ""
+    },
+    {
+      "offset": 302352,
+      "addr": 100982032,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        237,
+        209,
+        246,
+        281,
+        169,
+        192,
+        167,
+        201
+      ],
+      "text": " {g237}{g209}{g246}{g281}{g169}{g192}{g167}{g201}",
+      "budget": 20,
+      "translation": " TO TITLE"
+    },
+    {
+      "offset": 302372,
+      "addr": 100982052,
+      "kind": "wide",
+      "glyphs": [
+        231,
+        244,
+        282,
+        215
+      ],
+      "text": "{g231}{g244}{g282}{g215}",
+      "budget": 10,
+      "translation": ""
+    },
+    {
+      "offset": 302382,
+      "addr": 100982062,
+      "kind": "wide",
+      "glyphs": [
+        272,
+        252,
+        279,
+        281
+      ],
+      "text": "{g272}{g252}{g279}{g281}",
+      "budget": 10,
+      "translation": ""
+    },
+    {
+      "offset": 302392,
+      "addr": 100982072,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        227,
+        211,
+        286,
+        247,
+        244,
+        231,
+        246
+      ],
+      "text": " {g227}{g211}{g286}{g247}{g244}{g231}{g246}",
+      "budget": 40,
+      "translation": ""
+    },
+    {
+      "offset": 302432,
+      "addr": 100982112,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        230,
+        274,
+        286,
+        261
+      ],
+      "text": " {g230}{g274}{g286}{g261}",
+      "budget": 12,
+      "translation": ""
+    },
+    {
+      "offset": 302444,
+      "addr": 100982124,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        211,
+        214,
+        267,
+        286
+      ],
+      "text": " {g211}{g214}{g267}{g286}",
+      "budget": 12,
+      "translation": ""
+    },
+    {
+      "offset": 302456,
+      "addr": 100982136,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        400,
+        401,
+        404,
+        405
+      ],
+      "text": " {g400}{g401}{g404}{g405}",
+      "budget": 12,
+      "translation": ""
+    },
+    {
+      "offset": 302468,
+      "addr": 100982148,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        402,
+        403,
+        404,
+        405
+      ],
+      "text": " {g402}{g403}{g404}{g405}",
+      "budget": 12,
+      "translation": ""
+    },
+    {
+      "offset": 302480,
+      "addr": 100982160,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        402,
+        403,
+        406,
+        407
+      ],
+      "text": " {g402}{g403}{g406}{g407}",
+      "budget": 24,
+      "translation": ""
+    },
+    {
+      "offset": 302504,
+      "addr": 100982184,
+      "kind": "wide",
+      "glyphs": [
+        32,
+        280,
+        233,
+        243,
+        246
+      ],
+      "text": " {g280}{g233}{g243}{g246}",
+      "budget": 12,
+      "translation": "RESET"
+    },
+    {
+      "offset": 302516,
+      "addr": 100982196,
+      "kind": "wide",
+      "glyphs": [
+        231,
+        237,
+        45,
+        246,
+        266,
+        237,
+        286,
+        61,
+        406,
+        407
+      ],
+      "text": "{g231}{g237}-{g246}{g266}{g237}{g286}={g406}{g407}",
+      "budget": 22,
+      "translation": ""
+    },
+    {
+      "offset": 302538,
+      "addr": 100982218,
+      "kind": "wide",
+      "glyphs": [
+        71,
+        65,
+        77,
+        69,
+        32,
+        32,
+        79,
+        86,
+        69,
+        82
+      ],
+      "text": "GAME  OVER",
+      "budget": 84,
+      "translation": ""
+    }
+  ]
+}

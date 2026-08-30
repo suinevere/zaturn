@@ -25,11 +25,25 @@
 #define DASH_PAL_NO    1
 
 /*----------------------
+ | DASH_TINT_NUM / DASH_TINT_DEN
+ | Description: How far a marble entry travels from neutral toward the
+ |   background's hue -- half. Full tint turns a blue ground's marble pure blue
+ |   and throws away the stone; none is what it did before. The dominant channel
+ |   is untouched at any strength, so the ramp keeps its top end and only the
+ |   other two channels come down, which is what reads as a tint rather than as
+ |   a darkening.
+ | Author: suinevere
+ ----------------------*/
+#define DASH_TINT_NUM 1
+#define DASH_TINT_DEN 2
+
+/*----------------------
  | g_ready / g_cell / g_map_vram / g_char_base
  | Description: Whether the layer came up, where its two allocations landed, and
  |   the character number its first tile sits at.
  | Author: suinevere
  ----------------------*/
+static unsigned short g_tint_bg = 0;   // last background handed to dash_tint
 static bool      g_ready = false;
 static void     *g_cell = nullptr;
 static uint16_t *g_map_vram = nullptr;
@@ -67,6 +81,52 @@ static void flush_hook(void)
     dash_dirty_clear();
 }
 
+/*----------------------
+ | write_palette
+ | Description: Writes CRAM entries 16..31 from dash_tiles.c's ramp, each scaled
+ |   DASH_TINT_NUM/DASH_TINT_DEN of the way toward g_tint_bg's hue. `peak` is the
+ |   background's brightest channel, so scaling by (peak + channel) / 2*peak
+ |   leaves the dominant channel exactly where it was and halves one that the
+ |   background has none of. A background with no colour at all (peak 0, i.e.
+ |   black) divides by nothing and is left alone. Straight into the SH-2's
+ |   uncached CRAM mirror, as text_set_color does it, so no flush is needed and
+ |   nothing has to wait for a DMA.
+ | Author: suinevere
+ | Dependencies: dash_tiles.h (dash_palette), SRL (VDP2_COLRAM)
+ | Globals: g_tint_bg
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void write_palette(void)
+{
+    volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
+    unsigned br = g_tint_bg & 31;
+    unsigned bg = (g_tint_bg >> 5) & 31;
+    unsigned bb = (g_tint_bg >> 10) & 31;
+    unsigned peak = br > bg ? br : bg;
+    if (bb > peak) peak = bb;
+
+    for (int i = 0; i < 16; i++) {
+        unsigned short src = dash_palette[i];
+        if (src == 0) { cram[DASH_PAL_NO * 16 + i] = 0; continue; }   // transparent
+        unsigned r = src & 31, g = (src >> 5) & 31, b = (src >> 10) & 31;
+        if (peak != 0) {
+            const unsigned d = DASH_TINT_DEN, n = DASH_TINT_NUM;
+            r = (r * ((d - n) * peak + n * br)) / (d * peak);
+            g = (g * ((d - n) * peak + n * bg)) / (d * peak);
+            b = (b * ((d - n) * peak + n * bb)) / (d * peak);
+        }
+        cram[DASH_PAL_NO * 16 + i] =
+            (unsigned short) (0x8000 | (b << 10) | (g << 5) | r);
+    }
+}
+
+void dash_tint(unsigned short bg555)
+{
+    g_tint_bg = bg555;
+    write_palette();
+}
+
 bool dash_init(void)
 {
     if (g_ready) return true;
@@ -99,6 +159,10 @@ bool dash_init(void)
                                 SRL::CRAM::TextureColorMode::Paletted16, true);
     SRL::VDP2::NBG2::TilePalette.Load(
         (SRL::Types::HighColor *) dash_palette, 16);
+    // Over the Load, so the tint survives however this races display_apply:
+    // the CD build brings the layer up before the colours are set and the
+    // netbin sets them first, and neither should decide what the marble is.
+    write_palette();
 
     SRL::Tilemap::TilemapInfo info(SRL::CRAM::TextureColorMode::Paletted16,
                                    PNB_2WORD, CHAR_SIZE_1x1, PL_SIZE_1x1,

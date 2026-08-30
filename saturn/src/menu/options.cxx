@@ -15,6 +15,7 @@
 #include "input.h"
 #include "display.h"
 #include "text_map.h"   // TEXT_DIM_CRAM, the entry the dim ink lives in
+#include "dash_view.h"  // dash_tint, the marble's sixteen CRAM entries
 #ifndef NETBIN
 #include "title.h"
 #endif
@@ -91,6 +92,7 @@ void text_set_color(unsigned short rgb555, unsigned short bg555) {
     cram[2]  = 0;        // reverse-video letter, punched out of the ink block
     cram[15] = rgb555;   // install_block_glyph()'s cursor tile
     cram[TEXT_DIM_CRAM] = text_dim_rgb(rgb555, bg555);   // unselected menu rows
+    dash_tint(bg555);   // and the marble chrome, which follows the same ground
 }
 
 /*----------------------

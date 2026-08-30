@@ -63,6 +63,26 @@ void dash_set(int variant, int base_row);
 int dash_ready(void);
 
 /*----------------------
+ | dash_tint
+ | Description: Recolours the marble to carry the background's hue, by writing
+ |   the layer's sixteen CRAM entries from dash_tiles.c's ramp scaled toward
+ |   `bg555`. The tiles are 4bpp indices, so the whole look is those sixteen
+ |   words and nothing in VRAM moves. Each entry keeps its own lightness and
+ |   gives up half its distance to the background's hue, so a blue ground makes
+ |   a blue-grey marble and an amber one a warm marble, while a neutral ground
+ |   -- black, white, grey, which is most of the presets -- leaves the ramp
+ |   exactly as it was, because a colourless background has no hue to take.
+ |   Remembers its argument, so dash_init can re-apply it whichever order the
+ |   two run in.
+ | Author: suinevere
+ | Dependencies: dash_tiles.h, SRL
+ | Globals: g_tint_bg
+ | Params: bg555 -- the background colour to tint toward
+ | Returns: N/A
+ ----------------------*/
+void dash_tint(unsigned short bg555);
+
+/*----------------------
  | dash_hold
  | Description: Claims the dashboard panel for one frame with the variant and
  |   top-edge row the strip's renderers would have asked for, choosing between

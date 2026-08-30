@@ -21,11 +21,12 @@ extern "C" {
  ----------------------*/
 enum {
     GAME_CAT_ZORK = 0,      // The Zork Universe
+    GAME_CAT_ENCHANTER,     // The Enchanter Series
     GAME_CAT_PLANETFALL,    // The Planetfall Series
     GAME_CAT_MYSTERY,       // The Mystery Series
     GAME_CAT_ADVENTURE,     // Tales of Adventure & Fantasy
     GAME_CAT_SCIFI,         // Sci-Fi & Horror
-    GAME_CAT_COMEDY,         // anything else
+    GAME_CAT_COMEDY,        // Comedy
     GAME_CAT_OTHER,         // anything else
     GAME_CAT_COUNT
 };

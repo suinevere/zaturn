@@ -51,23 +51,23 @@ TITLES = {
 }
 
 # Category id per short name (matches GAME_CAT_* in game_titles.h). Anything not
-# listed (amfv, minizork, sampler, hypochondriac, ...) falls into Other (5).
+# listed (advent, amfv, minizork, sampler, hypochondriac, ...) falls into Other (7).
 CATEGORY = {
-    "advent": 0,
-    "zork1": 0, "zork2": 0, "zork3": 0, "enchanter": 0, "sorcerer": 0, "spellbreaker": 0,
-    "planetfall": 1, "stationfall": 1,
-    "deadline": 2, "witness": 2, "suspect": 2, "moonmist": 2,
-    "infidel": 3, "cutthroats": 3, "seastalker": 3, "wishbringer": 3,
-    "ballyhoo": 3, "hollywoodhijinx": 3, "plunderedhearts": 3,
-    "starcross": 4, "suspended": 4, "lurkinghorror": 4,
-    "hitchhiker": 5, "leathergoddesses": 5
+    "zork1": 0, "zork2": 0, "zork3": 0,
+    "enchanter": 1, "sorcerer": 1, "spellbreaker": 1,
+    "planetfall": 2, "stationfall": 2,
+    "deadline": 3, "witness": 3, "suspect": 3, "moonmist": 3,
+    "infidel": 4, "cutthroats": 4, "seastalker": 4, "wishbringer": 4,
+    "ballyhoo": 4, "hollywoodhijinx": 4, "plunderedhearts": 4,
+    "starcross": 5, "suspended": 5, "lurkinghorror": 5,
+    "hitchhiker": 6, "leathergoddesses": 6
 }
-CAT_OTHER = 5
+CAT_OTHER = 7
 
 # Games that ship on a disc but have no file in the reference collection, keyed
 # by (release, serial) so a regenerate keeps them. Merged over the scan results.
 MANUAL = {
-    #(6, "151001"): ("Colossal Cave Adventure (1977)", 0)
+    #(6, "151001"): ("Colossal Cave Adventure (1977)", CAT_OTHER)
 }
 
 

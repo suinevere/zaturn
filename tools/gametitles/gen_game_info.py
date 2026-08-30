@@ -51,7 +51,7 @@ REC_SIZE = 52
 NAME_MAX = 16
 LABEL_MAX = 32
 MAX_GAMES = 32
-GAME_CAT_OTHER = 6
+GAME_CAT_OTHER = 7
 
 # One row of the generated table: { release, "serial", "title", cat },
 ROW_RE = re.compile(r'\{\s*(\d+)\s*,\s*"([^"]*)"\s*,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(\d+)\s*\}')

@@ -145,8 +145,9 @@ static const char* read_game_info(const char* filename, int* cat) {
  | Author: suinevere
  ----------------------*/
 static const char *const CAT_NAMES[GAME_CAT_COUNT] = {
-    "The Zork Universe", "The Planetfall Series", "The Mystery Series",
-    "Tales of Adventure & Fantasy", "Sci-Fi & Horror", "Comedy", "Other",
+    "The Zork Universe", "The Enchanter Series", "The Planetfall Series",
+    "The Mystery Series", "Tales of Adventure & Fantasy", "Sci-Fi & Horror",
+    "Comedy", "Other",
 };
 
 /*----------------------

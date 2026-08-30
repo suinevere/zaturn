@@ -65,11 +65,18 @@ static unsigned short text_dim_rgb(unsigned short ink, unsigned short bg) {
  |   it via SetPrintPaletteColor(0, White), which writes 1 + (index << 8); its
  |   other six calls, index 1..6, land on entries 257, 513, ... which a 4bpp
  |   cell cannot reach, so index 0 is the only one that colors anything);
- |   entry 2 is always forced to black rather than `rgb555` -- it is the
- |   letter punched out of a reverse-video cell's solid ink block
- |   (glyph_invert.h), and painting it black rather than the background colour
- |   keeps the punched letter legible against every background this page can
- |   set; and entry 15 is the cursor (install_block_glyph() fills its tile
+ |   entry 2 is the letter punched out of a reverse-video cell's solid ink
+ |   block (glyph_invert.h) and is painted the BACKGROUND colour. It used to be
+ |   forced black, on the reasoning that black stays legible against every
+ |   background this page can set -- but the letter does not sit on the
+ |   background, it sits inside a block of the ink, so what it has to contrast
+ |   with is the ink. Six presets set the text colour to black (ZX Spectrum,
+ |   TRS-80 CoCo, TI-99/4A, Mac Classic, Monochrome P3), and on those the block
+ |   and the punched letter were both black, so every highlighted word in the
+ |   command panel, the compass rose and the on-screen keyboards came out a
+ |   solid black box. The background colour instead gives the punched letter
+ |   exactly the contrast against the ink that the player already chose for
+ |   text against ground, which is correct for every preset by construction; and entry 15 is the cursor (install_block_glyph() fills its tile
  |   with 0xFF, and 4bpp pixel value 15 selects entry 15). SRL::ASCII::SetColor
  |   cannot be used for the glyphs: it indexes from (colorBank >> 6), which is
  |   0 here, so SetColor(c, i) writes
@@ -89,7 +96,7 @@ static unsigned short text_dim_rgb(unsigned short ink, unsigned short bg) {
 void text_set_color(unsigned short rgb555, unsigned short bg555) {
     volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
     cram[1]  = rgb555;   // glyph foreground
-    cram[2]  = 0;        // reverse-video letter, punched out of the ink block
+    cram[2]  = bg555;    // reverse-video letter, punched out of the ink block
     cram[15] = rgb555;   // install_block_glyph()'s cursor tile
     cram[TEXT_DIM_CRAM] = text_dim_rgb(rgb555, bg555);   // unselected menu rows
     dash_tint(bg555);   // and the marble chrome, which follows the same ground

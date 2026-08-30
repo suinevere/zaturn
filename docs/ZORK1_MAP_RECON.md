@@ -91,16 +91,69 @@ These were tested and are **not** where the map lives:
   `0x032600`, climbing with each state) are the text-glyph sprite uploads moving
   through a bump allocator, not canvas pixels.
 
+## Solved: how the map is drawn
+
+Recovered by breakpointing `draw_cel` (`0x0601b95c`) once per call and saving a
+state at each break, then reading `R4`/`R5`/`R6` and `SysRegs[2]` (PR) out of the
+savestates. PR gave the caller directly, which located the renderer.
+
+### The renderer
+
+`0x06019AE0`-`0x06019B24` is a straight-line block of eight `draw_cel` calls, and
+**every coordinate is a hardcoded immediate**:
+
+| Cel | y | x | What |
+|---|---|---|---|
+| 26 | -160 | 0 | indirect cel |
+| 27 | -160 | 0 | indirect cel |
+| 12 | -96 | -16 | 32x32 |
+| 28 | 0 | -112 | the canvas |
+| 29 | 32 | -80 | compass ring |
+| 30 | 32 | -80 | compass labels |
+| 31 | -96 | -16 | stick figure |
+| 32 | -96 | -16 | trail stamp |
+
+The stick figure therefore **never moves**: it is painted at a fixed screen
+position and the map scrolls underneath it. There is no room-to-screen coordinate
+mapping in this routine, which is why no such table exists to find.
+
+### Per-room map state
+
+* **`0x060B4830`** - u16 canvas cursor, the live map position.
+* **`0x0600AA96`** - on entering a room: `maptbl[room] = cursor | 0x8000`.
+* **`0x06072D38`** - 110 x u16 indexed by room. Bit 15 = visited; the low 15 bits
+  are the cursor value captured on first visit.
+* **`0x06019B84`** - the draw loop: iterates all 110 rooms (`cmp/eq #110`),
+  skips any whose table entry is zero, and for each visited room emits its label
+  from a 20-byte record (`add #20,r12`) holding up to ten u16 glyph entries,
+  zero-terminated.
+
+The cursor splits into two fields per the draw code: `hi = (v >> 8) & 0x7F`
+(compared against 11) and `lo = v & 0xFF` (scaled by `0x1800` or `0x3000`
+depending on that comparison).
+
+Verified against a five-room northward walk, with the table containing exactly
+the rooms visited and nothing else:
+
+| Room | Cursor | hi | lo |
+|---|---|---|---|
+| 12 West of House | `0x005B` | 0 | 91 |
+| 7 North of House | `0x006D` | 0 | 109 |
+| 8 Forest Path | `0x0155` | 1 | 85 |
+| 5 Clearing | `0x0054` | 0 | 84 |
+| 3 Forest | `0x0054` | 0 | 84 |
+
 ## Open
 
-The map is redrawn per frame rather than persisted as a bitmap, yet no structured
-source for it has been located. The next step is dynamic, not static:
+Rooms 5 (Clearing) and 3 (Forest) carry the **same** cursor, `0x0054`, in every
+savestate checked. So the cursor is not a unique per-room coordinate. Either it
+only advances on some transitions, or the two labels are separated by the 20-byte
+name record rather than by the cursor.
 
-Set a PC breakpoint on **`draw_cel` at `0x0601b95c`** with the map open. Its
-signature is `draw_cel(r4 = cel index, r5 = y, r6 = x)`, so every break yields
-the element and its exact canvas position. Logging those triples for two
-different exploration states gives the layout directly, and the coordinate source
-can then be traced back from whatever computes `r5`/`r6`.
+A save from a room reached by moving **east or west** would show whether the `hi`
+field is the axis that changes. Note that the savestates which produced the table
+above no longer exist (see the warning at the top of this document), so any
+further capture starts from a fresh playthrough.
 
 ## Incidental
 

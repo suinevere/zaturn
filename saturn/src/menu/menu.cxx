@@ -556,21 +556,22 @@ const char *menu_num(int nums, int row) {
 }
 
 /*----------------------
- | menu_row
+ | draw_centered
  | Description: Right-pads a composed row to `pad` columns, centers it inside
- |   the box interior and draws it, in reverse video when it is the selected
- |   one. The centering matches menu_frame's title so a row and the title above
- |   it share an axis; the padding is what gives a whole list one left edge
- |   (see menu.h); and the left clamp keeps a row wider than its box off the
- |   border rather than letting a negative offset walk it outside.
+ |   the box interior and draws it through `put`. The centering matches
+ |   menu_frame's title so a row and the title above it share an axis; the
+ |   padding is what gives a whole list one left edge (see menu.h); and the left
+ |   clamp keeps a row wider than its box off the border rather than letting a
+ |   negative offset walk it outside.
  | Author: suinevere
  | Dependencies: text_map.h, menu_layout.h (MENU_SCREEN_COLS)
  | Globals: N/A
- | Params: x0 -- box left column; w -- box width; y -- row; sel -- nonzero to
- |   highlight; pad -- width to pad to, or 0; text -- the composed row
+ | Params: x0 -- box left column; w -- box width; y -- row; pad -- width to pad
+ |   to, or 0; text -- the composed row; put -- the printer to draw it with
  | Returns: N/A
  ----------------------*/
-void menu_row(int x0, int w, int y, int sel, int pad, const char *text) {
+static void draw_centered(int x0, int w, int y, int pad, const char *text,
+                          void (*put)(int, int, const char *)) {
     char buf[MENU_SCREEN_COLS + 1];
     int len = 0;
     while (text[len] && len < MENU_SCREEN_COLS) { buf[len] = text[len]; len++; }
@@ -578,8 +579,39 @@ void menu_row(int x0, int w, int y, int sel, int pad, const char *text) {
     buf[len] = 0;
     int x = x0 + 2 + ((w - 4) - len) / 2;
     if (x < x0 + 1) x = x0 + 1;
-    if (sel) text_print_hl(x, y, buf);
-    else     text_print_str(x, y, buf);
+    put(x, y, buf);
+}
+
+/*----------------------
+ | menu_row
+ | Description: One selectable list row: the selected one at the player's text
+ |   colour, the rest in the dim ink, so brightness alone says where the cursor
+ |   is. Trailing pad is invisible either way now that the selection is not a
+ |   filled bar, but it still holds the list's left edge and value columns.
+ | Author: suinevere
+ | Dependencies: draw_centered, text_map.h
+ | Globals: N/A
+ | Params: x0 -- box left column; w -- box width; y -- row; sel -- nonzero for
+ |   the selected row; pad -- width to pad to, or 0; text -- the composed row
+ | Returns: N/A
+ ----------------------*/
+void menu_row(int x0, int w, int y, int sel, int pad, const char *text) {
+    draw_centered(x0, w, y, pad, text, sel ? text_print_str : text_print_dim);
+}
+
+/*----------------------
+ | menu_text
+ | Description: A centered line that is not a row, drawn at the full text
+ |   colour so it does not read as an unselected one.
+ | Author: suinevere
+ | Dependencies: draw_centered, text_map.h
+ | Globals: N/A
+ | Params: x0 -- box left column; w -- box width; y -- row; pad -- width to pad
+ |   to, or 0; text -- the line
+ | Returns: N/A
+ ----------------------*/
+void menu_text(int x0, int w, int y, int pad, const char *text) {
+    draw_centered(x0, w, y, pad, text, text_print_str);
 }
 
 /*----------------------
@@ -641,8 +673,8 @@ void menu_message(const char *title, const char *line1, const char *line2) {
 
     menu_clear();
     menu_frame(x0, y0, w, h, title);
-    if (l1) menu_row(x0, w, y0 + 3, 0, 0, line1);
-    if (l2) menu_row(x0, w, y0 + 5, 0, 0, line2);
+    if (l1) menu_text(x0, w, y0 + 3, 0, line1);
+    if (l2) menu_text(x0, w, y0 + 5, 0, line2);
 }
 
 /*----------------------
@@ -663,8 +695,8 @@ static const char MENU_SELECT_HINT_KBD[] = "Enter=Ok   Esc=Back";
  |   does not resize when the player switches between the pad and a keyboard
  |   mid-menu), also budgeting the wider of the two MENU_SELECT_HINT_*
  |   variants since the hint line shares the box's width. Rows draw through
- |   menu_row, so they sit centered and the selected one is drawn in reverse
- |   video rather than carrying a '>' in a column every other row wastes.
+ |   menu_row, so they sit centered and the selected one is the only one at full
+ |   brightness, rather than carrying a '>' in a column every other row wastes.
  |   Height is the visible slice (up to 16 rows) plus the two scroll
  |   markers, a blank row, and the hint -- the markers keep their rows whether
  |   or not they are drawn, so the box does not jump as the list scrolls. Each
@@ -742,12 +774,12 @@ int menu_select_at(const char *title, const char *const *items, int count, int *
 
         menu_clear();
         menu_frame(x0, y0, w, h, title);
-        // One pad width for the whole list, so every row shares a left edge and
-        // the highlight is a bar of one width; the tenth visible row and beyond
-        // spend the digit columns on spaces, since digits only reach nine.
+        // One pad width for the whole list, so every row shares a left edge; the
+        // tenth visible row and beyond spend the digit columns on spaces, since
+        // digits only reach nine.
         int pad = item_w + (nums ? MENU_DIGIT_COLS : 0);
         int cy = y0 + 3;
-        if (top > 0) menu_row(x0, w, cy, 0, 0, "^ more");
+        if (top > 0) menu_text(x0, w, cy, 0, "^ more");
         for (i = top; i < last; i++) {
             int vis = i - top;        // 0-based row within the window
             if (nums && vis < 9)
@@ -757,8 +789,8 @@ int menu_select_at(const char *title, const char *const *items, int count, int *
             else
                 menu_row(x0, w, cy + 1 + vis, i == sel, pad, items[i]);
         }
-        if (last < count) menu_row(x0, w, cy + 1 + (last - top), 0, 0, "v more");
-        menu_row(x0, w, cy + 3 + (last - top), 0, 0,
+        if (last < count) menu_text(x0, w, cy + 1 + (last - top), 0, "v more");
+        menu_text(x0, w, cy + 3 + (last - top), 0,
             hint(MENU_SELECT_HINT_PAD, MENU_SELECT_HINT_KBD));
         menu_sync();
         if (intro) { menu_fade_in(intro); intro = 0; }
@@ -830,11 +862,11 @@ bool menu_confirm(const char *line1, const char *line2) {
         menu_clear();
         menu_frame(x0, y0, w, h, "CONFIRM");
         int cy = y0 + 3;
-        if (l1) menu_row(x0, w, cy, 0, 0, line1);
-        if (l2) menu_row(x0, w, cy + 1, 0, 0, line2);
+        if (l1) menu_text(x0, w, cy, 0, line1);
+        if (l2) menu_text(x0, w, cy + 1, 0, line2);
         int hy = cy + (l2 > 0 ? 3 : 2);
-        if (!g_kbd_visible) menu_row(x0, w, hy, 0, 0, "1) Yes    2) No");
-        menu_row(x0, w, hy + 1, 0, 0,
+        if (!g_kbd_visible) menu_text(x0, w, hy, 0, "1) Yes    2) No");
+        menu_text(x0, w, hy + 1, 0,
             hint("A / C = Yes     B = No", "Enter = Yes     Esc = No"));
         menu_sync();
     }

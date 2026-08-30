@@ -416,7 +416,7 @@ int main(void) {
     // no game to route it through.
     splash_show();                // does the boot's CD reads, under its own logo
 
-    text_set_color(DISP_RGB555(0xFF, 0xFF, 0xFF));
+    text_set_color(DISP_RGB555(0xFF, 0xFF, 0xFF), DISP_RGB555(0, 0, 0));
     title_bg_fade_arm();          // black out first, so the title is composed unseen
 
     const char *title_file = title_art_random(boot_entropy());

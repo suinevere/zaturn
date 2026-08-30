@@ -32,6 +32,14 @@
 #define TEXT_COLOR_BANK 0
 
 /*----------------------
+ | TEXT_DIM_BANK
+ | Description: TEXT_DIM_PAL in the pattern name's palette field (bits 15..12),
+ |   the one bit-or that moves a cell onto the dim ink.
+ | Author: suinevere
+ ----------------------*/
+#define TEXT_DIM_BANK (TEXT_DIM_PAL << 12)
+
+/*----------------------
  | TEXT_BLANK
  | Description: The pattern-name word for a space, which is what a cleared cell
  |   holds.
@@ -192,6 +200,25 @@ extern "C" void text_print_str(int x, int y, const char *s)
     }
 }
 
+extern "C" void text_print_dim(int x, int y, const char *s)
+{
+    if (y < 0 || y >= TEXT_ROWS || x >= TEXT_COLS || s == nullptr) return;
+    if (x < 0) x = 0;
+
+    uint16_t *row = g_shadow[y];
+
+    for (int c = x; c < TEXT_COLS && *s != '\0'; c++)
+    {
+        uint16_t word = (uint16_t)((uint16_t)(uint8_t)(*s++) + TEXT_FONT_BANK) | TEXT_DIM_BANK;
+
+        if (row[c] != word)
+        {
+            row[c] = word;
+            mark_dirty(y);
+        }
+    }
+}
+
 extern "C" void text_print_hl(int x, int y, const char *s)
 {
     if (y < 0 || y >= TEXT_ROWS || x >= TEXT_COLS || s == nullptr) return;
@@ -287,6 +314,12 @@ static void install_backslash_glyph(void)
 extern "C" void text_map_init(void)
 {
     if (g_registered) return;
+
+    // Claim the dim ink's palette before anything else can be handed it. The
+    // entry itself is written by text_set_color, which is the only code that
+    // knows what colour the player picked; this only reserves the bank.
+    SRL::CRAM::SetBankUsedState(TEXT_DIM_PAL,
+                                SRL::CRAM::TextureColorMode::Paletted16, true);
 
     install_backslash_glyph();
 

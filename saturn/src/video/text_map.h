@@ -94,6 +94,34 @@ void text_print_str(int x, int y, const char *s);
 void text_print_hl(int x, int y, const char *s);
 
 /*----------------------
+ | TEXT_DIM_PAL / TEXT_DIM_CRAM
+ | Description: The 4bpp palette number a dimmed cell names in its pattern name,
+ |   and the CRAM entry its ink reads from. NBG3's font is palette 0 (entries
+ |   0..15) and the dashboard tiles are palette 1 (16..31), so 2 is the first
+ |   free one; a 1-word pattern name carries the palette in bits 15..12, which
+ |   is all it takes to give some cells a second ink with no second font and no
+ |   tile writes at all. Named here beside the printer so whoever writes the
+ |   entry (text_set_color) and whoever names the palette cannot drift apart.
+ | Author: suinevere
+ ----------------------*/
+#define TEXT_DIM_PAL  2
+#define TEXT_DIM_CRAM (TEXT_DIM_PAL * 16 + 1)
+
+/*----------------------
+ | text_print_dim
+ | Description: text_print_str into the dim palette: the same glyphs, drawn from
+ |   CRAM entry TEXT_DIM_CRAM instead of entry 1. Costs one bit-or per cell and
+ |   no VRAM traffic beyond the map itself, unlike text_print_hl, which has to
+ |   build an inverted tile per distinct character and can run out of slots.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_shadow
+ | Params: x, y -- cell position; s -- the string
+ | Returns: N/A
+ ----------------------*/
+void text_print_dim(int x, int y, const char *s);
+
+/*----------------------
  | text_clear_line
  | Description: Blanks TEXT_CLEAR_COLS cells of one row in the shadow.
  | Author: suinevere

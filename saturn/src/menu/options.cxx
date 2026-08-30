@@ -14,6 +14,7 @@
 #include "app_state.h"
 #include "input.h"
 #include "display.h"
+#include "text_map.h"   // TEXT_DIM_CRAM, the entry the dim ink lives in
 #ifndef NETBIN
 #include "title.h"
 #endif
@@ -21,6 +22,31 @@
 extern "C" {
 #include "saturn_backup.h"
 #include "music.h"
+}
+
+/*----------------------
+ | text_dim_rgb
+ | Description: `ink` mixed five-eighths of the way from `bg`, per RGB555
+ |   channel -- the colour an unselected menu row is drawn in, so the selected
+ |   one stands out by being the only text at the player's chosen brightness.
+ |   Mixed TOWARD THE BACKGROUND rather than toward black, because a preset can
+ |   put dark text on a light ground (ZX Spectrum, Mac Classic, TI-99/4A) and
+ |   darkening black text leaves it black -- the selected row would then look
+ |   exactly like the rest. Reducing contrast against whatever is behind the
+ |   text always reads as "less prominent", whichever way round the preset is.
+ |   Inside a menu the background really is this flat colour even under a
+ |   wallpaper, since MenuBacking's window suppresses the picture over the box.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: ink -- the text colour; bg -- the colour behind it
+ | Returns: the mixed RGB555 word
+ ----------------------*/
+static unsigned short text_dim_rgb(unsigned short ink, unsigned short bg) {
+    unsigned r = (((ink        & 31) * 5) + ((bg        & 31) * 3)) >> 3;
+    unsigned g = ((((ink >>  5) & 31) * 5) + (((bg >>  5) & 31) * 3)) >> 3;
+    unsigned b = ((((ink >> 10) & 31) * 5) + (((bg >> 10) & 31) * 3)) >> 3;
+    return (unsigned short) (0x8000 | (b << 10) | (g << 5) | r);
 }
 
 /*----------------------
@@ -55,14 +81,16 @@ extern "C" {
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
- | Params: rgb555 -- Saturn RGB555 color word
+ | Params: rgb555 -- Saturn RGB555 color word; bg555 -- the background the text
+ |   sits on, which the dim ink is mixed toward
  | Returns: N/A
  ----------------------*/
-void text_set_color(unsigned short rgb555) {
+void text_set_color(unsigned short rgb555, unsigned short bg555) {
     volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
     cram[1]  = rgb555;   // glyph foreground
     cram[2]  = 0;        // reverse-video letter, punched out of the ink block
     cram[15] = rgb555;   // install_block_glyph()'s cursor tile
+    cram[TEXT_DIM_CRAM] = text_dim_rgb(rgb555, bg555);   // unselected menu rows
 }
 
 /*----------------------
@@ -98,7 +126,7 @@ void text_set_color(unsigned short rgb555) {
  |   and the solid back-colour path is the only reachable one.
  ----------------------*/
 bool display_apply(void) {
-    text_set_color(display_text_rgb(g_display.text));
+    text_set_color(display_text_rgb(g_display.text), display_bg_rgb(g_display.bg));
     SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
 #ifndef NETBIN
     title_bg_dim_set(display_dim_offset(g_display.dim));
@@ -112,7 +140,7 @@ bool display_apply(void) {
             g_display.bg      = display_preset_bg(p);
             g_display.text    = display_preset_text(p);
             g_display.image   = DISP_IMAGE_NONE;
-            text_set_color(display_text_rgb(g_display.text));
+            text_set_color(display_text_rgb(g_display.text), display_bg_rgb(g_display.bg));
             title_bg_hide();
             SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
             return false;

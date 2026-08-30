@@ -127,27 +127,53 @@ void menu_frame(int x0, int y0, int w, int h, const char *title);
 
 /*----------------------
  | menu_row
- | Description: Draws one composed row centered inside the box's interior (the
- |   w - 4 columns between the borders and their pad), in reverse video when
- |   `sel` is true. The reverse video IS the selection marker: pages no longer
- |   spend a column on a '>' that only one row ever used. `pad` right-pads the
- |   text with spaces to a common width before centering, which is how a list
- |   keeps one left edge: without it every row would center on its own length
- |   and the digit column would zigzag, the exact regression that had per-row
- |   centering reverted the last time it was tried. Padding also makes the
- |   highlight a bar of one width rather than one that hugs each label. Pass 0
- |   for a standalone line that should simply sit centered. A character the
- |   inverted-glyph cache cannot seat falls back to plain text
- |   (text_print_hl's own rule), which costs the highlight rather than the row.
+ | Description: Draws one selectable list row, centered inside the box's
+ |   interior (the w - 4 columns between the borders and their pad). Brightness
+ |   is the selection marker: the selected row is drawn in the text colour the
+ |   player chose, every other row in a dimmed mix of that colour and the
+ |   background (text_print_dim), so the cursor is the one line at full
+ |   strength rather than a block of reverse video, and pages spend no column
+ |   on a '>' that only one row ever used. `pad` right-pads the text to a common
+ |   width before centering, which is how a list keeps one left edge: without it
+ |   every row would center on its own length and the digit column would zigzag,
+ |   the exact regression that had per-row centering reverted the last time it
+ |   was tried. Use menu_text, not this, for a line that is not a row the cursor
+ |   can land on -- a description, a hint, a message -- so it is not dimmed for
+ |   being unselected when it was never selectable.
  | Author: suinevere
- | Dependencies: text_map.h (text_print_str/text_print_hl)
+ | Dependencies: text_map.h (text_print_str/text_print_dim)
  | Globals: N/A
- | Params: x0 -- box left column; w -- box width; y -- row; sel -- nonzero to
- |   draw highlighted; pad -- width to pad to, or 0 for the text's own; text --
+ | Params: x0 -- box left column; w -- box width; y -- row; sel -- nonzero for
+ |   the selected row; pad -- width to pad to, or 0 for the text's own; text --
  |   the composed row
  | Returns: N/A
  ----------------------*/
 void menu_row(int x0, int w, int y, int sel, int pad, const char *text);
+
+/*----------------------
+ | menu_text / menu_textf
+ | Description: menu_row's placement without its selection colouring: one
+ |   centered line at the full text colour. For everything in a box that is not
+ |   a row the cursor can reach -- titles under the frame, description lines,
+ |   the controls hint, a menu_message's body -- which must not read as "an
+ |   unselected row" just because nothing selected it.
+ | Author: suinevere
+ | Dependencies: menu_row, srl.hpp
+ | Globals: N/A
+ | Params: x0, w, y, pad -- as menu_row; text/fmt/args -- the line
+ | Returns: N/A
+ ----------------------*/
+void menu_text(int x0, int w, int y, int pad, const char *text);
+
+template <typename ...Args>
+inline void menu_textf(int x0, int w, int y, int pad, const char *fmt, Args...args)
+{
+    char buffer[TEXT_FORMAT_MAX];
+    SRL::string stringObj;
+
+    if (stringObj.snprintfEx(buffer, TEXT_FORMAT_MAX, fmt, args ...) > 0)
+        menu_text(x0, w, y, pad, buffer);
+}
 
 /*----------------------
  | menu_pad

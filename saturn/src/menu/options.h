@@ -103,17 +103,20 @@ bool valid_dialnum(const char *s);
 
 /*----------------------
  | text_set_color
- | Description: Recolors the SGL font glyphs and the block cursor to
- |   `rgb555` by writing the two VDP2 CRAM entries they are read from.
- |   Declared here (rather than kept file-local to options.cxx) because the
- |   title-screen setup in main.cxx also needs to set the initial text color
- |   before display_apply runs.
+ | Description: Recolors the SGL font glyphs, the block cursor and the dim ink
+ |   unselected menu rows are drawn in, by writing the VDP2 CRAM entries they
+ |   are read from. Takes the background as well as the text colour because the
+ |   dim ink is a mix of the two -- see text_dim_rgb in options.cxx for why it
+ |   is not simply a darker text colour. Declared here (rather than kept
+ |   file-local to options.cxx) because the title-screen setup in main.cxx also
+ |   needs to set the initial text color before display_apply runs.
  | Author: suinevere
- | Dependencies: SRL
+ | Dependencies: SRL, text_map.h (TEXT_DIM_CRAM)
  | Globals: N/A
- | Params: rgb555 -- Saturn RGB555 color word (see DISP_RGB555 in display.h)
+ | Params: rgb555 -- Saturn RGB555 text color (see DISP_RGB555 in display.h);
+ |   bg555 -- the background color behind it
  | Returns: N/A
  ----------------------*/
-void text_set_color(unsigned short rgb555);
+void text_set_color(unsigned short rgb555, unsigned short bg555);
 
 #endif /* OPTIONS_H */

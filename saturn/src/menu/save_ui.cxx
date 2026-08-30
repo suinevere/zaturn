@@ -99,12 +99,13 @@ int choose_device(const char *title) {
  |   (reserved whether or not drawn) and the widest label actually present, with
  |   a floor of 10 chars (saturn_bup_info caps a comment at 10; "(empty)" is 7);
  |   the edit row budgets maxchars plus the caret. It budgets no cursor mark,
- |   because there is none: the selected row is drawn in reverse video. In EDIT
+ |   because there is none: the selected row is the one drawn at full
+ |   brightness, the rest in the dim ink. In EDIT
  |   the width must also cover the keyboard (KB_COLS*2) and the hint; in either
  |   state the LONGER of the two hint variants (pad vs keyboard) is budgeted
  |   unconditionally so the box does not resize when the player switches input
  |   device mid-menu. That same row width is what every row pads to, so the
- |   centred list keeps one left edge and one highlight width.
+ |   centred list keeps one left edge.
  | Author: suinevere
  | Dependencies: menu.h (MenuBacking/menu_clear/menu_frame), menu_layout.h
  |   (menu_box_fit/menu_visible_digit/MENU_DIGIT_COLS), keyboard.h (KeyboardState
@@ -249,8 +250,8 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
             }
         }
         if (!editing) {
-            menu_row(x0, w, cy + SAVE_SLOTS + 1, 0, 0,
-                     hint(PICK_HINT_PAD, PICK_HINT_KBD));
+            menu_text(x0, w, cy + SAVE_SLOTS + 1, 0,
+                      hint(PICK_HINT_PAD, PICK_HINT_KBD));
         } else {
             // Centred as one block, not row by row, so the cursor highlight can
             // still be addressed by column.
@@ -269,8 +270,8 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                     text_print_hl(kbx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
                 }
             }
-            menu_row(x0, w, cy + SAVE_SLOTS + 2 + KB_ROWS, 0, 0,
-                     hint(EDIT_HINT_PAD, EDIT_HINT_KBD));
+            menu_text(x0, w, cy + SAVE_SLOTS + 2 + KB_ROWS, 0,
+                      hint(EDIT_HINT_PAD, EDIT_HINT_KBD));
         }
         menu_sync();
     }

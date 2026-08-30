@@ -187,12 +187,12 @@ void netbin_dial_page(void) {
         menu_box_fit("NETWORK", 24, g_kbd_visible ? 15 : 10, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "NETWORK");
         int y = fy + 4;
-        menu_row(fx, fw, y++, 0, 0, "Server dial number:");
+        menu_text(fx, fw, y++, 0, "Server dial number:");
         // The ROW is padded to the field's full length, not the text: the row
         // width has to hold still or the centred line creeps sideways by half a
         // column with every digit typed, while the caret has to stay against
         // the last digit rather than out at the end of the field.
-        menu_rowf(fx, fw, y++, 0, DIALNUM_MAX + 1, "%s_", k.input);
+        menu_textf(fx, fw, y++, DIALNUM_MAX + 1, "%s_", k.input);
         y++;
         if (g_kbd_visible) {
             int npx = fx + 2 + ((fw - 4) - (NP_COLS * 2 - 1)) / 2;   // centre the pad
@@ -211,10 +211,10 @@ void netbin_dial_page(void) {
         }
         menu_row(fx, fw, y++, arow == 0, DIAL_ROW_W, "Dial");
         menu_row(fx, fw, y++, arow == 1, DIAL_ROW_W, "Controls");
-        if (err[0]) menu_row(fx, fw, y, 0, 0, err);
+        if (err[0]) menu_text(fx, fw, y, 0, err);
         y++;
         y++;
-        menu_row(fx, fw, y, 0, 0,
+        menu_text(fx, fw, y, 0,
             hint("A=Dial C=type  B=del", "type number  Enter=Dial"));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
@@ -514,7 +514,7 @@ static bool controls_page(void) {
                   g_cmd_iface > IFACE_KEYBOARD ? "<" : " ",
                   menu_pad(INAMES[g_cmd_iface], CTL_IFACE_W),
                   g_cmd_iface < IFACE_PANEL ? ">" : " ");
-        menu_row(fx, fw, y++, 0, 0, IDESC[g_cmd_iface]);
+        menu_text(fx, fw, y++, 0, IDESC[g_cmd_iface]);
         y++;
         const int block_y = y;
         for (int i = 0; i < v.nassign; i++) {
@@ -625,8 +625,8 @@ static bool keyboard_controls_page(void) {
         menu_box_fit("CONTROLS", 34, 12, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
         int y = fy + 4;
-        menu_row(fx, fw, y++, 0, 0, "Insert: type-insert, caret arrows.");
-        menu_row(fx, fw, y++, 0, 0, "ScrLk: Up/Dn scroll, Ctrl=history.");
+        menu_text(fx, fw, y++, 0, "Insert: type-insert, caret arrows.");
+        menu_text(fx, fw, y++, 0, "ScrLk: Up/Dn scroll, Ctrl=history.");
         y++;
         bool nums = !g_kbd_visible;
         menu_rowf(fx, fw, y++, sel == 0, KB_ROW_W, "%s%s%s", menu_num(nums, 0),
@@ -858,14 +858,14 @@ static void gameplay_page(void) {
         menu_rowf(fx, fw, y, sel == GR_DIFF, GP_ROW_W, "%sDifficulty: %s %s %s",
                   menu_num(nums, GR_DIFF), diff > DIFF_EASY ? "<" : " ",
                   menu_pad(NAMES[diff], GP_VALUE_W), diff < DIFF_HARD ? ">" : " ");
-        menu_row(fx, fw, y + 1, 0, 0, DESC[diff]);
+        menu_text(fx, fw, y + 1, 0, DESC[diff]);
         y += 3;
         // Two spaces after the colon, so the value column lines up under
         // Difficulty's despite the shorter label.
         menu_rowf(fx, fw, y, sel == GR_VERB, GP_ROW_W, "%sRoom text:  %s %s %s",
                   menu_num(nums, GR_VERB), verb > VERB_SUPERBRIEF ? "<" : " ",
                   menu_pad(VNAMES[verb], GP_VALUE_W), verb < VERB_VERBOSE ? ">" : " ");
-        menu_row(fx, fw, y + 1, 0, 0, VDESC[verb]);
+        menu_text(fx, fw, y + 1, 0, VDESC[verb]);
         y += 3;
         menu_rowf(fx, fw, y++, sel == GR_OK,     GP_ROW_W, "%sOk", menu_num(nums, GR_OK));
         menu_rowf(fx, fw, y++, sel == GR_CANCEL, GP_ROW_W, "%sCancel", menu_num(nums, GR_CANCEL));

@@ -223,7 +223,7 @@ extern "C" void check_soft_reset(void) {
 static void netbin_video_init(void) {
     slScrWindowModeNbg0(0);
     SRL::VDP2::SetBackColor(HighColor(display_bg_rgb(g_display.bg)));
-    text_set_color(display_text_rgb(g_display.text));
+    text_set_color(display_text_rgb(g_display.text), display_bg_rgb(g_display.bg));
     for (int r = 0; r <= 28; r++) text_clear_line(r);
     SRL::Core::Synchronize();
 }

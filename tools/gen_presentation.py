@@ -10,10 +10,17 @@
  |     Joins the Saturn room table to the story file's rooms by title, through
  |     a hand-checked alias table for the fourteen rooms that were renamed, and
  |     resolves same-title groups by pairing story object order against Saturn
- |     room-index order. Refuses rather than guessing: any room left
- |     unresolved, any Saturn row claimed twice, or a story whose release and
- |     serial are not 88 / 840726 raises instead of writing a zero, because a
- |     zero would show up only as a background that silently fails to change.
+ |     room-index order. An alias can merge two distinct story rooms into one
+ |     Saturn title group -- STRANGE PASSAGE and NARROW PASSAGE both land in
+ |     the Saturn NARROW PASSAGE group once the alias applies -- and
+ |     within-group order cannot then tell them apart, so a pin table names
+ |     specific story rooms directly by Saturn room index and is honoured
+ |     before the order-based pairing runs. Refuses rather than guessing: any
+ |     room left unresolved, any Saturn row claimed twice, a pin naming a
+ |     Saturn room that does not exist or a story title it cannot match
+ |     exactly once, or a story whose release and serial are not 88 / 840726,
+ |     raises instead of writing a zero, because a zero would show up only as
+ |     a background that silently fails to change.
  | Author: suinevere
  | Dependencies: csv, json, pathlib, re, sys
  | Globals: ROOT, CSV, ROOMS, ZIL, ALIASES, OUT, AREAS, SE_BANKS, RELEASE, SERIAL
@@ -74,13 +81,61 @@ def load_saturn():
     return rows
 
 
+def apply_pins(pins, story_rooms, by_title, sat_by_title, sat_by_index, title_of):
+    """/*----------------------
+     | apply_pins
+     | Description: Resolves the pinned rooms before the order-based pairing
+     |     loop runs. A pin names a story room by its raw (pre-alias) title and
+     |     a Saturn room index directly, because an alias can merge two
+     |     distinct story rooms into one Saturn title group and within-group
+     |     order cannot then tell them apart -- STRANGE PASSAGE and NARROW
+     |     PASSAGE both land in the Saturn NARROW PASSAGE group once the alias
+     |     is applied, and object-order-vs-index-order pairs them backwards.
+     |     Removes each pinned room from the group the ordering loop then
+     |     processes, so it is not paired a second time.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: pins -- {raw story title: saturn room index}
+     |     story_rooms -- the story's rooms, obj order
+     |     by_title -- {post-alias title: [story room, ...]}, mutated in place
+     |     sat_by_title -- {saturn title: [saturn row, ...]}, mutated in place
+     |     sat_by_index -- {int saturn room index: saturn row}
+     |     title_of -- story room -> post-alias title
+     | Returns: {object number: saturn row dict}
+     ----------------------*/"""
+    join = {}
+    claimed = set()
+    for pin_title, room_index in pins.items():
+        matches = [r for r in story_rooms
+                   if r["title"].strip().upper() == pin_title]
+        if len(matches) != 1:
+            raise SystemExit(f"pin {pin_title!r} matches {len(matches)} "
+                             f"story rooms, need exactly 1")
+        room = matches[0]
+        if room_index not in sat_by_index:
+            raise SystemExit(f"pin {pin_title!r} names Saturn room "
+                             f"{room_index}, which does not exist")
+        sat = sat_by_index[room_index]
+        if int(sat["room"]) in claimed:
+            raise SystemExit(f"Saturn room {sat['room']} claimed twice")
+        claimed.add(int(sat["room"]))
+        join[room["obj"]] = sat
+        group_title = title_of(room)
+        by_title[group_title].remove(room)
+        sat_by_title[group_title].remove(sat)
+    return join, claimed
+
+
 def build_join():
     """/*----------------------
      | build_join
      | Description: Maps each Z-machine object number to its Saturn row. Groups
      |     both sides by title -- story titles first passed through the alias
-     |     table -- checks the group sizes agree, and pairs within a group by
-     |     object order against Saturn room-index order.
+     |     table -- checks the group sizes agree, honours the pin table for
+     |     rooms an alias merges into a group order cannot separate, and pairs
+     |     what is left in a group by object order against Saturn room-index
+     |     order.
      | Author: suinevere
      | Dependencies: json
      | Globals: ROOMS, ALIASES, RELEASE, SERIAL
@@ -93,8 +148,9 @@ def build_join():
             f"ZORK1.Z3 is release {story['release']} serial {story['serial']}, "
             f"not {RELEASE} / {SERIAL}; the table would bind to the wrong objects")
 
-    alias = {k: v for k, v in json.loads(
-        ALIASES.read_text(encoding="utf-8")).items() if not k.startswith("_")}
+    raw_aliases = json.loads(ALIASES.read_text(encoding="utf-8"))
+    alias = {k: v for k, v in raw_aliases.items() if not k.startswith("_")}
+    pins = raw_aliases.get("_pins", {})
     saturn = load_saturn()
     story_rooms = sorted(story["rooms"], key=lambda r: r["obj"])
 
@@ -120,8 +176,10 @@ def build_join():
     if lopsided:
         raise SystemExit(f"titles present on one side only: {sorted(lopsided)}")
 
-    join = {}
-    claimed = set()
+    sat_by_index = {int(r["room"]): r for r in saturn}
+    join, claimed = apply_pins(pins, story_rooms, by_title, sat_by_title,
+                                sat_by_index, title_of)
+
     for title, group in by_title.items():
         sat_group = sat_by_title[title]
         if len(group) != len(sat_group):

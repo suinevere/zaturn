@@ -63,9 +63,11 @@ IMAGE_FRAME[75]        /* where a frame lives inside its archive */
 derivable from the image, so no room column names it.
 
 `IMAGE_FRAME` exists because a `.CGL` is a chain of records with **no
-compressed-length header** — which is precisely why the original's own room
-record carries offset *and* length. The chain cannot be walked at runtime; the
-offsets must be generated. 75 entries is roughly 600 bytes.
+compressed-length header** — a record's end is only discovered by decompressing
+it. So reaching frame 14 of `BCEL` by walking means decompressing the thirteen
+before it, which is why the original's own room record carries offset *and*
+length instead. The offsets are generated for the same reason. 75 entries is
+roughly 600 bytes.
 
 Keyed by `(release, serial)` so the table can only ever bind to the story it was
 generated from. A different Zork I release renumbers objects, and a table bound

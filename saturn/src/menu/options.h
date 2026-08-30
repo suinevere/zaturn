@@ -35,7 +35,7 @@ enum DisplayCycleRow { DCR_PALETTE, DCR_BG, DCR_TEXT, DCR_DIM };
  | Author: suinevere
  | Dependencies: saturn_backup.h, display.h, input.h, music.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,
- |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_display
+ |   g_chord_slot, g_verbosity, g_display
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -50,7 +50,7 @@ void options_load(void);
  | Author: suinevere
  | Dependencies: saturn_backup.h, display.h, input.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,
- |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_display
+ |   g_chord_slot, g_verbosity, g_display
  | Params: N/A
  | Returns: N/A
  ----------------------*/

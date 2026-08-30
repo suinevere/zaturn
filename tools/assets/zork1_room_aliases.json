@@ -1,0 +1,19 @@
+{
+  "_comment": "Story-file room title -> Saturn room title, for the thirteen rooms whose title differs between the two. Hand-checked against 1dungeon.zil's exits. CAVE/SHAFT and STRANGE PASSAGE/NARROW PASSAGE share no words and cannot be inferred from the names alone.",
+  "_pins": {
+    "STRANGE PASSAGE": 42,
+    "NARROW PASSAGE": 53
+  },
+  "SMELLY ROOM": "FOUL ROOM",
+  "ROCKY LEDGE": "LEDGE",
+  "TWISTING PASSAGE": "CURVED PASSAGE",
+  "STRANGE PASSAGE": "NARROW PASSAGE",
+  "CAVE": "SHAFT",
+  "THE TROLL ROOM": "TROLL ROOM",
+  "DAM BASE": "BASE OF DAM",
+  "EGYPTIAN ROOM": "EGYPT ROOM",
+  "STONE BARROW": "BARROW ENTRANCE",
+  "MAINTENANCE ROOM": "CONTROL ROOM",
+  "DAM": "FLOOD CONTROL DAM",
+  "LAND OF THE DEAD": "LAND OF THE LIVING DEAD"
+}

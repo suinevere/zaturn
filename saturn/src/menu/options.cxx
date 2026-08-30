@@ -4,7 +4,7 @@
  |   of display settings to VDP2. Owns no menu UI -- the option pages call in
  |   here.
  | Author: suinevere
- | Dependencies: app_state.h, input.h, display.h, saturn_backup.h, music.h,
+ | Dependencies: app_state.h, input.h, display.h, saturn_backup.h,
  |   title.h, SRL
  ----------------------*/
 
@@ -18,11 +18,11 @@
 #include "dash_view.h"  // dash_tint, the marble's sixteen CRAM entries
 #ifndef NETBIN
 #include "title.h"
+#include "room_art.h"
 #endif
 
 extern "C" {
 #include "saturn_backup.h"
-#include "music.h"
 }
 
 /*----------------------
@@ -124,8 +124,15 @@ void text_set_color(unsigned short rgb555, unsigned short bg555) {
  |   caller that can be reached with CD-DA playing has to cover that: the mode
  |   menu pauses the track around options_menu() (main.cxx) and the in-game
  |   Options menu already did (saturn_glue.cxx).
+ |     When no image resolves and the palette is Dynamic on an authored game,
+ |   the "no image" branch asks room_art to redraw instead of hiding NBG0:
+ |   room_art owns that layer on this path and title_bg_loaded_file's area stem
+ |   can never resolve through display_image_slot, so hiding here would blank the
+ |   room picture every time this page re-applies (Display Options cancel, any
+ |   cycler press). Redrawing rather than only leaving it alone is what puts the
+ |   picture up the moment the Palette row lands on Dynamic.
  | Author: suinevere
- | Dependencies: display.h, title.h, SRL
+ | Dependencies: display.h, title.h, room_art.h, SRL
  | Globals: g_display
  | Params: N/A
  | Returns: true if applied; false if a load failed and the fallback was
@@ -154,6 +161,16 @@ bool display_apply(void) {
             SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
             return false;
         }
+    } else if (g_display.palette == DISP_PAL_DYNAMIC && room_art_available()) {
+        // Dynamic on an authored game has no slot to resolve to (the loaded
+        // file is an area stem, not a disc image name), so the branch above
+        // cannot reach it: room_art owns NBG0 here. Redraw rather than merely
+        // leave it alone -- this is the path the Palette row takes when it
+        // lands on Dynamic, and the room subscriber fires only on a room
+        // change, so otherwise the picture would not appear until the player
+        // walked somewhere. Free when it is already up: room_art_show
+        // short-circuits to a bare ScrollEnable.
+        room_art_reshow();
     } else {
         title_bg_hide();
     }
@@ -236,9 +253,9 @@ void display_cycle_row(DisplayCycleRow which, int dir) {
  |   than a runtime scan, so this carries no ordering requirement against disc
  |   access.
  | Author: suinevere
- | Dependencies: saturn_backup.h, display.h, input.h, music.h
+ | Dependencies: saturn_backup.h, display.h, input.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,
- |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_cmd_iface,
+ |   g_chord_slot, g_verbosity, g_cmd_iface,
  |   g_toggle_btn, g_display
  | Params: N/A
  | Returns: N/A
@@ -277,11 +294,11 @@ void options_load(void) {
         for (int a = 0; a < fa_stored; a++) { int v = buf[m + 1 + a];             if (v < btn_max) g_face_btn[a]   = v; }
         for (int a = 0; a < CA_N; a++)      { int v = buf[m + 1 + fa_stored + a]; if (v < SL_N)    g_chord_slot[a] = v; }
     }
+    /* The sound block's sentinel and its two bytes -- the mix mode and the
+       selected track -- are read past rather than read. Both settings are gone;
+       the bytes stay reserved because every block behind them is positional, and
+       reclaiming two bytes would silently misparse every blob already written. */
     int s = m + 1 + fa_stored + CA_N;
-    if (s + 2 < (int) sizeof(buf) && buf[s] == 1) {
-        if (buf[s + 1] <= MIX_RANDOM) g_mix_mode = buf[s + 1];
-        if (buf[s + 2] >= MUSIC_TRACK_MIN && buf[s + 2] <= MUSIC_TRACK_MAX) g_sel_track = buf[s + 2];
-    }
     /* The gameplay block sits between the sound block and the display one because
        the display block is the variable-width tail. Sentinel 5 (v1, verbosity
        only) and sentinel 7 (v2, verbosity plus a packed command-interface byte)
@@ -316,7 +333,8 @@ void options_load(void) {
  |   layout options_load reads: difficulty byte; NUL-terminated dial number;
  |   music and pcm level bytes; controller-mapping sentinel byte (3) followed
  |   by the face-button and chord-slot bytes; sound-block sentinel byte (1)
- |   followed by mix mode and selected track; gameplay-block sentinel byte (7)
+ |   followed by two reserved bytes that used to carry the mix mode and the
+ |   selected track; gameplay-block sentinel byte (7)
  |   followed by the verbosity byte and a packed byte (bit 0 = g_cmd_iface, bit
  |   1 = g_toggle_btn); then the display block from display_encode(), appended
  |   only if it fits the remaining space in the 62-byte payload. Writes the
@@ -324,7 +342,7 @@ void options_load(void) {
  | Author: suinevere
  | Dependencies: saturn_backup.h, display.h, input.h
  | Globals: g_difficulty, g_dialnum, g_music_level, g_pcm_level, g_face_btn,
- |   g_chord_slot, g_mix_mode, g_sel_track, g_verbosity, g_cmd_iface,
+ |   g_chord_slot, g_verbosity, g_cmd_iface,
  |   g_toggle_btn, g_display
  | Params: N/A
  | Returns: N/A
@@ -340,8 +358,8 @@ void options_save(void) {
     for (int a = 0; a < FA_N && n < 62; a++) buf[n++] = (uint8_t) g_face_btn[a];
     for (int a = 0; a < CA_N && n < 62; a++) buf[n++] = (uint8_t) g_chord_slot[a];
     buf[n++] = 1;                                 // sound-block sentinel
-    buf[n++] = (uint8_t) g_mix_mode;              // 0..3
-    buf[n++] = (uint8_t) g_sel_track;             // 2..32
+    buf[n++] = 0;                                 // reserved (was the mix mode)
+    buf[n++] = 0;                                 // reserved (was the selected track)
     buf[n++] = 7;                                 // gameplay-block sentinel, v2
     buf[n++] = (uint8_t) g_verbosity;             // VERB_*
     buf[n++] = (uint8_t) ((g_cmd_iface & 1) | ((g_toggle_btn & 1) << 1));

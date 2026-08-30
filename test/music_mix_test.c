@@ -1,4 +1,8 @@
-/* Host tests for mix modes, scene-keyed debounce, and short-track re-pick.
+/* Host tests for the dynamic mix, scene-keyed debounce, and short-track
+   re-pick. Repeat, Sequential and Random were removed along with the Sound
+   Options rows that fed them, so the only mix left is the one keyed on the
+   room, and every case below is that one.
+
    gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/mmt \
        test/music_mix_test.c saturn/src/sound/music.c saturn/src/sound/music_data.c \
        saturn/src/sound/event_scan.c saturn/src/scene/scene_map.c && /tmp/mmt
@@ -21,6 +25,18 @@
 #include "sound/music.h"
 #include "sound/event_scan.h"
 #include "scene/scene_map.h"
+#include "scene/presentation.h"
+
+/* music.c asks the presentation table first and only falls back to the scene
+   map when a room is unauthored. Every case here is written against the scene
+   map, so the table is stubbed away rather than linked -- linking the real
+   presentation.c would let Zork I's own authored rows answer for these object
+   numbers and none of the scene assertions below would hold. Same reason
+   test_music_static.c stubs it. */
+int pres_of_room(unsigned int release, const char *serial, unsigned int obj,
+                 Presentation *out) {
+    (void) release; (void) serial; (void) obj; (void) out; return 0;
+}
 
 #define CHECK(c) do{ if(!(c)){ printf("FAIL line %d: %s\n", __LINE__, #c); fails++; } }while(0)
 
@@ -67,7 +83,6 @@ int main(void) {
     music_set_game(ZORK1_RELEASE, ZORK1_SERIAL);
 
     /* --- Dynamic: first room commits immediately (nothing playing yet) --- */
-    music_set_mix(MIX_DYNAMIC, 10);
     music_reset();
     music_set_debounce_frames(6);
     g_calls = 0;
@@ -92,7 +107,6 @@ int main(void) {
     CHECK(in_pool(POOL_NEUTRAL, g_track));
 
     /* A scene flip before commit resets the countdown to the newest target. */
-    music_set_mix(MIX_DYNAMIC, 10);
     music_reset(); music_set_debounce_frames(6);
     music_on_turn(OBJ_MINE_A);      /* immediate SC_MINE */
     music_on_turn(OBJ_FOREST);      /* pending SC_FOREST */
@@ -105,39 +119,11 @@ int main(void) {
     CHECK(g_calls == 1);
     CHECK(in_pool(POOL_NEUTRAL, g_track));
 
-    /* --- Override: plays the override track looped, ignores rooms --- */
-    music_set_mix(MIX_OVERRIDE, 7);
+    /* --- music_start starts nothing: there is no room yet to key off, and the
+           mode that used to play a track outright is gone. --- */
     music_reset(); g_calls = 0;
     music_start();
-    CHECK(g_track == 7 && g_loop == 1);
-    music_on_turn(OBJ_CAVE_A);
-    CHECK(g_track == 7);           /* unchanged by room */
-
-    /* --- Sequential: one-shot; advances on loop-end (isplaying==0) --- */
-    music_set_mix(MIX_SEQUENTIAL, 5);
-    music_reset(); music_start();
-    CHECK(g_track == 5 && g_loop == 0);
-    playing = 1; music_tick();     /* track registers as playing -> latch clears */
-    playing = 0; music_tick();     /* track ended -> advance */
-    CHECK(g_track == 6 && g_loop == 0);
-    playing = 1; music_tick();     /* still playing -> no change */
-    CHECK(g_track == 6);
-    /* wrap at MAX (bounds come from music.h, so raising the track max can't
-       silently leave this asserting the old wrap point) */
-    music_set_mix(MIX_SEQUENTIAL, MUSIC_TRACK_MAX); music_reset(); music_start();
-    CHECK(g_track == MUSIC_TRACK_MAX);
-    playing = 1; music_tick();     /* settle */
-    playing = 0; music_tick();
-    CHECK(g_track == MUSIC_TRACK_MIN);
-    playing = 1;
-
-    /* --- Random: one-shot; picks within the track range on loop-end --- */
-    music_set_mix(MIX_RANDOM, 10); music_reset(); music_start();
-    CHECK(g_track >= MUSIC_TRACK_MIN && g_track <= MUSIC_TRACK_MAX && g_loop == 0);
-    playing = 1; music_tick();      /* settle */
-    playing = 0; int r0 = g_track; music_tick();
-    CHECK(g_track >= MUSIC_TRACK_MIN && g_track <= MUSIC_TRACK_MAX);
-    playing = 1; (void)r0;
+    CHECK(g_calls == 0);
 
     /* --- Dynamic repeats MUSIC_DYN_LOOPS times, then cycles inside the pool ---
            The track must be re-issued unchanged for passes 2..MUSIC_DYN_LOOPS, and
@@ -145,7 +131,7 @@ int main(void) {
            as "plays once then cycles", which is exactly what a drive-side repeat
            count produced. --- */
     for (int i = 0; i < 64; i++) short_set[i] = 0;
-    music_set_mix(MIX_DYNAMIC, 10); music_reset(); music_set_debounce_frames(0);
+    music_reset(); music_set_debounce_frames(0);
     music_on_turn(OBJ_CAVE_A);
     int room40_track = g_track;
     for (int pass = 2; pass <= MUSIC_DYN_LOOPS; pass++) {
@@ -170,7 +156,7 @@ int main(void) {
 
     /* --- A pool with only one long track has nowhere to cycle to, so loop-end
            re-issues that same track rather than dropping onto a short one. --- */
-    music_set_mix(MIX_DYNAMIC, 10); music_reset(); music_set_debounce_frames(0);
+    music_reset(); music_set_debounce_frames(0);
     { const unsigned char* p; int n = music_track_pool(POOL_NEUTRAL, &p);
       for (int i = 0; i < n; i++) short_set[p[i]] = 1;
       short_set[p[n-1]] = 0;   /* exactly one long track */
@@ -189,7 +175,7 @@ int main(void) {
     /* --- New room, NEW scene: the track cycles again (there is only the one
            pool to cycle within today, but the pick must still move off the
            track that was sounding) --- */
-    music_set_mix(MIX_DYNAMIC, 10); music_reset(); music_set_debounce_frames(0);
+    music_reset(); music_set_debounce_frames(0);
     music_on_turn(OBJ_CAVE_B);
     int cave2_track = g_track;
     music_on_turn(OBJ_FOREST);
@@ -213,32 +199,9 @@ int main(void) {
        is_playing() reads 0 before the track has ever registered as playing.
        The engine must NOT treat that as loop-end (which caused runaway skips /
        re-rolls / re-picks). Advance only after is_playing() has first gone true. */
-    music_set_mix(MIX_SEQUENTIAL, 5);
-    music_reset(); music_start();
-    CHECK(g_track == 5);
-    int seek_track = g_track;
-    playing = 0;                        /* simulate the SEEK window after PlaySingle */
-    for (int i = 0; i < 5; i++) music_tick();
-    CHECK(g_track == seek_track);       /* must NOT advance during the seek window */
-    playing = 1; music_tick();          /* track settles -> latch clears */
-    playing = 0; music_tick();          /* real loop-end -> advance now */
-    CHECK(g_track == 6);
-    playing = 1;
-
-    /* Random: no re-roll during the seek window. */
-    music_set_mix(MIX_RANDOM, 10); music_reset(); music_start();
-    int rseek = g_track;
-    playing = 0;
-    for (int i = 0; i < 5; i++) music_tick();
-    CHECK(g_track == rseek);            /* no re-roll mid-seek */
-    playing = 1; music_tick();          /* settle */
-    playing = 0; g_calls = 0; music_tick();
-    CHECK(g_calls == 1);               /* re-rolls on real loop-end */
-    playing = 1;
-
     /* Dynamic: the active room track is not re-picked during the seek window. */
     for (int i = 0; i < 64; i++) short_set[i] = 0;
-    music_set_mix(MIX_DYNAMIC, 10); music_reset(); music_set_debounce_frames(0);
+    music_reset(); music_set_debounce_frames(0);
     music_on_turn(OBJ_CAVE_A);
     int dseek = g_track;
     playing = 0; g_calls = 0;
@@ -247,40 +210,42 @@ int main(void) {
     CHECK(g_calls == 0);               /* no backend play issued during the seek window */
     playing = 1;
 
-    /* --- Menus: Dynamic has no room to classify, so music_start_menu opens on the
-           selected track and then cycles it through the neutral pool. Without this
-           the menu track went straight to the backend looped and repeated forever. --- */
+    /* --- Menus: there is no room to classify, so music_start_menu opens on the
+           neutral pool -- "no particular mood", which is what a menu is -- and
+           then cycles inside it. It used to open on the track picked in Sound
+           Options; that row is gone. Without this the menu track went straight to
+           the backend looped and repeated forever. --- */
     for (int i = 0; i < 64; i++) short_set[i] = 0;
-    music_reset(); music_set_mix(MIX_DYNAMIC, 10); music_set_debounce_frames(0);
+    music_reset(); music_set_debounce_frames(0);
     g_calls = 0;
     music_start_menu();
     CHECK(g_calls == 1);
-    CHECK(g_track == 10);              /* opens on the player's selected track */
+    CHECK(in_pool(POOL_NEUTRAL, g_track));
     CHECK(g_loop == 0);                /* counted, not looped forever */
+    int menu_track = g_track;
     for (int pass = 2; pass <= MUSIC_DYN_LOOPS; pass++) {
         playing = 1; music_tick();
         playing = 0; music_tick();
-        CHECK(g_track == 10);
+        CHECK(g_track == menu_track);
     }
     playing = 1; music_tick();
     playing = 0; music_tick();
-    CHECK(g_track != 10);
-    CHECK(in_pool(POOL_NEUTRAL, g_track));   /* a menu is "no particular mood" */
+    CHECK(in_pool(POOL_NEUTRAL, g_track));   /* still "no particular mood" */
     playing = 1;
 
-    /* A Sound Options preview mid-game must not drag the room's mood to neutral.
+    /* music_start_menu mid-game must not drag the room's mood to neutral.
        There is no second pool left to prove this by track membership -- both a
        real scene with no authored mask and the menu's "nothing" both draw from
        POOL_NEUTRAL. What must NOT happen is a second "nothing" announcement
        while a room is still active, so this checks the category-change count
-       instead: entering the room announces once; the preview must not announce
-       again. */
-    music_reset(); music_set_mix(MIX_DYNAMIC, 10); music_set_debounce_frames(0);
+       instead: entering the room announces once; the menu start must not
+       announce again. */
+    music_reset(); music_set_debounce_frames(0);
     music_set_category_fn(rec_cat);
     g_ncat = 0;
     music_on_turn(OBJ_CAVE_A);
     CHECK(g_ncat == 1);
-    music_start_menu();                /* what the preview row calls */
+    music_start_menu();
     CHECK(g_ncat == 1);                 /* no second announcement -- still the room's scene */
     playing = 1; music_tick();
     playing = 0; music_tick();
@@ -291,7 +256,7 @@ int main(void) {
 
     /* --- Pause holds the track: a paused drive reads as not-playing, and every
            tick of an open menu would otherwise look like loop-end. --- */
-    music_reset(); music_set_mix(MIX_DYNAMIC, 10); music_set_debounce_frames(0);
+    music_reset(); music_set_debounce_frames(0);
     music_start_menu();
     playing = 1; music_tick();
     int held = g_track;
@@ -307,19 +272,6 @@ int main(void) {
     playing = 1; music_tick();         /* the tail registers as playing */
     playing = 0; music_tick();         /* now the interrupted pass really ends */
     CHECK(g_track == held);            /* pass 2 of 3, so the same track again */
-    playing = 1;
-
-    /* Override survives a resume: the drive was repeating it, so the tail of the
-       interrupted pass is the only loop-end Override ever sees. */
-    music_reset(); music_set_mix(MIX_OVERRIDE, 7); music_start();
-    CHECK(g_track == 7 && g_loop == 1);
-    playing = 1; music_tick();
-    music_pause(); playing = 0;
-    music_resume();
-    playing = 1; music_tick();
-    playing = 0; g_calls = 0; music_tick();
-    CHECK(g_calls == 1);
-    CHECK(g_track == 7 && g_loop == 1);   /* back to repeating its own track */
     playing = 1;
 
     printf(fails ? "\n%d FAILURES\n" : "\nALL PASS\n", fails);

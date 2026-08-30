@@ -103,6 +103,44 @@ void border_use_black(void);
 int console_height(void);
 
 /*----------------------
+ | console_screen_rows
+ | Description: The screen's total text row count -- physical geometry, not the
+ |   rows currently free for console content. Unlike console_height(), it does
+ |   not move when the on-screen keyboard shows or hides, which is what a
+ |   full-screen wipe (a title/menu/splash reset, saturn_die's halt clear) needs
+ |   instead: console_height()'s bound is wrong there, since with the keyboard
+ |   hidden it reports fewer rows than the screen actually has, leaving rows
+ |   above the console unclearable through it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the screen's total row count (SCREEN_ROWS)
+ ----------------------*/
+int console_screen_rows(void);
+
+/*----------------------
+ | console_strip_shift
+ | Description: How far up, in pixels, the NBG0 wallpaper sits while the
+ |   gamepad's input strip is on screen. The strip's marble covers its two
+ |   borders and CV_STRIP_ROWS of content -- nine rows, 72 lines -- of a
+ |   240-line picture, and image_window_box suppresses NBG0 under all of it, so
+ |   what is left to see is the 168 lines above. Half the covered height
+ |   re-centres the picture in that window: the top 36 lines go off the screen,
+ |   the bottom 36 stay behind the strip, and neither end is lopsidedly cropped.
+ |
+ |   Geometry only: it does not ask whether the strip is up. That question
+ |   belongs to whoever also armed the NBG0 window the offset relies on -- see
+ |   dash_view.cxx's flush_hook, which pairs this with dash_input_up().
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the offset in pixels
+ ----------------------*/
+int console_strip_shift(void);
+
+/*----------------------
  | hint
  | Description: Picks the input-hint string matching the last-used device, so
  |   on-screen text always names the device the player actually has in hand

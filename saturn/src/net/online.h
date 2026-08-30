@@ -53,7 +53,7 @@ void online_typeahead_release(void);
  | Dependencies: net/net_connect.h, term.h, console.h, console_view.h, input.h,
  |   keyboard.h, saturn_keyboard.h, typeahead.h, menu.h, soft_reset.h, music.h,
  |   SRL
- | Globals: g_online_ta, g_dialnum, g_sel_track, g_scroll, g_pad, g_kbd_visible
+ | Globals: g_online_ta, g_dialnum, g_scroll, g_pad, g_kbd_visible
  | Params: N/A
  | Returns: N/A
  ----------------------*/

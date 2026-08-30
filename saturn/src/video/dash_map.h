@@ -17,7 +17,7 @@ extern "C" {
 /*----------------------
  | DASH_COLS / DASH_ROWS
  | Description: The shadow's shape: the 40 columns a 320-pixel screen shows, and
- |   32 rows covering the 28 the program draws on with room to spare, matching
+ |   32 rows covering the 30 the program draws on with room to spare, matching
  |   text_map's TEXT_ROWS. The hardware map's pitch is 64 cells; dash_view
  |   supplies that when it flushes.
  | Author: suinevere
@@ -192,6 +192,22 @@ void dash_map_paint(int x, int y, unsigned char tile);
  | Returns: the tile index, or DT_BLANK when off the shadow
  ----------------------*/
 unsigned char dash_cell(int x, int y);
+
+/*----------------------
+ | dash_input_up
+ | Description: Whether what is painted right now is one of the game's input
+ |   strips, rather than a menu box or nothing. The wallpaper's vertical offset
+ |   keys off this and nothing else: the offset exists to compensate for the
+ |   strip's marble, and the NBG0 window that hides the scrolled plane's wrap is
+ |   armed by the same two renderers that draw that marble, so the offset must
+ |   never outlive it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_variant
+ | Params: N/A
+ | Returns: 1 for DASH_PANEL, DASH_GAMEKB or DASH_OVERLAY, else 0
+ ----------------------*/
+int dash_input_up(void);
 
 /*----------------------
  | dash_dirty_top / dash_dirty_bottom / dash_dirty_clear

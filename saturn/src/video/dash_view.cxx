@@ -13,6 +13,9 @@
 #include "dash_tiles.h"
 #include "console_view.h"
 #include "app_state.h"
+#ifndef NETBIN
+#include "title.h"      // title_bg_set_shift; the netbin links no wallpaper
+#endif
 
 /*----------------------
  | DASH_MAP_PITCH / DASH_PAL_NO
@@ -52,7 +55,8 @@ static uint16_t  g_char_base = 0;
 /*----------------------
  | flush_hook
  | Description: The OnAfterSync subscriber. Closes the frame first, which takes
- |   the panel down when no renderer claimed it, then writes each dirty row's 40
+ |   the panel down when no renderer claimed it, moves the wallpaper to wherever
+ |   the input strip's presence puts it, then writes each dirty row's 40
  |   painted columns as 2-word pattern names and empties the span. Runs in vblank
  |   for the reason text_map.h's file header gives: VDP2 re-reads a cell's
  |   pattern name on every scanline of that cell's row, so a store landing
@@ -66,6 +70,23 @@ static uint16_t  g_char_base = 0;
 static void flush_hook(void)
 {
     dash_frame_end();
+
+#ifndef NETBIN
+    // The strip hides the bottom 72 lines of the picture, so the picture moves
+    // up to stay centred in what is left of it. Driven from here, after
+    // dash_frame_end has settled what is painted, because this is the one
+    // subscriber that runs on every frame whatever is on screen: an
+    // edge-triggered call could leave the offset behind on a screen that
+    // stopped drawing the strip.
+    //
+    // Keyed on the strip being PAINTED, not merely on the rows console_height
+    // reserves for it. A scrolled NBG0 wraps its blank tail and then its own
+    // top rows into the bottom of the screen, and the only thing hiding that is
+    // the window image_window_box arms -- which the same renderers arm, and
+    // which a menu box replaces. So the picture drops back to where it was
+    // whenever the strip is not drawn, and the wrap can never be on screen.
+    title_bg_set_shift(dash_input_up() ? console_strip_shift() : 0);
+#endif
 
     int top = dash_dirty_top();
     int bottom = dash_dirty_bottom();

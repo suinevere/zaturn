@@ -32,7 +32,7 @@
      gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/t \
          saturn/tests/test_music_pause.c saturn/src/sound/music.c \
          saturn/src/sound/music_data.c saturn/src/sound/event_scan.c \
-         saturn/src/scene/scene_map.c && /tmp/t
+         saturn/src/scene/scene_map.c saturn/src/scene/presentation.c && /tmp/t
 */
 #include "../src/sound/music.h"
 #include <stdio.h>
@@ -54,15 +54,16 @@ static void reset_probe(void) {
 }
 
 /* Bring the engine up with something actually sounding, the way both menus are
-   entered. */
+   entered. music_start_menu rather than music_start: with the mix modes gone,
+   music_start only clears state and waits for a room, so it would leave the
+   drive silent and every hold below with nothing to hold. */
 static void engine_up(void) {
     music_reset();
     music_set_backend(fake_play);
     music_set_pausefns(fake_pause, fake_resume);
     music_set_duckfns(fake_duck, fake_unduck);
     music_set_isplaying(fake_isplaying);
-    music_set_mix(MIX_SEQUENTIAL, MUSIC_TRACK_MIN);
-    music_start();
+    music_start_menu();
     assert(fake_isplaying());
     reset_probe();
 }
@@ -178,15 +179,16 @@ static void test_sound_page_leaves_main_menu_playing(void) {
     printf("  main menu left playing:    OK\n");
 }
 
-/* Ok commits by restarting the track; the restore still has to hold that one,
-   rather than being skipped because something started playing. */
+/* The restore has to hold even when something started playing while the page was
+   open -- it must not be skipped just because the drive is busy. The Sound page's
+   own Ok no longer restarts anything (the rows are levels), so the start here
+   stands in for any engine call that could land under an open page. */
 static void test_restore_survives_a_commit_on_exit(void) {
     engine_up();
     music_duck();
 
     int was = sound_page_enter();
-    music_set_mix(MIX_SEQUENTIAL, MUSIC_TRACK_MIN + 1);
-    music_start();                  /* what the Ok branch does before breaking */
+    music_start_menu();             /* something starts playing under the page */
     assert(!music_is_paused());
     sound_page_leave(was);
 
@@ -271,7 +273,6 @@ static void test_duck_withholds_category_commit(void) {
     engine_up();
     music_set_category_fn(record_cat);
     music_set_debounce_frames(1);
-    music_set_mix(MIX_DYNAMIC, MUSIC_TRACK_MIN);
     /* Adventure (release 1, serial "151001"), object 21 -> an authored scene
        (SC_MAZE), so the turn actually has something to commit. Without a game
        set, scene_of_room finds no row and the room is "hold whatever is

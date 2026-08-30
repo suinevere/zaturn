@@ -21,7 +21,7 @@
  |   mapping_reset_defaults), console_view.h (note_input_device/hint/
  |   g_kbd_visible), options.h (options_save/display_apply/
  |   display_cycle_row/valid_dialnum), app_state.h (g_difficulty/g_dialnum/
- |   g_display/g_mix_mode/g_sel_track/g_music_level/g_pcm_level/g_in_game/
+ |   g_display/g_music_level/g_pcm_level/g_in_game/
  |   g_cmd_iface/g_toggle_btn), keyboard.h, saturn_keyboard.h, soft_reset.h,
  |   display.h, sound.h, music.h, SRL
  ----------------------*/
@@ -646,13 +646,14 @@ bool keyboard_controls_page(void) {
 
 /*----------------------
  | sound_options_page
- | Description: Sound Options (full-screen, Ok/Cancel). Which rows appear
- |   depends on what is actually available: Audio Mix / Track / Music level
- |   need CD-DA on the disc (has_cd, from music_cdda_audio_tracks() > 0);
- |   PCM level needs the loaded game's .BLB (has_blb, from
- |   sound_has_audio()); Ok/Cancel always show.
+ | Description: Sound Options (full-screen, Ok/Cancel). Two levels and nothing
+ |   else: the Audio Mix row and the Track row it fed are gone with the mix modes
+ |   themselves, so the music is the dynamic engine or, at Music 0, silence.
+ |   Which rows appear still depends on what is available: Music needs CD-DA on
+ |   the disc (has_cd, from music_cdda_audio_tracks() > 0); PCM needs the loaded
+ |   game's .BLB (has_blb, from sound_has_audio()); Ok/Cancel always show.
  |   `sel` indexes the resulting visible-row list, not a fixed row number.
- |   Snapshots g_mix_mode/g_sel_track/g_music_level/g_pcm_level for Cancel.
+ |   Snapshots g_music_level/g_pcm_level for Cancel.
  |   Opening this page resumes the music if the in-game Options menu paused it:
  |   every row here is judged by ear, so it is the one page that cannot work in
  |   silence. Leaving it puts that pause back (`was_paused`, restored once after
@@ -661,65 +662,49 @@ bool keyboard_controls_page(void) {
  |   the resume that ends it. Without the restore, visiting Sound and backing out
  |   left the rest of the in-game Options menu playing. The flag is read rather
  |   than assumed: from the main menu nothing paused the music and nothing may.
- |   `previewed` tracks whether a live demo (Track row Left/Right, which
- |   restarts the engine on the picked track) interrupted whatever was streaming,
- |   so exit only
- |   re-asserts playback -- music_refresh() for Dynamic mix, else
- |   music_start() -- when a preview fired or the mix/track actually
- |   changed; absent both, opening and closing this page in-game leaves the
- |   current track running uninterrupted. Cancel (or B/Backspace) restores the
- |   snapshot (including live audio via music_set_level/sound_set_level/
- |   music_set_mix) and, if a preview fired, calls music_refresh() to put
- |   back what was playing; Start/Esc take the Ok path instead, committing and
- |   saving what the rows currently show. The value column is fixed at x + 14 +
- |   MENU_DIGIT_COLS in both digit and no-digit modes, reserved
- |   unconditionally so it does not move when the player switches device;
- |   the widest value is "< Sequential >" (14 chars), ending at column 33,
- |   clear of the box's right border at column 38.
+ |   Neither row can interrupt what is streaming -- a level is a volume write, not
+ |   a new track -- so no exit path re-asserts playback any more; opening and
+ |   closing this page in-game leaves the current track running. Cancel (or
+ |   B/Backspace) restores the snapshot, live audio included, via
+ |   music_set_level/sound_set_level; Start/Esc take the Ok path instead,
+ |   committing and saving what the rows currently show. The value column is
+ |   fixed at x + 14 + MENU_DIGIT_COLS in both digit and no-digit modes, reserved
+ |   unconditionally so it does not move when the player switches device. The box
+ |   keeps the 34-column width it was given for "< Sequential >": the widest value
+ |   left is a single digit, but the other Options pages are 34 too and a SOUND
+ |   box that shrank away from them would be the more conspicuous change.
  | Author: suinevere
  | Dependencies: music.c (music_cdda_audio_tracks/music_resume/music_duck/
- |   music_set_volume/music_set_level/music_set_mix/music_refresh/
- |   music_start/music_start_menu/music_cdda_has_audio/MIX_*), sound.c (sound_has_audio/
+ |   music_set_volume/music_set_level/music_is_paused), sound.c (sound_has_audio/
  |   sound_set_level), console_view.c
  |   (note_input_device/hint/g_kbd_visible), input.c (pad_repeat_update),
  |   menu.c, menu_layout.c (MENU_DIGIT_COLS), options.c (options_save),
  |   soft_reset.h (check_soft_reset)
- | Globals: g_mix_mode, g_sel_track, g_music_level, g_pcm_level
+ | Globals: g_music_level, g_pcm_level
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void sound_options_page(void) {
     MenuBacking backing;
-    static const char *const MIX[] = { "Dynamic", "Repeat", "Sequential", "Random" };
-    // One bar width, one label field, and a mix-name field as wide as
-    // "Sequential", so the Audio Mix arrows hold still while it cycles.
     const int SND_ROW_W   = 31;
     const int SND_LABEL_W = 14;
-    const int SND_MIX_W   = 10;
-    enum { SR_MIX, SR_TRACK, SR_MUSIC, SR_PCM, SR_OK, SR_CANCEL };
-    const unsigned char* atracks; int an = music_cdda_audio_tracks(&atracks);
-    bool has_cd  = (an > 0);
+    enum { SR_MUSIC, SR_PCM, SR_OK, SR_CANCEL };
+    bool has_cd  = (music_cdda_audio_tracks(0) > 0);
     bool has_blb = (sound_has_audio() != 0);
 
-    int rows[6], nrows = 0;
-    if (has_cd)  { rows[nrows++] = SR_MIX; rows[nrows++] = SR_TRACK; rows[nrows++] = SR_MUSIC; }
+    int rows[4], nrows = 0;
+    if (has_cd)  rows[nrows++] = SR_MUSIC;
     if (has_blb) rows[nrows++] = SR_PCM;
     rows[nrows++] = SR_OK;
     rows[nrows++] = SR_CANCEL;
 
-    // Remembered as a row ID, not an index: the Mix/Track/Music rows are only
-    // listed when there is CD audio and PCM only when there is a sound blob, so
-    // the same index names a different row on a different disc.
-    static int last_row = SR_MIX;
+    // Remembered as a row ID, not an index: Music is only listed when there is
+    // CD audio and PCM only when there is a sound blob, so the same index names
+    // a different row on a different disc.
+    static int last_row = SR_MUSIC;
     int sel = 0;
     for (int i = 0; i < nrows; i++) if (rows[i] == last_row) { sel = i; break; }
-    int s_mix = g_mix_mode, s_trk = g_sel_track, s_mus = g_music_level, s_pcm = g_pcm_level;
-    bool previewed = false;
-    // Open the Track row on whatever is actually sounding, falling back to the saved
-    // selection and then to the first audio track. Deliberately does NOT write
-    // g_sel_track: the page must be able to open and close without changing anything,
-    // or the Ok handler below sees g_sel_track != s_trk and restarts the music the
-    // player came in listening to.
+    int s_mus = g_music_level, s_pcm = g_pcm_level;
     // Reached from the in-game Options menu, the music is ducked; this page is the
     // one place that cannot work under a duck, since every row on it is judged by
     // ear and has to be heard at the level being set. A no-op everywhere else.
@@ -730,11 +715,6 @@ void sound_options_page(void) {
     const int was_paused = music_is_paused();
     music_resume();
 
-    int aidx = -1;
-    int cur = music_cdda_current_track();
-    if (cur > 0) for (int i = 0; i < an; i++) if (atracks[i] == cur)         { aidx = i; break; }
-    if (aidx < 0)   for (int i = 0; i < an; i++) if (atracks[i] == g_sel_track) { aidx = i; break; }
-    if (aidx < 0) aidx = 0;
     int fx, fy, fw, fh;
     menu_box_fit("SOUND", 34, nrows + 3, &fx, &fy, &fw, &fh);
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
@@ -757,42 +737,19 @@ void sound_options_page(void) {
         last_row = row;   // every frame, so no exit path has to remember to
 
         if (cancel || (ok && row == SR_CANCEL)) {
-            g_mix_mode = s_mix; g_sel_track = s_trk; g_music_level = s_mus; g_pcm_level = s_pcm;
+            g_music_level = s_mus; g_pcm_level = s_pcm;
             music_set_level(g_music_level); sound_set_level(g_pcm_level);
-            music_set_mix(g_mix_mode, g_sel_track);
-            if (previewed) music_refresh();
             break;
         }
         if (commit || (ok && row == SR_OK)) {
             music_set_level(g_music_level); sound_set_level(g_pcm_level);
-            music_set_mix(g_mix_mode, g_sel_track);
-            if (previewed || g_mix_mode != s_mix || g_sel_track != s_trk) {
-                if (g_mix_mode == MIX_DYNAMIC) music_refresh();
-                else music_start();
-            }
             options_save();
             break;
         }
-        if (row == SR_MIX) { if (left && g_mix_mode > 0) g_mix_mode--; if (right && g_mix_mode < MIX_RANDOM) g_mix_mode++; }
-        else if (row == SR_TRACK) {
-            if (left  && aidx > 0)      aidx--;
-            if (right && aidx < an - 1) aidx++;
-            // Only an actual interaction commits a new selection, so that merely
-            // visiting this row leaves g_sel_track (and the music) alone.
-            if ((left || right || ok) && an > 0) {
-                g_sel_track = atracks[aidx];
-                // Through the engine, not straight at the backend: a preview left
-                // sounding while the player sits on this row is still music that
-                // has to cycle rather than loop the one track forever.
-                music_set_mix(g_mix_mode, g_sel_track);
-                music_start_menu();
-                previewed = true;
-            }
-        }
-        else if (row == SR_MUSIC) { if (left && g_music_level > 0) g_music_level--; if (right && g_music_level < 7) g_music_level++;
-                                    if (left || right) music_set_volume(g_music_level); }
-        else if (row == SR_PCM)   { if (left && g_pcm_level > 0) g_pcm_level--; if (right && g_pcm_level < 7) g_pcm_level++;
-                                    if (left || right) sound_set_level(g_pcm_level); }
+        if (row == SR_MUSIC) { if (left && g_music_level > 0) g_music_level--; if (right && g_music_level < 7) g_music_level++;
+                               if (left || right) music_set_volume(g_music_level); }
+        else if (row == SR_PCM) { if (left && g_pcm_level > 0) g_pcm_level--; if (right && g_pcm_level < 7) g_pcm_level++;
+                                  if (left || right) sound_set_level(g_pcm_level); }
 
         menu_clear();
         menu_frame(fx, fy, fw, fh, "SOUND");
@@ -801,17 +758,6 @@ void sound_options_page(void) {
         for (int i = 0; i < nrows; i++) {
             const char *n = menu_num(nums, i);
             switch (rows[i]) {
-                case SR_MIX:
-                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s %s %s", n,
-                              menu_pad("Audio Mix", SND_LABEL_W),
-                              g_mix_mode > 0 ? "<" : " ",
-                              menu_pad(MIX[g_mix_mode], SND_MIX_W),
-                              g_mix_mode < MIX_RANDOM ? ">" : " ");
-                    break;
-                case SR_TRACK:
-                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
-                              menu_pad("Track", SND_LABEL_W), aidx + 1);
-                    break;
                 case SR_MUSIC:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
                               menu_pad("Music", SND_LABEL_W), g_music_level);
@@ -836,8 +782,8 @@ void sound_options_page(void) {
     // rather than on each of them -- the "remember to undo this on every exit path"
     // shape that menu.h's MenuBacking box was written about. Before the fade-out,
     // not after: the root Options menu this is leaving to is ducked, so the fade
-    // should be too. Ok's music_start()/music_refresh() has already run by
-    // now, so this holds the track it just picked. A duck, matching what the entry
+    // should be too. Neither exit restarts anything now that both rows are
+    // levels, so this holds whatever was already streaming. A duck, matching what the entry
     // above lifted -- and with no seek involved it cannot land the drive anywhere
     // else, which is the failure the old stop-and-restore had to document.
     if (was_paused) music_duck();
@@ -869,6 +815,11 @@ void sound_options_page(void) {
  |   ScrollEnable: the current room's category picture in game, the house picture
  |   the title screen put up in the main menu. The engine's own g_dyn_slot is
  |   untouched underneath, so the next mood change resolves normally.
+ |     The pin cannot resolve on an authored game: title_bg_loaded_file returns
+ |   the area stem room_art_show passed to title_bg_show_raw ("BCEL"), not a
+ |   disc image name, so display_image_slot always misses and the pin stays
+ |   empty. display_apply() has its own guard for that case -- see its header --
+ |   so the room picture holds regardless.
  |     Uses the full 40
  |   columns rather than the 38 the other pages use. Values print at x + 17,
  |   leaving 20 columns before the border, so "< %s >" fits a name of at most

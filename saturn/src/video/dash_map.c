@@ -350,6 +350,12 @@ void dash_dirty_clear(void)
     g_dirty_bottom = -1;
 }
 
+int dash_input_up(void)
+{
+    return (g_variant == DASH_PANEL || g_variant == DASH_GAMEKB
+            || g_variant == DASH_OVERLAY) ? 1 : 0;
+}
+
 void dash_frame_end(void)
 {
     if (!g_touched) dash_build(DASH_NONE, 0);

@@ -25,15 +25,18 @@ extern "C" {
 #endif
 
 /*----------------------
- | MIX_* / MUSIC_TRACK_MIN / MUSIC_TRACK_MAX
- | Description: The Audio Mix modes from Sound Options, and the track bounds.
- |   MUSIC_TRACK_MAX is the ceiling for Sequential/Random and the override
- |   clamp -- a fixed offer, not a detected count (playing a missing track is
- |   a harmless no-op); the Sound Options track selector instead lists the
- |   disc's real tracks from music_cdda_audio_tracks().
+ | MUSIC_TRACK_MIN / MUSIC_TRACK_MAX
+ | Description: The CD-DA track bounds -- a fixed offer, not a detected count
+ |   (playing a track the disc does not carry is a harmless no-op). MIN is also
+ |   what bit 0 of a scene's track mask names; see music_track_from_mask. The
+ |   disc's real track list, where one is wanted, comes from
+ |   music_cdda_audio_tracks().
+ |
+ |   There is no mix mode any more. Repeat, Sequential and Random were removed
+ |   along with the track selector that fed them: the music is the dynamic
+ |   engine or, at Music level 0, nothing.
  | Author: suinevere
  ----------------------*/
-enum { MIX_DYNAMIC = 0, MIX_OVERRIDE = 1, MIX_SEQUENTIAL = 2, MIX_RANDOM = 3 };
 #define MUSIC_TRACK_MIN 2
 #define MUSIC_TRACK_MAX 33
 
@@ -155,8 +158,7 @@ void music_transition_skip_fade(void);
 void music_refresh(void);   /* re-assert the current room's track (after a preview) */
 void music_seed(unsigned int s);            /* seed the track-pool RNG */
 int  music_category_track(int category);    /* random track from the category pool; 0 if none */
-void music_set_mix(int mode, int override_track);      /* mix mode + selected/override track */
-void music_start(void);                                /* assert playback for the current mode */
+void music_start(void);                                /* clear the mix; the first room starts it */
 void music_start_menu(void);                           /* ...for the menus, which have no room */
 void music_tick(void);                                 /* per frame: commit/advance/re-pick */
 void music_pause(void);                                /* hold the drive where it is */
@@ -170,6 +172,21 @@ void music_set_duckfns(void (*duck_fn)(void), void (*unduck_fn)(void));
 void music_set_debounce_frames(int n);                 /* room-switch debounce length */
 void music_set_category_fn(void (*fn)(int cat));       /* announce the active SCENE only; events are silent */
 void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-scene rotations; also scene-only */
+
+/*----------------------
+ | music_set_room_fn
+ | Description: Subscribes to every room change, for stories with an authored
+ |   per-room presentation. set_category_fn cannot serve this: on that path the
+ |   category is the track, so two rooms sharing a track are one category and
+ |   the picture would never change between them. The picture needs the room,
+ |   which is what this hands over.
+ |
+ |   Fired on the room change itself rather than at the debounced commit,
+ |   because the picture must not lag the text -- the area's archive is resident
+ |   and the change costs a decompress, not a disc read.
+ | Author: suinevere
+ ----------------------*/
+void music_set_room_fn(void (*fn)(unsigned int obj));
 void music_set_fade_fn(void (*fn)(int level));         /* 0 = black/quiet, 255 = normal */
 void music_set_fade_frames(int n);                     /* ramp length; 0 = instant commit */
 

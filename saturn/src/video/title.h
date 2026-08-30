@@ -63,6 +63,29 @@ bool title_bg_show(const char *file);
 bool title_bg_show_oneoff(const char *file);
 
 /*----------------------
+ | title_bg_show_raw
+ | Description: Shows an already-decoded 8bpp picture on VDP2 NBG0, for callers
+ |   that produced their pixels themselves rather than reading a TGA off the
+ |   disc. Touches no CD, so it is safe to call with music playing -- which is
+ |   the whole point for the room backgrounds, whose archive is already resident
+ |   and whose per-room change must not interrupt a track.
+ |
+ |   tag is recorded as the loaded-file name so title_bg_loaded_file and the
+ |   Dynamic pin's short-circuit keep working. It is a label, not a path, and
+ |   nothing ever reopens it.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: pixels -- w*h 8bpp bytes; clut -- 256 Saturn RGB555 words; w, h --
+ |   the picture's size; tag -- a name to record, truncated to the cache's name
+ |   field
+ | Returns: true if the picture was applied, false if an argument was bad or the
+ |   palette could not be made
+ ----------------------*/
+bool title_bg_show_raw(const unsigned char *pixels, const unsigned short *clut,
+                       int w, int h, const char *tag);
+
+/*----------------------
  | title_bg_hide
  | Description: Hides the title background image by disabling scroll on VDP2 NBG0.
  | Author: suinevere
@@ -72,6 +95,27 @@ bool title_bg_show_oneoff(const char *file);
  | Returns: N/A
  ----------------------*/
 void title_bg_hide(void);
+
+/*----------------------
+ | title_bg_set_shift
+ | Description: Scrolls NBG0 down over the wallpaper by `y` pixels, which moves
+ |   the picture that many pixels UP the screen. For the gamepad input strip,
+ |   which covers the bottom of the picture: see console_strip_shift for the
+ |   size and the reasoning. Writes the register only when the value actually changes,
+ |   so a caller may hand it the same answer every frame.
+ |
+ |   The picture's plane is 512x256 with a 320x240 image in it, so a positive
+ |   offset wraps the plane's blank tail, and then the picture's own top, into
+ |   the bottom of the screen. That is only ever safe because image_window_box
+ |   suppresses NBG0 across the whole strip -- the wrap lands entirely inside
+ |   the suppressed rows.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: g_bg_shift
+ | Params: y -- pixels to raise the picture by, 0 for none
+ | Returns: N/A
+ ----------------------*/
+void title_bg_set_shift(int y);
 
 /*----------------------
  | title_bg_loaded_file

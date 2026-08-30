@@ -18,10 +18,14 @@
  |   row can draw without touching the box border (31 = 32 ceiling minus one margin
  |   column, after 5 columns of chrome). Callers building rows from external data
  |   clamp to MENU_ROW_TEXT_MAX, since a clamped box truncates silently.
+ |   MENU_SCREEN_ROWS is the one place this project spells out the screen's row
+ |   count as a literal; console_view.cxx's SCREEN_ROWS is defined from it rather
+ |   than carrying its own copy, specifically so the two cannot read differently
+ |   again the way MENU_SCREEN_ROWS itself once did against the real 30.
  | Author: suinevere
  ----------------------*/
 #define MENU_SCREEN_COLS 40
-#define MENU_SCREEN_ROWS 28
+#define MENU_SCREEN_ROWS 30
 #define MENU_DIGIT_COLS  3
 #define MENU_ROW_TEXT_MAX 31
 

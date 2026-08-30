@@ -5,11 +5,10 @@
  |   soft-reset jump target, the loaded story file, and the console scroll
  |   position. Initializers are carried over verbatim from main.cxx.
  | Author: suinevere
- | Dependencies: app_state.h, music.h (MIX_DYNAMIC)
+ | Dependencies: app_state.h
  ----------------------*/
 
 #include "app_state.h"
-#include "music.h"
 
 /*----------------------
  | g_difficulty
@@ -59,16 +58,14 @@ const char *verbosity_command(void) {
 }
 
 /*----------------------
- | g_music_level / g_pcm_level / g_mix_mode / g_sel_track
+ | g_music_level / g_pcm_level
  | Description: Persisted audio options: CD-DA music level and PCM effect level
- |   (0..7, 0 = off), the music mix mode (MIX_*), and the selected/override CD
- |   track. Defaults match the Options sliders.
+ |   (0..7, 0 = off). Defaults match the Options sliders. Music level 0 is the
+ |   only "off" there is, now that the mix modes are gone.
  | Author: suinevere
  ----------------------*/
 int g_music_level = 7;
 int g_pcm_level   = 4;
-int g_mix_mode  = MIX_DYNAMIC;
-int g_sel_track = 10;
 
 /*----------------------
  | g_display

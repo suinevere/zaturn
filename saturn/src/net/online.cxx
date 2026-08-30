@@ -12,7 +12,7 @@
  |   pad repeat/scroll, history), typeahead.h + typeahead_extract.h +
  |   typeahead_solution.h (the trie), menu.h (dialing boxes), soft_reset.h
  |   (reboot command + confirm), music.h (menu-track playback), app_state.h
- |   (g_difficulty/g_dialnum/g_sel_track/g_scroll), game_catalog.h (Z3 scan), SRL.
+ |   (g_difficulty/g_dialnum/g_scroll), game_catalog.h (Z3 scan), SRL.
  ----------------------*/
 
 #include <srl.hpp>
@@ -338,7 +338,7 @@ static const RoomModel *netbin_room(void) {
  | Dependencies: net/net_connect.h, term.h, console.h, console_view.h, input.h,
  |   keyboard.h, saturn_keyboard.h, typeahead.h, menu.h, soft_reset.h, music.h,
  |   SRL
- | Globals: g_online_ta, g_dialnum, g_sel_track, g_scroll, g_output_start, g_pad,
+ | Globals: g_online_ta, g_dialnum, g_scroll, g_output_start, g_pad,
  |   g_kbd_visible
  | Params: N/A
  | Returns: N/A
@@ -580,7 +580,7 @@ void online_mode(void) {
 #else
         render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);
 #endif
-        text_print(0, 28, "%s", hint("L/R=cycle  hold L+R=disconnect", "Esc=disconnect"));
+        text_print(0, console_screen_rows() - 1, "%s", hint("L/R=cycle  hold L+R=disconnect", "Esc=disconnect"));
         menu_sync();
     }
     net_connect_close();

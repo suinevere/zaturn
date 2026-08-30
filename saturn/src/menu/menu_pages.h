@@ -81,7 +81,7 @@ bool keyboard_controls_page(void);
  |   F12 key.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_mix_mode, g_sel_track, g_music_level, g_pcm_level
+ | Globals: g_music_level, g_pcm_level
  | Params: N/A
  | Returns: N/A
  ----------------------*/

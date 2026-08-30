@@ -4,7 +4,10 @@
  |   rather than linking it, because the whole point is to control what
  |   scene_track_mask answers: the shipped table is all zeros until someone
  |   authors tracks.json, and a test that waited for that would assert
- |   nothing.
+ |   nothing. Stubs pres_of_room the same way, always answering "unauthored",
+ |   for the same reason music.c now calls into it too: linking the real
+ |   presentation.c would let Zork I's own authored table answer for these
+ |   rooms instead of this file's g_scene/g_mask controls.
  |   gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/tmt \
  |       saturn/tests/test_music_static.c saturn/src/sound/music.c \
  |       saturn/src/sound/music_data.c saturn/src/sound/event_scan.c && /tmp/tmt
@@ -14,6 +17,7 @@
 #include <string.h>
 #include "sound/music.h"
 #include "sound/event_scan.h"
+#include "scene/presentation.h"
 
 static int fails = 0;
 static void check(int cond, const char *what) {
@@ -34,6 +38,9 @@ int scene_of_room(unsigned short release, const char *serial, unsigned int obj) 
 }
 int scene_game_index(unsigned short release, const char *serial) {
     (void) release; (void) serial; return 0;
+}
+int pres_of_room(unsigned int release, const char *serial, unsigned int obj, Presentation *out) {
+    (void) release; (void) serial; (void) obj; (void) out; return 0;
 }
 
 /*----------------------
@@ -56,8 +63,7 @@ static void settle(void) {
 static void arm(void) {
     music_set_backend(rec_play);
     music_set_isplaying(isplaying_true);
-    music_set_game(88, "840726");
-    music_set_mix(MIX_DYNAMIC, 10);
+    music_set_game(1, "151001");
     music_reset();
     music_set_debounce_frames(0);
     g_plays = 0;

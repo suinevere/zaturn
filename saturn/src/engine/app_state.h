@@ -92,13 +92,6 @@ extern int g_music_level;
 // PCM sound-effect volume level, 0..7 (0 = off); persisted in MOJOOPTS.
 extern int g_pcm_level;
 
-// Audio mix mode selected in Options > Sound (MIX_DYNAMIC/OVERRIDE/SEQUENTIAL/
-// RANDOM, from music.h); persisted in MOJOOPTS.
-extern int g_mix_mode;
-
-// Selected/override CD-DA track number; also the title/menu track.
-extern int g_sel_track;
-
 // Current display colors/background/image, applied to VDP2 by display_apply
 // and persisted in MOJOOPTS.
 extern DisplayState g_display;

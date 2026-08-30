@@ -577,7 +577,7 @@ static bool tga_blit_nbg0(const TgaImage *img) {
     bmp.W      = img->W;
     bmp.H      = img->H;
     bmp.Pal    = new SRL::Bitmap::Palette(colors, 256);
-    if (bmp.Pal == nullptr) { delete colors; return false; }
+    if (bmp.Pal == nullptr) { delete[] colors; return false; }
 
     SRL::VDP2::NBG0::LoadBitmap(&bmp);
     return true;
@@ -908,6 +908,37 @@ bool title_bg_show_oneoff(const char *file) {
 }
 
 /*----------------------
+ | title_bg_show_raw
+ | Description: See title.h.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: pixels, clut, w, h, tag -- see title.h
+ | Returns: true on success
+ ----------------------*/
+bool title_bg_show_raw(const unsigned char *pixels, const unsigned short *clut,
+                       int w, int h, const char *tag) {
+    if (pixels == nullptr || clut == nullptr || w <= 0 || h <= 0) return false;
+
+    SRL::Types::HighColor *colors = new SRL::Types::HighColor[256];
+    if (colors == nullptr) return false;
+    for (int i = 0; i < 256; i++) colors[i] = SRL::Types::HighColor(clut[i]);
+
+    RawBitmap bmp;
+    bmp.Pixels = const_cast<uint8_t *>(pixels);
+    bmp.W      = (uint16_t) w;
+    bmp.H      = (uint16_t) h;
+    bmp.Pal    = new SRL::Bitmap::Palette(colors, 256);
+    if (bmp.Pal == nullptr) { delete[] colors; return false; }
+
+    SRL::VDP2::NBG0::LoadBitmap(&bmp);
+    SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
+    nbg0_note_loaded(tag ? tag : "");
+    SRL::VDP2::NBG0::ScrollEnable();
+    return true;
+}
+
+/*----------------------
  | title_bg_hide
  | Description: Hides the title background image by disabling scroll on VDP2 NBG0.
  | Author: suinevere
@@ -918,6 +949,32 @@ bool title_bg_show_oneoff(const char *file) {
  ----------------------*/
 void title_bg_hide(void) {
     SRL::VDP2::NBG0::ScrollDisable();
+}
+
+/*----------------------
+ | g_bg_shift
+ | Description: The wallpaper's current vertical offset in pixels, so the
+ |   per-frame caller costs a comparison rather than a register write.
+ | Author: suinevere
+ ----------------------*/
+static int g_bg_shift = 0;
+
+/*----------------------
+ | title_bg_set_shift
+ | Description: See title.h.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: g_bg_shift
+ | Params: y -- pixels to raise the picture by
+ | Returns: N/A
+ ----------------------*/
+void title_bg_set_shift(int y) {
+    if (y < 0)   y = 0;
+    if (y > 255) y = 255;
+    if (y == g_bg_shift) return;
+    g_bg_shift = y;
+    SRL::Math::Types::Vector2D pos((int16_t) 0, (int16_t) y);
+    SRL::VDP2::NBG0::SetPosition(pos);
 }
 
 /*----------------------
@@ -1278,7 +1335,7 @@ static void title_drain_input(void) {
 int title_and_seed(void) {
     int frames = 0;
     int reset_hold = 0;
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
     title_draw_art();
     menu_sync();
 

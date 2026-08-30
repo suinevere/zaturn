@@ -111,7 +111,7 @@ void menu_set_service(MenuServiceFn fn, void *ctx) {
  | Returns: N/A
  ----------------------*/
 void menu_clear(void) {
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
 }
 
 /*----------------------

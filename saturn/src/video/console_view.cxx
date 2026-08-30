@@ -21,17 +21,20 @@
 #include "game_kb.h"
 #include "input.h"
 #include "dash_view.h"
+#include "menu_layout.h"   // MENU_SCREEN_ROWS, the one place the row count is literal
 
 // ---- rendering -------------------------------------------------------------
 
 /*----------------------
  | SCREEN_ROWS
- | Description: The 28 text rows (0..27) the debug layer provides. The on-screen
- |   keyboard occupies the bottom rows when shown; when hidden (real keyboard in
- |   hand) those rows go back to the console for more text.
+ | Description: The text rows (0..MENU_SCREEN_ROWS-1) the debug layer provides,
+ |   taken from menu_layout.h rather than a second literal so this and the menu
+ |   framework's own screen geometry cannot read different row counts. The
+ |   on-screen keyboard occupies the bottom rows when shown; when hidden (real
+ |   keyboard in hand) those rows go back to the console for more text.
  | Author: suinevere
  ----------------------*/
-static const int SCREEN_ROWS = 28;
+static const int SCREEN_ROWS = MENU_SCREEN_ROWS;
 
 /*----------------------
  | TOP_MARGIN
@@ -92,7 +95,11 @@ bool g_kbd_visible = true;
 /*----------------------
  | image_window_box
  | Description: See console_view.h. Converts text cells to pixels (cells are 8x8,
- |   the display is 320x224) and clamps to the screen.
+ |   the display is 320x240) and clamps to the screen. The bottom clamp is 239,
+ |   not the 223 it was while the display was 224 lines tall: at 223 the last two
+ |   rows of the input strip left NBG0 unsuppressed, which was invisible only
+ |   while the wallpaper sat at scroll position zero and had nothing but its own
+ |   bottom edge down there to show.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
@@ -103,7 +110,7 @@ void image_window_box(int x0, int y0, int w, int h) {
     int x1 = x0 * 8,             y1 = y0 * 8;
     int x2 = (x0 + w) * 8 - 1,   y2 = (y0 + h) * 8 - 1;
     if (x2 > 319) x2 = 319;
-    if (y2 > 223) y2 = 223;
+    if (y2 > 239) y2 = 239;
     if (x1 < 0)   x1 = 0;
     if (y1 < 0)   y1 = 0;
     slScrWindow0((uint16_t) x1, (uint16_t) y1, (uint16_t) x2, (uint16_t) y2);
@@ -185,6 +192,35 @@ int console_height(void) {
        the title screen's online terminal keeps the smaller four-row grid. */
     if (g_in_game) return avail - (1 + CV_STRIP_ROWS + 2);
     return avail - (1 + KB_ROWS);
+}
+
+/*----------------------
+ | console_screen_rows
+ | Description: See console_view.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: SCREEN_ROWS
+ ----------------------*/
+int console_screen_rows(void) {
+    return SCREEN_ROWS;
+}
+
+/*----------------------
+ | console_strip_shift
+ | Description: See console_view.h. The row count is the strip's marble -- the
+ |   two borders and CV_STRIP_ROWS of content -- not the ten rows
+ |   console_height() reserves: the tenth is the input line, which is text over
+ |   the picture rather than something covering it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the offset in pixels
+ ----------------------*/
+int console_strip_shift(void) {
+    return ((CV_STRIP_ROWS + 2) * 8) / 2;
 }
 
 /*----------------------

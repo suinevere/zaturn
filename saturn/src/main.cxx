@@ -39,6 +39,7 @@ extern "C" {
 #include "menu_pages.h"
 #include "save_ui.h"
 #include "title.h"
+#include "room_art.h"
 #include "splash.h"
 #include "game_catalog.h"
 #include "online.h"
@@ -181,6 +182,40 @@ static void on_text_rotate(int cat) {
     if (slot == DISP_IMAGE_NONE || slot == g_display.image) return;
     g_display.image = slot;
     display_apply();
+}
+
+/*----------------------
+ | on_text_room
+ | Description: The authored art's half of a room change, for stories that carry
+ |   a per-room presentation. Unlike on_text_category this fires on every room,
+ |   because every room has its own picture, and it takes that picture
+ |   immediately rather than at the bottom of a fade: within an area the
+ |   archive is already resident, so the change costs a decompress and touches
+ |   no CD.
+ |
+ |   An area change does read the disc, and not under a fade: music_on_turn
+ |   (music.c) calls g_room_fn -- this function -- inside its room_changed
+ |   block, before it arms the debounced pending switch that later drives the
+ |   fade, so room_art_show's read (up to 408.5 KB) happens immediately at full
+ |   volume and the fade only starts once music_tick counts that switch down.
+ |   Whether the read is audible against the CD-DA has not been measured. It is
+ |   not a first-room cost either -- every area change that happens with music
+ |   already playing is also a track change, since only track 0 spans more than
+ |   one area.
+ |
+ |   The room is noted on every turn, not only on the turns that draw one: the
+ |   picture goes up only under the Dynamic palette, and room_art_reshow needs a
+ |   room to redraw for the player who selects Dynamic standing still.
+ | Author: suinevere
+ | Dependencies: room_art.h, options.h
+ | Globals: g_display
+ | Params: obj -- the room's object number
+ | Returns: N/A
+ ----------------------*/
+static void on_text_room(unsigned int obj) {
+    room_art_note_room(obj);
+    if (g_display.palette != DISP_PAL_DYNAMIC) return;
+    room_art_show(obj);
 }
 
 /*----------------------
@@ -342,23 +377,28 @@ static unsigned int boot_entropy(void) {
  |   menu_pages.h, save_ui.h, soft_reset.h, saturn_glue.h, saturn_backup.h,
  |   display.h, console.h, console_view.h, sound.h, music.h, input.h, SRL/GFS/SGL
  | Globals: g_display, g_pad, g_title_jmp, g_title_jmp_armed, g_z3_dir_valid,
- |   g_menu_backing_depth, g_music_level, g_pcm_level, g_mix_mode, g_sel_track,
+ |   g_menu_backing_depth, g_music_level, g_pcm_level,
  |   g_story_filename, g_restore_device, g_restore_slot, g_autocmd,
  |   g_output_start, g_in_game, g_cmd_mode, g_cmd_iface
  | Params: N/A
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
 int main(void) {
-    // 320x224, not SRL's default: every layer this client paints is 224 lines
-    // tall -- 28 text rows of 8, and the wallpaper TGAs are 320x224 -- while the
-    // default is 320x240 on NTSC and 320x256 on PAL. The surplus 16 (or 32) lines
-    // were painted by nothing and showed the back-plane colour as a band under
-    // everything, invisible only for as long as that colour stayed black.
-    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
+    // 320x240, SRL's own NTSC default. The client used to narrow this to 224
+    // because every layer it painted was 224 lines tall and the surplus showed
+    // the back-plane as a band under everything. Zork I's backgrounds are
+    // 320x240 on the original disc, so the surplus now carries picture, and the
+    // text grid grew to meet it rather than leaving a band.
+    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x240);
     // Black in the raster around that 320x224, rather than the back-screen colour
     // VDP2 puts there by default -- which is the player's background colour, and
     // framed the picture with it.
     border_use_black();
+    // The room backgrounds use all 256 CLUT entries, index 0 among them, and
+    // VDP2 would otherwise punch that colour through to the back-plane. The
+    // image window console_view aims at NBG0 is what still punches holes, and
+    // it is unaffected by this.
+    SRL::VDP2::NBG0::TransparentDisable();
     text_map_init();       // before anything prints: draws land in the shadow and
                            // reach VRAM on the vblank the next Synchronize waits for
     dash_init();        // after text_map_init: VDP2 and the font are up, and a
@@ -403,8 +443,9 @@ int main(void) {
     // the cache is empty and this costs nothing, and the sequence below is meant
     // not to know which boot it is.
     title_bg_cache_release();
+    room_art_release();
 
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
 
     // No game is selected at the title, so g_display's own Dynamic resolution
     // (display_dynamic_slot) correctly has nothing to show -- the menu behind the
@@ -434,7 +475,6 @@ int main(void) {
     music_set_duckfns(music_cdda_duck, music_cdda_unduck);
 
     music_set_level(g_music_level);
-    music_set_mix(g_mix_mode, g_sel_track);
     // Down to the floor BEFORE the track is issued, or its first frames play at
     // whatever the player's saved level is and the ramp starts from full. Floor 1
     // and never 0: music_set_volume(0) calls StopPause() with no way back up (see
@@ -454,6 +494,7 @@ int main(void) {
     // neither is meant to repaint the title out from under itself.
     music_set_category_fn(on_text_category);
     music_set_rotate_fn(on_text_rotate);
+    music_set_room_fn(on_text_room);
     music_set_fade_fn(on_music_fade);
     music_set_fade_frames(MUSIC_FADE_FRAMES);
     menu_intro_fade_arm();        // ...then hold it black across the swap so the
@@ -622,9 +663,14 @@ int main(void) {
     {
         music_set_level(g_music_level);
         music_set_game(game_release, game_serial);
+        room_art_set_game(game_release, game_serial);
+        // After display_set_game above, which clears the flag: authored art lives
+        // outside GAME_SCENE, so without this the Dynamic palette entry is skipped
+        // and the room-art path, which only runs under Dynamic, never draws.
+        display_set_authored(room_art_available());
+        if (room_art_available()) title_bg_cache_release();
         music_seed((unsigned int) seed);
         music_reset();
-        music_set_mix(g_mix_mode, g_sel_track);
         // Floored before the track is issued, exactly as the title screen does it,
         // so the opening frames play at 1 and game_intro_reveal has somewhere to
         // ramp up from. Never 0: music_set_volume(0) stops the drive.
@@ -655,7 +701,7 @@ int main(void) {
     if (g_intro_reveal) { g_intro_reveal = 0; menu_fade_clear(); }
 
     render_console();
-    text_print(1, 27, "(press any key/button for the title screen)");
+    text_print(1, console_screen_rows() - 1, "(press any key/button for the title screen)");
     menu_wait();
     soft_reset_to_title();
     return 0;

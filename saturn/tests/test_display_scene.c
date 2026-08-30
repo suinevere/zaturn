@@ -41,6 +41,53 @@ int main(void) {
     display_set_game(-1);
     check(display_scene_image(SC_FOREST) == 0, "no game selected yields no image");
 
+    /* A game whose art is authored per room carries none in GAME_SCENE, so every
+       Dynamic gate has to ask display_has_art rather than display_image_count --
+       otherwise Dynamic is skipped in the palette row, cannot be selected, and the
+       room-art path, which only runs under Dynamic, never draws at all. */
+    {
+        int zork1 = scene_game_index(88, "840726");
+        DisplayState d;
+
+        display_set_game(zork1);
+        display_set_authored(0);
+        check(display_image_count() == 0, "Zork I carries no scene pictures");
+        check(display_has_art() == 0, "...so without authored art it has none");
+
+        /* The symptom this guards: cycling the palette row skips Dynamic when the
+           game has no art, so with authored art unaccounted for it can never be
+           landed on, and the room-art path never runs. Walk the whole row. */
+        {
+            int i, seen = 0;
+            d.palette = DISP_PAL_DYNAMIC + 1;
+            for (i = 0; i < display_palette_count() + 1; i++) {
+                display_cycle_palette(&d, 1);
+                if (d.palette == DISP_PAL_DYNAMIC) seen = 1;
+            }
+            check(seen == 0, "without art, cycling never lands on Dynamic");
+        }
+
+        display_set_authored(1);
+        check(display_has_art() != 0, "authored art counts as art");
+        display_defaults(&d);
+        check(d.palette == DISP_PAL_DYNAMIC, "and makes Dynamic the default");
+
+        {
+            int i, seen = 0;
+            d.palette = DISP_PAL_DYNAMIC + 1;
+            for (i = 0; i < display_palette_count() + 1; i++) {
+                display_cycle_palette(&d, 1);
+                if (d.palette == DISP_PAL_DYNAMIC) seen = 1;
+            }
+            check(seen != 0, "with authored art, cycling reaches Dynamic");
+        }
+
+        display_set_game(-1);
+        check(display_has_art() == 0, "selecting another game clears the flag");
+        display_set_game(zork1);
+        check(display_has_art() == 0, "...and reselecting does not resurrect it");
+    }
+
     printf(fails ? "%d FAILED\n" : "all passed\n", fails);
     return fails ? 1 : 0;
 }

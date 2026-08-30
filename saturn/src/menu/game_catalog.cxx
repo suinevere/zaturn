@@ -427,6 +427,13 @@ const char* game_select(void) {
 
     if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);   // mode-select -> black
 
+    // The category row and one game row PER category, so stepping back out of a
+    // game list lands on the category it came from and re-entering that
+    // category lands on the game -- one shared game row would hand the cursor
+    // from one category's list to another's, where its index means nothing.
+    static int cat_sel = 0;
+    static int game_sel[GAME_CAT_COUNT] = { 0 };
+
     for (;;) {
         int catmap[GAME_CAT_COUNT], ncat = 0;
         for (int c = 0; c < GAME_CAT_COUNT; c++) {
@@ -439,7 +446,7 @@ const char* game_select(void) {
             cs = 0;   // only one category: skip the picker, screen stays black-held
         } else {
             g_menu_intro_fade = g_menu_page_fade;   // category list fades in from black
-            cs = menu_select("Choose a category:", items, ncat);
+            cs = menu_select_at("Choose a category:", items, ncat, &cat_sel);
             if (cs < 0) { if (g_menu_page_fade) menu_fade_out(g_menu_page_fade); return nullptr; }
             if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);   // -> black before the game list
         }
@@ -458,7 +465,7 @@ const char* game_select(void) {
         }
         for (int i = 0; i < ng; i++) items[i] = labels[gmap[i]];
         g_menu_intro_fade = g_menu_page_fade;   // game list fades in from black
-        int gs = menu_select(CAT_NAMES[catmap[cs]], items, ng);
+        int gs = menu_select_at(CAT_NAMES[catmap[cs]], items, ng, &game_sel[catmap[cs]]);
         if (gs < 0) {
             if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);   // game list -> black
             if (ncat == 1) return nullptr;   // nothing above it: back to the mode menu

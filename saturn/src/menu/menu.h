@@ -250,6 +250,25 @@ void menu_message(const char *title, const char *line1, const char *line2);
 int menu_select(const char *title, const char *const *items, int count);
 
 /*----------------------
+ | menu_select_at
+ | Description: menu_select that opens on a remembered row instead of the top,
+ |   and writes the row back on both exits. Callers keep the variable across
+ |   calls (a function static), so backing out of a list and re-opening it
+ |   resumes where the cursor was rather than resetting -- the thing a list
+ |   nested under another list otherwise loses every time the player steps
+ |   back up. Out-of-range values (a list that shrank since the last visit)
+ |   fall back to the top rather than being clamped to the end, since the
+ |   remembered row no longer means anything once the list has changed shape.
+ |   menu_select is this with a throwaway zero.
+ | Author: suinevere
+ | Dependencies: as menu_select
+ | Globals: g_pad, g_kbd_visible
+ | Params: title, items, count -- as menu_select; sel -- in/out remembered row
+ | Returns: the chosen item's 0-based index, or -1 if cancelled
+ ----------------------*/
+int menu_select_at(const char *title, const char *const *items, int count, int *sel);
+
+/*----------------------
  | menu_confirm
  | Description: Modal Yes/No confirmation box showing `line1` and an optional
  |   `line2`. Accepts C/A/Start/Enter/Y as yes and B/N/Esc/Backspace as no.

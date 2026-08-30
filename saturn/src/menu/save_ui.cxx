@@ -78,7 +78,8 @@ int choose_device(const char *title) {
         dev_items[ndev] = "Cartridge"; dev_ids[ndev] = SATURN_BUP_CARTRIDGE; ndev++;
     }
     g_menu_intro_fade = g_menu_page_fade;   // fades in from black in the title-menu Load flow; no-op in-game
-    int d = menu_select(title, dev_items, ndev);
+    static int dev_sel = 0;   // held across visits, like every other list
+    int d = menu_select_at(title, dev_items, ndev, &dev_sel);
     return (d < 0) ? -1 : dev_ids[d];
 }
 
@@ -130,7 +131,8 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
         if (!saturn_bup_info(device, fn, slotname[i])) slotname[i][0] = '\0';
     }
 
-    int sel = 0;
+    static int last_sel = 0;   // held across visits; SAVE_SLOTS never changes
+    int sel = last_sel;
     int editing = 0;
     KeyboardState k;
     keyboard_reset(&k);
@@ -153,6 +155,7 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 if (g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START)) pick = true;
                 if (g_pad->WasPressed(Button::B)) cancel = true;
             }
+            last_sel = sel;   // after every move, so no exit path has to remember to
             if (cancel) return 0;
             if (pick) {
                 keyboard_reset(&k);
@@ -318,9 +321,10 @@ int choose_dest(const char *title_dev, const char *title_slot,
        one drops the interpreter into a black screen, so a pick on one is refused
        and the list re-opens rather than returned. Only the first open fades in
        from black; the refusal re-opens at the brightness it left. */
+    static int restore_sel = 0;   // held across visits; SAVE_SLOTS never changes
     g_menu_intro_fade = g_menu_page_fade;
     for (;;) {
-        int slot = menu_select(title_slot, slot_items, SAVE_SLOTS);
+        int slot = menu_select_at(title_slot, slot_items, SAVE_SLOTS, &restore_sel);
         if (slot < 0) { if (g_menu_page_fade) menu_fade_out(g_menu_page_fade); return 0; }
         if (used[slot]) {
             if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);   // slot list -> black

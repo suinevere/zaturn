@@ -474,8 +474,13 @@ int main(void) {
     // through the CD load into the instant reveal below.
     g_menu_page_fade = QUICK_FADE_FRAMES;
 
+    // Held across the loop so every `continue` below -- Options, Credits,
+    // Online, a cancelled game or save pick -- comes back to the row the player
+    // left on rather than to Single Player.
+    static int mode_sel = 0;
+
     for (;;) {
-        int mode = menu_select("Z-ATURN", modes, 5);
+        int mode = menu_select_at("Z-ATURN", modes, 5, &mode_sel);
         if (mode < 0) continue;
         if (mode == 3) {
             menu_fade_out(QUICK_FADE_FRAMES);      // mode-select dims to black

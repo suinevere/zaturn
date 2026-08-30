@@ -431,10 +431,17 @@ static bool controls_page(void) {
     for (int a = 0; a < FA_N; a++) s_face[a]  = g_face_btn[a];
     for (int a = 0; a < CA_N; a++) s_chord[a] = g_chord_slot[a];
     const int R_IFACE = 0;
-    int sel = 0;
+    // Held across visits so returning from Options lands on the row the player
+    // was configuring. Clamped rather than trusted, because the row count moves
+    // with the interface: a Command Panel view lists one more binding than a
+    // keyboard one, and switching interface between visits would otherwise
+    // leave the cursor past the end, where none of the sel == v.r_* tests match.
+    static int last_sel = 0;
+    int sel = last_sel;
     bool switched = false;
     for (;;) {
         CtlView v = ctl_view();
+        if (sel < 0 || sel >= v.nrows) sel = 0;
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         if (g_kbd_visible != started_kbd) { switched = true; break; }
@@ -459,6 +466,7 @@ static bool controls_page(void) {
         if (down) sel = (sel + 1) % v.nrows;
         int drow = 0;
         if (menu_digit_row(ke, v.nassign, drow, left, right)) { sel = drow + 1; act = true; }
+        last_sel = sel;   // after every move, so no exit path has to remember to
         if (sel == v.r_done)  { if (act) { options_save(); break; } }
         else if (sel == v.r_cancel) { if (act) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
@@ -573,7 +581,8 @@ bool keyboard_controls_page(void) {
     int s_ins = keyboard_get_insert(), s_caps = keyboard_get_caps(),
         s_num = keyboard_get_num(), s_scrl = keyboard_get_scrolllock();
     const int N = 6;
-    int sel = 0;
+    static int last_sel = 0;   // held across visits; the six rows never change
+    int sel = last_sel;
     bool switched = false;
     for (;;) {
         SaturnKeyEvent ke = saturn_keyboard_poll();
@@ -595,6 +604,7 @@ bool keyboard_controls_page(void) {
         }
         if (done) { options_save(); break; }
         if (menu_digit_row(ke, N, sel, left, right)) act = true;
+        last_sel = sel;   // after every move, so no exit path has to remember to
         bool toggle = left || right || act;
         if      (sel == 0 && toggle) keyboard_set_insert(!keyboard_get_insert());
         else if (sel == 1 && toggle) keyboard_set_caps(!keyboard_get_caps());
@@ -696,7 +706,12 @@ void sound_options_page(void) {
     rows[nrows++] = SR_OK;
     rows[nrows++] = SR_CANCEL;
 
+    // Remembered as a row ID, not an index: the Mix/Track/Music rows are only
+    // listed when there is CD audio and PCM only when there is a sound blob, so
+    // the same index names a different row on a different disc.
+    static int last_row = SR_MIX;
     int sel = 0;
+    for (int i = 0; i < nrows; i++) if (rows[i] == last_row) { sel = i; break; }
     int s_mix = g_mix_mode, s_trk = g_sel_track, s_mus = g_music_level, s_pcm = g_pcm_level;
     bool previewed = false;
     // Open the Track row on whatever is actually sounding, falling back to the saved
@@ -738,6 +753,7 @@ void sound_options_page(void) {
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
         int row = rows[sel];
+        last_row = row;   // every frame, so no exit path has to remember to
 
         if (cancel || (ok && row == SR_CANCEL)) {
             g_mix_mode = s_mix; g_sel_track = s_trk; g_music_level = s_mus; g_pcm_level = s_pcm;
@@ -892,6 +908,12 @@ static void display_options_page(void) {
     int rows[6];
     int nrows = 0;
 
+    // Remembered as a row ID, not an index: the Dimming row comes and goes with
+    // the Palette row above it, so the same index names a different row
+    // depending on the palette the page was left under. Resolved on the first
+    // pass rather than here, because rows[] is not built until inside the loop.
+    static int last_row = DR_PALETTE;
+    int resume = last_row;
     int sel = 0;
     display_pin_dynamic_slot(display_image_slot(title_bg_loaded_file()));
     if (g_display.palette == DISP_PAL_DYNAMIC) g_display.image = display_dynamic_slot();
@@ -912,6 +934,10 @@ static void display_options_page(void) {
         if (g_display.palette == DISP_PAL_DYNAMIC) rows[nrows++] = DR_DIM;
         rows[nrows++] = DR_OK;
         rows[nrows++] = DR_CANCEL;
+        if (resume >= 0) {
+            for (int i = 0; i < nrows; i++) if (rows[i] == resume) { sel = i; break; }
+            resume = -1;
+        }
         if (sel >= nrows) sel = nrows - 1;
 
         check_soft_reset();
@@ -928,6 +954,7 @@ static void display_options_page(void) {
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
         int row = rows[sel];
+        last_row = row;   // every frame, so no exit path has to remember to
 
         if (cancel || (ok && row == DR_CANCEL)) {
             g_display = snapshot;
@@ -1279,7 +1306,8 @@ static void gameplay_page(void) {
                                           "Full text every visit" };
     enum { GR_DIFF, GR_VERB, GR_OK, GR_CANCEL };
     const int nrows = 4;
-    int sel = 0;
+    static int last_sel = 0;   // held across visits; the four rows never change
+    int sel = last_sel;
     int diff  = g_difficulty;
     int verb  = g_verbosity;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
@@ -1298,6 +1326,7 @@ static void gameplay_page(void) {
         bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+        last_sel = sel;   // every frame, so no exit path has to remember to
 
         if (cancel || (ok && sel == GR_CANCEL)) break;
         if (commit || (ok && sel == GR_OK)) {
@@ -1453,7 +1482,12 @@ int options_menu(void) {
     int x0, y0, w, h;
     menu_box_fit("OPTIONS", 18, nitems + 2, &x0, &y0, &w, &h);
 
+    // Remembered as an item ID, not an index: Resume/Save/Load only appear
+    // in-game and Sound only with audio present, so the same index names a
+    // different row from the title screen than it does from a paused game.
+    static int last_item = -1;
     int sel = 0;
+    for (int i = 0; i < nitems; i++) if (items[i] == last_item) { sel = i; break; }
     int result = OM_NONE;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
@@ -1467,6 +1501,7 @@ int options_menu(void) {
         bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
         bool digit = menu_digit_row(ke, nitems, sel, left, right);
         int item = items[sel];
+        last_item = item;   // every frame, so no exit path has to remember to
         bool act = digit
                  || g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                  || ke.kind == SATURN_KEY_ENTER;

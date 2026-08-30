@@ -678,15 +678,18 @@ static const char MENU_SELECT_HINT_KBD[] = "Enter=Ok   Esc=Back";
  |   soft_reset.h, SRL
  | Globals: g_pad, g_kbd_visible
  | Params: title -- box title; items -- array of item strings; count -- number
- |   of items
+ |   of items; sel_io -- in/out remembered row (see menu_select_at)
  | Returns: the chosen item's 0-based index, or -1 if cancelled
  ----------------------*/
-int menu_select(const char *title, const char *const *items, int count) {
+int menu_select_at(const char *title, const char *const *items, int count, int *sel_io) {
     const int VIS = 16;         // max list rows shown at once; longer lists scroll
     MenuBacking backing;        // opaque while the list is up; restored on exit
     int intro = g_menu_intro_fade;  // one-shot: fade this first frame up from black
     g_menu_intro_fade = 0;
-    int sel = 0;
+    // Out of range means the list changed shape since the last visit, so the
+    // remembered row no longer names the same thing: start over rather than
+    // clamp to whatever now sits at that index.
+    int sel = (sel_io && *sel_io > 0 && *sel_io < count) ? *sel_io : 0;
     int top = 0;                // index of the first visible row
     int i;
 
@@ -725,8 +728,10 @@ int menu_select(const char *title, const char *const *items, int count) {
         }
         else if (ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + count) % count;
         else if (ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % count;
-        if (cancel) return -1;
-        if (pick)   return sel;
+        if (cancel || pick) {
+            if (sel_io) *sel_io = sel;
+            return cancel ? -1 : sel;
+        }
 
         // scroll the window so the selection stays visible
         if (sel < top)             top = sel;
@@ -758,6 +763,22 @@ int menu_select(const char *title, const char *const *items, int count) {
         menu_sync();
         if (intro) { menu_fade_in(intro); intro = 0; }
     }
+}
+
+/*----------------------
+ | menu_select
+ | Description: menu_select_at opened at the top and remembering nothing, for
+ |   the callers whose list is built fresh each time and has no place to
+ |   return to.
+ | Author: suinevere
+ | Dependencies: menu_select_at
+ | Globals: N/A
+ | Params: title, items, count -- as menu_select_at
+ | Returns: the chosen item's 0-based index, or -1 if cancelled
+ ----------------------*/
+int menu_select(const char *title, const char *const *items, int count) {
+    int sel = 0;
+    return menu_select_at(title, items, count, &sel);
 }
 
 /*----------------------

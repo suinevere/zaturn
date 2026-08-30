@@ -437,10 +437,17 @@ static bool controls_page(void) {
     for (int a = 0; a < FA_N; a++) s_face[a]  = g_face_btn[a];
     for (int a = 0; a < CA_N; a++) s_chord[a] = g_chord_slot[a];
     const int R_IFACE = 0;
-    int sel = 0;
+    // Held across visits so returning from Options lands on the row the player
+    // was configuring. Clamped rather than trusted, because the row count moves
+    // with the interface: a Command Panel view lists one more binding than a
+    // keyboard one, and switching interface between visits would otherwise
+    // leave the cursor past the end, where none of the sel == v.r_* tests match.
+    static int last_sel = 0;
+    int sel = last_sel;
     bool switched = false;
     for (;;) {
         CtlView v = ctl_view();
+        if (sel < 0 || sel >= v.nrows) sel = 0;
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         if (g_kbd_visible != started_kbd) { switched = true; break; }
@@ -465,6 +472,7 @@ static bool controls_page(void) {
         if (down) sel = (sel + 1) % v.nrows;
         int drow = 0;
         if (menu_digit_row(ke, v.nassign, drow, left, right)) { sel = drow + 1; act = true; }
+        last_sel = sel;   // after every move, so no exit path has to remember to
         if (sel == v.r_done)  { if (act) { options_save(); break; } }
         else if (sel == v.r_cancel) { if (act) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
@@ -578,7 +586,8 @@ static bool keyboard_controls_page(void) {
     int s_ins = keyboard_get_insert(), s_caps = keyboard_get_caps(),
         s_num = keyboard_get_num(), s_scrl = keyboard_get_scrolllock();
     const int N = 6;
-    int sel = 0;
+    static int last_sel = 0;   // held across visits; the six rows never change
+    int sel = last_sel;
     bool switched = false;
     for (;;) {
         SaturnKeyEvent ke = saturn_keyboard_poll();
@@ -600,6 +609,7 @@ static bool keyboard_controls_page(void) {
         }
         if (done) { options_save(); break; }
         if (menu_digit_row(ke, N, sel, left, right)) act = true;
+        last_sel = sel;   // after every move, so no exit path has to remember to
         bool toggle = left || right || act;
         if      (sel == 0 && toggle) keyboard_set_insert(!keyboard_get_insert());
         else if (sel == 1 && toggle) keyboard_set_caps(!keyboard_get_caps());
@@ -690,7 +700,8 @@ static void display_options_page(void) {
     static const int NROWS = 5;
     int rows[NROWS];
 
-    int sel = 0;
+    static int last_sel = 0;   // held across visits; the five rows never change
+    int sel = last_sel;
     DisplayState snapshot = g_display;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
@@ -716,6 +727,7 @@ static void display_options_page(void) {
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
         int row = rows[sel];
+        last_sel = sel;   // every frame, so no exit path has to remember to
 
         if (cancel || (ok && row == DR_CANCEL)) {
             g_display = snapshot;
@@ -804,7 +816,8 @@ static void gameplay_page(void) {
                                           "Full text every visit" };
     enum { GR_DIFF, GR_VERB, GR_OK, GR_CANCEL };
     const int nrows = 4;
-    int sel = 0;
+    static int last_sel = 0;   // held across visits; the four rows never change
+    int sel = last_sel;
     int diff  = g_difficulty;
     int verb  = g_verbosity;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
@@ -823,6 +836,7 @@ static void gameplay_page(void) {
         bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+        last_sel = sel;   // every frame, so no exit path has to remember to
 
         if (cancel || (ok && sel == GR_CANCEL)) break;
         if (commit || (ok && sel == GR_OK)) {
@@ -891,7 +905,8 @@ void netbin_pause_menu(void) {
     int x0, y0, w, h;
     menu_box_fit("PAUSED", 18, PI_N + 2, &x0, &y0, &w, &h);
 
-    int sel = 0;
+    static int last_sel = 0;   // held across visits; the five rows never change
+    int sel = last_sel;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
@@ -907,6 +922,7 @@ void netbin_pause_menu(void) {
                  || ke.kind == SATURN_KEY_ENTER;
         bool back = g_pad->WasPressed(Button::B) || g_pad->WasPressed(Button::START)
                   || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE;
+        last_sel = sel;   // every frame, so no exit path has to remember to
         if (back) break;
         if (act) {
             if (sel == PI_RESUME) break;   // exactly what backing out does

@@ -507,6 +507,82 @@ void menu_frame(int x0, int y0, int w, int h, const char *title) {
 }
 
 /*----------------------
+ | menu_pad
+ | Description: Right-pads `s` to `w` columns into one of four rotating scratch
+ |   buffers, so a single menu_rowf call can pad more than one field. Four is
+ |   the most any row in this project pads at once; the ring, rather than one
+ |   buffer, is what makes that legal.
+ | Author: suinevere
+ | Dependencies: menu_layout.h (MENU_SCREEN_COLS)
+ | Globals: N/A
+ | Params: s -- the text; w -- column width
+ | Returns: the padded copy, valid until the ring wraps
+ ----------------------*/
+const char *menu_pad(const char *s, int w) {
+    static char ring[4][MENU_SCREEN_COLS + 1];
+    static int  next = 0;
+    char *b = ring[next];
+    next = (next + 1) & 3;
+    int n = 0;
+    while (s[n] && n < MENU_SCREEN_COLS) { b[n] = s[n]; n++; }
+    while (n < w && n < MENU_SCREEN_COLS) b[n++] = ' ';
+    b[n] = 0;
+    return b;
+}
+
+/*----------------------
+ | menu_num
+ | Description: The three-column row-number prefix, or three spaces when the
+ |   digits are hidden or the row is past the tenth. Two rotating buffers, like
+ |   menu_pad's four, so a row that numbers two fields does not read one
+ |   prefix twice.
+ | Author: suinevere
+ | Dependencies: menu_layout.h (menu_row_digit_char)
+ | Globals: N/A
+ | Params: nums -- nonzero when digit shortcuts are shown; row -- 0-based row
+ | Returns: a three-column prefix
+ ----------------------*/
+const char *menu_num(int nums, int row) {
+    static char ring[2][4];
+    static int  next = 0;
+    char *b = ring[next];
+    next ^= 1;
+    char d = nums ? menu_row_digit_char(row) : 0;
+    b[0] = d ? d : ' ';
+    b[1] = d ? ')' : ' ';
+    b[2] = ' ';
+    b[3] = 0;
+    return b;
+}
+
+/*----------------------
+ | menu_row
+ | Description: Right-pads a composed row to `pad` columns, centers it inside
+ |   the box interior and draws it, in reverse video when it is the selected
+ |   one. The centering matches menu_frame's title so a row and the title above
+ |   it share an axis; the padding is what gives a whole list one left edge
+ |   (see menu.h); and the left clamp keeps a row wider than its box off the
+ |   border rather than letting a negative offset walk it outside.
+ | Author: suinevere
+ | Dependencies: text_map.h, menu_layout.h (MENU_SCREEN_COLS)
+ | Globals: N/A
+ | Params: x0 -- box left column; w -- box width; y -- row; sel -- nonzero to
+ |   highlight; pad -- width to pad to, or 0; text -- the composed row
+ | Returns: N/A
+ ----------------------*/
+void menu_row(int x0, int w, int y, int sel, int pad, const char *text) {
+    char buf[MENU_SCREEN_COLS + 1];
+    int len = 0;
+    while (text[len] && len < MENU_SCREEN_COLS) { buf[len] = text[len]; len++; }
+    while (len < pad && len < MENU_SCREEN_COLS) buf[len++] = ' ';
+    buf[len] = 0;
+    int x = x0 + 2 + ((w - 4) - len) / 2;
+    if (x < x0 + 1) x = x0 + 1;
+    if (sel) text_print_hl(x, y, buf);
+    else     text_print_str(x, y, buf);
+}
+
+/*----------------------
  | menu_wait
  | Description: Drops the current frame's edge with one menu_sync, then polls
  |   both the gamepad face/start buttons and the keyboard every frame until one
@@ -565,8 +641,8 @@ void menu_message(const char *title, const char *line1, const char *line2) {
 
     menu_clear();
     menu_frame(x0, y0, w, h, title);
-    if (l1) text_print(x0 + 2, y0 + 3, "%s", line1);
-    if (l2) text_print(x0 + 2, y0 + 5, "%s", line2);
+    if (l1) menu_row(x0, w, y0 + 3, 0, 0, line1);
+    if (l2) menu_row(x0, w, y0 + 5, 0, 0, line2);
 }
 
 /*----------------------
@@ -582,12 +658,14 @@ static const char MENU_SELECT_HINT_KBD[] = "Enter=Ok   Esc=Back";
 
 /*----------------------
  | menu_select
- | Description: Sizes a box (menu_box_fit) to the longest item plus the "> "
- |   cursor and the reserved digit columns (MENU_DIGIT_COLS, added
- |   unconditionally so the box does not resize when the player switches
- |   between the pad and a keyboard mid-menu), also budgeting the wider of the
- |   two MENU_SELECT_HINT_* variants since the hint line shares the box's
- |   width. Height is the visible slice (up to 16 rows) plus the two scroll
+ | Description: Sizes a box (menu_box_fit) to the longest item plus the
+ |   reserved digit columns (MENU_DIGIT_COLS, added unconditionally so the box
+ |   does not resize when the player switches between the pad and a keyboard
+ |   mid-menu), also budgeting the wider of the two MENU_SELECT_HINT_*
+ |   variants since the hint line shares the box's width. Rows draw through
+ |   menu_row, so they sit centered and the selected one is drawn in reverse
+ |   video rather than carrying a '>' in a column every other row wastes.
+ |   Height is the visible slice (up to 16 rows) plus the two scroll
  |   markers, a blank row, and the hint -- the markers keep their rows whether
  |   or not they are drawn, so the box does not jump as the list scrolls. Each
  |   loop iteration polls the soft-reset chord, then D-pad/A/C/Start/B on the
@@ -612,13 +690,13 @@ int menu_select(const char *title, const char *const *items, int count) {
     int top = 0;                // index of the first visible row
     int i;
 
-    int content_w = 0;
+    int item_w = 0;
     for (i = 0; i < count; i++) {
         int len = 0;
         while (items[i][len]) len++;
-        if (len > content_w) content_w = len;
+        if (len > item_w) item_w = len;
     }
-    content_w += 2 + MENU_DIGIT_COLS;
+    int content_w = item_w + MENU_DIGIT_COLS;
 
     int hint_w = (int) sizeof(MENU_SELECT_HINT_PAD) - 1;
     int hint_kbd_w = (int) sizeof(MENU_SELECT_HINT_KBD) - 1;
@@ -659,18 +737,23 @@ int menu_select(const char *title, const char *const *items, int count) {
 
         menu_clear();
         menu_frame(x0, y0, w, h, title);
-        int cx = x0 + 2, cy = y0 + 3;
-        text_print(cx, cy, "%s", top > 0 ? "^ more" : "      ");
+        // One pad width for the whole list, so every row shares a left edge and
+        // the highlight is a bar of one width; the tenth visible row and beyond
+        // spend the digit columns on spaces, since digits only reach nine.
+        int pad = item_w + (nums ? MENU_DIGIT_COLS : 0);
+        int cy = y0 + 3;
+        if (top > 0) menu_row(x0, w, cy, 0, 0, "^ more");
         for (i = top; i < last; i++) {
-            char mark = (i == sel) ? '>' : ' ';
-            int  vis  = i - top;      // 0-based row within the window
+            int vis = i - top;        // 0-based row within the window
             if (nums && vis < 9)
-                text_print(cx, cy + 1 + vis, "%c %d) %s", mark, vis + 1, items[i]);
+                menu_rowf(x0, w, cy + 1 + vis, i == sel, pad, "%d) %s", vis + 1, items[i]);
+            else if (nums)
+                menu_rowf(x0, w, cy + 1 + vis, i == sel, pad, "   %s", items[i]);
             else
-                text_print(cx, cy + 1 + vis, "%c    %s", mark, items[i]);
+                menu_row(x0, w, cy + 1 + vis, i == sel, pad, items[i]);
         }
-        text_print(cx, cy + 1 + (last - top), "%s", last < count ? "v more" : "      ");
-        text_print(cx, cy + 3 + (last - top), "%s",
+        if (last < count) menu_row(x0, w, cy + 1 + (last - top), 0, 0, "v more");
+        menu_row(x0, w, cy + 3 + (last - top), 0, 0,
             hint(MENU_SELECT_HINT_PAD, MENU_SELECT_HINT_KBD));
         menu_sync();
         if (intro) { menu_fade_in(intro); intro = 0; }
@@ -725,12 +808,12 @@ bool menu_confirm(const char *line1, const char *line2) {
 
         menu_clear();
         menu_frame(x0, y0, w, h, "CONFIRM");
-        int cx = x0 + 2, cy = y0 + 3;
-        if (l1) text_print(cx, cy, "%s", line1);
-        if (l2) text_print(cx, cy + 1, "%s", line2);
+        int cy = y0 + 3;
+        if (l1) menu_row(x0, w, cy, 0, 0, line1);
+        if (l2) menu_row(x0, w, cy + 1, 0, 0, line2);
         int hy = cy + (l2 > 0 ? 3 : 2);
-        if (!g_kbd_visible) text_print(cx, hy, "1) Yes    2) No");
-        text_print(cx, hy + 1, "%s",
+        if (!g_kbd_visible) menu_row(x0, w, hy, 0, 0, "1) Yes    2) No");
+        menu_row(x0, w, hy + 1, 0, 0,
             hint("A / C = Yes     B = No", "Enter = Yes     Esc = No"));
         menu_sync();
     }

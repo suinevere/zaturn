@@ -108,9 +108,9 @@ Button face_button(int action) {
 /*----------------------
  | face_btn_name
  | Description: Indexes a fixed name table by the currently-mapped button number
- |   for face-action `action`. text_print has no width flags, so callers
- |   align columns by printing the returned value at a fixed x rather than
- |   padding here.
+ |   for face-action `action`. Returned unpadded: the Controls page aligns its
+ |   value column by padding the LABEL field beside it (menu_pad), so a value
+ |   padded here would only add trailing space inside the highlight.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn

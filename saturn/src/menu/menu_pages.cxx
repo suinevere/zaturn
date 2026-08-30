@@ -128,6 +128,7 @@ static bool menu_digit_row(const SaturnKeyEvent &ke, int nrows,
  ----------------------*/
 static void network_page(void) {
     MenuBacking backing;
+    const int NET_ROW_W = 6;   // "Cancel", the wider of the page's two rows
     KeyboardState k; keyboard_reset(&k);
     for (int i = 0; g_dialnum[i] && k.input_len < DIALNUM_MAX; i++) keyboard_type_char(&k, g_dialnum[i]);
     const char *err = "";
@@ -181,11 +182,15 @@ static void network_page(void) {
         int fx, fy, fw, fh;
         /* Taller with the numpad up (gamepad), shrinking to the line and the two
            rows once a real keyboard hides it. */
-        menu_box_fit("NETWORK", 24, g_kbd_visible ? 15 : 10, &fx, &fy, &fw, &fh);
+        menu_box_fit("NETWORK", 24, g_kbd_visible ? 13 : 8, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "NETWORK");
-        int x = fx + 2, y = fy + 4;
-        text_print(x, y++, "Server dial number:");
-        text_print(x, y++, "> %s_", k.input);
+        int y = fy + 4;
+        menu_row(fx, fw, y++, 0, 0, "Server dial number:");
+        // The ROW is padded to the field's full length, not the text: the row
+        // width has to hold still or the centred line creeps sideways by half a
+        // column with every digit typed, while the caret has to stay against
+        // the last digit rather than out at the end of the field.
+        menu_rowf(fx, fw, y++, 0, DIALNUM_MAX + 1, "%s_", k.input);
         y++;
         if (g_kbd_visible) {
             int npx = fx + 2 + ((fw - 4) - (NP_COLS * 2 - 1)) / 2;   // centre the pad
@@ -202,13 +207,9 @@ static void network_page(void) {
             }
             y++;
         }
-        text_print(x, y++, "%c Ok",     arow == 0 ? '>' : ' ');
-        text_print(x, y++, "%c Cancel", arow == 1 ? '>' : ' ');
-        if (err[0]) text_print(x, y, "%s", err);
-        y++;
-        y++;
-        text_print(x, y, "%s",
-            hint("A/Start=Ok C=type B=del", "type number  Enter/Esc=Ok"));
+        menu_row(fx, fw, y++, arow == 0, NET_ROW_W, "Ok");
+        menu_row(fx, fw, y++, arow == 1, NET_ROW_W, "Cancel");
+        if (err[0]) menu_row(fx, fw, y, 0, 0, err);
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -413,6 +414,14 @@ static CtlView ctl_view(void) {
  ----------------------*/
 static bool controls_page(void) {
     MenuBacking backing;
+    // One bar width for every selectable row, and one label field inside the
+    // assignment block, so the centred rows keep a single left edge and a
+    // single value column. CTL_ROW_W is the box's content width; CTL_IFACE_W is
+    // the wider of INAMES, so the Interface slider's arrows do not move when
+    // its value does.
+    const int CTL_ROW_W   = 36;
+    const int CTL_LABEL_W = 20;
+    const int CTL_IFACE_W = 13;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
@@ -480,19 +489,18 @@ static bool controls_page(void) {
         v = ctl_view();
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", 36, CTL_BLOCK_ROWS + 11, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", CTL_ROW_W, CTL_BLOCK_ROWS + 9, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
         /* One row higher than every other page's content start, so the Interface
            row and its description line together end where a single row would
            have: the swapped block below opens on the same line either way. */
-        int x = fx + 2, y = fy + 3;
+        int y = fy + 3;
         bool nums = !g_kbd_visible;
-        const int vx = x + 20 + MENU_DIGIT_COLS;
-        const int lx = x + 2 + MENU_DIGIT_COLS;
-        text_print(x, y++, "%c    Interface:  %s %s %s", sel == R_IFACE ? '>' : ' ',
-                           g_cmd_iface > IFACE_KEYBOARD ? "<" : " ", INAMES[g_cmd_iface],
-                           g_cmd_iface < IFACE_PANEL ? ">" : " ");
-        text_print(x + 4, y++, "%s", IDESC[g_cmd_iface]);
+        menu_rowf(fx, fw, y++, sel == R_IFACE, CTL_ROW_W, "   Interface:  %s %s %s",
+                  g_cmd_iface > IFACE_KEYBOARD ? "<" : " ",
+                  menu_pad(INAMES[g_cmd_iface], CTL_IFACE_W),
+                  g_cmd_iface < IFACE_PANEL ? ">" : " ");
+        menu_row(fx, fw, y++, 0, 0, IDESC[g_cmd_iface]);
         y++;
         const int block_y = y;
         for (int i = 0; i < v.nassign; i++) {
@@ -500,30 +508,25 @@ static bool controls_page(void) {
             const char *label = r.kind == CK_FACE
                               ? (v.panel ? PANEL_FACE_LABEL[r.idx] : FACE_LABEL[r.idx])
                               : CHORD_LABEL[r.idx];
-            char cur = sel == i + 1 ? '>' : ' ';
-            if (nums) text_print(x, y, "%c %c) %s", cur, menu_row_digit_char(i), label);
-            else      text_print(x, y, "%c    %s", cur, label);
-            text_print(vx, y++, "%s", r.kind == CK_FACE ? face_btn_name(r.idx)
-                                                        : slot_name(g_chord_slot[r.idx]));
+            menu_rowf(fx, fw, y++, sel == i + 1, CTL_ROW_W, "%s%s%s",
+                      menu_num(nums, i), menu_pad(label, CTL_LABEL_W),
+                      r.kind == CK_FACE ? face_btn_name(r.idx)
+                                        : slot_name(g_chord_slot[r.idx]));
         }
-        if (v.panel) {
-            text_print(lx, y, "Cycle Module");
-            text_print(vx, y++, "L/R (fixed)");
-        }
-        text_print(lx, y, "Caps Toggle");
-        text_print(vx, y++, "L+R (fixed)");
+        if (v.panel)
+            menu_rowf(fx, fw, y++, 0, CTL_ROW_W, "   %sL/R (fixed)",
+                      menu_pad("Cycle Module", CTL_LABEL_W));
+        menu_rowf(fx, fw, y++, 0, CTL_ROW_W, "   %sL+R (fixed)",
+                  menu_pad("Caps Toggle", CTL_LABEL_W));
         y = block_y + CTL_BLOCK_ROWS;
-        text_print(x, y++, "%c    Keyboard Caps: %s", sel == v.r_caps ? '>' : ' ',
-                           keyboard_get_caps() ? "On" : "Off");
-        text_print(x, y++, "%c    Panel/Keyboard Swap: %s", sel == v.r_toggle ? '>' : ' ',
-                           g_toggle_btn == 1 ? "Y" : "Z");
+        menu_rowf(fx, fw, y++, sel == v.r_caps, CTL_ROW_W, "   Keyboard Caps: %s",
+                  keyboard_get_caps() ? "On" : "Off");
+        menu_rowf(fx, fw, y++, sel == v.r_toggle, CTL_ROW_W, "   Panel/Keyboard Swap: %s",
+                  g_toggle_btn == 1 ? "Y" : "Z");
         y++;
-        text_print(x, y++, "%c    Reset to Defaults", sel == v.r_reset ? '>' : ' ');
-        text_print(x, y++, "%c    Ok", sel == v.r_done ? '>' : ' ');
-        text_print(x, y++, "%c    Cancel", sel == v.r_cancel ? '>' : ' ');
-        y++;
-        text_print(x, y++, "%s", hint("A/C/Start=Ok  B=Cancel",
-                                             "Enter/Esc=Ok  Bksp=Cancel"));
+        menu_row(fx, fw, y++, sel == v.r_reset,  CTL_ROW_W, "   Reset to Defaults");
+        menu_row(fx, fw, y++, sel == v.r_done,   CTL_ROW_W, "   Ok");
+        menu_row(fx, fw, y++, sel == v.r_cancel, CTL_ROW_W, "   Cancel");
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -539,13 +542,11 @@ static bool controls_page(void) {
  |   activation are treated alike), then Ok and Cancel. Snapshots the
  |   keyboard.c getters on entry so Cancel (B/Backspace, or the Cancel row)
  |   can restore them. Ok commits and calls options_save(), and so do Start/Esc
- |   -- leaving an options page keeps what it shows. The value column
- |   is fixed at x + 18 in BOTH digit and no-digit modes -- unlike the other
- |   pages it must NOT take the usual MENU_DIGIT_COLS shift: at x + 21 the
- |   widest value, "Off (overwrite)" (15 chars), would end on column 38, this
- |   box's right border (fx=1, fw=38). It does not need the shift regardless:
- |   the longest numbered label, "N) Insert mode", ends at column 18, still
- |   two columns clear of the value at 21. Returns true, without saving or
+ |   -- leaving an options page keeps what it shows. Rows are composed whole
+ |   and drawn through menu_row, so the label field (KB_LABEL_W) is what holds
+ |   the value column in place rather than an absolute screen column, and it
+ |   holds in BOTH digit and no-digit modes because menu_num reserves its three
+ |   columns either way. Returns true, without saving or
  |   restoring, if the active input device's family changed while this page
  |   was open, so controls_dispatch can hand off to controls_page instead of
  |   leaving this page on screen showing the wrong device's controls with the
@@ -563,6 +564,9 @@ static bool controls_page(void) {
  ----------------------*/
 bool keyboard_controls_page(void) {
     MenuBacking backing;
+    // One bar width and one value column for the page, as on controls_page.
+    const int KB_ROW_W   = 21;
+    const int KB_LABEL_W = 15;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
@@ -603,32 +607,24 @@ bool keyboard_controls_page(void) {
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", 34, 14, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", 34, 12, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
-        int x = fx + 2, y = fy + 4;
-        text_print(x, y++, "Insert: type-insert, caret arrows.");
-        text_print(x, y++, "ScrLk: Up/Dn scroll, Ctrl=history.");
+        int y = fy + 4;
+        menu_row(fx, fw, y++, 0, 0, "Insert: type-insert, caret arrows.");
+        menu_row(fx, fw, y++, 0, 0, "ScrLk: Up/Dn scroll, Ctrl=history.");
         y++;
         bool nums = !g_kbd_visible;
-        if (nums) text_print(x, y, "%c 1) Insert mode", sel == 0 ? '>' : ' ');
-        else      text_print(x, y, "%c    Insert mode", sel == 0 ? '>' : ' ');
-        text_print(x + 18, y++, "%s", keyboard_get_insert() ? "On" : "Off");
-        if (nums) text_print(x, y, "%c 2) Caps Lock", sel == 1 ? '>' : ' ');
-        else      text_print(x, y, "%c    Caps Lock", sel == 1 ? '>' : ' ');
-        text_print(x + 18, y++, "%s", keyboard_get_caps() ? "On" : "Off");
-        if (nums) text_print(x, y, "%c 3) Num Lock", sel == 2 ? '>' : ' ');
-        else      text_print(x, y, "%c    Num Lock", sel == 2 ? '>' : ' ');
-        text_print(x + 18, y++, "%s", keyboard_get_num() ? "On" : "Off");
-        if (nums) text_print(x, y, "%c 4) Scroll Lock", sel == 3 ? '>' : ' ');
-        else      text_print(x, y, "%c    Scroll Lock", sel == 3 ? '>' : ' ');
-        text_print(x + 18, y++, "%s", keyboard_get_scrolllock() ? "On" : "Off");
+        menu_rowf(fx, fw, y++, sel == 0, KB_ROW_W, "%s%s%s", menu_num(nums, 0),
+                  menu_pad("Insert mode", KB_LABEL_W), keyboard_get_insert() ? "On" : "Off");
+        menu_rowf(fx, fw, y++, sel == 1, KB_ROW_W, "%s%s%s", menu_num(nums, 1),
+                  menu_pad("Caps Lock", KB_LABEL_W), keyboard_get_caps() ? "On" : "Off");
+        menu_rowf(fx, fw, y++, sel == 2, KB_ROW_W, "%s%s%s", menu_num(nums, 2),
+                  menu_pad("Num Lock", KB_LABEL_W), keyboard_get_num() ? "On" : "Off");
+        menu_rowf(fx, fw, y++, sel == 3, KB_ROW_W, "%s%s%s", menu_num(nums, 3),
+                  menu_pad("Scroll Lock", KB_LABEL_W), keyboard_get_scrolllock() ? "On" : "Off");
         y++;
-        if (nums) text_print(x, y++, "%c 5) Ok", sel == 4 ? '>' : ' ');
-        else      text_print(x, y++, "%c    Ok", sel == 4 ? '>' : ' ');
-        if (nums) text_print(x, y++, "%c 6) Cancel", sel == 5 ? '>' : ' ');
-        else      text_print(x, y++, "%c    Cancel", sel == 5 ? '>' : ' ');
-        y += 2;
-        text_print(x, y++, "%s", hint("A/C/Start=Ok  B=Cancel", "Enter/Esc=Ok  Bksp=Cancel"));
+        menu_rowf(fx, fw, y++, sel == 4, KB_ROW_W, "%sOk", menu_num(nums, 4));
+        menu_rowf(fx, fw, y++, sel == 5, KB_ROW_W, "%sCancel", menu_num(nums, 5));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -684,6 +680,11 @@ bool keyboard_controls_page(void) {
 void sound_options_page(void) {
     MenuBacking backing;
     static const char *const MIX[] = { "Dynamic", "Repeat", "Sequential", "Random" };
+    // One bar width, one label field, and a mix-name field as wide as
+    // "Sequential", so the Audio Mix arrows hold still while it cycles.
+    const int SND_ROW_W   = 31;
+    const int SND_LABEL_W = 14;
+    const int SND_MIX_W   = 10;
     enum { SR_MIX, SR_TRACK, SR_MUSIC, SR_PCM, SR_OK, SR_CANCEL };
     const unsigned char* atracks; int an = music_cdda_audio_tracks(&atracks);
     bool has_cd  = (an > 0);
@@ -719,7 +720,7 @@ void sound_options_page(void) {
     if (aidx < 0)   for (int i = 0; i < an; i++) if (atracks[i] == g_sel_track) { aidx = i; break; }
     if (aidx < 0) aidx = 0;
     int fx, fy, fw, fh;
-    menu_box_fit("SOUND", 34, nrows + 5, &fx, &fy, &fw, &fh);
+    menu_box_fit("SOUND", 34, nrows + 3, &fx, &fy, &fw, &fh);
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
@@ -778,45 +779,39 @@ void sound_options_page(void) {
 
         menu_clear();
         menu_frame(fx, fy, fw, fh, "SOUND");
-        int x = fx + 2, y = fy + 4;
+        int y = fy + 4;
         bool nums = !g_kbd_visible;
-        const int vx = x + 14 + MENU_DIGIT_COLS;
         for (int i = 0; i < nrows; i++) {
-            char cur = (i == sel) ? '>' : ' ';
+            const char *n = menu_num(nums, i);
             switch (rows[i]) {
                 case SR_MIX:
-                    if (nums) text_print(x, y, "%c %d) Audio Mix", cur, i + 1);
-                    else      text_print(x, y, "%c    Audio Mix", cur);
-                    text_print(vx, y++, "%s %s %s", g_mix_mode > 0 ? "<" : " ", MIX[g_mix_mode], g_mix_mode < MIX_RANDOM ? ">" : " ");
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s %s %s", n,
+                              menu_pad("Audio Mix", SND_LABEL_W),
+                              g_mix_mode > 0 ? "<" : " ",
+                              menu_pad(MIX[g_mix_mode], SND_MIX_W),
+                              g_mix_mode < MIX_RANDOM ? ">" : " ");
                     break;
                 case SR_TRACK:
-                    if (nums) text_print(x, y, "%c %d) Track", cur, i + 1);
-                    else      text_print(x, y, "%c    Track", cur);
-                    text_print(vx, y++, "%d", aidx + 1);
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
+                              menu_pad("Track", SND_LABEL_W), aidx + 1);
                     break;
                 case SR_MUSIC:
-                    if (nums) text_print(x, y, "%c %d) Music", cur, i + 1);
-                    else      text_print(x, y, "%c    Music", cur);
-                    text_print(vx, y++, "%d", g_music_level);
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
+                              menu_pad("Music", SND_LABEL_W), g_music_level);
                     break;
                 case SR_PCM:
-                    if (nums) text_print(x, y, "%c %d) PCM", cur, i + 1);
-                    else      text_print(x, y, "%c    PCM", cur);
-                    text_print(vx, y++, "%d", g_pcm_level);
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
+                              menu_pad("PCM", SND_LABEL_W), g_pcm_level);
                     break;
                 case SR_OK:
                     y++;
-                    if (nums) text_print(x, y++, "%c %d) Ok", cur, i + 1);
-                    else      text_print(x, y++, "%c    Ok", cur);
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%sOk", n);
                     break;
                 case SR_CANCEL:
-                    if (nums) text_print(x, y++, "%c %d) Cancel", cur, i + 1);
-                    else      text_print(x, y++, "%c    Cancel", cur);
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%sCancel", n);
                     break;
             }
         }
-        y += 2;
-        text_print(x, y++, "%s", hint("A/C/Start=Ok  B=Cancel", "Enter/Esc=Ok  Bksp=Cancel"));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -887,6 +882,12 @@ void sound_options_page(void) {
  ----------------------*/
 static void display_options_page(void) {
     MenuBacking backing;
+    // One bar width, one label field, and a value field as wide as the longest
+    // preset name ("Amstrad CPC 464"), so the arrows hold still while a row
+    // cycles. 3 + 14 + 2 + 15 + 2 is the 36 the box is sized to.
+    const int DSP_ROW_W   = 36;
+    const int DSP_LABEL_W = 14;
+    const int DSP_VALUE_W = 15;
     enum { DR_PALETTE, DR_BG, DR_TEXT, DR_DIM, DR_OK, DR_CANCEL };
     int rows[6];
     int nrows = 0;
@@ -949,47 +950,43 @@ static void display_options_page(void) {
         // comes and goes with the Palette row directly above it, and a frame
         // that resized under the cursor while cycling Palette would read as the
         // page redrawing itself rather than as one row appearing.
-        menu_box_fit("DISPLAY", 36, (int)(sizeof(rows) / sizeof(rows[0])) + 5,
+        menu_box_fit("DISPLAY", DSP_ROW_W, (int)(sizeof(rows) / sizeof(rows[0])) + 3,
                      &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "DISPLAY");
-        int x = fx + 2, y = fy + 4;
+        int y = fy + 4;
         bool nums = !g_kbd_visible;
         for (int i = 0; i < nrows; i++) {
-            char cur = (i == sel) ? '>' : ' ';
+            const char *n = menu_num(nums, i);
             switch (rows[i]) {
                 case DR_PALETTE:
-                    if (nums) text_print(x, y, "%c %d) Palette", cur, i + 1);
-                    else      text_print(x, y, "%c    Palette", cur);
-                    text_print(x + 17, y++, "< %s >", display_palette_name(&g_display));
+                    menu_rowf(fx, fw, y++, i == sel, DSP_ROW_W, "%s%s< %s >", n,
+                              menu_pad("Palette", DSP_LABEL_W),
+                              menu_pad(display_palette_name(&g_display), DSP_VALUE_W));
                     break;
                 case DR_BG:
-                    if (nums) text_print(x, y, "%c %d) Background", cur, i + 1);
-                    else      text_print(x, y, "%c    Background", cur);
-                    text_print(x + 17, y++, "< %s >", display_bg_name(&g_display));
+                    menu_rowf(fx, fw, y++, i == sel, DSP_ROW_W, "%s%s< %s >", n,
+                              menu_pad("Background", DSP_LABEL_W),
+                              menu_pad(display_bg_name(&g_display), DSP_VALUE_W));
                     break;
                 case DR_TEXT:
-                    if (nums) text_print(x, y, "%c %d) Text", cur, i + 1);
-                    else      text_print(x, y, "%c    Text", cur);
-                    text_print(x + 17, y++, "< %s >", display_text_name(g_display.text));
+                    menu_rowf(fx, fw, y++, i == sel, DSP_ROW_W, "%s%s< %s >", n,
+                              menu_pad("Text", DSP_LABEL_W),
+                              menu_pad(display_text_name(g_display.text), DSP_VALUE_W));
                     break;
                 case DR_DIM:
-                    if (nums) text_print(x, y, "%c %d) Dimming", cur, i + 1);
-                    else      text_print(x, y, "%c    Dimming", cur);
-                    text_print(x + 17, y++, "< %s >", display_dim_name(g_display.dim));
+                    menu_rowf(fx, fw, y++, i == sel, DSP_ROW_W, "%s%s< %s >", n,
+                              menu_pad("Dimming", DSP_LABEL_W),
+                              menu_pad(display_dim_name(g_display.dim), DSP_VALUE_W));
                     break;
                 case DR_OK:
                     y++;
-                    if (nums) text_print(x, y++, "%c %d) Ok", cur, i + 1);
-                    else      text_print(x, y++, "%c    Ok", cur);
+                    menu_rowf(fx, fw, y++, i == sel, DSP_ROW_W, "%sOk", n);
                     break;
                 case DR_CANCEL:
-                    if (nums) text_print(x, y++, "%c %d) Cancel", cur, i + 1);
-                    else      text_print(x, y++, "%c    Cancel", cur);
+                    menu_rowf(fx, fw, y++, i == sel, DSP_ROW_W, "%sCancel", n);
                     break;
             }
         }
-        y += 2;
-        text_print(x, y++, "%s", hint("A/C/Start=Ok  B=Cancel","Enter/Esc=Ok  Bksp=Cancel"));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -1268,6 +1265,10 @@ void credits_page(void) {
  ----------------------*/
 static void gameplay_page(void) {
     MenuBacking backing;
+    // One bar width for the page, and a value field as wide as "Superbrief",
+    // so both sliders' arrows sit in the same two columns.
+    const int GP_ROW_W   = 29;
+    const int GP_VALUE_W = 10;
     static const char *const NAMES[] = { "Easy", "Medium", "Hard" };
     static const char *const DESC[]  = { "Typeahead by Walkthrough",
                                          "Typeahead by Valid Words",
@@ -1311,33 +1312,24 @@ static void gameplay_page(void) {
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("GAMEPLAY", 34, 12, &fx, &fy, &fw, &fh);
+        menu_box_fit("GAMEPLAY", 34, 10, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "GAMEPLAY");
-        int x = fx + 2, y = fy + 4;
+        int y = fy + 4;
         bool nums = !g_kbd_visible;
-        char dmark = sel == GR_DIFF ? '>' : ' ';
-        if (nums) text_print(x, y, "%c 1) Difficulty: %s %s %s", dmark,
-                          diff > DIFF_EASY ? "<" : " ", NAMES[diff], diff < DIFF_HARD ? ">" : " ");
-        else      text_print(x, y, "%c    Difficulty: %s %s %s", dmark,
-                          diff > DIFF_EASY ? "<" : " ", NAMES[diff], diff < DIFF_HARD ? ">" : " ");
-        text_print(x + 4, y + 1, "%s", DESC[diff]);
+        menu_rowf(fx, fw, y, sel == GR_DIFF, GP_ROW_W, "%sDifficulty: %s %s %s",
+                  menu_num(nums, GR_DIFF), diff > DIFF_EASY ? "<" : " ",
+                  menu_pad(NAMES[diff], GP_VALUE_W), diff < DIFF_HARD ? ">" : " ");
+        menu_row(fx, fw, y + 1, 0, 0, DESC[diff]);
         y += 3;
-        char vmark = sel == GR_VERB ? '>' : ' ';
         // Two spaces after the colon, so the value column lines up under
         // Difficulty's despite the shorter label.
-        if (nums) text_print(x, y, "%c 2) Room text:  %s %s %s", vmark,
-                          verb > VERB_SUPERBRIEF ? "<" : " ", VNAMES[verb], verb < VERB_VERBOSE ? ">" : " ");
-        else      text_print(x, y, "%c    Room text:  %s %s %s", vmark,
-                          verb > VERB_SUPERBRIEF ? "<" : " ", VNAMES[verb], verb < VERB_VERBOSE ? ">" : " ");
-        text_print(x + 4, y + 1, "%s", VDESC[verb]);
+        menu_rowf(fx, fw, y, sel == GR_VERB, GP_ROW_W, "%sRoom text:  %s %s %s",
+                  menu_num(nums, GR_VERB), verb > VERB_SUPERBRIEF ? "<" : " ",
+                  menu_pad(VNAMES[verb], GP_VALUE_W), verb < VERB_VERBOSE ? ">" : " ");
+        menu_row(fx, fw, y + 1, 0, 0, VDESC[verb]);
         y += 3;
-        if (nums) text_print(x, y++, "%c 3) Ok", sel == GR_OK ? '>' : ' ');
-        else      text_print(x, y++, "%c    Ok", sel == GR_OK ? '>' : ' ');
-        if (nums) text_print(x, y++, "%c 4) Cancel", sel == GR_CANCEL ? '>' : ' ');
-        else      text_print(x, y++, "%c    Cancel", sel == GR_CANCEL ? '>' : ' ');
-        y += 2;
-        text_print(x, y++, "%s", hint(" A/C/Start=Ok  B=Cancel",
-                                             "Enter/Esc=Ok  Bksp=Cancel"));
+        menu_rowf(fx, fw, y++, sel == GR_OK,     GP_ROW_W, "%sOk", menu_num(nums, GR_OK));
+        menu_rowf(fx, fw, y++, sel == GR_CANCEL, GP_ROW_W, "%sCancel", menu_num(nums, GR_CANCEL));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -1401,14 +1393,15 @@ static void controls_dispatch(void) {
  |   its own box rectangle, and does nothing to leftover text OUTSIDE it, so
  |   without this the wider menu that opened Options (e.g. the
  |   Single/Multiplayer list) would show through around this box. Rows are
- |   left-justified at a fixed column (x0 + 2), matching every other page in
- |   this file -- per-row centering was tried and reverted (each row would
- |   center independently on its own label length, so the cursor/digit
- |   column visibly zigzagged between rows instead of lining up). The box is
+ |   centered through menu_row, all padded to one width (OM_ROW_W) taken from
+ |   the widest label -- centering each row on its own length was tried once
+ |   before and reverted, because the digit column visibly zigzagged; padding
+ |   first is what makes centering safe, since the block moves as one and the
+ |   highlight is a bar of one width. The box is
  |   sized via menu_box_fit from the actual item count (4..8 rows, depending
  |   on g_in_game and sound_available), not a fixed constant -- items[] is
  |   built first so nitems is known before the box is measured, keeping the
- |   title/blank/items/blank/hint rhythm every other page uses instead of a
+ |   title/blank/items/blank rhythm every other page uses instead of a
  |   gap that grows or shrinks with the fewest/most rows a given run shows.
  |   On exit (Resume, Save Game,
  |   Load Game, or B/Esc), blocks on menu_sync() until B/A/C/Start are all
@@ -1429,6 +1422,12 @@ int options_menu(void) {
     MenuBacking backing;
     enum { OI_RESUME, OI_SAVE, OI_LOAD, OI_GAMEPLAY, OI_DISPLAY, OI_SOUND,
            OI_CONTROLS, OI_NETWORK, OI_RETURN, OI_N };
+    // Hoisted out of the draw loop because the widest one sets the bar width
+    // every row pads to, and that has to be known before the first row is drawn.
+    static const char *const OI_LABEL[OI_N] = {
+        "Resume", "Save Game", "Load Game", "Gameplay", "Display", "Sound",
+        "Controls", "Network", "Title Screen"
+    };
     bool sound_available = (music_cdda_has_audio() != 0) || (sound_has_audio() != 0);
     int items[OI_N], nitems = 0;
     // In-game only, and first: the menu is over a paused game there, so the way
@@ -1443,8 +1442,16 @@ int options_menu(void) {
     if (!g_in_game) items[nitems++] = OI_NETWORK;
     if (g_in_game) items[nitems++] = OI_RETURN;
 
+    int label_w = 0;
+    for (int i = 0; i < nitems; i++) {
+        int n = 0; const char *s = OI_LABEL[items[i]];
+        while (s[n]) n++;
+        if (n > label_w) label_w = n;
+    }
+    const int OM_ROW_W = MENU_DIGIT_COLS + label_w;
+
     int x0, y0, w, h;
-    menu_box_fit("OPTIONS", 18, nitems + 4, &x0, &y0, &w, &h);
+    menu_box_fit("OPTIONS", 18, nitems + 2, &x0, &y0, &w, &h);
 
     int sel = 0;
     int result = OM_NONE;
@@ -1491,25 +1498,9 @@ int options_menu(void) {
         menu_frame(x0, y0, w, h, "OPTIONS");
         bool nums = !g_kbd_visible;
         int ay = y0 + 4;
-        for (int i = 0; i < nitems; i++) {
-            char cur = (i == sel) ? '>' : ' ';
-            const char *label = 0;
-            switch (items[i]) {
-                case OI_RESUME:   label = "Resume";          break;
-                case OI_SAVE:     label = "Save Game";       break;
-                case OI_LOAD:     label = "Load Game";       break;
-                case OI_GAMEPLAY: label = "Gameplay";        break;
-                case OI_DISPLAY:  label = "Display";         break;
-                case OI_SOUND:    label = "Sound";           break;
-                case OI_CONTROLS: label = "Controls";        break;
-                case OI_NETWORK:    label = "Network";           break;
-                case OI_RETURN:   label = "Title Screen";    break;
-            }
-            if (nums) text_print(x0 + 2, ay++, "%c %d) %s", cur, i + 1, label);
-            else      text_print(x0 + 2, ay++, "%c    %s", cur, label);
-        }
-        ay += 2;
-        text_print(x0 + 1, ay, "%s", hint("A/C=Ok  B/Start=Back", "Enter=Ok  Esc=Back"));
+        for (int i = 0; i < nitems; i++)
+            menu_rowf(x0, w, ay++, i == sel, OM_ROW_W, "%s%s",
+                      menu_num(nums, i), OI_LABEL[items[i]]);
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }

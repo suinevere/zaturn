@@ -17,6 +17,8 @@
 #ifndef MENU_H
 #define MENU_H
 
+#include "text_map.h"   // menu_rowf formats through the same path text_print does
+
 // Refcounted RAII guard that switches the image-suppressing VDP2 window on
 // while at least one menu page is open, and off again once the last one
 // closes. Refcounted rather than paired on/off calls because pages nest
@@ -122,6 +124,84 @@ void menu_clear(void);
  | Returns: N/A
  ----------------------*/
 void menu_frame(int x0, int y0, int w, int h, const char *title);
+
+/*----------------------
+ | menu_row
+ | Description: Draws one composed row centered inside the box's interior (the
+ |   w - 4 columns between the borders and their pad), in reverse video when
+ |   `sel` is true. The reverse video IS the selection marker: pages no longer
+ |   spend a column on a '>' that only one row ever used. `pad` right-pads the
+ |   text with spaces to a common width before centering, which is how a list
+ |   keeps one left edge: without it every row would center on its own length
+ |   and the digit column would zigzag, the exact regression that had per-row
+ |   centering reverted the last time it was tried. Padding also makes the
+ |   highlight a bar of one width rather than one that hugs each label. Pass 0
+ |   for a standalone line that should simply sit centered. A character the
+ |   inverted-glyph cache cannot seat falls back to plain text
+ |   (text_print_hl's own rule), which costs the highlight rather than the row.
+ | Author: suinevere
+ | Dependencies: text_map.h (text_print_str/text_print_hl)
+ | Globals: N/A
+ | Params: x0 -- box left column; w -- box width; y -- row; sel -- nonzero to
+ |   draw highlighted; pad -- width to pad to, or 0 for the text's own; text --
+ |   the composed row
+ | Returns: N/A
+ ----------------------*/
+void menu_row(int x0, int w, int y, int sel, int pad, const char *text);
+
+/*----------------------
+ | menu_pad
+ | Description: `s` right-padded with spaces to `w` columns, in one of a small
+ |   ring of scratch buffers so several padded fields can be composed in a
+ |   single menu_rowf call. Exists because a value column inside a centered row
+ |   only stays a column if every row's value occupies the same width -- with
+ |   the rows centered rather than left-anchored, a short value would otherwise
+ |   drag the closing arrow left. The result is valid until the ring wraps, so
+ |   use it as an argument and never store it.
+ | Author: suinevere
+ | Dependencies: menu_layout.h (MENU_SCREEN_COLS)
+ | Globals: N/A
+ | Params: s -- the text; w -- column width to pad to
+ | Returns: the padded copy
+ ----------------------*/
+const char *menu_pad(const char *s, int w);
+
+/*----------------------
+ | menu_num
+ | Description: A row's three-column number prefix -- "3) " when digit
+ |   shortcuts are live, three spaces when a keyboard has hidden them.
+ |   Reserved either way, the same reason MENU_DIGIT_COLS is unconditional: a
+ |   row that changed width when the player picked up a keyboard would move
+ |   the centered block under the cursor. Rows past the tenth get spaces,
+ |   since the digits only reach that far.
+ | Author: suinevere
+ | Dependencies: menu_layout.h (menu_row_digit_char)
+ | Globals: N/A
+ | Params: nums -- nonzero when digit shortcuts are shown; row -- 0-based row
+ | Returns: the three-column prefix
+ ----------------------*/
+const char *menu_num(int nums, int row);
+
+/*----------------------
+ | menu_rowf
+ | Description: menu_row with printf formatting, through the same SRL::string
+ |   path text_print uses. Split from the plain overload for the same reason
+ |   text_print is: a bare string carrying a '%' must print literally.
+ | Author: suinevere
+ | Dependencies: menu_row, srl.hpp
+ | Globals: N/A
+ | Params: x0, w, y, sel, pad -- as menu_row; fmt/args -- format and arguments
+ | Returns: N/A
+ ----------------------*/
+template <typename ...Args>
+inline void menu_rowf(int x0, int w, int y, int sel, int pad, const char *fmt, Args...args)
+{
+    char buffer[TEXT_FORMAT_MAX];
+    SRL::string stringObj;
+
+    if (stringObj.snprintfEx(buffer, TEXT_FORMAT_MAX, fmt, args ...) > 0)
+        menu_row(x0, w, y, sel, pad, buffer);
+}
 
 /*----------------------
  | menu_wait

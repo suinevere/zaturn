@@ -94,13 +94,16 @@ int choose_device(const char *title) {
  |   PICK, and A/Enter/Start confirms.
  |
  |   The box is sized every frame rather than once, because its shape changes
- |   when `editing` flips. A slot row budgets a cursor mark, the reserved "N) "
- |   digit columns (reserved whether or not drawn), and up to 10 label chars
- |   (saturn_bup_info caps a comment at 10; "(empty)" is 7); the edit row budgets
- |   maxchars plus the caret. In EDIT the width must also cover the keyboard
- |   (KB_COLS*2) and the hint; in either state the LONGER of the two hint
- |   variants (pad vs keyboard) is budgeted unconditionally so the box does not
- |   resize when the player switches input device mid-menu.
+ |   when `editing` flips. A slot row budgets the reserved "N) " digit columns
+ |   (reserved whether or not drawn) and the widest label actually present, with
+ |   a floor of 10 chars (saturn_bup_info caps a comment at 10; "(empty)" is 7);
+ |   the edit row budgets maxchars plus the caret. It budgets no cursor mark,
+ |   because there is none: the selected row is drawn in reverse video. In EDIT
+ |   the width must also cover the keyboard (KB_COLS*2) and the hint; in either
+ |   state the LONGER of the two hint variants (pad vs keyboard) is budgeted
+ |   unconditionally so the box does not resize when the player switches input
+ |   device mid-menu. That same row width is what every row pads to, so the
+ |   centred list keeps one left edge and one highlight width.
  | Author: suinevere
  | Dependencies: menu.h (MenuBacking/menu_clear/menu_frame), menu_layout.h
  |   (menu_box_fit/menu_visible_digit/MENU_DIGIT_COLS), keyboard.h (KeyboardState
@@ -195,9 +198,18 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
 
         const char *btitle = editing ? "NAME THIS SAVE" : "SAVE - PICK A SLOT";
 
-        int row_w = 2 + MENU_DIGIT_COLS + 10;
-        int edit_w = 2 + MENU_DIGIT_COLS + maxchars + 1;
+        // No cursor column any more -- the selected row is drawn in reverse
+        // video -- so a row is the digit prefix plus its label, and the widest
+        // slot name gets a say too, since a centred row that overran the box
+        // would be clipped rather than merely ragged.
+        int row_w = MENU_DIGIT_COLS + 10;
+        int edit_w = MENU_DIGIT_COLS + maxchars + 1;
         if (edit_w > row_w) row_w = edit_w;
+        for (int i = 0; i < SAVE_SLOTS; i++) {
+            int n = 0;
+            while (slotname[i][n]) n++;
+            if (MENU_DIGIT_COLS + n > row_w) row_w = MENU_DIGIT_COLS + n;
+        }
         int content_w;
         int rows;
         if (editing) {
@@ -222,20 +234,24 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
 
         menu_clear();
         menu_frame(x0, y0, w, h, btitle);
-        int cx = x0 + 2, cy = y0 + 3;
+        int cy = y0 + 3;
         for (int i = 0; i < SAVE_SLOTS; i++) {
-            char mark = (i == sel) ? '>' : ' ';
             if (editing && i == sel) {
-                text_print(cx, cy + i, "%c    %s_", mark, k.input);
+                menu_rowf(x0, w, cy + i, 1, row_w, "%s%s_",
+                          menu_num(0, i), k.input);
             } else {
                 const char *label = slotname[i][0] ? slotname[i] : "(empty)";
-                if (nums) text_print(cx, cy + i, "%c %d) %s", mark, i + 1, label);
-                else      text_print(cx, cy + i, "%c    %s", mark, label);
+                menu_rowf(x0, w, cy + i, i == sel, row_w, "%s%s",
+                          menu_num(nums, i), label);
             }
         }
         if (!editing) {
-            text_print(cx, cy + SAVE_SLOTS + 1, "%s", hint(PICK_HINT_PAD, PICK_HINT_KBD));
+            menu_row(x0, w, cy + SAVE_SLOTS + 1, 0, 0,
+                     hint(PICK_HINT_PAD, PICK_HINT_KBD));
         } else {
+            // Centred as one block, not row by row, so the cursor highlight can
+            // still be addressed by column.
+            int kbx = x0 + 2 + ((w - 4) - KB_COLS * 2) / 2;
             for (int r = 0; r < KB_ROWS; r++) {
                 char rowbuf[KB_COLS * 2 + 1];
                 int p = 0;
@@ -244,14 +260,14 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                     rowbuf[p++] = KB_LAYOUT[r][c];
                 }
                 rowbuf[p] = '\0';
-                text_print(cx, cy + SAVE_SLOTS + 1 + r, "%s", rowbuf);
+                text_print(kbx, cy + SAVE_SLOTS + 1 + r, "%s", rowbuf);
                 if (r == k.cursor_row) {
                     char sel[2] = { KB_LAYOUT[r][k.cursor_col], '\0' };
-                    text_print_hl(cx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
+                    text_print_hl(kbx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
                 }
             }
-            text_print(cx, cy + SAVE_SLOTS + 2 + KB_ROWS, "%s",
-                hint(EDIT_HINT_PAD, EDIT_HINT_KBD));
+            menu_row(x0, w, cy + SAVE_SLOTS + 2 + KB_ROWS, 0, 0,
+                     hint(EDIT_HINT_PAD, EDIT_HINT_KBD));
         }
         menu_sync();
     }

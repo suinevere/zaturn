@@ -91,3 +91,20 @@ def test_a_pin_naming_a_nonexistent_saturn_room_is_refused(monkeypatch):
         raise AssertionError("a pin naming a nonexistent Saturn room was accepted")
     finally:
         bad.unlink()
+
+
+def test_a_pin_naming_a_room_in_the_wrong_title_group_is_refused(monkeypatch):
+    aliases = json.loads(g.ALIASES.read_text(encoding="utf-8"))
+    aliases["_pins"]["STRANGE PASSAGE"] = 43
+    bad = g.ROOT / "tools" / "tests" / "_bad_aliases_2.json"
+    bad.write_text(json.dumps(aliases), encoding="utf-8")
+    monkeypatch.setattr(g, "ALIASES", bad)
+    try:
+        try:
+            g.build_join()
+        except SystemExit:
+            return
+        raise AssertionError(
+            "a pin naming a room from a different title group was accepted")
+    finally:
+        bad.unlink()

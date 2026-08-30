@@ -102,7 +102,9 @@ def apply_pins(pins, story_rooms, by_title, sat_by_title, sat_by_index, title_of
      |     sat_by_title -- {saturn title: [saturn row, ...]}, mutated in place
      |     sat_by_index -- {int saturn room index: saturn row}
      |     title_of -- story room -> post-alias title
-     | Returns: {object number: saturn row dict}
+     | Returns: (join, claimed) -- join is {object number: saturn row dict}
+     |     for pinned rooms only; claimed is the set of int Saturn room
+     |     indices those rooms resolved to
      ----------------------*/"""
     join = {}
     claimed = set()
@@ -117,11 +119,16 @@ def apply_pins(pins, story_rooms, by_title, sat_by_title, sat_by_index, title_of
             raise SystemExit(f"pin {pin_title!r} names Saturn room "
                              f"{room_index}, which does not exist")
         sat = sat_by_index[room_index]
+        group_title = title_of(room)
+        if sat["title"].strip().upper() != group_title:
+            raise SystemExit(
+                f"pin {pin_title!r} names Saturn room {room_index} "
+                f"({sat['title'].strip()!r}), which is not in the "
+                f"{group_title!r} group {pin_title!r} resolves into")
         if int(sat["room"]) in claimed:
             raise SystemExit(f"Saturn room {sat['room']} claimed twice")
         claimed.add(int(sat["room"]))
         join[room["obj"]] = sat
-        group_title = title_of(room)
         by_title[group_title].remove(room)
         sat_by_title[group_title].remove(sat)
     return join, claimed

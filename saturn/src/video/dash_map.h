@@ -111,6 +111,28 @@ void dash_build(int variant, int base_row);
 void dash_box(int x, int y, int w, int h);
 
 /*----------------------
+ | dash_box_hold
+ | Description: Keeps whatever box is on the layer up for one more frame, and
+ |   does nothing at all if a box is not what is on it. A menu that has finished
+ |   drawing does not draw again -- menu_message paints once and menu_wait then
+ |   holds the screen until a key arrives -- but dash_frame_end takes the layer
+ |   down on any frame nobody claims it, so somebody has to keep claiming.
+ |
+ |   The question it answers is "is a box currently painted", asked of the layer
+ |   itself. That is deliberately narrower than "is a menu open": online_mode
+ |   holds one MenuBacking for a whole telnet session, so a caller keyed on the
+ |   backing refcount goes on re-claiming a box the dial screen drew for the
+ |   rest of the session, fighting the gamepad strip for the layer every frame.
+ |   Keyed on the layer, a strip claim simply ends the hold.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_variant, g_touched
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void dash_box_hold(void);
+
+/*----------------------
  | dash_cell
  | Description: The tile index the shadow holds at (x, y). Out-of-range
  |   coordinates read as DT_BLANK rather than faulting, so a caller clipping at

@@ -988,8 +988,14 @@ void title_bg_fade_level(int v) {
 /*----------------------
  | title_fade_engage / title_bg_fade_engage
  | Description: Points NBG3 -- the Z-ATURN text art over the title picture, and
- |   the console text under every menu -- at colour offset channel A, and marks
+ |   the console text under every menu -- at colour offset channel A, takes NBG2
+ |   (the input dashboard and the menu borders) onto the same channel, and marks
  |   the screen-wide fade as owning the picture's brightness (see g_screen_fade).
+ |
+ |   NBG2 rides with the text rather than with the picture because it is chrome,
+ |   not scenery: channel B carries the player's held wallpaper dim, and a border
+ |   on B would dim whenever the wallpaper did. On A it tracks the text it frames,
+ |   which is the only thing that keeps a box and its contents fading as one.
  |
  |   NBG0 is deliberately not taken. The picture layer stays on channel B with
  |   title_bg_apply for the whole session, because that is the only channel that
@@ -1012,6 +1018,7 @@ void title_bg_fade_level(int v) {
  ----------------------*/
 static void title_fade_engage(void) {
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
+    SRL::VDP2::NBG2::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
     g_screen_fade = true;
 }
 
@@ -1077,7 +1084,7 @@ void title_bg_fade_out(int frames) {
 /*----------------------
  | title_bg_fade_reset
  | Description: See title.h. Instantly restores full brightness, releases NBG3
- |   from channel A, and hands the picture's brightness back to the room
+ |   and NBG2 from channel A, and hands the picture's brightness back to the room
  |   transitions -- the end of every screen-wide fade, whoever ran it. The
  |   title_fade_set(0) is what re-lights: it drives the picture to level 255,
  |   which composes to the held wallpaper dim rather than to nothing, so the dim
@@ -1093,6 +1100,7 @@ void title_bg_fade_out(int frames) {
 void title_bg_fade_reset(void) {
     title_fade_set(0);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+    SRL::VDP2::NBG2::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
     g_screen_fade = false;
 }
 

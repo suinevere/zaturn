@@ -85,7 +85,7 @@ Two consequences worth stating:
 One thing is on the layer at a time, as before: a box clears the panel and the
 panel clears a box.
 
-## The border has to be re-claimed, and that fixed an older bug
+## The border has to be re-claimed, and getting that wrong caused a flicker
 
 `dash_frame_end()` takes the layer down on any frame nobody claimed it — the
 rule that keeps the strip from surviving behind a menu. A printed border never
@@ -95,13 +95,48 @@ needed re-drawing to stay on screen; a cell layer does.
 as the player takes to press a key, so without a hold the box would lose its
 border one frame after drawing and never get it back.
 
-So `menu_sync()` re-claims the last rectangle every frame while a `MenuBacking`
-is alive, and the outermost destructor releases it. The refcount is the right
-signal because it already means exactly "a menu page is open" — the border
-expires on the same event the image-suppressing window does, rather than on a
-rule of its own. Unlike the window, the release is immediate rather than
-deferred to the next text flush: a border that outlived its page would sit over
-the game.
+**The first attempt at that hold shipped in `6cc79c2` and flickered.** It had
+`menu_sync()` re-claim a remembered rectangle while `g_menu_backing_depth > 0`,
+on the reasoning that the refcount already means "a menu page is open". It does
+not mean that. `online_mode()` constructs a `MenuBacking` at `online.cxx:350`
+that covers the **entire telnet session**, so:
+
+- the dial screen's box (`menu_message` → `menu_frame`) armed the hold, and
+  nothing disarmed it — the release ran only on the *outermost* destructor,
+  which is `online_mode`'s own and does not fire until the session ends;
+- from the first frame of gameplay onward, `menu_sync()` at `online.cxx:581`
+  re-painted that stale box every frame while `render_command_panel` painted the
+  strip, and the two fought for the layer.
+
+That is the reported "in-game navigation background flickers on first load-in",
+and it needed no pause menu to happen.
+
+The fix replaces the signal. `dash_box_hold()` asks the **layer** what is
+currently painted rather than asking menu.cxx whether a menu is open:
+
+```c
+void dash_box_hold(void) { if (g_variant == DASH_BOX) g_touched = 1; }
+```
+
+A strip claim changes the variant, so a stale box cannot come back — the hold
+simply stops being a hold. `menu.cxx` keeps no rectangle, no live flag, and the
+`MenuBacking` destructor is back to doing only what it did before.
+
+## Page frame-drops must claim too
+
+The second half of the same bug. Every page does a bare
+`SRL::Core::Synchronize()` on entry (to drop the input edge that opened it) and
+another on exit after `page_fade_out`. Those frames claim nothing, so
+`dash_frame_end()` blanked the border for exactly one frame on every page
+transition — the reported "flickers between navigating menus".
+
+All 24 of them, across `menu_pages.cxx` and `netbin_pages.cxx`, now go through
+`menu_sync()`, which claims and then Synchronizes. The fade loops in
+`menu_fade_out` / `menu_fade_in_ex` call `dash_box_hold()` for the same reason:
+a fade holds the screen for its whole ramp without redrawing anything.
+
+`tests/test_netbin_lift.py` now fails on any bare `SRL::Core::Synchronize()` at
+page scope in either file, so this cannot quietly come back.
 
 **This forced `menu_wait()` off its bare `SRL::Core::Synchronize()` and onto
 `menu_sync()`, which fixes a pre-existing bug unrelated to borders.**
@@ -111,6 +146,28 @@ CD-DA does not advance to its next pass otherwise. `menu_wait` was not calling
 it, so sound and music stalled for as long as any save/load result screen waited
 for a keypress. That is now the only behavioural change here that is not
 cosmetic.
+
+## The border fades with everything else
+
+NBG2 was on no colour-offset channel at all, so while a menu faded the text and
+the picture ramped to black and the border stayed fully lit — the box's frame
+surviving alone over a black screen. It now joins NBG3 on **channel A**, in both
+builds: `title_fade_engage` / `title_bg_fade_reset` for the CD build,
+`menu_offset_engage` / `menu_offset_release` for the netbin.
+
+Channel A rather than B, and that is the whole decision. B is where
+`title_bg_apply` composes the player's held wallpaper dim; a border on B would
+darken every time the player dimmed the wallpaper. NBG2 is chrome, not scenery —
+it belongs with the text it frames, which is also the only way a box and its
+contents fade as one thing.
+
+Nothing had to be seeded or cleared first: SRL puts only NBG3 in its
+`OffsetAScrolls` / `OffsetBScrolls` bitfields (`srl_vdp2.hpp:330-334`), so NBG2
+started on `NoOffset` and there was no pre-existing coupling to unpick.
+
+This also means **the gamepad strip now fades with in-game fades**, which it did
+not before. That follows from sharing the layer and is the intended behaviour,
+but it is a visible change to the CD build outside the menus.
 
 ## The fallback is still there
 
@@ -127,6 +184,8 @@ Clean rebuilds.
 |---|---:|---:|---:|
 | `zaturn.netbin` | 181,920 | 182,992 | **+1,072** |
 | CD `.elf` | 824,720 | 824,956 | +236 |
+| netbin, after the flicker fix | 182,992 | 183,424 | +432 |
+| netbin, after joining the fade | 183,424 | 183,488 | +64 |
 
 The two are not comparable — `compile.bat` builds the CD side with `-DDEBUG`.
 The netbin figure is the exact one, being a flat binary.

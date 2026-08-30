@@ -115,6 +115,21 @@ def main():
         print("main_netbin's soft-reset landing never clears the RX pump",
               file=sys.stderr); fails += 1
 
+    # No page may drop a frame with a bare Synchronize. dash_frame_end takes
+    # NBG2 down on any frame nobody claims it, and a page's entry and exit
+    # frame-drops happen with a menu box on screen -- a bare Synchronize there
+    # blanks the border for exactly one frame, which is what the flicker was.
+    # menu_sync claims and then Synchronizes. Matched at page scope (four-space
+    # indent) so the fade loops and nested waits, which are indented further and
+    # hold the layer their own way, are not swept up.
+    for f in (SRC / "menu" / "menu_pages.cxx", SRC / "net" / "netbin_pages.cxx"):
+        bare = [n for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
+                if line == "    SRL::Core::Synchronize();"]
+        if bare:
+            print(f"{f.name}: bare Synchronize at page scope, line(s) "
+                  f"{', '.join(map(str, bare))} -- use menu_sync", file=sys.stderr)
+            fails += 1
+
     if fails:
         print(f"test_netbin_lift: {fails} FAILED", file=sys.stderr); sys.exit(1)
     print("test_netbin_lift: OK")

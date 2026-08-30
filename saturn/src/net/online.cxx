@@ -356,7 +356,10 @@ void online_mode(void) {
                      number, attempt, ONLINE_DIAL_ATTEMPTS);
             menu_message("ONLINE", dial,
                          hint("L+R = cancel", "Esc = cancel"));
-            SRL::Core::Synchronize();
+            // menu_sync, not a bare Synchronize: menu_message draws the box
+            // once and this is the frame it is shown on, so the frame has to
+            // keep claiming NBG2 or the border blinks out under the text.
+            menu_sync();
         }
 
         rc = net_connect_open(number);

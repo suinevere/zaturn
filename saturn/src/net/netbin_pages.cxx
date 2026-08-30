@@ -133,7 +133,7 @@ void netbin_dial_page(void) {
     for (int i = 0; g_dialnum[i] && k.input_len < DIALNUM_MAX; i++) keyboard_type_char(&k, g_dialnum[i]);
     const char *err = "";
     int arow = 0;   // 0 = Dial; 1 = Controls
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
@@ -415,7 +415,7 @@ static CtlView ctl_view(void) {
  ----------------------*/
 static bool controls_page(void) {
     MenuBacking backing;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
     int s_face[FA_N], s_chord[CA_N];
@@ -530,7 +530,7 @@ static bool controls_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     return switched;
 }
 
@@ -564,7 +564,7 @@ static bool controls_page(void) {
  ----------------------*/
 static bool keyboard_controls_page(void) {
     MenuBacking backing;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
     int s_ins = keyboard_get_insert(), s_caps = keyboard_get_caps(),
@@ -634,7 +634,7 @@ static bool keyboard_controls_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     return switched;
 }
 
@@ -686,7 +686,7 @@ static void display_options_page(void) {
 
     int sel = 0;
     DisplayState snapshot = g_display;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         int nrows = 0;
@@ -766,7 +766,7 @@ static void display_options_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
 }
 
 /*----------------------
@@ -801,7 +801,7 @@ static void gameplay_page(void) {
     int sel = 0;
     int diff  = g_difficulty;
     int verb  = g_verbosity;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
@@ -862,7 +862,7 @@ static void gameplay_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
 }
 
 /*----------------------
@@ -887,7 +887,7 @@ void netbin_pause_menu(void) {
     menu_box_fit("PAUSED", 18, PI_N + 4, &x0, &y0, &w, &h);
 
     int sel = 0;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();

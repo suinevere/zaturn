@@ -154,6 +154,51 @@ int main(void) {
     assert(dash_cell(0, 19) == DT_CORNER_TL);
     assert(dash_cell(39, 19) == DT_CORNER_TR);
 
+    /* dash_box_hold keeps a box up across a frame nobody redraws it on. A menu
+       that has finished drawing does not draw again -- menu_message paints once
+       and menu_wait then holds the screen until a key arrives. */
+    dash_reset();
+    dash_box(6, 4, 12, 8);
+    dash_frame_end();                      /* claimed by the dash_box above */
+    dash_box_hold();
+    dash_frame_end();
+    assert(dash_cell(6, 4) == DT_BOX_TL);
+    dash_box_hold();
+    dash_frame_end();
+    assert(dash_cell(6, 4) == DT_BOX_TL);
+
+    /* Without the hold it expires, which is what makes the hold load-bearing
+       rather than decorative. */
+    dash_frame_end();
+    assert(dash_cell(6, 4) == DT_BLANK);
+
+    /* The hold asks the layer what is on it, NOT whether a menu is open. That
+       distinction is the whole bug it was written for: online_mode holds one
+       MenuBacking for a whole telnet session, so a hold keyed on the backing
+       refcount went on re-claiming the dial screen's box for the rest of the
+       session and fought the strip for the layer every frame. Once the strip
+       has claimed, a hold must do nothing at all. */
+    dash_reset();
+    dash_box(6, 4, 12, 8);
+    dash_build(DASH_PANEL, 19);
+    dash_box_hold();
+    dash_frame_end();
+    assert(dash_cell(0, 19) == DT_CORNER_TL);   /* strip still up */
+    assert(dash_cell(6, 4) == DT_BLANK);        /* stale box did not return */
+    for (y = 0; y < 6; y++) {
+        dash_build(DASH_PANEL, 19);
+        dash_box_hold();
+        dash_frame_end();
+        assert(dash_cell(0, 19) == DT_CORNER_TL);
+        assert(dash_cell(6, 4) == DT_BLANK);
+    }
+
+    /* And a hold with nothing painted stays nothing painted. */
+    dash_reset();
+    dash_box_hold();
+    dash_frame_end();
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+
     printf("test_dash_map: ok\n");
     return 0;
 }

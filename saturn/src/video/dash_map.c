@@ -256,6 +256,11 @@ void dash_box(int x, int y, int w, int h)
     paint();
 }
 
+void dash_box_hold(void)
+{
+    if (g_variant == DASH_BOX) g_touched = 1;
+}
+
 unsigned char dash_cell(int x, int y)
 {
     if (x < 0 || x >= DASH_COLS || y < 0 || y >= DASH_ROWS) return DT_BLANK;

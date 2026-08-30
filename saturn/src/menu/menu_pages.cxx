@@ -132,7 +132,7 @@ static void network_page(void) {
     for (int i = 0; g_dialnum[i] && k.input_len < DIALNUM_MAX; i++) keyboard_type_char(&k, g_dialnum[i]);
     const char *err = "";
     int arow = -1;   // -1 = on the numpad; 0 = Ok; 1 = Cancel
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
@@ -413,7 +413,7 @@ static CtlView ctl_view(void) {
  ----------------------*/
 static bool controls_page(void) {
     MenuBacking backing;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
     int s_face[FA_N], s_chord[CA_N];
@@ -528,7 +528,7 @@ static bool controls_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     return switched;
 }
 
@@ -563,7 +563,7 @@ static bool controls_page(void) {
  ----------------------*/
 bool keyboard_controls_page(void) {
     MenuBacking backing;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
     int s_ins = keyboard_get_insert(), s_caps = keyboard_get_caps(),
@@ -633,7 +633,7 @@ bool keyboard_controls_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     return switched;
 }
 
@@ -720,7 +720,7 @@ void sound_options_page(void) {
     if (aidx < 0) aidx = 0;
     int fx, fy, fw, fh;
     menu_box_fit("SOUND", 34, nrows + 5, &fx, &fy, &fw, &fh);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
@@ -830,7 +830,7 @@ void sound_options_page(void) {
     // else, which is the failure the old stop-and-restore had to document.
     if (was_paused) music_duck();
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
 }
 
 /*----------------------
@@ -895,7 +895,7 @@ static void display_options_page(void) {
     display_pin_dynamic_slot(display_image_slot(title_bg_loaded_file()));
     if (g_display.palette == DISP_PAL_DYNAMIC) g_display.image = display_dynamic_slot();
     DisplayState snapshot = g_display;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         // Rebuilt every frame because the Palette row above can remove a row
@@ -995,7 +995,7 @@ static void display_options_page(void) {
     }
     page_fade_out(g_menu_page_fade);
     display_pin_dynamic_slot(DISP_IMAGE_NONE);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
 }
 
 /*----------------------
@@ -1206,7 +1206,7 @@ void credits_page(void) {
     const int fx = 0, fy = 2, fw = 40, fh = 24;
     const int npages = (int)(sizeof(CREDITS_PAGES) / sizeof(CREDITS_PAGES[0]));
     int page = 0;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
@@ -1235,7 +1235,7 @@ void credits_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
 }
 
 /*----------------------
@@ -1281,7 +1281,7 @@ static void gameplay_page(void) {
     int sel = 0;
     int diff  = g_difficulty;
     int verb  = g_verbosity;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
@@ -1342,7 +1342,7 @@ static void gameplay_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
 }
 
 /*----------------------
@@ -1448,7 +1448,7 @@ int options_menu(void) {
 
     int sel = 0;
     int result = OM_NONE;
-    SRL::Core::Synchronize();
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();

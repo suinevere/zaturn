@@ -51,24 +51,6 @@ static void         *g_menu_service_ctx = nullptr;
 #endif
 
 /*----------------------
- | g_box_x / g_box_y / g_box_w / g_box_h / g_box_live
- | Description: The rectangle the last menu_frame handed to dash_box, and
- |   whether a menu still owns it. menu_sync re-claims it every frame while a
- |   MenuBacking is alive, because dash_frame_end takes the layer down on any
- |   frame nobody claims it and a menu that has finished drawing does not draw
- |   again -- menu_message paints once and menu_wait then holds the screen for
- |   as long as the player takes to press a key. The printed border did not need
- |   this: text stays on the screen until something overwrites it.
- |
- |   MenuBacking's refcount is the ownership signal because it is already
- |   exactly "a menu page is open", so the border expires on the same event the
- |   image-suppressing window does rather than on a rule of its own.
- | Author: suinevere
- ----------------------*/
-static int  g_box_x = 0, g_box_y = 0, g_box_w = 0, g_box_h = 0;
-static bool g_box_live = false;
-
-/*----------------------
  | menu_sync
  | Description: Services looping PCM sound (sound_service) and advances the
  |   music mixer (music_tick, which commits any debounced Dynamic-mix switch
@@ -99,8 +81,7 @@ void menu_sync(void) {
     sound_service();
     music_tick();
 #endif
-    if (g_box_live && g_menu_backing_depth > 0)
-        dash_box(g_box_x, g_box_y, g_box_w, g_box_h);
+    dash_box_hold();
     SRL::Core::Synchronize();
 }
 
@@ -178,9 +159,14 @@ static unsigned short menu_intro_scale(unsigned short packed, int v) {
 /*----------------------
  | menu_offset_engage / menu_offset_release
  | Description: Claim and release the layers a menu fade drives. The shared
- |   screen-wide fade (title.h) owns both: NBG3 on colour offset channel A, the
- |   background picture on channel B where the player's held wallpaper dim is
- |   composed in. Going through it rather than pointing both layers at channel A
+ |   screen-wide fade (title.h) owns them: NBG3 and NBG2 on colour offset channel
+ |   A, the background picture on channel B where the player's held wallpaper dim
+ |   is composed in. NBG2 -- the menu borders and the input dashboard -- goes on A
+ |   with the text it frames rather than on B with the picture: it is chrome, not
+ |   scenery, and a border composed into the wallpaper dim would darken every time
+ |   the player dimmed the wallpaper.
+ |
+ |   Going through the shared fade rather than pointing both layers at channel A
  |   here is what keeps a dimmed wallpaper dimmed across a menu fade -- taking the
  |   picture onto A dropped the dim for the length of the fade and left it
  |   dropped, so the Display page's Dimming row then appeared to do nothing until
@@ -194,6 +180,7 @@ static unsigned short menu_intro_scale(unsigned short packed, int v) {
 static void menu_offset_engage(void) {
 #ifdef NETBIN
     SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
+    SRL::VDP2::NBG2::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
 #else
     title_bg_fade_engage();
@@ -205,6 +192,7 @@ static void menu_offset_release(void) {
     SRL::VDP2::ColorOffset zero((int16_t) 0, (int16_t) 0, (int16_t) 0);
     SRL::VDP2::SetColorOffsetA(zero);
     SRL::VDP2::NBG0::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+    SRL::VDP2::NBG2::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
 #else
     title_bg_fade_reset();
@@ -269,6 +257,9 @@ void menu_fade_out(int frames) {
     menu_offset_engage();
     for (int i = 0; i <= frames; i++) {
         menu_intro_level(-(255 * i) / frames);
+        // A fade holds the screen for `frames` frames without redrawing, so
+        // without this the box it is fading out vanishes on the first of them.
+        dash_box_hold();
         SRL::Core::Synchronize();
     }
 }
@@ -357,6 +348,7 @@ void menu_fade_in_ex(int frames, MenuFadeStep step) {
         // frame that brightness belongs to -- the same ordering title_bg_fade_in_ex
         // uses, and the reason the CD-DA rises with the picture rather than behind it.
         if (step) step(level);
+        dash_box_hold();      // as in menu_fade_out: a fade redraws nothing
         SRL::Core::Synchronize();
     }
     menu_offset_release();
@@ -474,13 +466,7 @@ static void menu_backing_window_off(void) {
  | Returns: N/A
  ----------------------*/
 MenuBacking::~MenuBacking() {
-    if (--g_menu_backing_depth == 0) {
-        text_on_flush(&menu_backing_window_off);
-        // Stop re-claiming NBG2 here rather than at the next frame: unlike the
-        // window, whose deferral menu_backing_window_off explains, the border
-        // must expire with the page or it would outlive it over the game.
-        g_box_live = false;
-    }
+    if (--g_menu_backing_depth == 0) text_on_flush(&menu_backing_window_off);
 }
 
 /*----------------------
@@ -504,11 +490,7 @@ void menu_frame(int x0, int y0, int w, int h, const char *title) {
     // when it is not, exactly as the gamepad strip's border does. The printed
     // form is not dead code: it is what a failed VRAM allocation falls back to.
     bool chrome = (dash_ready() == 0);
-    if (!chrome) {
-        dash_box(x0, y0, w, h);
-        g_box_x = x0; g_box_y = y0; g_box_w = w; g_box_h = h;
-        g_box_live = true;
-    }
+    if (!chrome) dash_box(x0, y0, w, h);
     for (int r = 0; r < h; r++) {
         char line[42]; int p = 0;
         for (int c = 0; c < w && p < (int) sizeof(line) - 1; c++)

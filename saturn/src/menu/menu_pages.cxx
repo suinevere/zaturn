@@ -1254,7 +1254,6 @@ void credits_page(void) {
         for (int i = 0; i < cp.n; i++) text_print(x, y++, "%s", cp.lines[i]);
         text_print(x, y + 1, "%s Page %d/%d %s",
                            page > 0 ? "<" : " ", page + 1, npages, page < npages - 1 ? ">" : " ");
-        text_print(x, y + 2, "%s", hint("</> page  B=Back", "</> page  Esc=Back"));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }

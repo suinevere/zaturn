@@ -101,17 +101,17 @@ int choose_device(const char *title) {
  |   the edit row budgets maxchars plus the caret. It budgets no cursor mark,
  |   because there is none: the selected row is the one drawn at full
  |   brightness, the rest in the dim ink. In EDIT
- |   the width must also cover the keyboard (KB_COLS*2) and the hint; in either
- |   state the LONGER of the two hint variants (pad vs keyboard) is budgeted
- |   unconditionally so the box does not resize when the player switches input
- |   device mid-menu. That same row width is what every row pads to, so the
- |   centred list keeps one left edge.
+ |   the width must also cover the keyboard (KB_COLS*2). Neither state carries a
+ |   controls hint -- only the confirm box still spells the buttons out -- which
+ |   is also why the box no longer has to budget the longer of a pad/keyboard
+ |   hint pair against a mid-menu device switch. That same row width is what
+ |   every row pads to, so the centred list keeps one left edge.
  | Author: suinevere
  | Dependencies: menu.h (MenuBacking/menu_clear/menu_frame), menu_layout.h
  |   (menu_box_fit/menu_visible_digit/MENU_DIGIT_COLS), keyboard.h (KeyboardState
  |   and helpers/KB_LAYOUT/KB_ROWS/KB_COLS), saturn_backup.h (SAVE_SLOTS/
  |   saturn_bup_info), saturn_keyboard.h (saturn_keyboard_poll/SATURN_KEY_*),
- |   input.h (g_pad/Button), console_view.h (note_input_device/hint/g_kbd_visible)
+ |   input.h (g_pad/Button), console_view.h (note_input_device/g_kbd_visible)
  | Globals: g_pad, g_kbd_visible
  | Params: device -- SATURN_BUP_* target; out_slot -- receives chosen slot;
  |   out_name -- receives edited name (empty if blank); maxchars -- name cap
@@ -119,11 +119,6 @@ int choose_device(const char *title) {
  ----------------------*/
 int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) {
     MenuBacking backing;
-
-    static const char PICK_HINT_PAD[] = "A/C=edit   B=Back";
-    static const char PICK_HINT_KBD[] = "Enter=edit   Esc=Back";
-    static const char EDIT_HINT_PAD[] = "C=type X=space  A=Ok  B=Back";
-    static const char EDIT_HINT_KBD[] = "Enter=Ok";
 
     char slotname[SAVE_SLOTS][12];
     for (int i = 0; i < SAVE_SLOTS; i++) {
@@ -153,7 +148,8 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
             } else {
                 if (g_pad->WasPressed(Button::Up))   sel = (sel - 1 + SAVE_SLOTS) % SAVE_SLOTS;
                 if (g_pad->WasPressed(Button::Down)) sel = (sel + 1) % SAVE_SLOTS;
-                if (g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START)) pick = true;
+                if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
+                    || g_pad->WasPressed(Button::START)) pick = true;
                 if (g_pad->WasPressed(Button::B)) cancel = true;
             }
             last_sel = sel;   // after every move, so no exit path has to remember to
@@ -218,18 +214,12 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
         int rows;
         if (editing) {
             int kb_w = KB_COLS * 2;
-            int hint_w = (int) sizeof(EDIT_HINT_KBD) - 1;
-            if ((int) sizeof(EDIT_HINT_PAD) - 1 > hint_w) hint_w = (int) sizeof(EDIT_HINT_PAD) - 1;
             content_w = row_w;
-            if (kb_w > content_w)   content_w = kb_w;
-            if (hint_w > content_w) content_w = hint_w;
-            rows = SAVE_SLOTS + 2 + KB_ROWS + 1;
+            if (kb_w > content_w) content_w = kb_w;
+            rows = SAVE_SLOTS + 1 + KB_ROWS;
         } else {
-            int hint_w = (int) sizeof(PICK_HINT_KBD) - 1;
-            if ((int) sizeof(PICK_HINT_PAD) - 1 > hint_w) hint_w = (int) sizeof(PICK_HINT_PAD) - 1;
             content_w = row_w;
-            if (hint_w > content_w) content_w = hint_w;
-            rows = SAVE_SLOTS + 2;
+            rows = SAVE_SLOTS;
         }
         int x0, y0, w, h;
         menu_box_fit(btitle, content_w, rows, &x0, &y0, &w, &h);
@@ -249,10 +239,7 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                           menu_num(nums, i), label);
             }
         }
-        if (!editing) {
-            menu_text(x0, w, cy + SAVE_SLOTS + 1, 0,
-                      hint(PICK_HINT_PAD, PICK_HINT_KBD));
-        } else {
+        if (editing) {
             // Centred as one block, not row by row, so the cursor highlight can
             // still be addressed by column.
             int kbx = x0 + 2 + ((w - 4) - KB_COLS * 2) / 2;
@@ -270,8 +257,6 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                     text_print_hl(kbx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
                 }
             }
-            menu_text(x0, w, cy + SAVE_SLOTS + 2 + KB_ROWS, 0,
-                      hint(EDIT_HINT_PAD, EDIT_HINT_KBD));
         }
         menu_sync();
     }

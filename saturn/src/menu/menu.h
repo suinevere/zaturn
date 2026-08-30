@@ -263,8 +263,9 @@ void menu_message(const char *title, const char *line1, const char *line2);
  | Description: Modal, scrollable list menu titled `title` over `count` items
  |   in `items`. Navigable by gamepad (D-pad to move, A/C/Start to pick, B to
  |   cancel) or keyboard (number keys pick a visible row directly, Enter picks
- |   the highlighted item, Backspace/Esc cancels). Polls the soft-reset chord
- |   every loop.
+ |   the highlighted item, Backspace/Esc cancels). Draws no controls hint of its
+ |   own -- only menu_confirm still spells the buttons out. Polls the soft-reset
+ |   chord every loop.
  | Author: suinevere
  | Dependencies: menu_layout.c, console_view.cxx, input.h, saturn_keyboard.h,
  |   soft_reset.h, SRL

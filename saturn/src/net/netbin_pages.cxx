@@ -183,8 +183,9 @@ void netbin_dial_page(void) {
         menu_clear();
         int fx, fy, fw, fh;
         /* Taller when the numpad is up (gamepad), shrinking to the line and the
-           two rows once a real keyboard hides it. */
-        menu_box_fit("NETWORK", 24, g_kbd_visible ? 15 : 10, &fx, &fy, &fw, &fh);
+           two rows once a real keyboard hides it. No controls hint on either --
+           only the confirm box still spells the buttons out. */
+        menu_box_fit("NETWORK", 24, g_kbd_visible ? 13 : 8, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "NETWORK");
         int y = fy + 4;
         menu_text(fx, fw, y++, 0, "Server dial number:");
@@ -212,10 +213,6 @@ void netbin_dial_page(void) {
         menu_row(fx, fw, y++, arow == 0, DIAL_ROW_W, "Dial");
         menu_row(fx, fw, y++, arow == 1, DIAL_ROW_W, "Controls");
         if (err[0]) menu_text(fx, fw, y, 0, err);
-        y++;
-        y++;
-        menu_text(fx, fw, y, 0,
-            hint("A=Dial C=type  B=del", "type number  Enter=Dial"));
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }

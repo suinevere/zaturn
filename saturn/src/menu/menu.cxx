@@ -678,28 +678,18 @@ void menu_message(const char *title, const char *line1, const char *line2) {
 }
 
 /*----------------------
- | MENU_SELECT_HINT_PAD / MENU_SELECT_HINT_KBD
- | Description: The pad and keyboard hint lines at the bottom of the menu_select
- |   box, named once so their width feeds both the sizing math and the draw call --
- |   change the wording and the box width follows automatically instead of drifting
- |   from a hardcoded column count.
- | Author: suinevere
- ----------------------*/
-static const char MENU_SELECT_HINT_PAD[] = "A/C=Ok   B=Back";
-static const char MENU_SELECT_HINT_KBD[] = "Enter=Ok   Esc=Back";
-
-/*----------------------
  | menu_select
  | Description: Sizes a box (menu_box_fit) to the longest item plus the
  |   reserved digit columns (MENU_DIGIT_COLS, added unconditionally so the box
  |   does not resize when the player switches between the pad and a keyboard
- |   mid-menu), also budgeting the wider of the two MENU_SELECT_HINT_*
- |   variants since the hint line shares the box's width. Rows draw through
- |   menu_row, so they sit centered and the selected one is the only one at full
- |   brightness, rather than carrying a '>' in a column every other row wastes.
- |   Height is the visible slice (up to 16 rows) plus the two scroll
- |   markers, a blank row, and the hint -- the markers keep their rows whether
- |   or not they are drawn, so the box does not jump as the list scrolls. Each
+ |   mid-menu). Rows draw through menu_row, so they sit centered and the
+ |   selected one is the only one at full brightness, rather than carrying a
+ |   '>' in a column every other row wastes. Height is the visible slice (up to
+ |   16 rows) plus the two scroll markers -- the markers keep their rows whether
+ |   or not they are drawn, so the box does not jump as the list scrolls. No
+ |   controls hint line, and so nothing to budget its width against: the buttons
+ |   are the same on every list, and only the confirm box still spells them out.
+ |   Each
  |   loop iteration polls the soft-reset chord, then D-pad/A/C/Start/B on the
  |   gamepad and Up/Down/Enter/Backspace/Esc plus row-selecting digits (mapped
  |   through the visible scroll window via menu_visible_digit, so every entry
@@ -733,12 +723,7 @@ int menu_select_at(const char *title, const char *const *items, int count, int *
     }
     int content_w = item_w + MENU_DIGIT_COLS;
 
-    int hint_w = (int) sizeof(MENU_SELECT_HINT_PAD) - 1;
-    int hint_kbd_w = (int) sizeof(MENU_SELECT_HINT_KBD) - 1;
-    if (hint_kbd_w > hint_w) hint_w = hint_kbd_w;
-    if (hint_w > content_w) content_w = hint_w;
-
-    int rows = (count < VIS ? count : VIS) + 4;
+    int rows = (count < VIS ? count : VIS) + 2;
 
     int x0, y0, w, h;
     menu_box_fit(title, content_w, rows, &x0, &y0, &w, &h);
@@ -748,7 +733,8 @@ int menu_select_at(const char *title, const char *const *items, int count, int *
         check_soft_reset();   // A+B+C+Start -> back to the title screen
         if (g_pad->WasPressed(Button::Up))    sel = (sel - 1 + count) % count;
         if (g_pad->WasPressed(Button::Down))  sel = (sel + 1) % count;
-        bool pick = g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START);
+        bool pick = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
+                 || g_pad->WasPressed(Button::START);
         bool cancel = g_pad->WasPressed(Button::B);
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
@@ -790,8 +776,6 @@ int menu_select_at(const char *title, const char *const *items, int count, int *
                 menu_row(x0, w, cy + 1 + vis, i == sel, pad, items[i]);
         }
         if (last < count) menu_text(x0, w, cy + 1 + (last - top), 0, "v more");
-        menu_text(x0, w, cy + 3 + (last - top), 0,
-            hint(MENU_SELECT_HINT_PAD, MENU_SELECT_HINT_KBD));
         menu_sync();
         if (intro) { menu_fade_in(intro); intro = 0; }
     }

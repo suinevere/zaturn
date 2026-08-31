@@ -18,6 +18,21 @@
 :; #    game_presentation.inc's frame offsets were measured against. That check
 :; #    is why a wrong disc revision fails here instead of showing garbage on
 :; #    screen with nothing to say why.
+:; #
+:; #    Staged into ./BG, and MIRRORED into saturn/cd/data/BG when that tree is
+:; #    present. ./BG is the one the release kit needs, because the kit ships
+:; #    tools/assets alone and has no saturn/ tree to mirror into. The mirror is
+:; #    what makes a plain `compile-cd.bat` produce an ISO that can actually show
+:; #    room art -- the SDK build bakes cd/data into the image, and without it
+:; #    the disc you load into Mednafen has no /BG and every room is blank.
+:; #    Untracked and gitignored (saturn/.gitignore) -- these are the original
+:; #    disc's assets and are never committed.
+:; #
+:; #    In CI this mirror is inert: full-image.yml builds the base ISO BEFORE
+:; #    calling bg.bat, so the released base image stays free of them and the
+:; #    injection in games.bat is what puts them on the disc. A local release
+:; #    packaging run after a bg.bat would not have that ordering -- build the
+:; #    kit from a clean tree, as CI does.
 :; #  Author: suinevere
 :; #  Dependencies: curl, unzip, python3, ../extract_bg.py, CONFIG.ME
 :; #  Globals: N/A
@@ -38,8 +53,18 @@
 :; PY="../.venv/bin/python"
 :; [ -x "$PY" ] || PY=$(command -v python3 || command -v python)
 :;
+:; # mirror_local <dir> -- copy the staged archives into the SDK's own data tree
+:; # when that tree exists. A checkout has it; the standalone release kit does not.
+:; mirror_local() {
+:;   [ -d "../../saturn/cd/data" ] || return 0
+:;   mkdir -p ../../saturn/cd/data/BG
+:;   cp BG/*.CGL ../../saturn/cd/data/BG/ 2>/dev/null || return 0
+:;   echo "Mirrored into saturn/cd/data/BG for the SDK build"
+:; }
+:;
 :; if "$PY" ../extract_bg.py --check -o BG; then
 :;   echo "Room backgrounds already staged -> BG"
+:;   mirror_local
 :;   exit 0
 :; fi
 :;
@@ -68,13 +93,16 @@
 :; fi
 :;
 :; "$PY" ../extract_bg.py "$SRC" -o BG
+:; mirror_local
 :; exit
 
 @ECHO OFF
 REM ----------------------
 REM  bg.bat  (Windows Execution Block)
 REM  Description: Stages Zork I's eleven room-background archives (B*.CGL) into
-REM    .\BG, ready for games.bat to inject them into /BG on the output disc.
+REM    .\BG, ready for games.bat to inject them into /BG on the output disc, and
+REM    mirrors them into saturn\cd\data\BG when that tree is present so a plain
+REM    compile-cd.bat produces an ISO that can show room art at all.
 REM    See the sh block above for the full reasoning; the two halves must agree
 REM    on the staging directory name (BG) and the cache path
 REM    (cache\zork1jp.zip), or a build that switches shells re-downloads.
@@ -99,6 +127,7 @@ IF NOT EXIST "%PY%" SET "PY=python"
 "%PY%" "%~dp0..\extract_bg.py" --check -o "BG"
 IF NOT ERRORLEVEL 1 (
     ECHO Room backgrounds already staged -^> BG
+    CALL :mirror
     ENDLOCAL & EXIT /B 0
 )
 
@@ -135,5 +164,21 @@ IF NOT DEFINED SRC (
 "%PY%" "%~dp0..\extract_bg.py" "%SRC%" -o "BG"
 IF ERRORLEVEL 1 ( ECHO ERROR: background extraction failed & ENDLOCAL & EXIT /B 1 )
 
+CALL :mirror
+
 ENDLOCAL
+GOTO :eof
+
+REM ---------------------------------------------------------------------------
+REM :mirror
+REM Copies the staged archives into the SDK's own data tree when that tree
+REM exists. A checkout has it; the standalone release kit does not, and a
+REM missing tree is not an error there. Mirrors lib/pvms.bat's habit of failing
+REM soft on anything that is not the script's actual job.
+REM ---------------------------------------------------------------------------
+:mirror
+IF NOT EXIST "%~dp0..\..\saturn\cd\data" GOTO :eof
+IF NOT EXIST "%~dp0..\..\saturn\cd\data\BG" MKDIR "%~dp0..\..\saturn\cd\data\BG"
+COPY /Y "%~dp0BG\*.CGL" "%~dp0..\..\saturn\cd\data\BG\" >NUL 2>&1
+IF NOT ERRORLEVEL 1 ECHO Mirrored into saturn\cd\data\BG for the SDK build
 GOTO :eof

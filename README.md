@@ -288,6 +288,20 @@ download `music.bat` uses for the CD audio, whose data track it discards. Set
 `ZORK_DISC` to a local copy to skip the download entirely. Nothing copyrighted
 is committed: `tools/assets/BG/` is gitignored, exactly like the Z3 stories.
 
+`bg.bat` stages into **two** places, and both are needed:
+
+- `tools/assets/BG/` — what `games.bat` injects. The released asset kit ships
+  `tools/assets/` alone, with no `saturn/` tree, so this is the only one it has.
+- `saturn/cd/data/BG/` — mirrored in when that tree exists. The SDK build bakes
+  `cd/data` into the base image, so this is what makes a plain `compile-cd.bat`
+  produce an ISO that can show room art at all. Without it the disc you load
+  into Mednafen has no `/BG` and every room is blank.
+
+Both are gitignored; the archives are the original disc's assets and are never
+committed. In CI the mirror is inert — `full-image.yml` builds the base ISO
+*before* calling `bg.bat`, so the released base image stays free of them and the
+injection is what puts them on the disc.
+
 Each archive is verified by size and SHA-256 against `BG_MANIFEST` in
 `tools/extract_bg.py` before it is staged. That check is load-bearing rather
 than defensive — `game_presentation.inc` records a byte offset and length per

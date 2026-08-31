@@ -224,6 +224,16 @@ void music_set_category_fn(void (*fn)(int cat)) { g_cat_fn = fn; }
 static void notify_cat(int kind, int cat) { if (kind == CAT_KIND_SCENE && g_cat_fn) g_cat_fn(cat); }
 
 /*----------------------
+ | g_room_fn / music_set_room_fn
+ | Description: The per-room subscriber. Separate from g_cat_fn because a
+ |   category on the authored path is a track, and rooms sharing a track share a
+ |   category while needing different pictures.
+ | Author: suinevere
+ ----------------------*/
+static void (*g_room_fn)(unsigned int) = 0;
+void music_set_room_fn(void (*fn)(unsigned int obj)) { g_room_fn = fn; }
+
+/*----------------------
  | g_rot_fn / music_set_rotate_fn / notify_rotate / g_same_cat_rooms
  | Description: The same-category rotation subscriber, and the room counter that
  |   triggers it. g_same_cat_rooms counts rooms entered since the last commit
@@ -928,6 +938,7 @@ void music_on_turn(unsigned int obj) {
     if (room_changed) {
         int base = scene_of_room(g_release, g_serial, obj);
         g_cur_room = obj; g_have_room = 1; g_base_cat = base; g_event_cat = -1;
+        if (g_room_fn) g_room_fn(obj);
     }
     if (event_cat >= 0) g_event_cat = event_cat;
 

@@ -39,6 +39,7 @@ extern "C" {
 #include "menu_pages.h"
 #include "save_ui.h"
 #include "title.h"
+#include "room_art.h"
 #include "splash.h"
 #include "game_catalog.h"
 #include "online.h"
@@ -181,6 +182,29 @@ static void on_text_rotate(int cat) {
     if (slot == DISP_IMAGE_NONE || slot == g_display.image) return;
     g_display.image = slot;
     display_apply();
+}
+
+/*----------------------
+ | on_text_room
+ | Description: The authored art's half of a room change, for stories that carry
+ |   a per-room presentation. Unlike on_text_category this fires on every room,
+ |   because every room has its own picture, and it takes that picture
+ |   immediately rather than at the bottom of a fade: within an area the
+ |   archive is already resident, so the change costs a decompress and touches
+ |   no CD.
+ |
+ |   An area change does read the disc. room_art_show performs the read itself
+ |   and the fade around it is the music's own, since an area change is also a
+ |   track change.
+ | Author: suinevere
+ | Dependencies: room_art.h, options.h
+ | Globals: g_display
+ | Params: obj -- the room's object number
+ | Returns: N/A
+ ----------------------*/
+static void on_text_room(unsigned int obj) {
+    if (g_display.palette != DISP_PAL_DYNAMIC) return;
+    room_art_show(obj);
 }
 
 /*----------------------
@@ -408,6 +432,7 @@ int main(void) {
     // the cache is empty and this costs nothing, and the sequence below is meant
     // not to know which boot it is.
     title_bg_cache_release();
+    room_art_release();
 
     for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
 
@@ -459,6 +484,7 @@ int main(void) {
     // neither is meant to repaint the title out from under itself.
     music_set_category_fn(on_text_category);
     music_set_rotate_fn(on_text_rotate);
+    music_set_room_fn(on_text_room);
     music_set_fade_fn(on_music_fade);
     music_set_fade_frames(MUSIC_FADE_FRAMES);
     menu_intro_fade_arm();        // ...then hold it black across the swap so the
@@ -627,6 +653,8 @@ int main(void) {
     {
         music_set_level(g_music_level);
         music_set_game(game_release, game_serial);
+        room_art_set_game(game_release, game_serial);
+        if (room_art_available()) title_bg_cache_release();
         music_seed((unsigned int) seed);
         music_reset();
         music_set_mix(g_mix_mode, g_sel_track);

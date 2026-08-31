@@ -170,6 +170,21 @@ void music_set_duckfns(void (*duck_fn)(void), void (*unduck_fn)(void));
 void music_set_debounce_frames(int n);                 /* room-switch debounce length */
 void music_set_category_fn(void (*fn)(int cat));       /* announce the active SCENE only; events are silent */
 void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-scene rotations; also scene-only */
+
+/*----------------------
+ | music_set_room_fn
+ | Description: Subscribes to every room change, for stories with an authored
+ |   per-room presentation. set_category_fn cannot serve this: on that path the
+ |   category is the track, so two rooms sharing a track are one category and
+ |   the picture would never change between them. The picture needs the room,
+ |   which is what this hands over.
+ |
+ |   Fired on the room change itself rather than at the debounced commit,
+ |   because the picture must not lag the text -- the area's archive is resident
+ |   and the change costs a decompress, not a disc read.
+ | Author: suinevere
+ ----------------------*/
+void music_set_room_fn(void (*fn)(unsigned int obj));
 void music_set_fade_fn(void (*fn)(int level));         /* 0 = black/quiet, 255 = normal */
 void music_set_fade_frames(int n);                     /* ramp length; 0 = instant commit */
 

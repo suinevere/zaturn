@@ -58,10 +58,22 @@ void map_model_reset(void);
 
 /*----------------------
  | map_model_enter
- | Description: Records one prompt. Infers the direction travelled by matching
- |   the new room against the previous snapshot's dest[], places the room if it
- |   is new, and makes it current. Placing is idempotent: a room already on the
- |   grid keeps its cell.
+ | Description: Records a room the player is standing in, placing it on first
+ |   entry and never moving it afterwards.
+ |
+ |   Two rules decide where. If map_atlas covers the room, it goes where the
+ |   atlas says -- that is the default wherever somebody has drawn the geography,
+ |   and it is what makes a compass direction mean what it says. Otherwise it is
+ |   stepped one cell from the room just left, in the direction travelled, which
+ |   is the original Saturn release's rule and the fallback for everything
+ |   unauthored: a story nobody has mapped, a maze the atlas deliberately omits,
+ |   or a room past the edge of the drawn region. A room placed by the fallback
+ |   still links to what it was reached from, so walking off the atlas draws a
+ |   line onward rather than stopping the map.
+ |
+ |   Contested cells are resolved by the placement search, and the first room to
+ |   hold a cell keeps it -- including against the atlas, so an authored room
+ |   arriving late takes the nearest free cell rather than evicting a walked one.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_vis, g_x, g_y, g_cur, g_have_cur, g_prev

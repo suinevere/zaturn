@@ -8,6 +8,7 @@
  | Author: suinevere
  ----------------------*/
 #include "map_model.h"
+#include "map_atlas.h"
 
 /*----------------------
  | DX / DY
@@ -60,6 +61,26 @@ static RoomModel      g_prev;
 static int            g_have_prev;
 
 /*----------------------
+ | g_frame_set / g_frame_x / g_frame_y
+ | Description: The translation from the atlas's coordinates into this session's,
+ |   and whether it has been established yet.
+ |
+ |   The atlas numbers its cells absolutely and the walk numbers them from
+ |   wherever the first room happened to land, so the two have to be reconciled
+ |   or an authored room would sit an arbitrary distance from a walked one. The
+ |   reconciliation is deferred to the first authored room actually entered: if
+ |   nothing is placed yet the atlas frame is simply adopted, and if the walk has
+ |   already placed rooms the offset is chosen so that first authored room lands
+ |   where the walk would have put it. Everything authored afterwards is placed
+ |   through the same offset, so the atlas's internal geometry survives whole
+ |   however the player entered it.
+ | Author: suinevere
+ ----------------------*/
+static int   g_frame_set;
+static short g_frame_x;
+static short g_frame_y;
+
+/*----------------------
  | g_dest / g_kind
  | Description: Each placed room's destinations and whether each was a flat or
  |   a vertical exit, kept because a link is a property of the story rather
@@ -85,6 +106,9 @@ void map_model_reset(void) {
     g_cur = 0;
     g_have_cur = 0;
     g_have_prev = 0;
+    g_frame_set = 0;
+    g_frame_x = 0;
+    g_frame_y = 0;
 }
 
 /*----------------------
@@ -243,6 +267,34 @@ static void place(unsigned short room, int tx, int ty) {
 }
 
 /*----------------------
+ | atlas_target
+ | Description: Where an authored room belongs in this session's coordinates, or
+ |   nothing when the atlas does not cover it. Establishes the frame on the first
+ |   authored room, anchoring it to `wx`, `wy` -- what the walk would have chosen
+ |   -- when the walk has already placed something, and adopting the atlas's own
+ |   numbering when it has not.
+ | Author: suinevere
+ | Dependencies: map_atlas.h
+ | Globals: g_frame_set, g_frame_x, g_frame_y
+ | Params: room -- object number; wx, wy -- the walk's target, and whether it
+ |   means anything is `anchored`; tx, ty -- receive the cell
+ | Returns: 1 when the atlas covers the room, 0 otherwise
+ ----------------------*/
+static int atlas_target(unsigned short room, int wx, int wy, int anchored,
+                        int *tx, int *ty) {
+    int ax, ay;
+    if (!map_atlas_pos(room, &ax, &ay)) return 0;
+    if (!g_frame_set) {
+        g_frame_x = (short) (anchored ? wx - ax : 0);
+        g_frame_y = (short) (anchored ? wy - ay : 0);
+        g_frame_set = 1;
+    }
+    *tx = ax + g_frame_x;
+    *ty = ay + g_frame_y;
+    return 1;
+}
+
+/*----------------------
  | record_exits
  | Description: Copies one snapshot's exits and destinations into the placed
  |   room's own row, which is what map_model_link answers from. Shared by the
@@ -268,7 +320,7 @@ static void record_exits(unsigned short room, const RoomModel *m) {
  | map_model_enter
  | Description: See map_model.h.
  | Author: suinevere
- | Dependencies: dir_from_prev, dir_to_cur, place, record_exits
+ | Dependencies: dir_from_prev, dir_to_cur, atlas_target, place, record_exits
  | Globals: g_vis, g_cur, g_have_cur, g_prev, g_have_prev
  | Params: m -- the snapshot, never null
  | Returns: N/A
@@ -279,14 +331,16 @@ void map_model_enter(const RoomModel *m) {
 
     if (!g_vis[room]) {
         int d = dir_from_prev(room);
-        int tx = 0, ty = 0;
+        int tx = 0, ty = 0, anchored = 0, ax, ay;
         if (d == MAP_DIR_UNKNOWN) d = dir_to_cur(m);
         if (g_have_cur && g_vis[g_cur]) {
             tx = g_x[g_cur];
             ty = g_y[g_cur];
             if (d != MAP_DIR_UNKNOWN) { tx += DX[d]; ty += DY[d]; }
             else                      { ty += 1; }
+            anchored = 1;
         }
+        if (atlas_target(room, tx, ty, anchored, &ax, &ay)) { tx = ax; ty = ay; }
         place(room, tx, ty);
     }
 

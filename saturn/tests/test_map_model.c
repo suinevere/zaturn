@@ -3,6 +3,7 @@
          saturn/src/engine/map_model.c && /tmp/tmm
    map_model.c is deliberately free of SRL includes so this links on the host. */
 #include "../src/engine/map_model.h"
+#include "../src/engine/map_atlas.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -513,6 +514,98 @@ int main(void) {
             assert(map_model_pos(30, &x, &y));
             assert(x == 0 && y == 2);
         }
+    }
+
+    /* With an atlas bound, an authored room goes where the drawing puts it and
+       the walk is not consulted. West of House, North of House, South of House
+       and Behind House must come out in the arrangement Infocom drew -- which is
+       the whole point, since walking Zork's exits cannot produce it. */
+    {
+        unsigned char hdr[0x18];
+        int wx, wy, nx, ny, sx, sy;
+        memset(hdr, 0, sizeof hdr);
+        hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
+        memcpy(hdr + 0x12, "840726", 6);
+        assert(map_atlas_bind(hdr, sizeof hdr) == 20);
+
+        map_model_reset();
+        {
+            RoomModel woh = mk(180); link1(&woh, RM_N, 81); link1(&woh, RM_S, 80);
+            RoomModel noh = mk(81);  link1(&noh, RM_S, 180); link1(&noh, RM_E, 79);
+            RoomModel soh = mk(80);  link1(&soh, RM_N, 180);
+            map_model_enter(&woh);
+            map_model_enter(&noh);
+            map_model_enter(&woh);
+            map_model_enter(&soh);
+        }
+        assert(map_model_pos(180, &wx, &wy));
+        assert(map_model_pos(81, &nx, &ny));
+        assert(map_model_pos(80, &sx, &sy));
+
+        /* The exact drawn offsets, not merely the right side of the house. The
+           walk would put North of House one cell straight up; Infocom draws it
+           two up and one across, and only the atlas produces that. A weaker
+           assertion here passes under either rule and pins nothing. */
+        assert(nx == wx + 1 && ny == wy - 2);
+        assert(sx == wx + 1 && sy == wy + 2);
+    }
+
+    /* Walking off the edge of the drawn region falls back to the step rule, and
+       the room lands one cell from where it was reached from -- close enough
+       that the view still draws the link onward. Object 250 is not in the
+       table. */
+    {
+        int ax, ay, bx, by;
+        map_model_reset();
+        {
+            RoomModel woh = mk(180); link1(&woh, RM_N, 250);
+            RoomModel off = mk(250); link1(&off, RM_S, 180);
+            map_model_enter(&woh);
+            map_model_enter(&off);
+        }
+        assert(map_model_pos(180, &ax, &ay));
+        assert(map_model_pos(250, &bx, &by));
+        assert(bx == ax && by == ay - 1);
+        assert(map_model_link(180, 250) == MAP_LINK_FLAT);
+    }
+
+    /* Entering the drawn region from outside it reconciles the two coordinate
+       systems: the first authored room lands exactly where the walk would have
+       put it, and everything authored afterwards keeps its position relative to
+       that one. Without the reconciliation the atlas's absolute cells would sit
+       an arbitrary distance from the walked ones. */
+    {
+        int ox, oy, wx, wy, nx, ny;
+        map_model_reset();
+        {
+            RoomModel off = mk(250); link1(&off, RM_S, 180);
+            RoomModel woh = mk(180); link1(&woh, RM_N, 250); link1(&woh, RM_N, 81);
+            RoomModel noh = mk(81);  link1(&noh, RM_S, 180);
+            map_model_enter(&off);
+            map_model_enter(&woh);
+            map_model_enter(&noh);
+        }
+        assert(map_model_pos(250, &ox, &oy));
+        assert(map_model_pos(180, &wx, &wy));
+        assert(map_model_pos(81, &nx, &ny));
+        assert(wx == ox && wy == oy + 1);
+        assert(nx == wx + 1 && ny == wy - 2);
+    }
+
+    /* Unbinding restores the walk exactly, so a story nobody drew is unaffected
+       by the existence of the table. */
+    {
+        int ax, ay;
+        assert(map_atlas_bind(0, 0) == 0);
+        map_model_reset();
+        {
+            RoomModel woh = mk(180); link1(&woh, RM_N, 81);
+            RoomModel noh = mk(81);  link1(&noh, RM_S, 180);
+            map_model_enter(&woh);
+            map_model_enter(&noh);
+        }
+        assert(map_model_pos(180, &x, &y) && x == 0 && y == 0);
+        assert(map_model_pos(81, &ax, &ay) && ax == 0 && ay == -1);
     }
 
     printf("test_map_model: ok\n");

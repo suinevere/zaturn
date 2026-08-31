@@ -44,6 +44,7 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 #include "menu_pages.h"
 #include "room_model.h"
 #include "map_model.h"
+#include "map_atlas.h"
 #include "save_ui.h"
 #include "soft_reset.h"
 extern "C" {
@@ -196,7 +197,11 @@ static void ensure_typeahead() {
     }
     typeahead_set_easy(g_difficulty == DIFF_EASY, have_solution);
     if (story != nullptr && len > 0) room_model_bind(story, len);
-    if (story != g_map_story) { map_model_reset(); g_map_story = story; }
+    if (story != g_map_story) {
+        map_atlas_bind(story, len);
+        map_model_reset();
+        g_map_story = story;
+    }
     g_ta_story = story;
     g_ta_diff = g_difficulty;
 }

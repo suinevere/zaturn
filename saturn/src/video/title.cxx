@@ -908,6 +908,37 @@ bool title_bg_show_oneoff(const char *file) {
 }
 
 /*----------------------
+ | title_bg_show_raw
+ | Description: See title.h.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: pixels, clut, w, h, tag -- see title.h
+ | Returns: true on success
+ ----------------------*/
+bool title_bg_show_raw(const unsigned char *pixels, const unsigned short *clut,
+                       int w, int h, const char *tag) {
+    if (pixels == nullptr || clut == nullptr || w <= 0 || h <= 0) return false;
+
+    SRL::Types::HighColor *colors = new SRL::Types::HighColor[256];
+    if (colors == nullptr) return false;
+    for (int i = 0; i < 256; i++) colors[i] = SRL::Types::HighColor(clut[i]);
+
+    RawBitmap bmp;
+    bmp.Pixels = const_cast<uint8_t *>(pixels);
+    bmp.W      = (uint16_t) w;
+    bmp.H      = (uint16_t) h;
+    bmp.Pal    = new SRL::Bitmap::Palette(colors, 256);
+    if (bmp.Pal == nullptr) { delete[] colors; return false; }
+
+    SRL::VDP2::NBG0::LoadBitmap(&bmp);
+    SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
+    nbg0_note_loaded(tag ? tag : "");
+    SRL::VDP2::NBG0::ScrollEnable();
+    return true;
+}
+
+/*----------------------
  | title_bg_hide
  | Description: Hides the title background image by disabling scroll on VDP2 NBG0.
  | Author: suinevere

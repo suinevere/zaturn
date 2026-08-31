@@ -26,12 +26,12 @@
 
 /*----------------------
  | SCREEN_ROWS
- | Description: The 28 text rows (0..27) the debug layer provides. The on-screen
+ | Description: The 30 text rows (0..29) the debug layer provides. The on-screen
  |   keyboard occupies the bottom rows when shown; when hidden (real keyboard in
  |   hand) those rows go back to the console for more text.
  | Author: suinevere
  ----------------------*/
-static const int SCREEN_ROWS = 28;
+static const int SCREEN_ROWS = 30;
 
 /*----------------------
  | TOP_MARGIN

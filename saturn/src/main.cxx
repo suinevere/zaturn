@@ -349,16 +349,21 @@ static unsigned int boot_entropy(void) {
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
 int main(void) {
-    // 320x224, not SRL's default: every layer this client paints is 224 lines
-    // tall -- 28 text rows of 8, and the wallpaper TGAs are 320x224 -- while the
-    // default is 320x240 on NTSC and 320x256 on PAL. The surplus 16 (or 32) lines
-    // were painted by nothing and showed the back-plane colour as a band under
-    // everything, invisible only for as long as that colour stayed black.
-    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
+    // 320x240, SRL's own NTSC default. The client used to narrow this to 224
+    // because every layer it painted was 224 lines tall and the surplus showed
+    // the back-plane as a band under everything. Zork I's backgrounds are
+    // 320x240 on the original disc, so the surplus now carries picture, and the
+    // text grid grew to meet it rather than leaving a band.
+    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x240);
     // Black in the raster around that 320x224, rather than the back-screen colour
     // VDP2 puts there by default -- which is the player's background colour, and
     // framed the picture with it.
     border_use_black();
+    // The room backgrounds use all 256 CLUT entries, index 0 among them, and
+    // VDP2 would otherwise punch that colour through to the back-plane. The
+    // image window console_view aims at NBG0 is what still punches holes, and
+    // it is unaffected by this.
+    SRL::VDP2::NBG0::TransparentDisable();
     text_map_init();       // before anything prints: draws land in the shadow and
                            // reach VRAM on the vblank the next Synchronize waits for
     dash_init();        // after text_map_init: VDP2 and the font are up, and a

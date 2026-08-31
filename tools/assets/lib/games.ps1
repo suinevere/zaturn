@@ -1,5 +1,12 @@
 param([string]$BaseIso,[string]$GamesDir,[string]$OutDir,[string]$Name,
-      [string]$Xorriso,[string]$Iso2raw)
+      [string]$Xorriso,[string]$Iso2raw,[string]$BgDir)
+
+# BgDir, when given and present, is mapped to /BG in the SAME xorriso commit as
+# the games. Two commits would mean two full rewrites of a several-hundred-MB
+# ISO, and the second would have to re-restore IP.BIN over the first's output.
+# One commit with two -map arguments costs a single pass and one system area to
+# protect. room_art.cxx opens /BG/<STEM>.CGL off the disc root, so the directory
+# name here is the contract with the runtime.
 
 # IP.BIN is the first 16 sectors (16 * 2048) of the ISO. xorriso rewrites the
 # system area when it commits, so we hold those bytes and put them back after.
@@ -34,7 +41,14 @@ $ip = Read-Head $BaseIso
 # Sega mastering never emits those, and the Saturn CD block's ISO9660 parser --
 # the one the BIOS uses to find the first-read file 0.BIN -- chokes on them, so
 # the patched disc stops booting. -joliet off guards the same way.
-& $Xorriso -indev $BaseIso -outdev $inj -rockridge off -joliet off -map $GamesDir /Z3 -commit 2>$null
+$xargs = @('-indev', $BaseIso, '-outdev', $inj, '-rockridge', 'off', '-joliet', 'off',
+            '-map', $GamesDir, '/Z3')
+if ($BgDir -and (Test-Path -LiteralPath $BgDir)) {
+    $xargs += @('-map', $BgDir, '/BG')
+    Write-Host "Also injecting room backgrounds from $BgDir -> /BG"
+}
+$xargs += '-commit'
+& $Xorriso @xargs 2>$null
 if ($LASTEXITCODE -ne 0) { Write-Error "xorriso injection failed"; exit 1 }
 if (-not (Test-Path $inj) -or (Get-Item $inj).Length -le $IpBinSize) {
     Write-Error "xorriso produced no injected ISO"; exit 1

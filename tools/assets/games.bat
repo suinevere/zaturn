@@ -49,7 +49,10 @@
 :; # saturn/cd/data/Z3/GAME.INF, and xorriso's -map merges into an existing /Z3
 :; # rather than replacing it, so the games injected below land alongside a
 :; # manifest that is already there.
-:; inject_games "$BASE_ISO" "Z3" "$OUTPUT_DIR" "$DISC_NAME"
+:; # BG is Zork I's eleven room-background archives, staged by bg.bat. Passing it
+:; # here rather than committing it under saturn/cd/data means the archives never
+:; # enter the base ISO, and one xorriso commit places both directories.
+:; inject_games "$BASE_ISO" "Z3" "$OUTPUT_DIR" "$DISC_NAME" "BG"
 :; exit
 
 @ECHO OFF
@@ -123,7 +126,10 @@ REM Nothing here handles the story manifest. It is built into the base ISO from
 REM saturn\cd\data\Z3\GAME.INF, and xorriso's -map merges into an existing /Z3
 REM rather than replacing it, so the games injected below land alongside a
 REM manifest that is already there.
-powershell -NoProfile -ExecutionPolicy Bypass -File ".\lib\games.ps1" -BaseIso "%BASE_ISO%" -GamesDir "Z3" -OutDir "%OUTPUT_DIR%" -Name "%DISC_NAME%" -Xorriso ".\bin\win\xorriso.exe" -Iso2raw ".\bin\win\iso2raw.exe"
+REM BG is Zork I's eleven room-background archives, staged by bg.bat. Passing it
+REM here rather than committing it under saturn\cd\data means the archives never
+REM enter the base ISO, and one xorriso commit places both directories.
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\lib\games.ps1" -BaseIso "%BASE_ISO%" -GamesDir "Z3" -OutDir "%OUTPUT_DIR%" -Name "%DISC_NAME%" -Xorriso ".\bin\win\xorriso.exe" -Iso2raw ".\bin\win\iso2raw.exe" -BgDir "BG"
 IF ERRORLEVEL 1 ( ECHO ERROR: game injection failed & EXIT /B 1 )
 
 ENDLOCAL

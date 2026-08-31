@@ -85,3 +85,11 @@ cd/**/*.mdf
 # Derived binary dumps from the reverse-engineering workflow (VDP1/VDP2 VRAM
 # captures, decompressed disc assets). All regenerable from cd/ plus a savestate.
 analysis/**/*.bin
+
+# Room-background archives, staged by tools/assets/bg.bat out of the original
+# Zork I (Japan) disc's data track -- the one music.bat already downloads and
+# skips. Never committed: they are that disc's assets, on the same footing as
+# the Z3 stories above, and games.bat injects them into /BG post-build rather
+# than baking them into the base ISO.
+tools/assets/BG/
+tools/assets/cache/

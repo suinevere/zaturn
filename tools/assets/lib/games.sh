@@ -1,9 +1,16 @@
 # Game injection into the Saturn data ISO. Source with: . lib/games.sh
 . "$(dirname "${BASH_SOURCE[0]}")/cuelib.sh"
 
-# inject_games <base.iso> <games_dir> <out_dir> <disc_name>
+# inject_games <base.iso> <games_dir> <out_dir> <disc_name> [bg_dir]
+#
+# bg_dir, when given and non-empty, is mapped to /BG in the SAME xorriso commit
+# as the games. Two commits would mean two full rewrites of a several-hundred-MB
+# ISO, and the second would have to re-rip and re-restore IP.BIN over the first's
+# output. One commit with two -map arguments costs a single pass and one system
+# area to protect. room_art.cxx opens /BG/<STEM>.CGL off the disc root, so the
+# directory name here is the contract with the runtime.
 inject_games() {
-  local base="$1" gdir="$2" out="$3" name="$4"
+  local base="$1" gdir="$2" out="$3" name="$4" bgdir="${5:-}"
   mkdir -p "$out"
   local XORRISO ISO2RAW inj
   XORRISO=$(resolve_tool xorriso) || return 1   # prints brew/apt hint if missing
@@ -17,7 +24,13 @@ inject_games() {
   # Sega mastering never emits those, and the Saturn CD block's ISO9660 parser --
   # the one the BIOS uses to find the first-read file 0.BIN -- chokes on them, so
   # the patched disc stops booting. -joliet off guards the same way.
-  if ! "$XORRISO" -indev "$base" -outdev "$inj" -rockridge off -joliet off -map "$gdir" /Z3 -commit >/dev/null 2>&1; then
+  local bgmap=()
+  if [ -n "$bgdir" ] && [ -d "$bgdir" ]; then
+    bgmap=(-map "$bgdir" /BG)
+    echo "Also injecting room backgrounds from $bgdir -> /BG"
+  fi
+  if ! "$XORRISO" -indev "$base" -outdev "$inj" -rockridge off -joliet off \
+       -map "$gdir" /Z3 "${bgmap[@]}" -commit >/dev/null 2>&1; then
     echo "ERROR: xorriso injection failed"; return 1
   fi
   [ -s "$inj" ] && [ "$(file_size "$inj")" -gt 32768 ] || {

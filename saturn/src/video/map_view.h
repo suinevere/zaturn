@@ -22,6 +22,10 @@ extern "C" {
  |   room at a time, clamped to the rooms actually placed so it cannot be walked
  |   off into empty ground.
  |
+ |   With MAP_REVEAL_ALL set in map_view.cxx the whole authored table is placed
+ |   before the first draw, so the screen shows the map as drawn rather than as
+ |   explored. That is a development aid, not the shipping behaviour.
+ |
  |   The scroll always starts with the player centred. It is a local of this
  |   call rather than anything kept between calls, so reopening the map after
  |   scrolling it to the far corner shows the player again -- there is no

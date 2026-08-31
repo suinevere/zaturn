@@ -65,6 +65,14 @@ static void same_as_field(int tile, int rp, int cp,
             assert(pixel(tile, x, y) == pixel(field_tile(rp, cp), x, y));
 }
 
+/*----------------------
+ | ground_at
+ | Description: The ground tile's own pixel at a position, which is what a link
+ |   tile shows anywhere it has not drawn an arm.
+ | Author: suinevere
+ ----------------------*/
+static int ground_at(int x, int y) { return pixel(DT_GROUND, x, y); }
+
 int main(void) {
     int i, v, x, y;
 
@@ -177,26 +185,53 @@ int main(void) {
     assert(pixel(DT_RULE_MODLEFT, 7, 5) == 13);
     assert(pixel(DT_RULE_RIGHT, 0, 5) == 13);
 
-    /* The six map tiles exist and none is silently blank -- an empty tile
-       draws as a hole in the map. dash_tile_data is [DT_N][32]: 8x8 pixels at
-       4bpp, two pixels to the byte. */
+    /* The map tiles exist and none is silently blank -- an empty tile draws as
+       a hole in the map. dash_tile_data is [DT_N][32]: 8x8 pixels at 4bpp, two
+       pixels to the byte.
+
+       DT_LINK0 is the exception and is skipped everywhere below: it is the link
+       tile for a cell no line leaves through any side, so it is bare ground by
+       construction and the renderer never paints it. Every other mask draws at
+       least one arm. */
     {
         int t;
         for (t = DT_GROUND; t <= DT_LINK_STAIR; t++) {
             int i, nonzero = 0;
+            if (t == DT_LINK0) continue;
             for (i = 0; i < 32; i++)
                 if (dash_tile_data[t][i] != 0) { nonzero = 1; break; }
             assert(nonzero);
         }
     }
 
-    /* Every mark must be visible on the ground it sits on -- all five of them,
-       and as a palette distance rather than as a byte difference. */
+    /* Every mark must be visible on the ground it sits on, as a palette
+       distance rather than as a byte difference. */
     {
         int t;
         measure_ground();
         assert(ground_lo <= ground_hi);
-        for (t = DT_ROOM; t <= DT_LINK_STAIR; t++) assert(escapes_ground(t));
+        for (t = DT_ROOM; t <= DT_LINK_STAIR; t++) {
+            if (t == DT_LINK0) continue;
+            assert(escapes_ground(t));
+        }
+    }
+
+    /* The link tiles are indexed by their connection mask, so the shape of each
+       must follow from the bits. An arm reaches the tile's own edge exactly
+       when its bit is set, which is what makes two cells drawn from adjoining
+       masks meet rather than stop short of each other. */
+    {
+        int mask;
+        for (mask = 1; mask < 16; mask++) {
+            int t = DT_LINK0 + mask;
+            assert(!!(mask & DT_EDGE_N) == (pixel(t, 3, 0) != ground_at(3, 0)));
+            assert(!!(mask & DT_EDGE_S) == (pixel(t, 3, 7) != ground_at(3, 7)));
+            assert(!!(mask & DT_EDGE_W) == (pixel(t, 0, 3) != ground_at(0, 3)));
+            assert(!!(mask & DT_EDGE_E) == (pixel(t, 7, 3) != ground_at(7, 3)));
+        }
+        /* And the two straight masks are what the H/V names claim. */
+        assert(DT_LINK_H == DT_LINK0 + (DT_EDGE_E | DT_EDGE_W));
+        assert(DT_LINK_V == DT_LINK0 + (DT_EDGE_N | DT_EDGE_S));
     }
 
     printf("test_dash_tiles: ok\n");

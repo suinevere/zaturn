@@ -7,6 +7,7 @@
  ----------------------*/
 #include <srl.hpp>
 #include "map_model.h"
+#include "map_atlas.h"
 #include "dash_map.h"
 #include "room_model.h"
 #include "text_map.h"
@@ -37,6 +38,16 @@
 #define MAP_CX       5
 #define MAP_CY       3
 #define MAP_TOP      0
+
+/*----------------------
+ | MAP_REVEAL_ALL
+ | Description: Set to draw every room the authored table covers rather than
+ |   only the rooms the player has walked into. A development aid for checking
+ |   the placements against Infocom's drawing without playing to each room, and
+ |   the one switch to clear to get the explored-only map back.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_REVEAL_ALL 1
 
 /*----------------------
  | MAP_VIS_MAX
@@ -108,40 +119,128 @@ static int cell_is_mark(int cx, int cy, int n)
 }
 
 /*----------------------
- | paint_link
- | Description: Draws the run of cells joining two room marks, whatever the
- |   offset between them, painting nothing on a cell a room mark already holds.
- |
- |   This replaces a rule that only joined rooms one grid step apart, and the
- |   replacement is not a refinement -- the old rule was wrong the moment the
- |   authored table arrived. A graph walk puts every linked pair exactly one
- |   step from each other, so a one-step rule lost nothing; the atlas places
- |   rooms where Infocom drew them, which spreads a linked pair across as many
- |   as six lanes. Measured against the shipped table, the old rule painted 26
- |   of the 59 links Zork I has between placed rooms. The rest were simply not
- |   there, which is exactly what the map looked like.
- |
- |   The route is a dogleg: half the horizontal distance, then all the vertical,
- |   then the rest of the horizontal. Two bends, wherever the pair sits. The
- |   obvious alternative -- stepping whichever axis keeps nearest the true line,
- |   so the bend is spread evenly -- was drawn out and rejected: over the
- |   thirteen rooms visible from West of House it laid 176 cells of ink with ten
- |   crossings against the dogleg's 151 and two, and read as a dithered diagonal
- |   rather than as a passage. Both are the same length, so the cost is only in
- |   how it looks.
- |
- |   Every step moves in x or in y and never both, because the tile set has a
- |   horizontal groove and a vertical one and no diagonal, and dash_tiles.c sits
- |   on the netbin's size-gated source list so adding one is not free.
- |
- |   Neither endpoint is painted, and that needs no test of its own: paint_link
- |   is only ever called for two gathered rooms, so cell_is_mark answers for both
- |   ends as it does for anything else in the way. draw_once paints the marks
- |   after the links regardless, so a mark wins even if that reasoning ever stops
- |   holding.
+ | MAP_EDGE_STAIR
+ | Description: The fifth bit of an edge cell, beside the four DT_EDGE_* sides:
+ |   set when a vertical exit -- a staircase rather than a walk -- laid the line.
+ |   Kept out of the low nibble so the nibble still indexes the tile set.
  | Author: suinevere
- | Dependencies: dash_map.h, cell_is_mark
+ ----------------------*/
+#define MAP_EDGE_STAIR 16
+
+/*----------------------
+ | g_edge
+ | Description: Which sides of each cell a link leaves through, accumulated over
+ |   every link before anything is painted. Two lines crossing a cell leave five
+ |   or six bits between them and the cell draws as a T or a crossing, which a
+ |   renderer painting each link as it walked could not do: it would only ever
+ |   see one line at a time and would overwrite the first with the second.
+ |
+ |   A whole viewport of bytes rather than a sparse list because the render pass
+ |   then costs one sweep with no lookup, and 1120 bytes is nothing beside the
+ |   story image the heap is already carrying.
+ | Author: suinevere
+ ----------------------*/
+static unsigned char g_edge[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
+
+/*----------------------
+ | mark_step
+ | Description: Records one cell-to-cell step of a route, setting the side it
+ |   leaves the first cell by and the facing side it enters the second by, so the
+ |   two tiles meet. Ignores a step either end of which is off the viewport,
+ |   which no candidate route should produce but which would corrupt the
+ |   neighbouring static if one ever did.
+ | Author: suinevere
+ | Dependencies: dash_map.h
+ | Globals: g_edge
+ | Params: x, y -- the cell stepped from; nx, ny -- the cell stepped to, always
+ |   one cell away in exactly one axis; stair -- nonzero for a vertical exit
+ | Returns: N/A
+ ----------------------*/
+static void mark_step(int x, int y, int nx, int ny, int stair)
+{
+    int out, in;
+    if (x < 0 || y < 0 || nx < 0 || ny < 0) return;
+    if (x >= MAP_ROOMS_W * MAP_CELLS || nx >= MAP_ROOMS_W * MAP_CELLS) return;
+    if (y >= MAP_ROOMS_H * MAP_CELLS || ny >= MAP_ROOMS_H * MAP_CELLS) return;
+
+    if      (nx > x) { out = DT_EDGE_E; in = DT_EDGE_W; }
+    else if (nx < x) { out = DT_EDGE_W; in = DT_EDGE_E; }
+    else if (ny > y) { out = DT_EDGE_S; in = DT_EDGE_N; }
+    else             { out = DT_EDGE_N; in = DT_EDGE_S; }
+
+    if (stair) { out |= MAP_EDGE_STAIR; in |= MAP_EDGE_STAIR; }
+    g_edge[y][x]   |= (unsigned char) out;
+    g_edge[ny][nx] |= (unsigned char) in;
+}
+
+/*----------------------
+ | trace
+ | Description: Walks an orthogonal route through a list of corner points,
+ |   either recording it or only testing it. In test mode it stops at the first
+ |   cell short of the far end that a room mark holds and answers 0; in record
+ |   mode it marks every step and answers 1.
+ |
+ |   The two modes share one body deliberately: the route that gets drawn has to
+ |   be the one that was checked, and two separate walkers would eventually
+ |   disagree about which cells that is.
+ | Author: suinevere
+ | Dependencies: mark_step, cell_is_mark
  | Globals: N/A
+ | Params: pts -- corner points as x, y pairs; npts -- how many points; n -- how
+ |   many rooms gather() returned; stair -- nonzero for a vertical exit; record
+ |   -- nonzero to mark, zero to only test
+ | Returns: 1 when the route touches no room mark between its ends, 0 otherwise
+ ----------------------*/
+static int trace(const short *pts, int npts, int n, int stair, int record)
+{
+    int ex = pts[(npts - 1) * 2], ey = pts[(npts - 1) * 2 + 1];
+    int i, x = pts[0], y = pts[1];
+    for (i = 1; i < npts; i++) {
+        int tx = pts[i * 2], ty = pts[i * 2 + 1];
+        while (x != tx || y != ty) {
+            int px = x, py = y;
+            if      (x < tx) x++;
+            else if (x > tx) x--;
+            else if (y < ty) y++;
+            else             y--;
+            if (record) mark_step(px, py, x, y, stair);
+            else if (!(x == ex && y == ey) && cell_is_mark(x, y, n)) return 0;
+        }
+    }
+    return 1;
+}
+
+/*----------------------
+ | paint_link
+ | Description: Records the route joining two room marks, choosing one that
+ |   passes through no other room.
+ |
+ |   That choice is the point of this function, and it is what the previous
+ |   version got wrong. It routed every pair the same way -- half the horizontal,
+ |   then the vertical, then the rest -- and where a third room happened to sit
+ |   on that path the line ran in one side of it and out the other, which reads
+ |   as two links rather than as one passing by. Against the shipped table that
+ |   happened to fourteen of Zork I's links: North of House to Behind House ran
+ |   straight through the Kitchen, and Forest (3) to Forest (1) through four
+ |   rooms in a row. Skipping the paint on the mark itself, which is what it did,
+ |   does not help at all -- the line still arrives and leaves.
+ |
+ |   Four routes are tried in order and the first clean one is taken: the two L
+ |   shapes, then a dogleg bending at the midpoint of whichever axis is long
+ |   enough to have one. Every candidate stays inside the rectangle spanned by
+ |   the two rooms, so none can wander off the viewport. Over the twenty rooms of
+ |   the shipped table the two L shapes alone answer all twenty-nine links and
+ |   the doglegs have never been needed; they are there because a table drawn for
+ |   another story will not have that property. If nothing is clean the first
+ |   candidate is drawn anyway, on the grounds that a map missing a link is worse
+ |   than one drawing an ambiguous link.
+ |
+ |   Nothing is painted here. The route is accumulated into g_edge and draw_once
+ |   paints the layer in one sweep afterwards, which is what lets a cell two
+ |   lines cross come out as a crossing rather than as whichever was drawn last.
+ | Author: suinevere
+ | Dependencies: trace
+ | Globals: g_edge
  | Params: ax, ay -- the source mark's cell; bx, by -- the destination mark's;
  |   n -- how many rooms gather() returned; kind -- MAP_LINK_FLAT or
  |   MAP_LINK_VERT
@@ -149,27 +248,44 @@ static int cell_is_mark(int cx, int cy, int n)
  ----------------------*/
 static void paint_link(int ax, int ay, int bx, int by, int n, int kind)
 {
-    int dx = bx - ax, dy = by - ay;
-    int sx = dx < 0 ? -1 : 1, sy = dy < 0 ? -1 : 1;
-    int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
-    int half = adx / 2, k, x = ax, y = ay;
-    unsigned char h = (unsigned char)
-        (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_H);
-    unsigned char v = (unsigned char)
-        (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_V);
+    int stair = (kind == MAP_LINK_VERT);
+    int mx = (ax + bx) / 2, my = (ay + by) / 2;
+    short cand[4][8];
+    int len[4], i, ncand = 2;
 
-    for (k = 0; k < half; k++) {
-        x += sx;
-        if (!cell_is_mark(x, y, n)) dash_map_paint(x, y, h);
+    cand[0][0] = (short) ax; cand[0][1] = (short) ay;
+    cand[0][2] = (short) bx; cand[0][3] = (short) ay;
+    cand[0][4] = (short) bx; cand[0][5] = (short) by;
+    len[0] = 3;
+
+    cand[1][0] = (short) ax; cand[1][1] = (short) ay;
+    cand[1][2] = (short) ax; cand[1][3] = (short) by;
+    cand[1][4] = (short) bx; cand[1][5] = (short) by;
+    len[1] = 3;
+
+    if (mx != ax && mx != bx) {
+        cand[ncand][0] = (short) ax; cand[ncand][1] = (short) ay;
+        cand[ncand][2] = (short) mx; cand[ncand][3] = (short) ay;
+        cand[ncand][4] = (short) mx; cand[ncand][5] = (short) by;
+        cand[ncand][6] = (short) bx; cand[ncand][7] = (short) by;
+        len[ncand] = 4;
+        ncand++;
     }
-    for (k = 0; k < ady; k++) {
-        y += sy;
-        if (!cell_is_mark(x, y, n)) dash_map_paint(x, y, v);
+    if (my != ay && my != by) {
+        cand[ncand][0] = (short) ax; cand[ncand][1] = (short) ay;
+        cand[ncand][2] = (short) ax; cand[ncand][3] = (short) my;
+        cand[ncand][4] = (short) bx; cand[ncand][5] = (short) my;
+        cand[ncand][6] = (short) bx; cand[ncand][7] = (short) by;
+        len[ncand] = 4;
+        ncand++;
     }
-    for (k = half; k < adx; k++) {
-        x += sx;
-        if (!cell_is_mark(x, y, n)) dash_map_paint(x, y, h);
+
+    for (i = 0; i < ncand; i++) {
+        if (!trace(cand[i], len[i], n, stair, 0)) continue;
+        trace(cand[i], len[i], n, stair, 1);
+        return;
     }
+    trace(cand[0], len[0], n, stair, 1);
 }
 
 /*----------------------
@@ -242,6 +358,11 @@ static void extent(int *x0, int *x1, int *y0, int *y1)
  |
  |   Every pair of gathered rooms the story links is joined, at whatever
  |   distance -- paint_link's header has why that is not the rule it used to be.
+ |   Links are routed into g_edge first and the whole layer painted from it
+ |   afterwards, so a cell two links cross knows about both and draws as a
+ |   crossing; painting each link as it was routed would have left whichever came
+ |   last. Marks go down after that again, so a mark always wins its own cell.
+ |
  |   The walk is gather() and then a pairwise pass over what it returned, both
  |   bounded by the viewport rather than by the placed set, which is what keeps
  |   this inside one frame; it used to nest the scan inside the pairwise loop and
@@ -273,6 +394,11 @@ static void draw_once(int sx, int sy) {
 
     n = gather(sx, sy);
 
+    for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
+        int c;
+        for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++) g_edge[i][c] = 0;
+    }
+
     for (i = 0; i < n; i++) {
         for (j = i + 1; j < n; j++) {
             int kind = map_model_link(g_ids[i], g_ids[j]);
@@ -282,6 +408,19 @@ static void draw_once(int sx, int sy) {
                        (MAP_CX + g_dxs[j]) * MAP_CELLS,
                        MAP_TOP + (MAP_CY + g_dys[j]) * MAP_CELLS,
                        n, kind);
+        }
+    }
+
+    for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
+        int c;
+        for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++) {
+            int e = g_edge[i][c], mask = e & 15;
+            if (mask == 0) continue;
+            if (cell_is_mark(c, i, n)) continue;
+            if ((e & MAP_EDGE_STAIR) && mask == (DT_EDGE_N | DT_EDGE_S))
+                dash_map_paint(c, i, DT_LINK_STAIR);
+            else
+                dash_map_paint(c, i, (unsigned char) (DT_LINK0 + mask));
         }
     }
 
@@ -344,6 +483,9 @@ extern "C" void map_view_show(void) {
 
     title_bg_hide();
     dash_tint(MAP_GROUND_555);
+#if MAP_REVEAL_ALL
+    map_model_reveal_atlas();
+#endif
     draw_once(sx, sy);
     menu_sync();
     for (;;) {

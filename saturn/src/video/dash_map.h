@@ -59,9 +59,28 @@ enum {
     DT_RULE_MODLEFT = 53, DT_RULE_RIGHT,
     DT_BOX_TOP = 55, DT_BOX_BOTTOM, DT_BOX_LEFT, DT_BOX_RIGHT,
     DT_BOX_TL, DT_BOX_TR, DT_BOX_BL, DT_BOX_BR,
-    DT_GROUND, DT_ROOM, DT_ROOM_HERE, DT_LINK_H, DT_LINK_V, DT_LINK_STAIR,
+    DT_GROUND, DT_ROOM, DT_ROOM_HERE,
+    DT_LINK0,
+    DT_LINK_STAIR = DT_LINK0 + 16,
     DT_N
 };
+
+/*----------------------
+ | DT_EDGE_N .. DT_EDGE_W / DT_LINK_H / DT_LINK_V
+ | Description: The bits that index the link tiles, one per side the groove
+ |   leaves a cell through, and names for the two masks that come out straight.
+ |   DT_LINK0 + mask is the tile: two opposite sides give a straight run, two
+ |   adjacent an elbow, three a T and all four a crossing, so a caller that
+ |   accumulates which way a line enters and leaves each cell never has to
+ |   choose a shape.
+ | Author: suinevere
+ ----------------------*/
+#define DT_EDGE_N 1
+#define DT_EDGE_E 2
+#define DT_EDGE_S 4
+#define DT_EDGE_W 8
+#define DT_LINK_H (DT_LINK0 + (DT_EDGE_E | DT_EDGE_W))
+#define DT_LINK_V (DT_LINK0 + (DT_EDGE_N | DT_EDGE_S))
 
 /*----------------------
  | DASH_NONE .. DASH_VARIANT_N

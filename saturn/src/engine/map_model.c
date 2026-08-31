@@ -494,6 +494,30 @@ void map_model_rebind_exits(void) {
 }
 
 /*----------------------
+ | map_model_reveal_atlas
+ | Description: See map_model.h.
+ | Author: suinevere
+ | Dependencies: map_atlas.h, atlas_target, place, map_model_rebind_exits
+ | Globals: g_vis, g_x, g_y
+ | Params: N/A
+ | Returns: how many rooms it placed that were not placed before
+ ----------------------*/
+int map_model_reveal_atlas(void) {
+    int i, n = map_atlas_count(), added = 0;
+    for (i = 0; i < n; i++) {
+        unsigned short r = 0;
+        int tx = 0, ty = 0;
+        if (!map_atlas_room_at(i, &r)) continue;
+        if (!in_range(r) || g_vis[r]) continue;
+        if (!atlas_target(r, 0, 0, 0, &tx, &ty)) continue;
+        place(r, tx, ty);
+        added++;
+    }
+    if (added) map_model_rebind_exits();
+    return added;
+}
+
+/*----------------------
  | map_model_serialize
  | Description: See map_model.h.
  | Author: suinevere

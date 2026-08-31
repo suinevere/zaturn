@@ -196,6 +196,29 @@ int map_model_link(unsigned short a, unsigned short b);
 void map_model_rebind_exits(void);
 
 /*----------------------
+ | map_model_reveal_atlas
+ | Description: Places every room the authored table covers, whether or not the
+ |   player has been there, and re-derives the exits so the links draw. A room
+ |   already placed keeps its cell, so this never moves anything -- including the
+ |   room the player is standing in, which is what keeps the reveal registered
+ |   with the walked half of the map.
+ |
+ |   This is a development aid: it shows the map as drawn rather than as
+ |   explored, which is how the placements get checked against Infocom's own
+ |   drawing without playing the game to each room. It is not the shipping
+ |   behaviour and the caller is expected to gate it.
+ |
+ |   Does nothing at all when no table is bound, which is every story but the one
+ |   somebody drew.
+ | Author: suinevere
+ | Dependencies: map_atlas.h, room_model.h
+ | Globals: g_vis, g_x, g_y
+ | Params: N/A
+ | Returns: how many rooms it placed that were not placed before
+ ----------------------*/
+int map_model_reveal_atlas(void);
+
+/*----------------------
  | MAP_BLOB_MAGIC / MAP_BLOB_MAX
  | Description: The serialised map's leading byte, so a foreign or stale blob
  |   is refused rather than decoded into nonsense, and the largest blob a full

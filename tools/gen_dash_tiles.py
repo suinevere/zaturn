@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 69 8x8 4bpp tiles
+"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 83 8x8 4bpp tiles
 and its 16-entry RGB555 palette. Deterministic -- the marble is seeded noise, so
 re-running reproduces the same file byte for byte.
 
@@ -7,7 +7,7 @@ Usage: python3 tools/gen_dash_tiles.py > saturn/src/video/dash_tiles.c
 """
 import random
 
-N = 69
+N = 83
 SEED = 20260828
 
 # Palette index by role. The blue channel runs two steps above red and green
@@ -212,8 +212,20 @@ def build():
     here = solid(MARK_HERE_CORE, 2, 2, 5, 5, base=here)
     tiles.append(here)                                          # DT_ROOM_HERE
 
-    tiles.append(solid(MARK_DARK, 0, 3, 7, 4, base=ground))     # DT_LINK_H
-    tiles.append(solid(MARK_DARK, 3, 0, 4, 7, base=ground))     # DT_LINK_V
+    # The sixteen link tiles, indexed by which of the four sides the groove
+    # leaves through: N=1, E=2, S=4, W=8. Each side present draws an arm from
+    # the tile's centre to that edge, so a mask of two opposite sides is a
+    # straight run, two adjacent sides an elbow, three a T and all four a
+    # crossing -- one rule, and the renderer never has to decide which shape a
+    # cell wants. Mask 0 is blank ground and is never painted; it exists so the
+    # mask can index the set directly.
+    for mask in range(16):
+        t = ground
+        if mask & 1: t = solid(MARK_DARK, 3, 0, 4, 4, base=t)   # north arm
+        if mask & 2: t = solid(MARK_DARK, 3, 3, 7, 4, base=t)   # east arm
+        if mask & 4: t = solid(MARK_DARK, 3, 3, 4, 7, base=t)   # south arm
+        if mask & 8: t = solid(MARK_DARK, 0, 3, 4, 4, base=t)   # west arm
+        tiles.append(t)                                         # DT_LINK0+mask
 
     stair = solid(MARK_DARK, 3, 0, 4, 1, base=ground)
     stair = solid(MARK_DARK, 3, 3, 4, 4, base=stair)

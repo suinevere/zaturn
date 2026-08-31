@@ -72,6 +72,18 @@ int map_atlas_pos(unsigned short room, int *x, int *y);
  ----------------------*/
 int map_atlas_count(void);
 
+/*----------------------
+ | map_atlas_room_at
+ | Description: The object number at a position in the bound table, so a caller
+ |   can walk everything the table covers without knowing what is in it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cells, g_n
+ | Params: index -- position in the table; room -- receives the object number
+ | Returns: 1 on success, 0 when index is out of range
+ ----------------------*/
+int map_atlas_room_at(int index, unsigned short *room);
+
 #ifdef __cplusplus
 }
 #endif

@@ -130,3 +130,18 @@ int map_atlas_pos(unsigned short room, int *x, int *y) {
 int map_atlas_count(void) {
     return g_n;
 }
+
+/*----------------------
+ | map_atlas_room_at
+ | Description: See map_atlas.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cells, g_n
+ | Params: index -- position in the table; room -- receives the object number
+ | Returns: 1 on success, 0 when index is out of range
+ ----------------------*/
+int map_atlas_room_at(int index, unsigned short *room) {
+    if (g_cells == 0 || index < 0 || index >= g_n) return 0;
+    *room = g_cells[index].room;
+    return 1;
+}

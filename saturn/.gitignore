@@ -14,6 +14,7 @@ cd/data/BOOTSND.MAP
 cd/data/SDDRVS.DAT
 cd/data/SDDRVS.TSK
 cd/data/MSC/*.PCM
+cd/data/BG/*.CGL
 build.log
 
 # Image arftifacts

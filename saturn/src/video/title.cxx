@@ -316,7 +316,7 @@ struct TgaImage {
  ----------------------*/
 #define LWRAM_TOTAL        (1024u * 1024u)
 #define TGA_CACHE_SLOTS    9
-#define TGA_PLANE_MAX      (320u * 240u + 2048u)
+#define TGA_PLANE_MAX      (320u * 224u + 2048u)
 #define TGA_PAL_BYTES      (256u * sizeof(SRL::Types::HighColor))
 #define TGA_SLOT_BYTES     (TGA_PLANE_MAX + TGA_PAL_BYTES)
 #define TGA_CACHE_FLOOR    (96u * 1024u)   /* save scratch + margin */
@@ -577,7 +577,7 @@ static bool tga_blit_nbg0(const TgaImage *img) {
     bmp.W      = img->W;
     bmp.H      = img->H;
     bmp.Pal    = new SRL::Bitmap::Palette(colors, 256);
-    if (bmp.Pal == nullptr) { delete colors; return false; }
+    if (bmp.Pal == nullptr) { delete[] colors; return false; }
 
     SRL::VDP2::NBG0::LoadBitmap(&bmp);
     return true;

@@ -92,16 +92,31 @@ MAPS = {
     "ZORK3": "zork3.pdf",
 }
 
-# A page must yield at least this many boxes, and at least this share of them
-# must name a room the story actually has, before it is treated as a map page.
-# Together these reject covers, legends and the floor-plan style maps whose
-# rooms are not drawn as boxes at all.
+# A page must yield at least this many boxes that name a room the story actually
+# has, and that share of all its boxes, before it is treated as a map page.
+#
+# MIN_NAMED is deliberately loose. It exists only to reject a cover or a legend
+# where a stray word happens to match, and the real gate on a page is the
+# PASS_RATE check at the end, which asks whether the placements agree with the
+# story's own exits. Holding it at 0.55 rejected Moonmist, whose scan reads
+# "riveuay" for driveway and "itchen" for kitchen: nineteen of its forty-one
+# boxes resolve, which is ample geography, but under a half-share rule the page
+# was thrown away whole.
 MIN_BOXES = 8
-MIN_NAMED = 0.55
+MIN_NAMED = 0.25
 
 # The largest group of identically-named rooms this will try to tell apart. 5!
 # is 120 scorings and instant; 15! is the Maze and is not attempted.
 AMBIG_MAX = 6
+
+# How many refinement sweeps the assignment gets before it stops regardless.
+REFINE_ROUNDS = 4
+
+# The fewest testable exits before a map is allowed to be treated as turned.
+# Below this there is not enough evidence to tell a real rotation from a small
+# set of exits happening to fit one.
+ORIENT_MIN = 6
+
 
 # How close an OCR reading must be to a story room name before it is accepted
 # as that room, and how far ahead of the next-best candidate it must be. The
@@ -191,11 +206,15 @@ def room_graph(path):
             raw[0x12:0x18].decode("ascii", "replace"))
 
 
-def find_boxes(pdf, page):
-    """Bounding rectangles of the room boxes drawn on one map page."""
+def page_image(pdf, page):
     pix = pymupdf.open(pdf)[page - 1].get_pixmap(dpi=DPI)
-    img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3)
-    ink = (cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) < 120).astype(np.uint8) * 255
+    return np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3)
+
+
+def _boxes_at(img, invert):
+    """Room boxes in one polarity: enclosed holes in the long straight rules."""
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    ink = ((gray > 135) if invert else (gray < 120)).astype(np.uint8) * 255
     line = cv2.getStructuringElement
     hor = cv2.morphologyEx(ink, cv2.MORPH_OPEN, line(cv2.MORPH_RECT, (22, 1)))
     ver = cv2.morphologyEx(ink, cv2.MORPH_OPEN, line(cv2.MORPH_RECT, (1, 22)))
@@ -215,9 +234,21 @@ def find_boxes(pdf, page):
     return out
 
 
-def page_image(pdf, page):
-    pix = pymupdf.open(pdf)[page - 1].get_pixmap(dpi=DPI)
-    return np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width, 3)
+def find_boxes(pdf, page):
+    """Bounding rectangles of the room boxes drawn on one map page.
+
+    Both polarities are tried and the one yielding more boxes is taken. Starcross
+    is set aboard a starship and its map is drawn in negative -- white rules and
+    white boxes on a black field -- so a detector that only looks for dark ink
+    finds nothing at all on any of its three pages, and finds 139, 20 and 60
+    boxes when inverted. Deciding by which reading yields more boxes rather than
+    by how dark the page is avoids a threshold that would have to be right about
+    photographs and cover art too.
+    """
+    img = page_image(pdf, page)
+    a = _boxes_at(img, False)
+    b = _boxes_at(img, True)
+    return b if len(b) > len(a) else a
 
 
 def read_boxes(pdf, page):
@@ -237,6 +268,99 @@ def read_boxes(pdf, page):
         txt = " ".join(r[1] for r in res) if res else ""
         out.append((x, y, w, h, " ".join(txt.split())))
     return out
+
+
+def read_labels(pdf, page):
+    """[(x, y, w, h, text)] for every text label on a page, boxes or not.
+
+    Suspended, The Witness and The Lurking Horror are drawn as architectural
+    floor plans: rooms are areas enclosed by walls, and the name is set as bare
+    text inside the area rather than in a box of its own. There is nothing for
+    the box finder to find -- Suspended's single page yields one box against
+    forty-odd rooms -- so the label itself has to stand in for the room.
+
+    Fragments are merged before they are returned, because a plan sets a long
+    name on two or three lines inside a cramped space and OCR reports each line
+    separately. Two join when they overlap horizontally and either sit inside
+    six tenths of a line of each other or the first ends in a hyphen, which is
+    what turns "Sterili-", "zation" and "Chamber" back into one room.
+
+    The tolerance was a line and a half and had to come down: in a dense plan
+    that reached past the wall into the next room and swallowed it, so The
+    Witness returned one label reading "TUB Room BatHROOM ToIL" where the game
+    has three separate rooms. Merging too eagerly does not just misname a room,
+    it deletes the ones it absorbs.
+
+    Note what this does not need: the walls. Adjacency is never read off the
+    drawing -- the exits come from the story file, which is the authority and
+    already knows which rooms connect. The plan is only being asked where each
+    room sits, so a wall between two neighbours changes nothing here.
+    """
+    img = page_image(pdf, page)
+    res, _ = ocr_engine()(img)
+    if not res:
+        return []
+    frags = []
+    for item in res:
+        pts = item[0]
+        xs = [q[0] for q in pts]
+        ys = [q[1] for q in pts]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        frags.append([x0, y0, x1 - x0, y1 - y0, str(item[1]).strip()])
+    frags.sort(key=lambda f: (f[1], f[0]))
+
+    merged = []
+    for f in frags:
+        placed = False
+        for m in merged:
+            gap = f[1] - (m[1] + m[3])
+            overlap = min(m[0] + m[2], f[0] + f[2]) - max(m[0], f[0])
+            joins = m[4].endswith("-")
+            close = -m[3] <= gap <= 0.6 * max(m[3], f[3])
+            if (joins or close) and overlap > 0.6 * min(m[2], f[2]):
+                nx0 = min(m[0], f[0])
+                ny0 = min(m[1], f[1])
+                nx1 = max(m[0] + m[2], f[0] + f[2])
+                ny1 = max(m[1] + m[3], f[1] + f[3])
+                m[0], m[1], m[2], m[3] = nx0, ny0, nx1 - nx0, ny1 - ny0
+                m[4] = (m[4].rstrip("-") + f[4]) if m[4].endswith("-") else (m[4] + " " + f[4])
+                placed = True
+                break
+        if not placed:
+            merged.append(list(f))
+    return [(int(m[0]), int(m[1]), int(m[2]), int(m[3]), " ".join(m[4].split()))
+            for m in merged]
+
+
+def page_items(pdf, page, names, cache):
+    """The named rooms drawn on one page, read once and remembered.
+
+    Boxes first, falling back to bare labels when the page has rooms but no
+    boxes to put them in. Cached because build_game lays a game out more than
+    one way and OCR is far and away the slowest thing here.
+    """
+    key = (pdf, page)
+    if key in cache:
+        return cache[key]
+
+    def resolve(items):
+        out = []
+        for b in items:
+            hit = match_name(base_and_index(b[4])[0], names)
+            if hit:
+                out.append((b[0], b[1], b[2], b[3], hit))
+        return out
+
+    boxes = read_boxes(pdf, page)
+    named = resolve(boxes)
+    total, mode = len(boxes), "box"
+    if len(named) < MIN_BOXES:
+        labels = read_labels(pdf, page)
+        cand = resolve(labels)
+        if len(cand) > len(named):
+            named, total, mode = cand, len(labels), "label"
+    cache[key] = (named, total, mode)
+    return cache[key]
 
 
 def norm(s):
@@ -260,7 +384,10 @@ def base_and_index(text):
         tail = tail[:-1].strip()
         if tail.isdigit():
             idx = int(tail)
-            t = head
+        # Stripped either way. A map annotates a room as "Garage (2-car)" where
+        # the game simply calls it Garage, and keeping the aside in the string
+        # drops the match below the threshold.
+        t = head
     return norm(t), idx
 
 
@@ -385,6 +512,47 @@ def assign(cells, graph):
         for k, o in zip(keys, best):
             pos[o] = (cells[k][0], cells[k][1])
             chosen[k] = o
+
+    # Refine. The pass above resolves each ambiguous group against whatever was
+    # already placed, which for a game like Starcross is almost nothing: five
+    # Red Halls, five Green Halls, six Outskirts of Village and only a handful
+    # of uniquely-named rooms to anchor them, so the first group decided is
+    # decided against an empty board. Scoring every group again now that the
+    # whole layout exists is what catches those, and it shows up in the failures
+    # as exits like "Thin Forest --west--> Thin Forest" that a swap would fix.
+    #
+    # Hill-climbing on the same score the game is finally judged by, so this can
+    # only move a table toward validating. It stops when a full sweep changes
+    # nothing, and at REFINE_ROUNDS regardless, since a cycle between two equal
+    # arrangements would otherwise run forever.
+    groups_keys = {}
+    for k, o in chosen.items():
+        base, _ = base_and_index(cells[k][2])
+        groups_keys.setdefault(base, []).append(k)
+    for _ in range(REFINE_ROUNDS):
+        improved = False
+        for base, keys in sorted(groups_keys.items()):
+            if len(keys) < 2 or len(keys) > AMBIG_MAX:
+                continue
+            objs = [chosen[k] for k in keys]
+            base_score, _, _ = agreement(pos, graph)
+            best_perm, best_val = None, base_score
+            for perm in itertools.permutations(objs):
+                if perm == tuple(objs):
+                    continue
+                trial = dict(pos)
+                for k, o in zip(keys, perm):
+                    trial[o] = (cells[k][0], cells[k][1])
+                val, _, _ = agreement(trial, graph)
+                if val > best_val:
+                    best_val, best_perm = val, perm
+            if best_perm:
+                for k, o in zip(keys, best_perm):
+                    pos[o] = (cells[k][0], cells[k][1])
+                    chosen[k] = o
+                improved = True
+        if not improved:
+            break
     return pos, chosen, dropped
 
 
@@ -400,26 +568,26 @@ def build_game(story, pdf, verbose=False):
     names = {norm(r["name"]) for r in graph.values()} - {""}
 
     doc = pymupdf.open(pdf)
-    cells, page_rows, y_base, used_pages = {}, {}, 0, []
+    cache = {}
+    pages = []
     for page in range(1, doc.page_count + 1):
-        boxes = read_boxes(pdf, page)
-        if len(boxes) < MIN_BOXES:
+        named, total, mode = page_items(pdf, page, names, cache)
+        if len(named) < MIN_BOXES:
             continue
-        named = []
-        for b in boxes:
-            hit = match_name(base_and_index(b[4])[0], names)
-            if hit:
-                named.append((b[0], b[1], b[2], b[3], hit, b[4]))
-        if len(named) < MIN_NAMED * len(boxes):
+        if mode == "box" and len(named) < MIN_NAMED * total:
             continue
-        used_pages.append((page, len(boxes), len(named)))
+        pages.append((page, named, total, mode))
+
+    cells, used_pages, y_base = {}, [], 0
+    for seq, (page, named, total, mode) in enumerate(pages):
         cx = [b[0] + b[2] / 2.0 for b in named]
         cy = [b[1] + b[3] / 2.0 for b in named]
         col, row = snap(cx, 60), snap(cy, 60)
-        top = max(row.values()) + 1
         for i, b in enumerate(named):
-            cells[(page, i)] = (col[i], row[i] + y_base, b[4])
-        y_base += top + 2
+            cells[(seq, i)] = (col[i], row[i] + y_base, b[4])
+        y_base += max(row.values()) + 3
+        used_pages.append((page, total, len(named)))
+
     if not cells:
         return None, release, serial, {"reason": "no page yielded named boxes"}
 
@@ -442,10 +610,33 @@ def build_game(story, pdf, verbose=False):
     pos = {k: v for k, v in pos.items()
            if -128 <= v[0] <= 127 and -128 <= v[1] <= 127}
 
+    # A plan is often drawn square to the building rather than to the compass.
+    # The Witness is: as printed, all eight of its testable exits disagree, and
+    # every one of them is half of a reciprocal pair, which is the signature of
+    # a whole map turned rather than of rooms misplaced. Turned a quarter, all
+    # eight agree.
+    #
+    # Only the four rotations are tried. Reflections are not, because a mirrored
+    # map is not a thing a publisher prints, and offering eight candidates
+    # instead of four doubles the chance of a small exit set fitting one by
+    # accident. For the same reason a turn is only accepted on ORIENT_MIN exits
+    # or more, and ties go to the map as drawn.
+    ROTATIONS = (("as drawn", lambda x, y: (x, y)),
+                 ("quarter",  lambda x, y: (-y, x)),
+                 ("half",     lambda x, y: (-x, -y)),
+                 ("three-quarter", lambda x, y: (y, -x)))
     agreed, tested, bad = agreement(pos, graph)
+    orient = "as drawn"
+    if tested >= ORIENT_MIN:
+        for label, fn in ROTATIONS[1:]:
+            turned = {k: fn(*v) for k, v in pos.items()}
+            a2, t2, b2 = agreement(turned, graph)
+            if a2 > agreed:
+                pos, agreed, tested, bad, orient = turned, a2, t2, b2, label
     rate = (agreed / tested) if tested else 0.0
     stats = {"rooms": len(pos), "agreed": agreed, "tested": tested,
              "rate": rate, "bad": bad, "pages": used_pages, "dropped": dropped,
+             "orient": orient,
              "names": {k: graph[k]["name"] for k in pos}}
     if tested == 0 or rate < PASS_RATE:
         stats["reason"] = f"only {agreed}/{tested} exits agree ({rate:.0%})"
@@ -535,9 +726,10 @@ def main():
         tables.append({"story": story, "pos": pos, "release": release,
                        "serial": serial, "stats": stats})
         pages = ",".join(str(p) for p, _, _ in stats["pages"])
+        turn = "" if stats.get("orient") == "as drawn" else             f"  turned {stats.get('orient')}"
         print(f"  OK   {story:9s} {stats['rooms']:4d} rooms  "
               f"{stats['agreed']:4d}/{stats['tested']:<4d} exits "
-              f"({stats['rate']:.0%})  pages {pages}", file=sys.stderr)
+              f"({stats['rate']:.0%})  pages {pages}{turn}", file=sys.stderr)
 
     print(f"\n{len(tables)} games pass, {len(failed)} dropped", file=sys.stderr)
     if args.report:

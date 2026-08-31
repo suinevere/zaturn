@@ -49,6 +49,50 @@ static const MapAtlasCell MAP_ATLAS_BALLYHOO[] = {
 };
 
 /*----------------------
+ | MAP_ATLAS_CUTHROAT
+ | Description: CUTHROAT, release 23 serial 840809.
+ |   28 rooms, ascending by object number so map_atlas_pos can
+ |   bisect. 39 of 41 compass exits between two placed
+ |   rooms leave in the direction drawn (95%).
+ |
+ |   The exceptions, which are rooms whose exits contradict any planar
+ |   layout rather than misplacements:
+ |     Upstairs Hallway --north--> Red Boar Inn
+ |     Red Boar Inn --south--> Upstairs Hallway
+ | Author: suinevere
+ ----------------------*/
+static const MapAtlasCell MAP_ATLAS_CUTHROAT[] = {
+    {  61,    1,   -9 },   /* Crew's Quarters */
+    {  69,   -2,   -8 },   /* Starboard Deck */
+    {  97,    2,    0 },   /* Wharf */
+    {  98,    2,    8 },   /* Ferry Landing */
+    {  99,    5,    9 },   /* Point Lookout */
+    { 101,    4,    7 },   /* Mariners' Trust */
+    { 112,    4,    4 },   /* The Shanty */
+    { 131,    3,    4 },   /* Outfitters Int'l */
+    { 132,    2,    4 },   /* Vacant Lot */
+    { 135,    1,    4 },   /* McGinty Salvage */
+    { 147,    0,    3 },   /* Upstairs Hallway */
+    { 148,    4,    6 },   /* Back Alley */
+    { 149,    3,    6 },   /* Back Alley */
+    { 150,    2,    6 },   /* Back Alley */
+    { 152,    1,    6 },   /* Back Alley */
+    { 153,   -1,    6 },   /* Back Alley */
+    { 154,    4,    8 },   /* Shore Road */
+    { 156,    3,    8 },   /* Shore Road */
+    { 160,    4,    1 },   /* Wharf Road */
+    { 161,    3,    1 },   /* Wharf Road */
+    { 162,    2,    1 },   /* Wharf Road */
+    { 163,    1,    1 },   /* Wharf Road */
+    { 165,   -1,    1 },   /* Wharf Road */
+    { 166,   -2,    2 },   /* Winding Road */
+    { 167,   -3,    3 },   /* Winding Road */
+    { 169,   -4,    1 },   /* Winding Road */
+    { 183,    0,    5 },   /* Your Room */
+    { 190,   -1,    4 },   /* Red Boar Inn */
+};
+
+/*----------------------
  | MAP_ATLAS_ENCHANTR
  | Description: ENCHANTR, release 29 serial 860820.
  |   52 rooms, ascending by object number so map_atlas_pos can
@@ -242,38 +286,152 @@ static const MapAtlasCell MAP_ATLAS_INFIDEL[] = {
 /*----------------------
  | MAP_ATLAS_LEATHERG
  | Description: LEATHERG, release 59 serial 860730.
- |   20 rooms, ascending by object number so map_atlas_pos can
- |   bisect. 11 of 11 compass exits between two placed
+ |   42 rooms, ascending by object number so map_atlas_pos can
+ |   bisect. 22 of 22 compass exits between two placed
  |   rooms leave in the direction drawn (100%).
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_LEATHERG[] = {
-    {   7,    1,    0 },   /* Looks Can Be Deceiving */
-    {  29,   -3,    6 },   /* Lawn */
-    {  32,   -3,    5 },   /* Cleveland */
-    {  50,   -2,   -4 },   /* Cell */
-    {  65,   -3,    2 },   /* Spawning Ground */
-    {  68,    0,   -6 },   /* Ladies' Room */
-    {  70,   -2,    4 },   /* Teensy-Weensy House */
-    {  82,   -2,    2 },   /* Jungle */
-    {  92,    0,   -5 },   /* Roof */
-    { 102,    3,    1 },   /* Rocky Clifftop */
-    { 111,    0,    2 },   /* Clearing */
-    { 120,   -1,   -4 },   /* Observation Room */
-    { 130,    2,    0 },   /* Laboratory */
-    { 145,   -1,    2 },   /* Fork, Of Sorts */
-    { 147,   -2,    3 },   /* Bedroom */
-    { 159,   -1,   -5 },   /* Closet */
-    { 160,   -2,   -6 },   /* Gents' Room */
-    { 199,   -2,   -5 },   /* Cramped Space */
-    { 221,   -3,   -3 },   /* Basement */
-    { 227,   -1,    4 },   /* Garden */
+    {   7,   -3,   -7 },   /* Looks Can Be Deceiving */
+    {  29,   -7,   -1 },   /* Lawn */
+    {  32,   -7,   -2 },   /* Cleveland */
+    {  37,    5,    6 },   /* Laundry Room */
+    {  42,    6,   11 },   /* Inside the Tent */
+    {  50,   -6,  -11 },   /* Cell */
+    {  62,   -7,   13 },   /* In Space */
+    {  65,   -7,   -5 },   /* Spawning Ground */
+    {  68,   -4,  -13 },   /* Ladies' Room */
+    {  70,   -6,   -3 },   /* Teensy-Weensy House */
+    {  82,   -6,   -5 },   /* Jungle */
+    {  89,    6,    5 },   /* Oriental Garden */
+    {  92,   -4,  -12 },   /* Roof */
+    {  93,    7,    6 },   /* Base of Tower */
+    { 102,   -1,   -6 },   /* Rocky Clifftop */
+    { 111,   -4,   -5 },   /* Clearing */
+    { 112,   -7,   14 },   /* At Main Hatch */
+    { 120,   -5,  -11 },   /* Observation Room */
+    { 124,    2,    8 },   /* Oasis */
+    { 126,    2,    6 },   /* Exit Shop */
+    { 130,   -2,   -7 },   /* Laboratory */
+    { 145,   -5,   -5 },   /* Fork, Of Sorts */
+    { 147,   -6,   -4 },   /* Bedroom */
+    { 159,   -5,  -12 },   /* Closet */
+    { 160,   -6,  -13 },   /* Gents' Room */
+    { 163,    1,    5 },   /* Dunetop */
+    { 169,    7,    5 },   /* Minaret */
+    { 188,   -5,    6 },   /* Ruined Castle */
+    { 189,    4,   11 },   /* Penguin Park */
+    { 194,   -6,    7 },   /* Ruined Castle */
+    { 197,    6,   12 },   /* Gypsy Camp */
+    { 198,   -4,    7 },   /* Ruined Castle */
+    { 199,   -6,  -12 },   /* Cramped Space */
+    { 201,   -5,    4 },   /* Royal Docks */
+    { 204,   -3,    3 },   /* Martian Canal */
+    { 211,    3,   14 },   /* Stable */
+    { 215,    0,    2 },   /* Among the Dunes */
+    { 216,    3,   10 },   /* Edge of Polar Ice Cap */
+    { 217,   -5,    5 },   /* Throne Room */
+    { 221,   -7,  -10 },   /* Basement */
+    { 223,    5,    4 },   /* Harem */
+    { 227,   -5,   -3 },   /* Garden */
+};
+
+/*----------------------
+ | MAP_ATLAS_LURKING
+ | Description: LURKING, release 219 serial 870912.
+ |   51 rooms, ascending by object number so map_atlas_pos can
+ |   bisect. 34 of 34 compass exits between two placed
+ |   rooms leave in the direction drawn (100%).
+ | Author: suinevere
+ ----------------------*/
+static const MapAtlasCell MAP_ATLAS_LURKING[] = {
+    {   9,   -3,    8 },   /* Tomb */
+    {  16,    8,   -4 },   /* Small Courtyard */
+    {  25,    6,    9 },   /* Brick Tunnel */
+    {  33,    1,    5 },   /* Kitchen */
+    {  34,   -5,   10 },   /* Tunnel Entrance */
+    {  35,   -1,    8 },   /* Stairway */
+    {  38,   -4,   -3 },   /* Engineering Building */
+    {  39,   -6,   10 },   /* Muddy Tunnel */
+    {  42,    7,   11 },   /* Lab */
+    {  47,    5,    8 },   /* Dead Storage */
+    {  65,   -3,  -11 },   /* Computer Center */
+    {  66,   -4,   10 },   /* Steam Tunnel */
+    {  69,   -5,   13 },   /* Inner Lair */
+    {  78,   -3,   10 },   /* Steam Tunnel */
+    {  98,   -1,  -12 },   /* Smith Street */
+    {  99,   -6,   11 },   /* Large Chamber */
+    { 109,    7,  -10 },   /* Inside Dome */
+    { 121,   -1,   -9 },   /* Roof of Great Dome */
+    { 124,   -2,  -10 },   /* Elevator */
+    { 127,    3,    2 },   /* Roof */
+    { 134,   -2,    3 },   /* Basalt Bowl */
+    { 136,   -6,   -7 },   /* Aero Lobby */
+    { 137,    3,    5 },   /* Second Floor */
+    { 138,   -1,   10 },   /* Steam Tunnel */
+    { 140,    0,  -11 },   /* Temporary Lab */
+    { 142,   -1,    9 },   /* Subbasement */
+    { 145,    0,   -9 },   /* On the Great Dome */
+    { 150,    2,   -7 },   /* Fruits and Nuts */
+    { 152,   -2,    2 },   /* Place */
+    { 158,    0,    8 },   /* Aero Basement */
+    { 171,    6,    8 },   /* Ancient Storage */
+    { 174,    5,   -2 },   /* Department of Alchemy */
+    { 176,    1,    4 },   /* Terminal Room */
+    { 179,    6,   -7 },   /* Cluttered Passage */
+    { 180,    1,   -2 },   /* Great Court */
+    { 185,   -4,  -12 },   /* Smith Street */
+    { 190,   -7,   -5 },   /* Mass. Ave. */
+    { 195,    7,   -8 },   /* Top Floor */
+    { 200,    7,   -5 },   /* Brown Basement */
+    { 201,    5,    5 },   /* Renovated Cave */
+    { 202,    4,    8 },   /* Temporary Basement */
+    { 208,    3,   -5 },   /* Infinite Corridor */
+    { 210,    0,   -5 },   /* Infinite Corridor */
+    { 213,    0,   -8 },   /* Top of Dome */
+    { 214,   -3,   -5 },   /* Infinite Corridor */
+    { 218,   -5,   -5 },   /* Infinite Corridor */
+    { 221,    0,   10 },   /* Steam Tunnel */
+    { 222,    6,   -8 },   /* Skyscraper Roof */
+    { 240,    7,   -7 },   /* Brown Building */
+    { 248,    4,   -4 },   /* Chemistry Building */
+    { 249,    0,   -6 },   /* Great Dome */
+};
+
+/*----------------------
+ | MAP_ATLAS_MOONMIST
+ | Description: MOONMIST, release 9 serial 861022.
+ |   19 rooms, ascending by object number so map_atlas_pos can
+ |   bisect. 4 of 4 compass exits between two placed
+ |   rooms leave in the direction drawn (100%).
+ | Author: suinevere
+ ----------------------*/
+static const MapAtlasCell MAP_ATLAS_MOONMIST[] = {
+    {   9,    5,   -3 },   /* driveway */
+    {  12,    6,    0 },   /* drawing room */
+    {  13,    5,   -2 },   /* courtyard */
+    {  30,    3,   -2 },   /* kitchen */
+    {  32,    4,   -1 },   /* dining room */
+    {  62,    6,    3 },   /* your bathroom */
+    {  67,    2,    2 },   /* west hall */
+    {  88,    4,    1 },   /* sitting room */
+    { 107,   -3,    5 },   /* chapel */
+    { 114,   -1,    5 },   /* lumber room */
+    { 121,   -1,   -3 },   /* secret crypt */
+    { 126,    0,    4 },   /* Tamara's bedroom */
+    { 136,   -2,    0 },   /* old great hall */
+    { 151,   -4,    3 },   /* master bedroom */
+    { 183,   -4,    2 },   /* study */
+    { 186,   -5,   -4 },   /* path */
+    { 243,    3,   -1 },   /* backstairs */
+    { 246,    1,    0 },   /* junction */
+    { 249,    6,   -2 },   /* garden */
 };
 
 /*----------------------
  | MAP_ATLAS_PLNDHRTS
  | Description: PLNDHRTS, release 26 serial 870730.
- |   51 rooms, ascending by object number so map_atlas_pos can
+ |   52 rooms, ascending by object number so map_atlas_pos can
  |   bisect. 53 of 53 compass exits between two placed
  |   rooms leave in the direction drawn (100%).
  | Author: suinevere
@@ -299,6 +457,7 @@ static const MapAtlasCell MAP_ATLAS_PLNDHRTS[] = {
     {  80,   -1,    4 },   /* Cabin */
     {  83,    1,   -5 },   /* Supper Room */
     {  85,   -6,    2 },   /* Crow's Nest */
+    {  89,   -4,   11 },   /* By the Ship */
     {  92,   -3,    7 },   /* Landing */
     {  94,   -6,   -7 },   /* Parlour */
     {  99,    2,   -1 },   /* Shallows */
@@ -335,8 +494,8 @@ static const MapAtlasCell MAP_ATLAS_PLNDHRTS[] = {
 /*----------------------
  | MAP_ATLAS_SORCERER
  | Description: SORCERER, release 15 serial 851108.
- |   77 rooms, ascending by object number so map_atlas_pos can
- |   bisect. 121 of 138 compass exits between two placed
+ |   78 rooms, ascending by object number so map_atlas_pos can
+ |   bisect. 123 of 140 compass exits between two placed
  |   rooms leave in the direction drawn (88%).
  |
  |   The exceptions, which are rooms whose exits contradict any planar
@@ -430,6 +589,7 @@ static const MapAtlasCell MAP_ATLAS_SORCERER[] = {
     { 250,    6,    9 },   /* Lagoon Floor */
     { 253,   -1,    7 },   /* Belboz's Hideout */
     { 254,   -4,    4 },   /* Hall of Carvings */
+    { 255,    7,   -4 },   /* Inside the Glass Maze */
 };
 
 /*----------------------
@@ -600,6 +760,53 @@ static const MapAtlasCell MAP_ATLAS_STATFALL[] = {
 };
 
 /*----------------------
+ | MAP_ATLAS_SUSPENDD
+ | Description: SUSPENDD, release 8 serial 840521.
+ |   31 rooms, ascending by object number so map_atlas_pos can
+ |   bisect. 50 of 52 compass exits between two placed
+ |   rooms leave in the direction drawn (96%).
+ |
+ |   The exceptions, which are rooms whose exits contradict any planar
+ |   layout rather than misplacements:
+ |     Angling Corridor --sw--> Central Chamber
+ |     Central Chamber --ne--> Angling Corridor
+ | Author: suinevere
+ ----------------------*/
+static const MapAtlasCell MAP_ATLAS_SUSPENDD[] = {
+    {  87,    7,    0 },   /* Alpha FC */
+    {  88,    7,    1 },   /* Primary Channel */
+    {  89,    7,    2 },   /* Beta FC */
+    {  90,    7,    3 },   /* Secondary Channel */
+    {  91,    7,    4 },   /* Gamma FC */
+    {  97,    6,   -1 },   /* Skywalk Gamma */
+    { 103,    2,    0 },   /* Hallway End */
+    { 104,   -2,   -1 },   /* Library Core */
+    { 105,    2,   -1 },   /* Library Entrance */
+    { 106,    5,   -2 },   /* Maintenance Access */
+    { 107,    2,   -2 },   /* Hallway Branch */
+    { 108,    2,   -3 },   /* Hallway Corner */
+    { 109,    2,   -4 },   /* Sleep Chamber */
+    { 111,    0,   -4 },   /* Activities Area */
+    { 112,   -1,   -3 },   /* Access Hallway */
+    { 117,    6,    2 },   /* Southeast Junction */
+    { 127,   -2,   -4 },   /* Small Supply Room */
+    { 128,   -5,   -4 },   /* Sterilization Chamber */
+    { 129,   -4,   -4 },   /* Decontamination Chamber */
+    { 130,   -6,   -3 },   /* Dead End */
+    { 131,   -5,   -3 },   /* Hallway T */
+    { 132,    3,    4 },   /* Hydroponics Monitors */
+    { 133,    1,    5 },   /* Transit Monitors */
+    { 134,    4,    2 },   /* Bending Corridor */
+    { 135,   -2,    4 },   /* Main Supply Room */
+    { 136,   -2,    5 },   /* Middle Supply Room */
+    { 137,    1,    3 },   /* Angling Corridor */
+    { 138,   -1,    5 },   /* Sub Supply Room */
+    { 148,   -3,   -4 },   /* Entry Area */
+    { 151,    1,    4 },   /* Central Chamber */
+    { 157,   -1,    4 },   /* Weather Monitors */
+};
+
+/*----------------------
  | MAP_ATLAS_WISHBRNG
  | Description: WISHBRNG, release 69 serial 850920.
  |   41 rooms, ascending by object number so map_atlas_pos can
@@ -652,6 +859,36 @@ static const MapAtlasCell MAP_ATLAS_WISHBRNG[] = {
 };
 
 /*----------------------
+ | MAP_ATLAS_WITNESS
+ | Description: WITNESS, release 22 serial 840924.
+ |   19 rooms, ascending by object number so map_atlas_pos can
+ |   bisect. 8 of 8 compass exits between two placed
+ |   rooms leave in the direction drawn (100%).
+ | Author: suinevere
+ ----------------------*/
+static const MapAtlasCell MAP_ATLAS_WITNESS[] = {
+    {  96,    2,    3 },   /* workshop */
+    { 102,   -1,    3 },   /* garage */
+    { 126,   -1,    2 },   /* storage closet */
+    { 130,   -3,    1 },   /* entry */
+    { 135,   -2,    0 },   /* butler's room */
+    { 153,   -2,   -2 },   /* kitchen */
+    { 158,   -3,   -3 },   /* dining room */
+    { 168,    0,   -3 },   /* living room */
+    { 176,    1,   -2 },   /* toilet room */
+    { 180,    3,   -1 },   /* tub room */
+    { 185,    2,   -2 },   /* bathroom */
+    { 203,    5,   -4 },   /* rock garden */
+    { 207,    2,    1 },   /* office */
+    { 214,    4,    1 },   /* office porch */
+    { 219,   -1,    4 },   /* side yard */
+    { 224,   -4,    5 },   /* driveway entrance */
+    { 225,   -5,    3 },   /* driveway */
+    { 228,   -5,    1 },   /* front porch */
+    { 237,   -4,   -1 },   /* front yard */
+};
+
+/*----------------------
  | MAP_ATLAS_ZORK1
  | Description: ZORK1, release 88 serial 840726.
  |   84 rooms, ascending by object number so map_atlas_pos can
@@ -680,9 +917,9 @@ static const MapAtlasCell MAP_ATLAS_ZORK1[] = {
     {  22,    6,  -10 },   /* Smelly Room */
     {  23,   -4,   -7 },   /* Squeaky Room */
     {  24,   -2,   -7 },   /* Mine Entrance */
-    {  25,   -1,  -18 },   /* Canyon View */
-    {  26,    0,  -17 },   /* Rocky Ledge */
-    {  27,    1,  -16 },   /* Canyon Bottom */
+    {  25,   -2,  -18 },   /* Canyon View */
+    {  26,   -1,  -17 },   /* Rocky Ledge */
+    {  27,    0,  -16 },   /* Canyon Bottom */
     {  28,    8,   12 },   /* On the Rainbow */
     {  29,    9,   12 },   /* Aragain Falls */
     {  30,    8,    8 },   /* Shore */
@@ -705,32 +942,32 @@ static const MapAtlasCell MAP_ATLAS_ZORK1[] = {
     {  51,   -7,    7 },   /* Strange Passage */
     {  55,    8,   -5 },   /* Dead End */
     {  57,   -6,    2 },   /* Grating Room */
-    {  61,   -3,   16 },   /* Dead End */
-    {  65,   -4,   19 },   /* Dead End */
-    {  66,   -8,   21 },   /* Dead End */
+    {  61,   -4,   16 },   /* Dead End */
+    {  65,   -5,   19 },   /* Dead End */
+    {  66,   -9,   21 },   /* Dead End */
     {  71,   -5,    9 },   /* East of Chasm */
     {  72,   -5,    7 },   /* Cellar */
-    {  74,   -2,  -19 },   /* Clearing */
-    {  75,   -5,  -22 },   /* Forest Path */
-    {  76,   -2,  -16 },   /* Forest */
-    {  77,   -2,  -22 },   /* Forest */
-    {  78,   -8,  -22 },   /* Forest */
-    {  79,   -3,  -19 },   /* Behind House */
-    {  80,   -5,  -17 },   /* South of House */
-    {  81,   -5,  -21 },   /* North of House */
-    {  88,   -4,  -23 },   /* Up a Tree */
+    {  74,   -3,  -19 },   /* Clearing */
+    {  75,   -6,  -22 },   /* Forest Path */
+    {  76,   -3,  -16 },   /* Forest */
+    {  77,   -3,  -22 },   /* Forest */
+    {  78,   -9,  -22 },   /* Forest */
+    {  79,   -4,  -19 },   /* Behind House */
+    {  80,   -6,  -17 },   /* South of House */
+    {  81,   -6,  -21 },   /* North of House */
+    {  88,   -5,  -23 },   /* Up a Tree */
     {  94,   -3,    7 },   /* Studio */
     {  96,    2,    6 },   /* Engravings Cave */
     { 100,    1,    0 },   /* Reservoir */
     { 105,    4,    8 },   /* Torch Room */
-    { 118,    0,   24 },   /* Dead End */
+    { 118,   -1,   24 },   /* Dead End */
     { 120,    8,    6 },   /* Sandy Beach */
     { 124,    6,  -12 },   /* Gas Room */
     { 126,    9,    5 },   /* Sandy Cave */
-    { 136,    2,  -17 },   /* End of Rainbow */
+    { 136,    1,  -17 },   /* End of Rainbow */
     { 138,    2,    4 },   /* Loud Room */
     { 140,    5,    2 },   /* Dam Base */
-    { 143,   -5,  -24 },   /* Clearing */
+    { 143,   -6,  -24 },   /* Clearing */
     { 148,   -3,    9 },   /* Gallery */
     { 150,    0,   -4 },   /* Mirror Room */
     { 152,    0,    8 },   /* Mirror Room */
@@ -738,14 +975,14 @@ static const MapAtlasCell MAP_ATLAS_ZORK1[] = {
     { 157,    6,   -5 },   /* Machine Room */
     { 172,    1,   -1 },   /* Reservoir North */
     { 175,    5,   10 },   /* Egyptian Room */
-    { 178,   -7,  -18 },   /* Stone Barrow */
-    { 180,   -6,  -19 },   /* West of House */
-    { 185,   -8,    7 },   /* Cyclops Room */
+    { 178,   -8,  -18 },   /* Stone Barrow */
+    { 180,   -7,  -19 },   /* West of House */
+    { 185,   -9,    7 },   /* Cyclops Room */
     { 187,    1,   -2 },   /* Atlantis Room */
-    { 190,   -8,    9 },   /* Treasure Room */
-    { 193,   -5,  -19 },   /* Living Room */
-    { 201,   -4,  -20 },   /* Attic */
-    { 203,   -4,  -19 },   /* Kitchen */
+    { 190,   -9,    9 },   /* Treasure Room */
+    { 193,   -6,  -19 },   /* Living Room */
+    { 201,   -5,  -20 },   /* Attic */
+    { 203,   -5,  -19 },   /* Kitchen */
     { 206,    7,   -6 },   /* Timber Room */
     { 212,    4,   11 },   /* Altar */
     { 220,    4,   10 },   /* Temple */
@@ -753,7 +990,7 @@ static const MapAtlasCell MAP_ATLAS_ZORK1[] = {
     { 226,    6,   -8 },   /* Shaft Room */
     { 228,    6,   -6 },   /* Drafty Room */
     { 230,    1,   12 },   /* Land of the Dead */
-    { 239,   -1,  -22 },   /* Forest */
+    { 239,   -2,  -22 },   /* Forest */
 };
 
 /*----------------------
@@ -876,6 +1113,9 @@ static const MapAtlasStory MAP_ATLAS_STORIES[] = {
     { 97u, "851218", MAP_ATLAS_BALLYHOO,
       (unsigned short) (sizeof MAP_ATLAS_BALLYHOO /
                         sizeof MAP_ATLAS_BALLYHOO[0]) },
+    { 23u, "840809", MAP_ATLAS_CUTHROAT,
+      (unsigned short) (sizeof MAP_ATLAS_CUTHROAT /
+                        sizeof MAP_ATLAS_CUTHROAT[0]) },
     { 29u, "860820", MAP_ATLAS_ENCHANTR,
       (unsigned short) (sizeof MAP_ATLAS_ENCHANTR /
                         sizeof MAP_ATLAS_ENCHANTR[0]) },
@@ -888,6 +1128,12 @@ static const MapAtlasStory MAP_ATLAS_STORIES[] = {
     { 59u, "860730", MAP_ATLAS_LEATHERG,
       (unsigned short) (sizeof MAP_ATLAS_LEATHERG /
                         sizeof MAP_ATLAS_LEATHERG[0]) },
+    { 219u, "870912", MAP_ATLAS_LURKING,
+      (unsigned short) (sizeof MAP_ATLAS_LURKING /
+                        sizeof MAP_ATLAS_LURKING[0]) },
+    { 9u, "861022", MAP_ATLAS_MOONMIST,
+      (unsigned short) (sizeof MAP_ATLAS_MOONMIST /
+                        sizeof MAP_ATLAS_MOONMIST[0]) },
     { 26u, "870730", MAP_ATLAS_PLNDHRTS,
       (unsigned short) (sizeof MAP_ATLAS_PLNDHRTS /
                         sizeof MAP_ATLAS_PLNDHRTS[0]) },
@@ -900,9 +1146,15 @@ static const MapAtlasStory MAP_ATLAS_STORIES[] = {
     { 107u, "870430", MAP_ATLAS_STATFALL,
       (unsigned short) (sizeof MAP_ATLAS_STATFALL /
                         sizeof MAP_ATLAS_STATFALL[0]) },
+    { 8u, "840521", MAP_ATLAS_SUSPENDD,
+      (unsigned short) (sizeof MAP_ATLAS_SUSPENDD /
+                        sizeof MAP_ATLAS_SUSPENDD[0]) },
     { 69u, "850920", MAP_ATLAS_WISHBRNG,
       (unsigned short) (sizeof MAP_ATLAS_WISHBRNG /
                         sizeof MAP_ATLAS_WISHBRNG[0]) },
+    { 22u, "840924", MAP_ATLAS_WITNESS,
+      (unsigned short) (sizeof MAP_ATLAS_WITNESS /
+                        sizeof MAP_ATLAS_WITNESS[0]) },
     { 88u, "840726", MAP_ATLAS_ZORK1,
       (unsigned short) (sizeof MAP_ATLAS_ZORK1 /
                         sizeof MAP_ATLAS_ZORK1[0]) },

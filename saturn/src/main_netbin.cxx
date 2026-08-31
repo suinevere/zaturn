@@ -224,7 +224,7 @@ static void netbin_video_init(void) {
     slScrWindowModeNbg0(0);
     SRL::VDP2::SetBackColor(HighColor(display_bg_rgb(g_display.bg)));
     text_set_color(display_text_rgb(g_display.text), display_bg_rgb(g_display.bg));
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
     SRL::Core::Synchronize();
 }
 
@@ -244,10 +244,11 @@ static void netbin_video_init(void) {
  | Returns: 0 nominally, but it never actually returns
  ----------------------*/
 int main(void) {
-    // 320x224 for the same reason main.cxx picks it: the text grid is 28 rows of
-    // 8 lines and nothing paints below it. The netbin shows no wallpaper at all,
-    // so here the surplus lines were pure back-plane.
-    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x224);
+    // 320x240, matching the CD build, so the console_view.cxx geometry the two
+    // share (SCREEN_ROWS, TOP_MARGIN) means the same thing in both. The netbin
+    // shows no wallpaper, so the taller mode costs it nothing and it gains the
+    // same two rows the CD build did.
+    SRL::Core::Initialize(HighColor::Colors::Black, SRL::TV::Resolutions::Normal320x240);
     border_use_black();
     text_map_init();
     dash_init();        // after text_map_init, as main.cxx:364 does it: VDP2 and

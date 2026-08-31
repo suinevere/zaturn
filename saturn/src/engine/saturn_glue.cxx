@@ -724,7 +724,7 @@ extern "C" void saturn_die(const char *fmt, ...) {
             console_write("\n", 1);
         }
     }
-    for (int r = TOP_MARGIN + console_height(); r <= 28; r++) text_clear_line(r);
+    for (int r = TOP_MARGIN + console_height(); r < console_screen_rows(); r++) text_clear_line(r);
     while (1) { render_console(); SRL::Core::Synchronize(); }
 }
 

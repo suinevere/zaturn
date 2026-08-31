@@ -103,6 +103,23 @@ void border_use_black(void);
 int console_height(void);
 
 /*----------------------
+ | console_screen_rows
+ | Description: The screen's total text row count -- physical geometry, not the
+ |   rows currently free for console content. Unlike console_height(), it does
+ |   not move when the on-screen keyboard shows or hides, which is what a
+ |   full-screen wipe (a title/menu/splash reset, saturn_die's halt clear) needs
+ |   instead: console_height()'s bound is wrong there, since with the keyboard
+ |   hidden it reports fewer rows than the screen actually has, leaving rows
+ |   above the console unclearable through it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the screen's total row count (SCREEN_ROWS)
+ ----------------------*/
+int console_screen_rows(void);
+
+/*----------------------
  | hint
  | Description: Picks the input-hint string matching the last-used device, so
  |   on-screen text always names the device the player actually has in hand

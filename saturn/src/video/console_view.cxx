@@ -188,6 +188,19 @@ int console_height(void) {
 }
 
 /*----------------------
+ | console_screen_rows
+ | Description: See console_view.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: SCREEN_ROWS
+ ----------------------*/
+int console_screen_rows(void) {
+    return SCREEN_ROWS;
+}
+
+/*----------------------
  | hint
  | Description: Returns `pad` while the on-screen keyboard is showing (gamepad in
  |   hand) or `kbd` once it is hidden (real keyboard in hand), so the same call

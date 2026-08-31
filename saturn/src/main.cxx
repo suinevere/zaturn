@@ -409,7 +409,7 @@ int main(void) {
     // not to know which boot it is.
     title_bg_cache_release();
 
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
 
     // No game is selected at the title, so g_display's own Dynamic resolution
     // (display_dynamic_slot) correctly has nothing to show -- the menu behind the

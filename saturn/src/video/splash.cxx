@@ -32,7 +32,8 @@
  |   ever looks like only its glyphs fade while the surround stays fixed,
  |   that is a palette authoring issue in the TGA, not a bug in this file.
  | Author: suinevere
- | Dependencies: title.h, online.h, boot_music.h, input.h, saturn_keyboard.h, SRL
+ | Dependencies: title.h, online.h, boot_music.h, input.h, saturn_keyboard.h,
+ |   console_view.h, SRL
  ----------------------*/
 #include "splash.h"
 #include "title.h"
@@ -40,6 +41,7 @@
 #include "boot_music.h"
 #include "input.h"
 #include "saturn_keyboard.h"
+#include "console_view.h"
 #include <srl.hpp>
 #include "text_map.h"
 
@@ -198,7 +200,7 @@ void splash_show(void) {
 
     boot_music_load();   // first thing: resident in RAM before any other splash CD read
 
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
 
     bool have_logo = title_bg_show_oneoff("SUINE.TGA");
 

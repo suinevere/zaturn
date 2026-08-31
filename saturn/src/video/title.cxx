@@ -1278,7 +1278,7 @@ static void title_drain_input(void) {
 int title_and_seed(void) {
     int frames = 0;
     int reset_hold = 0;
-    for (int r = 0; r <= 28; r++) text_clear_line(r);
+    for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
     title_draw_art();
     menu_sync();
 

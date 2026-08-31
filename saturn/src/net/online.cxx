@@ -580,7 +580,7 @@ void online_mode(void) {
 #else
         render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);
 #endif
-        text_print(0, 28, "%s", hint("L/R=cycle  hold L+R=disconnect", "Esc=disconnect"));
+        text_print(0, console_screen_rows() - 1, "%s", hint("L/R=cycle  hold L+R=disconnect", "Esc=disconnect"));
         menu_sync();
     }
     net_connect_close();

@@ -2,7 +2,7 @@
  | saturn_backup.h
  | Description: Save/load the game blob to Saturn backup devices (internal RAM,
  |   cartridge) via the SGL/BIOS backup driver: init, presence check, write, read,
- |   and comment-only info. Implemented in saturn_backup.cxx.
+ |   delete, and comment-only info. Implemented in saturn_backup.cxx.
  | Author: suinevere
  | Dependencies: stdint.h
  ----------------------*/
@@ -42,17 +42,21 @@ void saturn_bup_init(void);
 int  saturn_bup_present(int device);
 
 /*----------------------
- | saturn_bup_write / saturn_bup_read / saturn_bup_info
+ | saturn_bup_write / saturn_bup_read / saturn_bup_info / saturn_bup_delete
  | Description: write stores len bytes under name+comment (overwriting a same-named
  |   file); read loads a named save into `data` (sized for the stored blob); info
- |   copies a save's comment (<=10 chars, NUL-terminated) into out_comment. Each
- |   returns 1 on success, 0 otherwise.
+ |   copies a save's comment (<=10 chars, NUL-terminated) into out_comment; delete
+ |   removes a named file, which is how a caller retires a companion record whose
+ |   own write failed rather than leave a stale one paired with a fresh save. Each
+ |   returns 1 on success, 0 otherwise; delete reports 0 for a file that was not
+ |   there, which is the same outcome the caller wanted.
  | Author: suinevere
  ----------------------*/
 int  saturn_bup_write(int device, const char *name, const char *comment,
                       const uint8_t *data, uint32_t len);
 int  saturn_bup_read(int device, const char *name, uint8_t *data);
 int  saturn_bup_info(int device, const char *name, char *out_comment);
+int  saturn_bup_delete(int device, const char *name);
 
 #ifdef __cplusplus
 }

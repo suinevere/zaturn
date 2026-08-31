@@ -43,6 +43,7 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 #include "menu.h"
 #include "menu_pages.h"
 #include "room_model.h"
+#include "map_model.h"
 #include "save_ui.h"
 #include "soft_reset.h"
 extern "C" {
@@ -110,6 +111,18 @@ static const uint8_t* g_ta_story = nullptr;
 static int g_ta_diff = -1;
 
 /*----------------------
+ | g_map_story
+ | Description: The story the map model currently holds rooms for. Kept apart
+ |   from g_ta_story because the trie is rebuilt whenever the difficulty
+ |   changes and whenever a node allocation failed, and neither of those is a
+ |   new world -- keying the map's reset on the trie's cache test threw the
+ |   whole map away when the player changed difficulty from the same Options
+ |   menu that offers the map, and once per prompt under memory pressure.
+ | Author: suinevere
+ ----------------------*/
+static const uint8_t* g_map_story = nullptr;
+
+/*----------------------
  | saturn_typeahead_release
  | Description: Frees the local prompt's trie and forgets the story it was built
  |   for, so the next game builds its own. For the soft reset, which is the moment
@@ -126,9 +139,10 @@ static int g_ta_diff = -1;
  |   g_ta_story goes with it, and would be worth clearing even if nothing else here
  |   were: the story image it points at is High Work RAM the reset is about to drop,
  |   so leaving it set leaves ensure_typeahead comparing against a dangling pointer.
+ |   g_map_story is cleared for exactly that reason and no other.
  | Author: suinevere
  | Dependencies: typeahead.h
- | Globals: g_typeahead_root, g_ta_story, g_ta_diff
+ | Globals: g_typeahead_root, g_ta_story, g_ta_diff, g_map_story
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -136,6 +150,7 @@ extern "C" void saturn_typeahead_release(void) {
     if (g_typeahead_root) { destroy_typeahead(g_typeahead_root); g_typeahead_root = nullptr; }
     g_ta_story = nullptr;
     g_ta_diff  = -1;
+    g_map_story = nullptr;
 }
 
 /*----------------------
@@ -156,10 +171,14 @@ extern "C" void saturn_typeahead_release(void) {
  |   builds no trie) still gets a working room model; the panel has nothing to do
  |   with typeahead and must not go dark at the one difficulty a player picked to
  |   keep it useful.
+ |   Forgets the map on the same terms: only when the story pointer itself
+ |   changes, which is the one event that makes stored rooms belong to another
+ |   world. Deliberately not on the cache test above, which also fires on a
+ |   difficulty change and on every prompt after a failed node allocation.
  | Author: suinevere
  | Dependencies: saturn_glue.h (saturn_story_data), typeahead.h,
- |   typeahead_extract.h, typeahead_solution.h, room_model.h
- | Globals: g_typeahead_root, g_ta_story, g_ta_diff, g_difficulty
+ |   typeahead_extract.h, typeahead_solution.h, room_model.h, map_model.h
+ | Globals: g_typeahead_root, g_ta_story, g_ta_diff, g_difficulty, g_map_story
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -177,6 +196,7 @@ static void ensure_typeahead() {
     }
     typeahead_set_easy(g_difficulty == DIFF_EASY, have_solution);
     if (story != nullptr && len > 0) room_model_bind(story, len);
+    if (story != g_map_story) { map_model_reset(); g_map_story = story; }
     g_ta_story = story;
     g_ta_diff = g_difficulty;
 }
@@ -452,6 +472,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
     ensure_typeahead();
     typeahead_scan_screen(g_typeahead_root);
     room_model_refresh();
+    map_model_enter(room_model_get());
 
     static KeyboardState k;
     static CommandPanel cpanel;
@@ -737,9 +758,15 @@ extern "C" void saturn_die(const char *fmt, ...) {
  |   empty name to "Save N", and confirms before overwriting an existing save.
  |   Records the committed device/slot as the quick-key target, then reports the
  |   result over an opaque backing so it reads over an image background.
+ |
+ |   The map goes beside the save in a companion record named for the slot plus
+ |   an 'M'. When that companion cannot be written the old one is deleted: the
+ |   player is told "Saved." on the strength of the game blob alone, and a stale
+ |   map left paired with a fresh save is one a later restore has no way to
+ |   recognise and loads as authoritative.
  | Author: suinevere
  | Dependencies: save_ui.h (choose_device/pick_slot_and_name/make_slot_name),
- |   saturn_backup.h, menu.h, music.h (music_resume), SRL
+ |   saturn_backup.h, map_model.h, menu.h, music.h (music_resume), SRL
  | Globals: g_save_device, g_save_slot, g_last_device, g_last_slot
  | Params: data -- blob to write; len -- its length
  | Returns: 1 on success, 0 on cancel or failure
@@ -771,6 +798,18 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
     }
 
     int ok = saturn_bup_write(device, name, comment, data, len);
+    if (ok) {
+        char mname[12];
+        unsigned char mblob[MAP_BLOB_MAX];
+        unsigned int mlen;
+        int i = 0;
+        while (name[i] && i < 10) { mname[i] = name[i]; i++; }
+        mname[i++] = 'M';
+        mname[i] = 0;
+        mlen = map_model_serialize(mblob, sizeof mblob);
+        if (mlen == 0 || !saturn_bup_write(device, mname, "map", mblob, mlen))
+            saturn_bup_delete(device, mname);
+    }
     if (ok) { g_last_device = device; g_last_slot = slot; }
     {
         MenuBacking backing;
@@ -788,9 +827,18 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
  |   Save Game") is consumed once; otherwise it runs choose_dest to resolve a
  |   device and slot. Reads the blob, records the device/slot as the quick-key
  |   target on success, and reports an empty slot to the player.
+ |
+ |   Then the companion map, which needs two things the save format does not
+ |   supply. Its first two bytes are zeroed before the read, because
+ |   saturn_bup_read reports success without a length and a shorter record than
+ |   asked for would leave the header map_model_serialize_len reads as stack
+ |   garbage. And a blob that loads is handed to map_model_rebind_exits, since
+ |   it stores positions only and without the story's exits back in place the
+ |   restored map draws marks with no trail between them. A companion that is
+ |   missing or refused resets the map rather than presenting a stale one.
  | Author: suinevere
- | Dependencies: save_ui.h (choose_dest/make_slot_name), saturn_backup.h, menu.h,
- |   music.h (music_resume)
+ | Dependencies: save_ui.h (choose_dest/make_slot_name), saturn_backup.h,
+ |   map_model.h, menu.h, music.h (music_resume)
  | Globals: g_restore_device, g_restore_slot, g_last_device, g_last_slot
  | Params: buf -- destination for the blob; maxlen -- capacity (unused; the
  |   backup layer knows the record size)
@@ -809,6 +857,20 @@ extern "C" int saturn_load_blob(uint8_t *buf, uint32_t maxlen) {
     char name[12];
     make_slot_name(name, slot);
     int ok = saturn_bup_read(device, name, buf);
+    if (ok) {
+        char mname[12];
+        unsigned char mblob[MAP_BLOB_MAX];
+        int i = 0;
+        while (name[i] && i < 10) { mname[i] = name[i]; i++; }
+        mname[i++] = 'M';
+        mname[i] = 0;
+        mblob[0] = 0; mblob[1] = 0;
+        if (!saturn_bup_read(device, mname, mblob) ||
+            !map_model_deserialize(mblob, map_model_serialize_len(mblob)))
+            map_model_reset();
+        else
+            map_model_rebind_exits();
+    }
     if (ok) { g_last_device = device; g_last_slot = slot; }
     if (!ok) {
         MenuBacking backing;

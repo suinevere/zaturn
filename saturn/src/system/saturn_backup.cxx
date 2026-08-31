@@ -1,9 +1,10 @@
 /*----------------------
  | saturn_backup.cxx
- | Description: A thin wrapper over the SGL BUP (backup) library for saving and
- |   loading the game blob to the internal RAM, cartridge, or other backup
- |   devices. Handles one-time driver init, presence checks that never format
- |   (so a probe cannot wipe a cartridge), and formatting only at write time.
+ | Description: A thin wrapper over the SGL BUP (backup) library for saving,
+ |   loading and deleting the game blob on the internal RAM, cartridge, or other
+ |   backup devices. Handles one-time driver init, presence checks that never
+ |   format (so a probe cannot wipe a cartridge), and formatting only at write
+ |   time.
  | Author: suinevere
  | Dependencies: SRL, sega_bup.h (the SGL BUP API), saturn_backup.h
  ----------------------*/
@@ -120,6 +121,26 @@ extern "C" int saturn_bup_read(int device, const char *name, uint8_t *data) {
     copy_name(fn, name);
     int32_t s = BUP_Read((uint32_t) device, fn, data);
     return (s == 0) ? 1 : 0;
+}
+
+/*----------------------
+ | saturn_bup_delete
+ | Description: Removes a named file from a present device. For a companion
+ |   record whose write failed: leaving the old one behind pairs a stale map
+ |   with a fresh save, and a later restore has no way to tell that it is stale
+ |   and loads it as authoritative.
+ | Author: suinevere
+ | Dependencies: sega_bup.h
+ | Globals: N/A
+ | Params: device -- backup device id; name -- save filename
+ | Returns: 1 when the file is gone, 0 when the device is absent or the driver
+ |   refused (which includes a file that was never there)
+ ----------------------*/
+extern "C" int saturn_bup_delete(int device, const char *name) {
+    if (!saturn_bup_present(device)) return 0;
+    uint8_t fn[12];
+    copy_name(fn, name);
+    return (BUP_Delete((uint32_t) device, fn) == 0) ? 1 : 0;
 }
 
 /*----------------------

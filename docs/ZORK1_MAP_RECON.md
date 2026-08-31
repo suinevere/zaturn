@@ -3,6 +3,11 @@
 State of the investigation into the in-game auto-map (menu -> map: a stick figure
 on a tan canvas with a trail drawn as you explore, plus room-name labels).
 
+**Resolved.** The map stores no room coordinates. It recomputes its layout every
+time it opens, by walking the room graph outward from the player at 32 pixels
+per exit. See "The layout rule" below; `0x06072D38` is a visited bitmap and
+nothing more.
+
 ## Confirmed
 
 ### Savestate mechanics
@@ -32,7 +37,7 @@ per break.
 | Address | Type | Meaning |
 |---|---|---|
 | `0x060A597C` | u16 | current room index, 0-109 (keys the room record at `0x06079060`) |
-| `0x060B4F50` | SJIS | current room title buffer |
+| `0x060B4F50` | SJIS | current room title buffer (lags one move behind in a savestate; trust `0x060A597C` instead) |
 | `0x060B5040` | SJIS | current room description buffer |
 | `0x060B2DAC` | struct | CDC play spec: `+4/+5` start track/index, `+12/+13` end, `+16` mode |
 
@@ -119,41 +124,111 @@ mapping in this routine, which is why no such table exists to find.
 
 ### Per-room map state
 
-* **`0x060B4830`** - u16 canvas cursor, the live map position.
-* **`0x0600AA96`** - on entering a room: `maptbl[room] = cursor | 0x8000`.
-* **`0x06072D38`** - 110 x u16 indexed by room. Bit 15 = visited; the low 15 bits
-  are the cursor value captured on first visit.
-* **`0x06019B84`** - the draw loop: iterates all 110 rooms (`cmp/eq #110`),
-  skips any whose table entry is zero, and for each visited room emits its label
-  from a 20-byte record (`add #20,r12`) holding up to ten u16 glyph entries,
-  zero-terminated.
+* **`0x06072D38`** - 110 x u16 indexed by room. **Bit 15 is the whole payload.**
+  The low 15 bits are a snapshot of `0x060B4830` taken at the moment of entry
+  and are never interpreted by anything.
+* **`0x0600AA8A`** - on entering a room, gated on `*(u16*)0x060A5988 == 0`:
+  `maptbl[room] = *(u16*)0x060B4830 | 0x8000`. The write is unconditional, not
+  first-visit-only, so a revisit rewrites the same entry.
+* **`0x060B4830`** - **not a map variable.** It is referenced from ~110
+  constant-pool sites across `0x06040000`-`0x06042700`, the text engine. The
+  map borrows it for a nonzero marker and discards its value.
+* **`0x06019B84`** - the draw loop: iterates all 110 rooms (`cmp/eq #110`) and
+  skips any whose table entry is zero.
 
-The cursor splits into two fields per the draw code: `hi = (v >> 8) & 0x7F`
-(compared against 11) and `lo = v & 0xFF` (scaled by `0x1800` or `0x3000`
-depending on that comparison).
+### The low bits are never read
 
-Verified against a five-room northward walk, with the table containing exactly
-the rooms visited and nothing else:
+Three independent sites touch `0x06072D38`. All three test it against zero and
+nothing else:
 
-| Room | Cursor | hi | lo |
-|---|---|---|---|
-| 12 West of House | `0x005B` | 0 | 91 |
-| 7 North of House | `0x006D` | 0 | 109 |
-| 8 Forest Path | `0x0155` | 1 | 85 |
-| 5 Clearing | `0x0054` | 0 | 84 |
-| 3 Forest | `0x0054` | 0 | 84 |
+| Site | Instructions | Use |
+|---|---|---|
+| `0x06019B8E` | `mov.w @(r0,r1),r1` / `tst r1,r1` / `bf` | `r1` clobbered two instructions later by the label record |
+| `0x0601A55E` | `mov.w @r6,r1` / `tst r1,r1` / `bf` | same shape, different function |
+| `0x0600AAA6` | `mov.w r1,@(r0,r3)` | the writer |
 
-## Open
+So the table is a **visited bitmap**, and the low 15 bits are noise.
 
-Rooms 5 (Clearing) and 3 (Forest) carry the **same** cursor, `0x0054`, in every
-savestate checked. So the cursor is not a unique per-room coordinate. Either it
-only advances on some transitions, or the two labels are separated by the 20-byte
-name record rather than by the cursor.
+### Correction: the hi/lo split belongs to the label records
 
-A save from a room reached by moving **east or west** would show whether the `hi`
-field is the axis that changes. Note that the savestates which produced the table
-above no longer exist (see the warning at the top of this document), so any
-further capture starts from a fresh playthrough.
+An earlier revision of this document attributed the decomposition
+`hi = (v >> 8) & 0x7F`, `lo = v & 0xFF`, scaled by `0x1800` or `0x3000`, to the
+cursor. That is the right code read against the wrong variable. The split is
+performed at `0x06019BB4` on **`record[i]`**, an entry in the 20-byte per-room
+label record, and it computes an *address*, not a coordinate:
+
+```
+r4 = *(0x0605E960) + 0x8000 + hi*16 + lo*0x3000
+```
+
+The `cmp/hi #11` at `0x06019BE8` selects between the two scales. `hi` and `lo`
+are glyph selectors.
+
+### Where the geometry actually lives
+
+The per-room records are built **on the stack** and thrown away when the map
+closes:
+
+* `0x06019B86` - `mov r15,r12`, so the record pointer is the stack pointer.
+* `0x0601A536` - `shll2` sequence producing `room*20`, indexed off `r15`.
+
+Two full scans of HWRAM across ten-state walks - one with the map closed, one
+with the map open - found no per-room coordinate pair anywhere. That is what a
+layout computed on open and discarded on close predicts.
+
+### The layout rule
+
+`0x0601A000`-`0x0601A05A` steps a coordinate by **32 units per move**, chosen by
+a direction index tested against 2 and 12, offset from `*(0x0605FBB2)`. That
+location reads a constant **-16** in all twenty captured states, which is the
+same immediate `0x06019AF4` hardcodes for the fixed figure's x.
+
+So the map is recomputed each time it opens, by walking the room graph outward
+from the room the player is standing in at 32 pixels per exit, drawing a label
+wherever the visited bit is set. Nothing is stored because nothing needs to be:
+laying out relative to the player is what lets the figure stay nailed to the
+centre while the map scrolls under it.
+
+## Verified against two walks
+
+Ten states each, read with `analysis/zork_savestate.py`.
+
+**Above ground**, W of House -> S -> E -> N -> W -> N -> N -> U -> D -> N:
+
+| Room | | Cursor |
+|---|---|---|
+| 12 | West of House | `0x005B` |
+| 9 | South of House | `0x00D6` |
+| 1 | Behind House | `0x00B5` |
+| 7 | North of House | `0x006D` |
+| 8 | Forest Path | `0x0155` |
+| 11 | Up a Tree | `0x0200` |
+| 5 | Clearing | `0x0054` |
+
+**Underground**, Living Room -> D -> N -> S -> S -> E -> N -> S -> N -> U:
+
+| Room | | Cursor |
+|---|---|---|
+| 15 | Living Room | `0x0204` |
+| 16 | Cellar | `0x0011` |
+| 20 | Troll Room | `0x0010` |
+| 17 | East of Chasm | `0x0005` |
+| 18 | Gallery | `0x0041` |
+| 19 | Studio | `0x0110` |
+| 14 | Kitchen | `0x0144` |
+
+Two findings fall out of the pair:
+
+* **Revisits restore a room's value exactly**, within a session - rooms 12, 7,
+  8, 16, 18 and 19 each read identically on both visits.
+* **The value is path-dependent across sessions.** Behind House reads `0x00B5`
+  when reached through South of House and `0x00F5` when reached through North
+  of House - a difference of exactly 64, or 2 x 32. A stored identity would not
+  do that; a walked position would.
+
+The second observation is the empirical half of the layout rule, and it also
+disposes of the old open question about rooms 5 and 3 sharing `0x0054`. They
+share it because the value is not a coordinate.
 
 ## Incidental
 

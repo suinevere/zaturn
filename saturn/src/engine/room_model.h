@@ -272,6 +272,20 @@ int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out
  ----------------------*/
 int room_model_full_word(unsigned short obj, const char *word, char *out, int max);
 
+/*----------------------
+ | room_model_object_name
+ | Description: An object's full short name, decoded from the Z-string at its
+ |   property table -- "West of House" rather than the six-character dictionary
+ |   form room_model_object_word returns. The decoder is the one
+ |   room_model_full_word already uses; this only makes it reachable.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story, g_len, g_available
+ | Params: obj -- object number; out -- receives the name; max -- its capacity
+ | Returns: 1 and fills out on success, 0 and empties out otherwise
+ ----------------------*/
+int room_model_object_name(unsigned short obj, char *out, int max);
+
 #ifdef __cplusplus
 }
 #endif

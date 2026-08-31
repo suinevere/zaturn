@@ -59,7 +59,8 @@ enum {
     DT_RULE_MODLEFT = 53, DT_RULE_RIGHT,
     DT_BOX_TOP = 55, DT_BOX_BOTTOM, DT_BOX_LEFT, DT_BOX_RIGHT,
     DT_BOX_TL, DT_BOX_TR, DT_BOX_BL, DT_BOX_BR,
-    DT_N = 63
+    DT_GROUND, DT_ROOM, DT_ROOM_HERE, DT_LINK_H, DT_LINK_V, DT_LINK_STAIR,
+    DT_N
 };
 
 /*----------------------
@@ -73,7 +74,7 @@ enum {
  | Author: suinevere
  ----------------------*/
 enum { DASH_NONE = 0, DASH_PANEL, DASH_GAMEKB, DASH_OVERLAY,
-       DASH_BOX, DASH_VARIANT_N };
+       DASH_BOX, DASH_VARIANT_MAP, DASH_VARIANT_N };
 
 /*----------------------
  | dash_build
@@ -131,6 +132,53 @@ void dash_box(int x, int y, int w, int h);
  | Returns: N/A
  ----------------------*/
 void dash_box_hold(void);
+
+/*----------------------
+ | dash_map_begin
+ | Description: Claims the layer for the map and clears it, exactly as
+ |   dash_build and dash_box do: one thing is on this layer at a time. Call
+ |   once per frame the map is on screen, then paint into it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_map, g_variant, g_base, g_box, g_dirty_top, g_dirty_bottom,
+ |   g_touched
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void dash_map_begin(void);
+
+/*----------------------
+ | dash_map_hold
+ | Description: Keeps the map's claim on the layer up for one more frame, and
+ |   does nothing at all if a map is not what is on it. dash_map's own contract
+ |   is that dash_map_begin is called once per frame the map is on screen; a
+ |   caller that draws the map once and then holds the screen -- rather than
+ |   redrawing every frame -- must keep claiming some other way, the same
+ |   problem dash_box_hold solves for a menu box. The map's counterpart is
+ |   separate because it is keyed on DASH_VARIANT_MAP rather than DASH_BOX: a
+ |   caller re-running the whole dash_map_begin/dash_map_paint pass every frame
+ |   just to keep the claim alive would also re-run whatever it costs to
+ |   recompute what to paint, which for the map is not free.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_variant, g_touched
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void dash_map_hold(void);
+
+/*----------------------
+ | dash_map_paint
+ | Description: Sets one cell of the shadow. Out-of-range coordinates are
+ |   dropped rather than faulting, so a caller clipping at the screen edge
+ |   needs no bounds test of its own.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_map, g_dirty_top, g_dirty_bottom
+ | Params: x -- column; y -- row; tile -- a DT_* index
+ | Returns: N/A
+ ----------------------*/
+void dash_map_paint(int x, int y, unsigned char tile);
 
 /*----------------------
  | dash_cell

@@ -336,6 +336,15 @@ int main(void) {
     assert(room_model_bind(bad_dict, sizeof bad_dict) == 0);
     assert(room_model_available() == 0);
 
+    /* The room object's short name, which the map draws as its label. */
+    room_model_bind(g_story, g_len);
+    room_model_refresh_room(180);
+    {
+        char nm[40];
+        assert(room_model_object_name(room_model_get()->room, nm, sizeof nm));
+        assert(strcmp(nm, "West of House") == 0);
+    }
+
     printf("test_room_model ok\n");
     return 0;
 }

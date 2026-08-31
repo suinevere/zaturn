@@ -38,6 +38,7 @@
 #include "saturn_keyboard.h"
 #include "soft_reset.h"
 #include "title.h"
+#include "map_view.h"
 
 extern "C" {
 #include "keyboard.h"
@@ -1440,19 +1441,19 @@ static void controls_dispatch(void) {
  |   (menu_confirm), soft_reset.h (soft_reset_to_title, check_soft_reset),
  |   console_view.c (note_input_device/hint/g_kbd_visible), menu_pages.cxx
  |   (gameplay_page/network_page/controls_dispatch/display_options_page/
- |   sound_options_page)
+ |   sound_options_page), map_view.h (map_view_show)
  | Globals: g_in_game
  | Params: N/A
  | Returns: OM_NONE, OM_SAVE, or OM_RESTORE
  ----------------------*/
 int options_menu(void) {
     MenuBacking backing;
-    enum { OI_RESUME, OI_SAVE, OI_LOAD, OI_GAMEPLAY, OI_DISPLAY, OI_SOUND,
+    enum { OI_RESUME, OI_MAP, OI_SAVE, OI_LOAD, OI_GAMEPLAY, OI_DISPLAY, OI_SOUND,
            OI_CONTROLS, OI_NETWORK, OI_RETURN, OI_N };
     // Hoisted out of the draw loop because the widest one sets the bar width
     // every row pads to, and that has to be known before the first row is drawn.
     static const char *const OI_LABEL[OI_N] = {
-        "Resume", "Save Game", "Load Game", "Gameplay", "Display", "Sound",
+        "Resume", "Map", "Save Game", "Load Game", "Gameplay", "Display", "Sound",
         "Controls", "Network", "Title Screen"
     };
     bool sound_available = (music_cdda_has_audio() != 0) || (sound_has_audio() != 0);
@@ -1461,6 +1462,7 @@ int options_menu(void) {
     // back to it is the one thing worth naming. The main menu is not over
     // anything -- a Resume row would have to read as "close this box".
     if (g_in_game) items[nitems++] = OI_RESUME;
+    if (g_in_game) items[nitems++] = OI_MAP;
     if (g_in_game) { items[nitems++] = OI_SAVE; items[nitems++] = OI_LOAD; }
     items[nitems++] = OI_GAMEPLAY;
     items[nitems++] = OI_DISPLAY;
@@ -1508,6 +1510,7 @@ int options_menu(void) {
         if (back) break;
         if (act) {
             if (item == OI_RESUME) break;   // OM_NONE: exactly what backing out does
+            else if (item == OI_MAP) { page_fade_out(g_menu_page_fade); map_view_show(); need_fade_in = true; }
             else if (item == OI_SAVE) { result = OM_SAVE; break; }
             else if (item == OI_LOAD) { result = OM_RESTORE; break; }
             else if (item == OI_GAMEPLAY) { page_fade_out(g_menu_page_fade); gameplay_page(); need_fade_in = true; }

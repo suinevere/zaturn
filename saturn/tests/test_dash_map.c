@@ -199,6 +199,99 @@ int main(void) {
     dash_frame_end();
     for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
 
+    /* The map paints individual cells rather than one rectangle, so it gets
+       its own claim: begin clears, paint sets, and nothing else survives. */
+    dash_reset();
+    dash_build(DASH_PANEL, 19);
+    dash_map_begin();
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+
+    dash_map_paint(4, 8, DT_ROOM);
+    dash_map_paint(4, 12, DT_ROOM_HERE);
+    dash_map_paint(4, 10, DT_LINK_V);
+    assert(dash_cell(4, 8)  == DT_ROOM);
+    assert(dash_cell(4, 12) == DT_ROOM_HERE);
+    assert(dash_cell(4, 10) == DT_LINK_V);
+    assert(dash_cell(5, 8)  == DT_BLANK);
+
+    /* Out-of-range paints are dropped rather than trusted, so a view clipping
+       at the screen edge needs no bounds test of its own. */
+    dash_map_paint(-1, 5, DT_ROOM);
+    dash_map_paint(DASH_COLS, 5, DT_ROOM);
+    dash_map_paint(3, DASH_ROWS, DT_ROOM);
+    assert(dash_cell(3, 5) == DT_BLANK);
+
+    /* Leaving the map for another variant must erase every cell
+       dash_map_paint could have touched, not just the rows the next variant
+       repaints itself -- clear_painted has to know the map's clear extent is
+       the whole shadow. Regression test for geom_of(DASH_VARIANT_MAP) running
+       out of bounds against g_geom, which is sized for DASH_NONE..DASH_OVERLAY
+       only. */
+    dash_reset();
+    dash_map_begin();
+    dash_map_paint(4, 8, DT_ROOM);
+    dash_map_paint(35, 30, DT_ROOM_HERE);
+    dash_build(DASH_PANEL, 19);
+    assert(dash_cell(4, 8)   == DT_BLANK);
+    assert(dash_cell(35, 30) == DT_BLANK);
+
+    /* Same bug, reached the way it actually happens: nobody reclaims the
+       layer after dash_map_begin, so dash_frame_end expires it by building
+       DASH_NONE -- which runs clear_painted while g_variant is still
+       DASH_VARIANT_MAP, before dash_build reassigns it. */
+    dash_reset();
+    dash_map_begin();
+    dash_map_paint(4, 8, DT_ROOM);
+    dash_dirty_clear();
+    dash_frame_end();                      /* claimed by begin above */
+    dash_frame_end();                      /* nobody reclaims: map expires */
+    assert(dash_cell(4, 8) == DT_BLANK);
+
+    /* dash_map_hold keeps the map's claim on the layer alive across a frame
+       nobody redraws it on, without repainting -- the map's counterpart to
+       dash_box_hold, for a screen that draws once and then holds rather than
+       recomputing and redrawing every frame. */
+    dash_reset();
+    dash_map_begin();
+    dash_map_paint(4, 8, DT_ROOM);
+    dash_frame_end();                      /* claimed by begin above */
+    dash_map_hold();
+    dash_frame_end();
+    assert(dash_cell(4, 8) == DT_ROOM);
+    dash_map_hold();
+    dash_frame_end();
+    assert(dash_cell(4, 8) == DT_ROOM);
+
+    /* Without the hold it expires, which is what makes the hold load-bearing
+       rather than decorative, same as the box. */
+    dash_frame_end();
+    assert(dash_cell(4, 8) == DT_BLANK);
+
+    /* The hold does nothing when a map is not what is on the layer -- it must
+       not resurrect a map the panel has since displaced, mirroring the box
+       hold's own narrowness (see the DASH_BOX case above). */
+    dash_reset();
+    dash_map_begin();
+    dash_map_paint(4, 8, DT_ROOM);
+    dash_build(DASH_PANEL, 19);
+    dash_map_hold();
+    dash_frame_end();
+    assert(dash_cell(0, 19) == DT_CORNER_TL);   /* strip still up */
+    assert(dash_cell(4, 8)  == DT_BLANK);       /* stale map did not return */
+    for (y = 0; y < 6; y++) {
+        dash_build(DASH_PANEL, 19);
+        dash_map_hold();
+        dash_frame_end();
+        assert(dash_cell(0, 19) == DT_CORNER_TL);
+        assert(dash_cell(4, 8)  == DT_BLANK);
+    }
+
+    /* And a hold with nothing painted stays nothing painted. */
+    dash_reset();
+    dash_map_hold();
+    dash_frame_end();
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+
     printf("test_dash_map: ok\n");
     return 0;
 }

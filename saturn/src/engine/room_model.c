@@ -869,3 +869,18 @@ int room_model_dict_word(int index, char *out, int max, unsigned char *flags_out
     if (flags_out != 0) *flags_out = g_story[off + 4];
     return 1;
 }
+
+/*----------------------
+ | room_model_object_name
+ | Description: See room_model.h.
+ | Author: suinevere
+ | Dependencies: obj_short_name
+ | Globals: g_available
+ | Params: obj -- object number; out -- receives the name; max -- its capacity
+ | Returns: 1 on success, 0 otherwise
+ ----------------------*/
+int room_model_object_name(unsigned short obj, char *out, int max) {
+    if (max > 0) out[0] = '\0';
+    if (!g_available || max <= 0) return 0;
+    return obj_short_name(obj, out, max);
+}

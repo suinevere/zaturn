@@ -127,6 +127,11 @@ void dash_tint(unsigned short bg555)
     write_palette();
 }
 
+unsigned short dash_tint_current(void)
+{
+    return g_tint_bg;
+}
+
 bool dash_init(void)
 {
     if (g_ready) return true;

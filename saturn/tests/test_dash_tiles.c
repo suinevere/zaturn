@@ -17,6 +17,40 @@ static int pixel(int tile, int x, int y) {
 
 static int is_field(int v) { return v >= 5 && v <= 12; }
 
+/* How far outside the ground's own index range a map mark has to reach.
+   Byte inequality proves nothing here: dash_view's half-tint compresses the
+   sixteen entries until neighbours are about a thirty-first of a channel
+   apart, so a mark drawn one step off the ground differs in every byte and is
+   still invisible on hardware. Four steps is the separation that survives the
+   tint. */
+#define MARK_MIN_STEPS 4
+
+/* The ground tile's index range, the band every mark has to escape. */
+static int ground_lo = 15, ground_hi = 0;
+
+static void measure_ground(void) {
+    int x, y;
+    for (y = 0; y < 8; y++)
+        for (x = 0; x < 8; x++) {
+            int v = pixel(DT_GROUND, x, y);
+            if (v < ground_lo) ground_lo = v;
+            if (v > ground_hi) ground_hi = v;
+        }
+}
+
+/* Whether a tile carries at least one pixel MARK_MIN_STEPS clear of the
+   ground's band, in either direction. */
+static int escapes_ground(int tile) {
+    int x, y;
+    for (y = 0; y < 8; y++)
+        for (x = 0; x < 8; x++) {
+            int v = pixel(tile, x, y);
+            if (v + MARK_MIN_STEPS <= ground_lo) return 1;
+            if (v >= ground_hi + MARK_MIN_STEPS) return 1;
+        }
+    return 0;
+}
+
 /* The tile a frame tile's marble must be taken from: the field at the same
    phase. Comparing against it is what proves the stone was carried through
    rather than replaced by a run of flat body, which is the defect that put a
@@ -142,6 +176,28 @@ int main(void) {
     }
     assert(pixel(DT_RULE_MODLEFT, 7, 5) == 13);
     assert(pixel(DT_RULE_RIGHT, 0, 5) == 13);
+
+    /* The six map tiles exist and none is silently blank -- an empty tile
+       draws as a hole in the map. dash_tile_data is [DT_N][32]: 8x8 pixels at
+       4bpp, two pixels to the byte. */
+    {
+        int t;
+        for (t = DT_GROUND; t <= DT_LINK_STAIR; t++) {
+            int i, nonzero = 0;
+            for (i = 0; i < 32; i++)
+                if (dash_tile_data[t][i] != 0) { nonzero = 1; break; }
+            assert(nonzero);
+        }
+    }
+
+    /* Every mark must be visible on the ground it sits on -- all five of them,
+       and as a palette distance rather than as a byte difference. */
+    {
+        int t;
+        measure_ground();
+        assert(ground_lo <= ground_hi);
+        for (t = DT_ROOM; t <= DT_LINK_STAIR; t++) assert(escapes_ground(t));
+    }
 
     printf("test_dash_tiles: ok\n");
     return 0;

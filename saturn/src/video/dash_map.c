@@ -52,18 +52,39 @@ static const DashGeom g_geom[DASH_BOX] = {
 static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1, 1 };
 
 /*----------------------
+ | g_map_geom
+ | Description: DASH_VARIANT_MAP's geometry for clear_painted: the whole
+ |   shadow, since dash_map_paint can write any cell in it and a clear that
+ |   only erased a sub-rectangle would leave stale tiles behind. Never used to
+ |   paint -- dash_map_begin blanks the shadow itself rather than going through
+ |   paint()'s cell_at, which knows only marble and bevel tiles.
+ | Author: suinevere
+ ----------------------*/
+static const DashGeom g_map_geom =
+    { DASH_ROWS, 0, DASH_COLS - 1, 0, { 0, 0 }, -1, 0 };
+
+/*----------------------
  | geom_of
  | Description: The geometry a variant paints from -- the static table for the
- |   fixed shapes, the runtime slot for DASH_BOX.
+ |   fixed shapes, the runtime slot for DASH_BOX, and the whole-shadow slot for
+ |   DASH_VARIANT_MAP. g_geom is sized for DASH_NONE..DASH_OVERLAY only, so
+ |   both of the other variants must be caught here rather than falling
+ |   through to an out-of-range index into it. Anything else falls back to
+ |   DASH_NONE: g_variant is only ever assigned from validated sources today,
+ |   but this file has already paid for that assumption once and a bounds check
+ |   is cheaper than the next time.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_geom, g_box
+ | Globals: g_geom, g_box, g_map_geom
  | Params: variant -- one of the DASH_* values
  | Returns: a pointer to that variant's geometry
  ----------------------*/
 static const DashGeom *geom_of(int variant)
 {
-    return (variant == DASH_BOX) ? &g_box : &g_geom[variant];
+    if (variant == DASH_BOX) return &g_box;
+    if (variant == DASH_VARIANT_MAP) return &g_map_geom;
+    if (variant < 0 || variant >= DASH_BOX) return &g_geom[0];
+    return &g_geom[variant];
 }
 
 /*----------------------
@@ -259,6 +280,59 @@ void dash_box(int x, int y, int w, int h)
 void dash_box_hold(void)
 {
     if (g_variant == DASH_BOX) g_touched = 1;
+}
+
+/*----------------------
+ | dash_map_begin
+ | Description: See dash_map.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_map, g_variant, g_base, g_box, g_dirty_top, g_dirty_bottom,
+ |   g_touched
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void dash_map_begin(void)
+{
+    int x, y;
+    for (y = 0; y < DASH_ROWS; y++)
+        for (x = 0; x < DASH_COLS; x++) g_map[y][x] = DT_BLANK;
+    g_variant = DASH_VARIANT_MAP;
+    g_base = 0;
+    g_dirty_top = 0;
+    g_dirty_bottom = DASH_ROWS - 1;
+    g_touched = 1;
+}
+
+/*----------------------
+ | dash_map_hold
+ | Description: See dash_map.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_variant, g_touched
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void dash_map_hold(void)
+{
+    if (g_variant == DASH_VARIANT_MAP) g_touched = 1;
+}
+
+/*----------------------
+ | dash_map_paint
+ | Description: See dash_map.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_map, g_dirty_top, g_dirty_bottom
+ | Params: x -- column; y -- row; tile -- a DT_* index
+ | Returns: N/A
+ ----------------------*/
+void dash_map_paint(int x, int y, unsigned char tile)
+{
+    if (x < 0 || x >= DASH_COLS || y < 0 || y >= DASH_ROWS) return;
+    g_map[y][x] = tile;
+    if (y < g_dirty_top)    g_dirty_top = y;
+    if (y > g_dirty_bottom) g_dirty_bottom = y;
 }
 
 unsigned char dash_cell(int x, int y)

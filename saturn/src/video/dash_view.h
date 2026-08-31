@@ -83,6 +83,21 @@ int dash_ready(void);
 void dash_tint(unsigned short bg555);
 
 /*----------------------
+ | dash_tint_current
+ | Description: The background dash_tint was last handed, so a screen that
+ |   tints the layer for its own ground can put back what it found rather than
+ |   leaving its colour on the gamepad strip and every menu box for the rest of
+ |   the session. Zero before the first dash_tint, which is what dash_init
+ |   starts from and so is a valid thing to restore.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_tint_bg
+ | Params: N/A
+ | Returns: the last background handed to dash_tint
+ ----------------------*/
+unsigned short dash_tint_current(void);
+
+/*----------------------
  | dash_hold
  | Description: Claims the dashboard panel for one frame with the variant and
  |   top-edge row the strip's renderers would have asked for, choosing between

@@ -1,5 +1,5 @@
 {
-  "_comment": "Story-file room title -> Saturn room title, for the fourteen rooms whose title differs between the two. Hand-checked against 1dungeon.zil's exits. CAVE/SHAFT and STRANGE PASSAGE/NARROW PASSAGE share no words and cannot be inferred from the names alone.",
+  "_comment": "Story-file room title -> Saturn room title, for the thirteen rooms whose title differs between the two. Hand-checked against 1dungeon.zil's exits. CAVE/SHAFT and STRANGE PASSAGE/NARROW PASSAGE share no words and cannot be inferred from the names alone.",
   "_pins": {
     "STRANGE PASSAGE": 42,
     "NARROW PASSAGE": 53

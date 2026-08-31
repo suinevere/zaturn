@@ -26,7 +26,7 @@ new audio ships, and no disc space is spent.
 
 **The room sets are the same size on all three sides.** `ZORK1.Z3` (release 88,
 serial `840726`) decodes to 110 rooms; the Saturn presentation record covers
-rooms 0–109; and `1dungeon.zil` declares exactly 110 `<ROOM>`s. 96 of the 110
+rooms 0–109; and `1dungeon.zil` declares exactly 110 `<ROOM>`s. 97 of the 110
 join on title alone.
 
 **The screen can carry the frames unaltered.** The frames are 320x240 8bpp with
@@ -92,7 +92,7 @@ New `tools/gen_presentation.py` joins three sources:
    contested exits unchanged), but it is not authoritative for anything
    release-specific, such as attribute numbers or object numbering.
 
-96 rooms join on title. The other 14, across 13 distinct titles, are the same room
+97 rooms join on title. The other 13, across 12 distinct titles, are the same room
 renamed between the Japanese release and the story file, resolved by a checked-in
 alias table rather than fuzzy matching:
 

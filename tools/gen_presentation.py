@@ -8,7 +8,7 @@
  |     earlier one.
  |
  |     Joins the Saturn room table to the story file's rooms by title, through
- |     a hand-checked alias table for the fourteen rooms that were renamed, and
+ |     a hand-checked alias table for the thirteen rooms that were renamed, and
  |     resolves same-title groups by pairing story object order against Saturn
  |     room-index order. An alias can merge two distinct story rooms into one
  |     Saturn title group -- STRANGE PASSAGE and NARROW PASSAGE both land in

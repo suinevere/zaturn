@@ -44,6 +44,7 @@ that were already local (see the previous handoff) plus these 4:
 | `e1329d8` | Presentation table extended to 31 games; `tools/pres_server.py` review app |
 | `ea3aae5` | Build fix: `pre_build` repointed off the deleted `make_tga.py` |
 | `4bef44d` | CI fix: `bg.bat` now runs in the full-image workflow, gated by a disc-level check |
+| `4525154` | `bg.bat` mirrors into `saturn/cd/data/BG` so a local build can show room art |
 
 The `.CGL` tracking question the two earlier handoffs both flagged is **settled
 and reversed**: `saturn/cd/data/BG/` is gone, `tools/assets/BG/` is gitignored,
@@ -160,6 +161,30 @@ fetching it twice per build.
 than building a disc, and `bg.bat` ships inside it. It now strips `BG/` and
 `cache/` from the staged kit, which matters only for a packaging run on a
 working tree that has already built.
+
+### And the locally built ISO had no backgrounds either
+
+The owner hit this next and fixed it by hand (`91a7330`, a gitignore for
+`saturn/cd/data/BG/*.CGL` plus a manual copy). They were right, and it is worth
+understanding why: the SDK build bakes `saturn/cd/data` into the base image, so
+staging **only** into `tools/assets/BG` meant a plain `compile-cd.bat` produced
+an ISO with no `/BG` at all -- every room blank in Mednafen, with the whole
+600 MB asset pipeline standing between a build and a testable disc.
+
+`4525154` automates it: `bg.bat` now stages into `tools/assets/BG` **and**
+mirrors into `saturn/cd/data/BG` when that tree exists.
+
+**Both locations are load-bearing; do not collapse them.**
+
+- `tools/assets/BG` is what `games.bat` injects, and the released kit ships
+  `tools/assets` *alone* with no `saturn/` tree -- so the kit has only this one.
+- `saturn/cd/data/BG` is what makes a local build testable.
+
+The mirror is inert in CI: `full-image.yml` builds the base ISO **before**
+calling `bg.bat`, so the released base image carries none of the original disc's
+assets and the injection is what puts them on the finished disc. A local release
+packaging run performed after a `bg.bat` would not have that ordering and would
+bake them in -- package from a clean tree, as CI does.
 
 **The lesson for the next wide deletion:** grep the build system and the CI, not
 just the scripts. Wiring a new script into the developer entry point does not

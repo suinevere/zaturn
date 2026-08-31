@@ -33,10 +33,13 @@ Answers given during the work that shaped it:
 
 ## Where the repo is
 
-`main` is at `2330860`, **13 commits ahead of `origin/main`, unpushed** -- the 5
-that were already local (see the previous handoff) plus the 8 code commits below
-and their 4 handoff commits. Read the commit messages for the what; this file
-only carries what is not in them.
+`main` is at `1687013` and **pushed** -- `origin/main` is identical. That closes
+the push decision the two previous handoffs both left open: the 5 commits they
+describe as local-only went up with these. Fast-forward, no rewrite, no merge
+commits.
+
+The 8 code commits are below, alongside 6 handoff/doc commits. Read the commit
+messages for the what; this file only carries what is not in them.
 
 | Commit | What |
 |---|---|
@@ -300,9 +303,11 @@ ceiling as both previous handoffs.
    it shows what every suggestion rests on. "Accept every strong suggestion"
    clears the well-founded ones per game; the weak, analogue and unfounded ones
    are the actual work. Then `python tools/gen_presentation.py` and rebuild.
-5. **Decide the push** -- 13 commits, and the three stale branches
-   (`zork1-authentic-presentation` local and remote,
-   `zork1-presentation-presquash`) the previous handoff wanted deleted.
+5. **Delete the three stale branches** the previous handoff wanted gone, now
+   that the push they were waiting on is done: `zork1-authentic-presentation`
+   (local and `origin/`), and `zork1-presentation-presquash` (`515291d`, the
+   pre-squash tip kept as a safety net). Everything they hold is in `main`'s
+   history.
 6. Unchanged from before: the Mednafen breakpoint capture at `0x060A597C` for
    the maze/river ordering and the seven unattributed tracks.
 

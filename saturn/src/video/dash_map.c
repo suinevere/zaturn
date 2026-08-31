@@ -22,7 +22,6 @@ typedef struct {
     unsigned char ndiv;
     unsigned char div[2];
     signed char   rule_row;
-    unsigned char box;      /* 1 = bevel only, transparent inside */
 } DashGeom;
 
 /*----------------------
@@ -36,10 +35,10 @@ typedef struct {
  | Author: suinevere
  ----------------------*/
 static const DashGeom g_geom[DASH_BOX] = {
-    { 0, 0,  0, 0, {  0, 0 }, -1, 0 },
-    { 9, 0, 39, 2, { 14, 30 }, -1, 0 },
-    { 9, 0, 38, 1, { 14,  0 },  2, 0 },
-    { 9, 0, 39, 0, {  0, 0 }, -1, 0 }
+    { 0, 0,  0, 0, {  0, 0 }, -1 },
+    { 9, 0, 39, 2, { 14, 30 }, -1 },
+    { 9, 0, 38, 1, { 14,  0 },  2 },
+    { 9, 0, 39, 0, {  0, 0 }, -1 }
 };
 
 /*----------------------
@@ -49,7 +48,7 @@ static const DashGeom g_geom[DASH_BOX] = {
  |   rectangle cannot live in a table.
  | Author: suinevere
  ----------------------*/
-static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1, 1 };
+static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1 };
 
 /*----------------------
  | g_map_geom
@@ -61,7 +60,7 @@ static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1, 1 };
  | Author: suinevere
  ----------------------*/
 static const DashGeom g_map_geom =
-    { DASH_ROWS, 0, DASH_COLS - 1, 0, { 0, 0 }, -1, 0 };
+    { DASH_ROWS, 0, DASH_COLS - 1, 0, { 0, 0 }, -1 };
 
 /*----------------------
  | geom_of
@@ -145,9 +144,18 @@ static int is_div(const DashGeom *g, int x)
  |   two transparent pixels between them. That frame is ten pixels wide where
  |   two boxes meet and a cell is eight, so the columns either side of a divider
  |   carry the highlight that spills out and need their own tiles. Every frame
- |   frame tile carries the field's own marble behind it, so the stone reaches
- |   the highlight: the horizontal runs pick their tile by x & 3, the vertical
- |   ones by y & 3.
+ |   tile carries the field's own marble behind it, so the stone reaches the
+ |   highlight: the horizontal runs pick their tile by x & 3, the vertical ones
+ |   by y & 3.
+ |
+ |   A menu box takes this same path. It used to have a branch of its own
+ |   returning the DT_BOX_* set -- the same bevel over transparency, with
+ |   DT_BLANK inside -- so a menu was a frame with the wallpaper or the back
+ |   colour showing through it. A menu box has no dividers and no rule (ndiv 0,
+ |   rule_row -1), so every test below simply falls through and it renders as
+ |   DASH_OVERLAY does: bevelled frame, marble field. dash_tint keeps that stone
+ |   carrying the player's chosen background hue, which is what the flat colour
+ |   showing through used to do.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -160,19 +168,6 @@ static unsigned char cell_at(const DashGeom *g, int r, int x, int y)
     int top  = (r == 0);
     int bot  = (r == g->rows - 1);
     int rule = (g->rule_row >= 0 && r == g->rule_row + 1);
-
-    if (g->box) {
-        int left = (x == g->x0), right = (x == g->x1);
-        if (top && left)   return DT_BOX_TL;
-        if (top && right)  return DT_BOX_TR;
-        if (bot && left)   return DT_BOX_BL;
-        if (bot && right)  return DT_BOX_BR;
-        if (top)   return DT_BOX_TOP;
-        if (bot)   return DT_BOX_BOTTOM;
-        if (left)  return DT_BOX_LEFT;
-        if (right) return DT_BOX_RIGHT;
-        return DT_BLANK;
-    }
 
     if (x == g->x0) {
         if (top) return DT_CORNER_TL;

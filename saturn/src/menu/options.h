@@ -65,8 +65,8 @@ void options_save(void);
  |   cycling presets can step over a bad one instead of settling on the
  |   fallback it installs.
  | Author: suinevere
- | Dependencies: display.h, title.h (title_bg_show/title_bg_hide, forward-
- |   declared here until the title module is extracted), SRL
+ | Dependencies: display.h, title.h (title_bg_hide/title_bg_dim_set),
+ |   room_art.h (room_art_reshow), SRL
  | Globals: g_display
  | Params: N/A
  | Returns: true if the requested display was applied; false if it fell back

@@ -8,9 +8,10 @@
  |   One archive is resident at a time. All eleven are 2.0 MB together and Low
  |   Work RAM is 1 MB, so holding more is not on the table; the largest single
  |   archive is 408.5 KB, which with the 76.8 KB decode target and the palette
- |   peaks around 486 KB. That only fits because title_bg_cache_release() drops
- |   the nine TGA cache slots when a game with authored art starts -- the two
- |   art paths never hold memory at the same time.
+ |   peaks around 486 KB. That has to fit beside the boot jingle as well as
+ |   beside a game's typeahead trie, because the title screen shows one of these
+ |   frames too -- saturn/tests/test_lwram_budget.py is where the arithmetic is
+ |   held.
  | Author: suinevere
  | Dependencies: N/A
  ----------------------*/
@@ -76,6 +77,32 @@ int room_art_available(void);
 int room_art_show(unsigned int obj);
 
 /*----------------------
+ | room_art_frame_count / room_art_show_frame
+ | Description: The picture route with the room taken out of it, for the title
+ |   screen: frame_count is how many frames the disc's archives hold between
+ |   them, and show_frame puts one of them up by index.
+ |
+ |   Deliberately not gated on room_art_set_game. The title screen has no story
+ |   selected -- that is the point of it -- but the frames themselves belong to
+ |   the disc rather than to any one game, so a picture can be shown there
+ |   without pretending a game is running. Every other refusal (an index out of
+ |   range, an archive that will not open, a stream that will not decode) is the
+ |   room route's, unchanged, and means the same thing: hold what is showing.
+ |
+ |   The archive one of these leaves resident is the caller's to drop --
+ |   room_art_release() -- once the picture has faded out. Left alone it holds
+ |   up to 408.5 KB of Low Work RAM for the whole menu phase.
+ | Author: suinevere
+ | Dependencies: scene/presentation.h
+ | Globals: g_area, g_archive, g_archive_len, g_pixels, g_clut, g_cur_image
+ | Params: image -- 1-based index, 1..room_art_frame_count()
+ | Returns: frame_count the count; show_frame 1 when that picture is on screen,
+ |   0 on any refusal
+ ----------------------*/
+int room_art_frame_count(void);
+int room_art_show_frame(int image);
+
+/*----------------------
  | room_art_note_room
  | Description: Records which room the player is in without drawing it, for the
  |   turns where the Palette is not Dynamic and nothing may be put on NBG0.
@@ -110,8 +137,9 @@ int room_art_reshow(void);
 /*----------------------
  | room_art_release
  | Description: Frees the resident archive and the decode target and forgets the
- |   game, for leaving back to the menus where the TGA cache wants the memory
- |   again.
+ |   game, for leaving back to the menus -- and for the title screen, once its
+ |   own randomly picked frame has faded out and the megabyte is wanted for the
+ |   boot jingle and the next game's typeahead trie instead.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: g_area, g_archive, g_archive_len, g_pixels, g_have_game

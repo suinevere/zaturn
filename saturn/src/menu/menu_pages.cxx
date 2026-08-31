@@ -1362,13 +1362,17 @@ static void controls_dispatch(void) {
  |   its own box rectangle, and does nothing to leftover text OUTSIDE it, so
  |   without this the wider menu that opened Options (e.g. the
  |   Single/Multiplayer list) would show through around this box. Rows are
- |   centered through menu_row, all padded to one width (OM_ROW_W) taken from
- |   the widest label -- centering each row on its own length was tried once
- |   before and reverted, because the digit column visibly zigzagged; padding
- |   first is what makes centering safe, since the block moves as one. The box is
- |   sized via menu_box_fit from the actual item count (4..8 rows, depending
- |   on g_in_game and sound_available), not a fixed constant -- items[] is
- |   built first so nitems is known before the box is measured, keeping the
+ |   centered through menu_row, all padded to one width taken from the widest
+ |   label -- centering each row on its own length was tried once before and
+ |   reverted, because the digit column visibly zigzagged; padding first is what
+ |   makes centering safe, since the block moves as one. Both the pad and the
+ |   box width follow menu_select's conventions exactly, which they did not
+ |   before: the box came from a hardcoded 18 rather than from the rows, and the
+ |   pad kept the digit columns even when the digits were hidden. Between them
+ |   those two put this list further right than every other menu on screen.
+ |   The box is sized via menu_box_fit from the actual item count (4..8 rows,
+ |   depending on g_in_game and sound_available), not a fixed constant -- items[]
+ |   is built first so nitems is known before the box is measured, keeping the
  |   title/blank/items/blank rhythm every other page uses instead of a
  |   gap that grows or shrinks with the fewest/most rows a given run shows.
  |   On exit (Resume, Save Game,
@@ -1417,10 +1421,14 @@ int options_menu(void) {
         while (s[n]) n++;
         if (n > label_w) label_w = n;
     }
-    const int OM_ROW_W = MENU_DIGIT_COLS + label_w;
-
+    // The box is sized from the rows it will actually hold, exactly as
+    // menu_select does it -- the digit columns included unconditionally so the
+    // box does not resize when the player switches pad<->keyboard mid-menu.
+    // This used to be a hardcoded 18, left over from a wider label set, which
+    // drew a 22-column box around an 11-column list: three or four columns of
+    // dead air on each side, where every other menu's box hugs its rows.
     int x0, y0, w, h;
-    menu_box_fit("OPTIONS", 18, nitems + 2, &x0, &y0, &w, &h);
+    menu_box_fit("OPTIONS", label_w + MENU_DIGIT_COLS, nitems + 2, &x0, &y0, &w, &h);
 
     // Remembered as an item ID, not an index: Resume/Save/Load only appear
     // in-game and Sound only with audio present, so the same index names a
@@ -1473,10 +1481,16 @@ int options_menu(void) {
         menu_clear();
         menu_frame(x0, y0, w, h, "OPTIONS");
         bool nums = !g_kbd_visible;
+        // The pad drops the digit columns when the digits are hidden, the same
+        // way menu_select's does. Holding the wider pad and filling it with
+        // menu_num's three spaces kept the gutter as leading whitespace inside
+        // a centred block, which walked the whole list three columns right of
+        // where every other menu puts it the moment a keyboard was in use.
+        int pad = label_w + (nums ? MENU_DIGIT_COLS : 0);
         int ay = y0 + 4;
         for (int i = 0; i < nitems; i++)
-            menu_rowf(x0, w, ay++, i == sel, OM_ROW_W, "%s%s",
-                      menu_num(nums, i), OI_LABEL[items[i]]);
+            menu_rowf(x0, w, ay++, i == sel, pad, "%s%s",
+                      nums ? menu_num(nums, i) : "", OI_LABEL[items[i]]);
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }

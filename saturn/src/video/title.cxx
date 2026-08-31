@@ -1,9 +1,15 @@
 /*----------------------
  | title.cxx
- | Description: Title screen, background art, TGA loading and its Low Work RAM
- |   cache, CD directory juggling, and the boot sequence random seed.
+ | Description: Title screen, the NBG0 picture layer and its fades, the one TGA
+ |   read left on the disc (the boot logo), CD directory juggling, and the boot
+ |   sequence random seed.
+ |
+ |   The Low Work RAM art cache that used to live here is gone with the TGA
+ |   backgrounds it held. Room art is CGL now -- room_art.cxx keeps one archive
+ |   resident and hands decoded frames to title_bg_show_raw -- so the only file
+ |   this reads is SUINE.TGA, once, under a black screen.
  | Author: suinevere
- | Dependencies: app_state.h, display.h, scene/title_art.inc,
+ | Dependencies: app_state.h, display.h,
  |   menu.h, soft_reset.h, game_catalog.h (the Z3 directory record
  |   cd_restore_z3 re-applies), online.h, boot_music.h, sound/music.h,
  |   text_map.h, bg_dim.h, SRL
@@ -12,7 +18,6 @@
 #include "bg_dim.h"
 #include "app_state.h"
 #include "display.h"
-#include "scene/title_art.inc" /* TITLE_ART_N: the shared title-folder picture count */
 #include "sound/music.h"       /* music_start_menu */
 #include "menu.h"
 #include "console_view.h"
@@ -115,42 +120,29 @@ void cd_enter_root(void) {
 }
 
 /*----------------------
- | cd_enter_mood
- | Description: Enters the on-disc folder a background lives in and hands back the
- |   bare filename to open there. Every image on the disc -- "SUINE.TGA" and
- |   "HORROR/07.TGA" alike -- lives under /TGA (tools/make_tga.py lays it out that
- |   way), so this always climbs to root and steps into TGA first; a `path` that
- |   names a mood before the slash then takes one further step into that mood's
- |   subfolder, and a bare `path` (no slash) stays in /TGA, which is where
- |   SUINE.TGA is.
+ | cd_enter_tga
+ | Description: Steps the CD into /TGA, where the one TGA on the disc lives.
+ |
+ |   There is exactly one: SUINE.TGA, the boot logo. The room backgrounds are
+ |   Zork I's own CGL archives under /BG, decoded on the Saturn by cgl.c, and
+ |   the title screen shows one of those too -- so nothing here reads a picture
+ |   that is not the logo, and the folder walk this used to do (a mood name
+ |   before the slash, one step further into its subfolder) has nothing left to
+ |   walk.
  |
  |   The working directory is process-wide, so the caller owes a cd_enter_root()
- |   once the open (or the failed attempt to make one) is done -- left standing in
- |   /TGA or /TGA/HORROR, a game catalog scan that runs GFS_LoadDir on /Z3 finds
- |   nothing (see game_catalog.cxx).
+ |   once the open -- or the failed attempt at one -- is done: left standing in
+ |   /TGA, a game catalog scan that runs GFS_LoadDir on /Z3 finds nothing (see
+ |   game_catalog.cxx).
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
- | Params: path -- "HORROR/07.TGA" or "SUINE.TGA"; leaf -- receives "07.TGA" or
- |   "SUINE.TGA"
- | Returns: true when the leaf can now be opened in the current directory
+ | Params: N/A
+ | Returns: true when a bare filename can now be opened in /TGA
  ----------------------*/
-static bool cd_enter_mood(const char *path, const char **leaf) {
-    char dir[16];
-    int i = 0;
-
-    while (path[i] && path[i] != '/' && i < (int) sizeof(dir) - 1) {
-        dir[i] = path[i];
-        i++;
-    }
-
+static bool cd_enter_tga(void) {
     cd_enter_root();
-    if (SRL::Cd::ChangeDir("TGA") < 0) { *leaf = path; return false; }
-
-    if (path[i] != '/') { *leaf = path; return true; }
-    dir[i] = '\0';
-    *leaf = path + i + 1;
-    return SRL::Cd::ChangeDir(dir) >= 0;
+    return SRL::Cd::ChangeDir("TGA") >= 0;
 }
 
 /*----------------------
@@ -174,13 +166,14 @@ void cd_restore_z3(void) {
 
 /*----------------------
  | g_nbg0_loaded / nbg0_note_loaded
- | Description: The filename of the picture currently uploaded to NBG0, and the only
- |   way to record a new one. title_bg_show compares against it to decide whether a
- |   request is already on screen and can skip the decode and the upload entirely.
+ | Description: The name of the picture currently uploaded to NBG0, and the only
+ |   way to record a new one. room_art.cxx compares its area stem against this to
+ |   decide whether the frame it was asked for is already on screen and the
+ |   decode and upload can be skipped entirely.
  |
- |   Every path that blits NBG0 has to record it here, the one-off logo path
- |   included -- a note about VRAM that VRAM does not agree with is invisible until
- |   a later request for that same name short-circuits onto the wrong picture.
+ |   Every path that blits NBG0 has to record it here, the logo path included --
+ |   a note about VRAM that VRAM does not agree with is invisible until a later
+ |   request for that same name short-circuits onto the wrong picture.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_nbg0_loaded
@@ -233,230 +226,80 @@ struct RawBitmap final : SRL::Bitmap::IBitmap {
 
 /*----------------------
  | TgaImage
- | Description: One decoded background: the 8bpp pixel plane (top-down, leading
- |   partial sector already shifted off) plus its 256-entry palette. Pixels is the
- |   allocation base, so freeing it frees the plane. LowRam records which allocator
- |   the two blocks came from -- a cached image lives in Low Work RAM, a one-off the
- |   cache could not take lives in High Work RAM.
+ | Description: One decoded picture: the 8bpp pixel plane (top-down, leading
+ |   partial sector already shifted off) plus its 256-entry palette. Pixels is
+ |   the allocation base, so freeing it frees the plane.
  |
- |   Cap is what makes a cache slot different from a one-off. A one-off's plane is
- |   allocated to the exact size that picture needs and freed with it, so Cap is 0.
- |   A cache slot's plane is allocated once at TGA_PLANE_MAX and then reused for
- |   every picture that passes through it, so Cap is that capacity and the block
- |   outlives any one image -- which is what keeps the zone from fragmenting as
- |   pictures come and go (see the TGA_CACHE_SLOTS box).
- |
- |   LastUse is the cache clock reading at the last hit, and is what eviction picks
- |   on. Meaningless on a one-off.
+ |   Always a throwaway now. There used to be a nine-slot Low Work RAM cache of
+ |   these, with a reusable plane capacity and an LRU clock, because the room
+ |   backgrounds were TGAs read off the disc one mood at a time and a miss
+ |   stopped the CD-DA. The backgrounds are CGL archives decoded by room_art.cxx
+ |   today and the only TGA left on the disc is the boot logo, read once under a
+ |   black screen with no music playing off the drive -- so there is nothing left
+ |   for a cache to save.
  | Author: suinevere
  ----------------------*/
 struct TgaImage {
     uint8_t               *Pixels;
     SRL::Types::HighColor *Colors;
-    uint32_t               Bytes;    /* what this image cost its allocator */
-    uint32_t               Cap;      /* plane capacity if this is a reusable slot, else 0 */
     uint16_t               W, H;
-    bool                   LowRam;
-    uint32_t               LastUse;
-    char                   Name[16];
 };
 
 /*----------------------
- | LWRAM_TOTAL / TGA_CACHE_SLOTS / TGA_PLANE_MAX / TGA_PAL_BYTES /
- |   TGA_SLOT_BYTES / TGA_CACHE_FLOOR
- | Description: The background-art cache: how many decoded pictures Low Work RAM
- |   holds at once, and what one costs. The Saturn plays CD-DA off the same head it
- |   reads data with, so any read stops the music -- which is what this cache
- |   exists to avoid, and what it can no longer avoid completely.
- |
- |   It used to hold every picture on the disc, decoded once during the boot
- |   splash. That worked at eight pictures (~580 KB) and does not at thirty-seven
- |   (~2.6 MB) -- LWRAM is 1 MB in total and the art is not its only resident. So
- |   the cache is now a fixed set of slots filled on demand, least-recently-used
- |   evicted, and a picture that misses costs one CD read. The read is not free but
- |   it is well placed: the engine only ever changes the wallpaper at the bottom of
- |   a fade, where the screen is already black and the CD-DA track is being swapped
- |   anyway (see commit_pending in sound/music.c), so the drive is interrupted at
- |   the one moment in a session when nothing is depending on it.
- |
- |   Slots are allocated once, at TGA_PLANE_MAX each, and then reused rather than
- |   freed and re-taken. Deliberate: the shipped pictures differ by a few hundred
- |   bytes (the colour map's length varies), so free-and-reallocate would leave
- |   TLSF holes slightly too small for the next picture and the cache would decay
- |   into misses over a long session -- a failure that shows up as the music
- |   skipping more and more the longer you play, which is close to undiagnosable
- |   from a bug report. TGA_PLANE_MAX is a 320x224 plane plus one sector, the
- |   leading partial sector tga_decode shifts off; a picture larger than that
- |   cannot take a slot and falls back to the one-off path, which is correct rather
- |   than merely tolerable, since nothing on the disc is larger (tools/make_tga.py
- |   enforces 320x224).
- |
- |   The other LWRAM residents are why the slot count is what it is, and none of them
- |   is permanent. SPLASH.PCM (~453 KB) is held across the splash and the title
- |   screen and freed before the mode menu. The local game's typeahead trie is
- |   several hundred KB and lives for the
- |   session, released by soft_reset_to_title. The save/restore scratch is ~47 KB
- |   while a save is written. The online trie is larger than any of them, but it is
- |   only built once the player actually dials (see ensure_online_typeahead), so it
- |   is not in the budget for an ordinary session at all -- which is where the slots
- |   below came from.
- |
- |   Only one reserve is needed, because the cache is now filled at a moment when
- |   nothing else is still owed. TGA_CACHE_FLOOR is therefore just the save scratch
- |   plus a margin, and the free-space check spends everything else on pictures.
- |
- |   Nothing pre-fills this at game start any more: a picture the cache does not
- |   hold is read at the bottom of a mood fade, where the volume is at zero and the
- |   screen has gone with it, so the miss costs frames nobody can perceive. The
- |   splash's own fill is capped separately -- the jingle is still resident there and
- |   the trie does not exist yet, so it takes a couple of slots at most and its real
- |   job is the title's own house.
- | Author: suinevere
- ----------------------*/
-#define LWRAM_TOTAL        (1024u * 1024u)
-#define TGA_CACHE_SLOTS    9
-#define TGA_PLANE_MAX      (320u * 224u + 2048u)
-#define TGA_PAL_BYTES      (256u * sizeof(SRL::Types::HighColor))
-#define TGA_SLOT_BYTES     (TGA_PLANE_MAX + TGA_PAL_BYTES)
-#define TGA_CACHE_FLOOR    (96u * 1024u)   /* save scratch + margin */
-
-/*----------------------
- | g_cache / g_cache_count / g_cache_clock
- | Description: The decoded-background cache: the slots, how many have been
- |   allocated so far (it grows on demand and never shrinks), and a monotonic
- |   counter stamped into TgaImage::LastUse on every hit so eviction can tell which
- |   slot has gone longest unwanted.
- |
- |   Plain statics, so a soft reset returns to a cache the longjmp left intact --
- |   the same property the game catalogue relies on. Nothing needs re-reading.
- | Author: suinevere
- ----------------------*/
-static TgaImage g_cache[TGA_CACHE_SLOTS];
-static int      g_cache_count = 0;
-static uint32_t g_cache_clock = 0;
-
-/*----------------------
- | tga_alloc
- | Description: Allocates from Low or High Work RAM, whichever the caller asked
- |   for, so one decoder can serve both the cache and a one-off load.
- | Author: suinevere
- | Dependencies: SRL
- | Globals: N/A
- | Params: bytes -- allocation size; low -- true for Low Work RAM
- | Returns: the allocation, or nullptr
- ----------------------*/
-static void *tga_alloc(uint32_t bytes, bool low) {
-    return low ? SRL::Memory::LowWorkRam::Malloc(bytes)
-               : SRL::Memory::HighWorkRam::Malloc(bytes);
-}
-
-/*----------------------
- | tga_free
- | Description: Returns a block to the zone tga_alloc took it from. Null-safe.
- | Author: suinevere
- | Dependencies: SRL
- | Globals: N/A
- | Params: p -- the block; low -- true if it came from Low Work RAM
- | Returns: N/A
- ----------------------*/
-static void tga_free(void *p, bool low) {
-    if (p == nullptr) return;
-    if (low) SRL::Memory::LowWorkRam::Free(p);
-    else     SRL::Memory::HighWorkRam::Free(p);
-}
-
-/*----------------------
- | tga_free_space
- | Description: Free space in whichever zone the caller is about to allocate in.
- | Author: suinevere
- | Dependencies: SRL
- | Globals: N/A
- | Params: low -- true for Low Work RAM
- | Returns: free bytes in that zone
- ----------------------*/
-static uint32_t tga_free_space(bool low) {
-    return low ? (uint32_t) SRL::Memory::LowWorkRam::GetFreeSpace()
-               : (uint32_t) SRL::Memory::HighWorkRam::GetFreeSpace();
-}
-
-/*----------------------
  | tga_image_free
- | Description: Releases both blocks of a decoded image and blanks it, so the
- |   slot reads as empty afterwards.
+ | Description: Releases both blocks of a decoded picture and blanks it. Both
+ |   come from High Work RAM: nothing here competes for the megabyte that the
+ |   boot jingle, the room archives and the typeahead trie share.
  | Author: suinevere
- | Dependencies: N/A
+ | Dependencies: SRL
  | Globals: N/A
- | Params: img -- the image to release
+ | Params: img -- the picture to release
  | Returns: N/A
  ----------------------*/
 static void tga_image_free(TgaImage *img) {
     if (img == nullptr) return;
-    tga_free(img->Pixels, img->LowRam);
-    tga_free(img->Colors, img->LowRam);
+    if (img->Pixels != nullptr) SRL::Memory::HighWorkRam::Free(img->Pixels);
+    if (img->Colors != nullptr) SRL::Memory::HighWorkRam::Free(img->Colors);
     img->Pixels = nullptr;
     img->Colors = nullptr;
-    img->Bytes  = 0;
-    img->Cap    = 0;
 }
 
 /*----------------------
  | tga_decode
  | Description: Reads an uncompressed 8bpp colour-mapped TGA off the CD and
- |   decodes it into RAM: palette expanded to 256 entries, rows flipped to
- |   top-down, and the leading partial sector shifted off the front. This is the
- |   only function here that touches the disc, so it is also the only one that
- |   interrupts CD audio.
+ |   decodes it into freshly allocated High Work RAM: palette expanded to 256
+ |   entries, rows flipped to top-down, and the leading partial sector shifted
+ |   off the front. This is the only function here that touches the disc, so it
+ |   is also the only one that interrupts CD audio -- and the only picture it is
+ |   ever asked for is the boot logo, read under a black screen before any track
+ |   is playing.
  |
- |   Enters the picture's mood folder through cd_enter_mood before opening it, and
- |   calls cd_enter_root() on every exit that follows -- success, every validation
+ |   Steps into /TGA through cd_enter_tga before opening, and calls
+ |   cd_enter_root() on every exit that follows -- success, every validation
  |   failure, every allocation or read failure. The working directory is
  |   process-wide, and a return that skipped it would leave the CD standing in
- |   /TGA or /TGA/HORROR for whatever runs next (see cd_enter_mood).
+ |   /TGA for whatever runs next (see cd_enter_tga).
  |
- |   Two modes, told apart by out->Cap on entry. Zero means "allocate": the plane
- |   is taken at exactly the size this picture needs and the caller owns it. Non-
- |   zero means out->Pixels and out->Colors are already-owned buffers of that
- |   capacity and this decodes into them, allocating nothing -- which is how a
- |   cache slot is refilled without ever returning its memory to the allocator.
- |   A picture too big for the capacity is refused rather than truncated, and the
- |   slot keeps whatever it held.
+ |   One mode. It used to have two, the second decoding into a cache slot's
+ |   already-owned buffers; there is no cache any more, so every call allocates
+ |   its own plane at exactly the size the picture needs and the caller owns it.
  | Author: suinevere
- | Dependencies: SRL, cd_enter_mood, cd_enter_root
+ | Dependencies: SRL, cd_enter_tga, cd_enter_root
  | Globals: N/A
- | Params: file -- the folder-relative path from title_art_file, e.g.
- |   "TITLE/01.TGA", or a bare /TGA filename like "SUINE.TGA"; low -- true to
- |   allocate in Low Work RAM (ignored when reusing);
- |   limit -- most bytes the pixel plane may take; out -- filled on success, Cap
- |   read on entry and preserved
- | Returns: true on success; on failure out is left blank (allocating mode, nothing
- |   allocated) or untouched apart from Name (reusing mode)
+ | Params: file -- a bare /TGA filename, e.g. "SUINE.TGA"; out -- filled on
+ |   success
+ | Returns: true on success; on failure out is left blank and nothing is
+ |   allocated
  ----------------------*/
-static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out) {
-    /* Captured before the blanking below, which would otherwise drop the very
-       buffers this is meant to refill. Both blocks have to be there, not just a
-       capacity: half a slot would blank one pointer and then write through the
-       other, leaking it. */
-    const bool reusing = (out->Cap > 0 && out->Pixels != nullptr
-                          && out->Colors != nullptr);
-    const uint32_t               reuse_cap = reusing ? out->Cap    : 0;
-    uint8_t               *const reuse_pix = reusing ? out->Pixels : nullptr;
-    SRL::Types::HighColor *const reuse_col = reusing ? out->Colors : nullptr;
+static bool tga_decode(const char *file, TgaImage *out) {
+    out->Pixels = nullptr;
+    out->Colors = nullptr;
+    out->W      = 0;
+    out->H      = 0;
 
-    if (!reusing) {
-        out->Pixels = nullptr;
-        out->Colors = nullptr;
-        out->Cap    = 0;
-        out->Bytes  = 0;
-        out->LowRam = low;
-    }
-    out->W       = 0;
-    out->H       = 0;
-    out->Name[0] = '\0';
+    if (!cd_enter_tga()) { cd_enter_root(); return false; }
 
-    const char *leaf = file;
-    if (!cd_enter_mood(file, &leaf)) { cd_enter_root(); return false; }
-
-    SRL::Cd::File f(leaf);
+    SRL::Cd::File f(file);
     if (!f.Exists()) { cd_enter_root(); return false; }
 
     static uint32_t hdrbuf[512];
@@ -489,17 +332,13 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
     const uint32_t skip    = (uint32_t) (pixoff % ss);
     const uint32_t span    = skip + npix;
     const uint32_t palsize = 256 * sizeof(SRL::Types::HighColor);
-    if (reuse_pix != nullptr) {
-        /* Refusing rather than truncating: a short plane would render as a band of
-           the previous picture across the bottom of this one. */
-        if (span > reuse_cap) { cd_enter_root(); return false; }
-    } else {
-        if (span + palsize > limit)                     { cd_enter_root(); return false; }
-        if (tga_free_space(low) < span + palsize + 4096) { cd_enter_root(); return false; }
+    if ((uint32_t) SRL::Memory::HighWorkRam::GetFreeSpace() < span + palsize + 4096) {
+        cd_enter_root();
+        return false;
     }
 
-    SRL::Types::HighColor *colors = reuse_col;
-    if (colors == nullptr) colors = (SRL::Types::HighColor *) tga_alloc(palsize, low);
+    SRL::Types::HighColor *colors =
+        (SRL::Types::HighColor *) SRL::Memory::HighWorkRam::Malloc(palsize);
     if (colors == nullptr) { cd_enter_root(); return false; }
     for (int i = 0; i < 256; i++) {
         SRL::Types::HighColor c;
@@ -513,16 +352,17 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
         colors[i] = c;
     }
 
-    uint8_t *pix = reuse_pix;
-    if (pix == nullptr) pix = (uint8_t *) tga_alloc(span, low);
+    uint8_t *pix = (uint8_t *) SRL::Memory::HighWorkRam::Malloc(span);
     // LoadBytes wants a long-aligned destination; refuse rather than corrupt.
     if (pix == nullptr || ((unsigned int) pix & 3) != 0) {
-        if (reuse_pix == nullptr) { tga_free(pix, low); tga_free(colors, low); }
+        if (pix != nullptr) SRL::Memory::HighWorkRam::Free(pix);
+        SRL::Memory::HighWorkRam::Free(colors);
         cd_enter_root();
         return false;
     }
     if (f.LoadBytes((size_t) (pixoff / ss), (int32_t) span, pix) <= 0) {
-        if (reuse_pix == nullptr) { tga_free(pix, low); tga_free(colors, low); }
+        SRL::Memory::HighWorkRam::Free(pix);
+        SRL::Memory::HighWorkRam::Free(colors);
         cd_enter_root();
         return false;
     }
@@ -541,14 +381,8 @@ static bool tga_decode(const char *file, bool low, uint32_t limit, TgaImage *out
 
     out->Pixels = pix;
     out->Colors = colors;
-    // A reused slot already paid for its buffers when they were taken and does not
-    // pay again per picture, so its cost stays whatever the slot cost.
-    if (reuse_pix == nullptr) out->Bytes = span + palsize;
     out->W      = (uint16_t) w;
     out->H      = (uint16_t) h;
-    int k = 0;
-    for (; file[k] && k < (int) sizeof(out->Name) - 1; k++) out->Name[k] = file[k];
-    out->Name[k] = '\0';
     cd_enter_root();
     return true;
 }
@@ -582,316 +416,26 @@ static bool tga_blit_nbg0(const TgaImage *img) {
 }
 
 /*----------------------
- | tga_name_eq
- | Description: Compares two disc filenames, bounded by the cache's name field.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: a, b -- the names to compare
- | Returns: true if they match
- ----------------------*/
-static bool tga_name_eq(const char *a, const char *b) {
-    for (int i = 0; i < (int) sizeof(g_cache[0].Name); i++) {
-        if (a[i] != b[i])  return false;
-        if (a[i] == '\0')  return true;
-    }
-    return true;
-}
-
-/*----------------------
- | tga_cache_find
- | Description: Looks up an already-decoded image by disc filename.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_cache, g_cache_count
- | Params: file -- the disc filename
- | Returns: the cached image, or nullptr if it is not held
- ----------------------*/
-static const TgaImage *tga_cache_find(const char *file) {
-    for (int i = 0; i < g_cache_count; i++) {
-        if (g_cache[i].Pixels != nullptr && tga_name_eq(g_cache[i].Name, file)) {
-            g_cache[i].LastUse = ++g_cache_clock;
-            return &g_cache[i];
-        }
-    }
-    return nullptr;
-}
-
-/*----------------------
- | tga_cache_slot
- | Description: The slot the next picture should be decoded into: a newly grown one
- |   while the cache is still below TGA_CACHE_SLOTS and Low Work RAM can spare it,
- |   otherwise the least recently used of the ones already held.
- |
- |   Growth is checked against live free space rather than a fixed budget, because
- |   the other residents of the zone are not fixed either -- the typeahead trie is
- |   whatever the loaded game's vocabulary needs. Refusing to grow is not a
- |   failure: the cache simply stays smaller and evicts more often.
- | Author: suinevere
- | Dependencies: SRL
- | Globals: g_cache, g_cache_count
- | Params: N/A
- | Returns: the slot to use, or nullptr if none could be had
- ----------------------*/
-static TgaImage *tga_cache_slot(void) {
-    if (g_cache_count < TGA_CACHE_SLOTS) {
-        const uint32_t free_now = tga_free_space(true);
-        if (free_now >= TGA_SLOT_BYTES + TGA_CACHE_FLOOR) {
-            TgaImage *slot = &g_cache[g_cache_count];
-            slot->Pixels = (uint8_t *) tga_alloc(TGA_PLANE_MAX, true);
-            slot->Colors = (SRL::Types::HighColor *) tga_alloc(TGA_PAL_BYTES, true);
-            // LoadBytes wants a long-aligned destination, and a slot that cannot
-            // give it one is worse than no slot: it would fail every decode
-            // forever. Hand the memory straight back and fall through to eviction.
-            if (slot->Pixels != nullptr && slot->Colors != nullptr
-                && ((unsigned int) slot->Pixels & 3) == 0) {
-                slot->Cap     = TGA_PLANE_MAX;
-                slot->Bytes   = TGA_SLOT_BYTES;
-                slot->LowRam  = true;
-                slot->Name[0] = '\0';
-                g_cache_count++;
-                return slot;
-            }
-            tga_free(slot->Pixels, true);
-            tga_free(slot->Colors, true);
-            slot->Pixels = nullptr;
-            slot->Colors = nullptr;
-        }
-    }
-
-    if (g_cache_count <= 0) return nullptr;
-    TgaImage *lru = &g_cache[0];
-    for (int i = 1; i < g_cache_count; i++)
-        if (g_cache[i].LastUse < lru->LastUse) lru = &g_cache[i];
-    return lru;
-}
-
-/*----------------------
- | tga_cache_admit
- | Description: Decodes an image from the CD into a cache slot, growing the cache
- |   or evicting its least recently used picture to find one. The caller must
- |   already be in the TGA directory. Reads the disc, so it stops CD audio.
- |
- |   Evicting the picture currently on screen is harmless and not guarded against:
- |   tga_blit_nbg0 copies into VRAM, so once a picture has been uploaded the RAM
- |   copy is only of interest to the next request for that same file.
- | Author: suinevere
- | Dependencies: SRL
- | Globals: g_cache, g_cache_clock
- | Params: file -- the disc filename
- | Returns: the newly cached image, or nullptr if no slot could be had or the file
- |   is unreadable
- ----------------------*/
-static const TgaImage *tga_cache_admit(const char *file) {
-    TgaImage *slot = tga_cache_slot();
-    if (slot == nullptr) return nullptr;
-
-    // Cap is set, so this decodes into the slot's own buffers and allocates
-    // nothing. It clears Name before it can fail, which is what stops a slot
-    // holding the previous picture's pixels under the previous picture's name
-    // from being handed out as a hit afterwards.
-    if (!tga_decode(file, true, TGA_SLOT_BYTES, slot)) return nullptr;
-
-    slot->LastUse = ++g_cache_clock;
-    return slot;
-}
-
-/*----------------------
- | title_art_file
- | Description: The disc path for the shared title picture at 1-based `index`
- |   ("TITLE/01.TGA"..), or NULL when index is out of 1..TITLE_ART_N -- which
- |   includes every index while TITLE_ART_N is 0, since no source images exist
- |   yet. TITLE is a flat, gapless folder addressed by literal filename rather
- |   than routed through display.c's scene machinery: the title screen has no
- |   room, no scene and no game to suit.
- | Author: suinevere
- | Dependencies: scene/title_art.inc (TITLE_ART_N)
- | Globals: N/A
- | Params: index -- 1..TITLE_ART_N
- | Returns: the disc path, or NULL
- ----------------------*/
-const char *title_art_file(int index) {
-    static char buf[16];
-    if (index < 1 || index > TITLE_ART_N) return nullptr;
-    buf[0] = 'T'; buf[1] = 'I'; buf[2] = 'T'; buf[3] = 'L'; buf[4] = 'E'; buf[5] = '/';
-    buf[6] = (char) ('0' + index / 10);
-    buf[7] = (char) ('0' + index % 10);
-    buf[8] = '.'; buf[9] = 'T'; buf[10] = 'G'; buf[11] = 'A';
-    buf[12] = '\0';
-    return buf;
-}
-
-/*----------------------
- | title_art_random
- | Description: One of the shared title pictures, chosen by `seed` reduced
- |   modulo TITLE_ART_N -- the boot's own pick, separate from the preload
- |   walk below. NULL when TITLE_ART_N is 0, which the caller must treat as
- |   "no wallpaper" rather than read a nonexistent file. The #if guards the
- |   modulo itself rather than relying on a runtime check: TITLE_ART_N is
- |   compile-time 0 until real title art ships, and `seed % 0` is a
- |   -Wdiv-by-zero on every build even though the runtime check below made it
- |   statically unreachable.
- | Author: suinevere
- | Dependencies: title_art_file
- | Globals: N/A
- | Params: seed -- any value; reduced modulo TITLE_ART_N
- | Returns: the disc path, or NULL
- ----------------------*/
-const char *title_art_random(unsigned int seed) {
-#if TITLE_ART_N > 0
-    const unsigned int n = (unsigned int) TITLE_ART_N;
-    return title_art_file((int) (seed % n) + 1);
-#else
-    (void) seed;
-    return nullptr;
-#endif
-}
-
-/*----------------------
- | title_preload_art
- | Description: Fills cache slots with the shared TITLE/ pictures, stopping the
- |   moment the cache will not grow any further.
- |
- |   Stopping rather than continuing is the whole point. tga_cache_admit falls
- |   back to evicting once the cache is full, so walking every picture into a
- |   smaller cache would read pictures off the disc only to throw the earliest
- |   ones away before the splash even ends. Watching g_cache_count is what
- |   tells the two apart: unchanged means it evicted.
- |
- |   Runs at BOOT, before any game is selected -- splash.cxx and title_and_seed
- |   below both call it, with the jingle resident and before any game's
- |   typeahead trie exists, so the free space it can see is not the free space
- |   that will be left; filling the cache for actual gameplay is
- |   left to the rooms themselves, which read what they need when they need it.
- |   A no-op at TITLE_ART_N 0.
- | Author: suinevere
- | Dependencies: title_art_file, SRL
- | Globals: g_cache_count
- | Params: max_slots -- stop after taking this many fresh slots; 0 or less for as
- |   many as Low Work RAM allows
- | Returns: N/A
- ----------------------*/
-void title_preload_art(int max_slots) {
-    int taken = 0;
-    for (int i = 1; i <= TITLE_ART_N; i++) {
-        if (g_cache_count >= TGA_CACHE_SLOTS) break;
-        if (tga_free_space(true) < TGA_SLOT_BYTES + TGA_CACHE_FLOOR) break;
-        if (max_slots > 0 && taken >= max_slots) break;
-        const char *file = title_art_file(i);
-        if (file == nullptr) continue;
-        if (tga_cache_find(file) != nullptr) continue;
-        const int before = g_cache_count;
-        if (tga_cache_admit(file) == nullptr) break;
-        if (g_cache_count == before) break;
-        taken++;
-    }
-    bitmap_read_end();
-}
-
-/*----------------------
- | title_bg_cache_release
- | Description: Hands every cache slot's Low Work RAM back and empties the cache.
- |
- |   For the soft-reset return, which is the one moment the zone has to be cleared
- |   rather than reused. A session ends with the cache full, ~580 KB, and the jingle
- |   splash_show is about to load wants ~453 KB of the same megabyte -- so a
- |   return that did not do this would find no room and drop onto a silent title.
- |   The pictures are cheap to lose: the title reads its own again on the next frame,
- |   and the next game warms the cache from scratch anyway.
- |
- |   Leaves the NBG0 upload alone. title_bg_show tracks what is in VRAM separately,
- |   so the picture on screen stays up and a re-show of that same file still
- |   short-circuits without a read.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_cache, g_cache_count
- | Params: N/A
- | Returns: N/A
- ----------------------*/
-void title_bg_cache_release(void) {
-    for (int i = 0; i < g_cache_count; i++) {
-        tga_image_free(&g_cache[i]);
-        g_cache[i].Name[0] = '\0';
-        g_cache[i].LastUse = 0;
-    }
-    g_cache_count = 0;
-}
-
-/*----------------------
- | title_bg_show
- | Description: Shows a TGA image on VDP2 NBG0 behind the title text (menus and
- |   gameplay stay on solid black). Serves it from the Low Work RAM cache on a hit,
- |   which keeps the CD idle and the music playing; on a miss it reads the disc,
- |   which stops CD-DA for the length of the read, and takes a cache slot so the
- |   same picture is free next time. Accepts only uncompressed 8bpp colour-mapped
- |   TGA. Returns false if the load fails or the format is unsupported, so the
- |   caller can fall back to a colour background.
- |
- |   Callers that can be reached with music playing should treat this as
- |   disc-touching and cover it -- either by picking their moment (the engine
- |   changes the wallpaper only at the bottom of a fade) or by pausing the track
- |   around it (the Options menu does).
- | Author: suinevere
- | Dependencies: SRL
- | Globals: N/A
- | Params: file -- filename of the TGA image to load
- | Returns: true if the requested display was applied; false if it fell back
- ----------------------*/
-bool title_bg_show(const char *file) {
-    bool same = true;
-    for (int i = 0; i < (int) sizeof(g_nbg0_loaded); i++) {
-        if (g_nbg0_loaded[i] != file[i]) { same = false; break; }
-        if (g_nbg0_loaded[i] == '\0') break;
-    }
-    if (!same) {
-        // A cached image uploads straight from RAM with no CD access. A miss reads
-        // the disc and takes a slot; the one-off below is the last resort for when
-        // even a slot could not be had (Low Work RAM too full to grow the cache and
-        // nothing in it to evict), and is decoded into High Work RAM and dropped
-        // again. Cap 0 marks it as owning its own exact-fit plane rather than
-        // borrowing a slot's.
-        TgaImage        oneoff   = { nullptr, nullptr, 0, 0, 0, 0, false, 0, { '\0' } };
-        bool            borrowed = false;
-        const TgaImage *img      = tga_cache_find(file);
-        if (img == nullptr) {
-            img = tga_cache_admit(file);
-            if (img == nullptr && tga_decode(file, false, 0xFFFFFFFFu, &oneoff)) {
-                img = &oneoff; borrowed = true;
-            }
-            bitmap_read_end();
-        }
-        if (img == nullptr) return false;
-
-        bool ok = tga_blit_nbg0(img);
-        if (borrowed) tga_image_free(&oneoff);
-        if (!ok) {
-            return false;
-        }
-        SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
-        text_clear_line(20);
-        text_clear_line(21);
-        nbg0_note_loaded(file);
-    }
-    SRL::VDP2::NBG0::ScrollEnable();
-    return true;
-}
-
-/*----------------------
  | title_bg_show_oneoff
- | Description: Always reads and decodes fresh into a High Work RAM buffer,
- |   uploads it to NBG0, and frees the buffer immediately -- unlike
- |   title_bg_show, it never calls tga_cache_admit, so it cannot take one of the
- |   TGA_CACHE_SLOTS cache slots or evict a room background out of one. Intended
- |   for images outside the registered set, such as the boot splash.
+ | Description: Reads and decodes a TGA fresh into High Work RAM, uploads it to
+ |   NBG0, and frees the buffer immediately. The one picture route that reads a
+ |   TGA off the disc, and the boot logo is the one picture that takes it: every
+ |   other background on this disc is a CGL frame that room_art.cxx decodes and
+ |   hands to title_bg_show_raw below.
+ |
+ |   The name is what is left of a distinction that no longer exists -- it used
+ |   to mean "a one-off, as opposed to a cached picture", back when the room
+ |   backgrounds were TGAs held in a Low Work RAM cache this deliberately did
+ |   not touch.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
- | Params: file -- filename of the TGA image to load
+ | Params: file -- bare /TGA filename of the image to load
  | Returns: true if the requested display was applied; false on failure
  ----------------------*/
 bool title_bg_show_oneoff(const char *file) {
-    TgaImage oneoff = { nullptr, nullptr, 0, 0, 0, 0, false, 0, { '\0' } };
-    bool decoded = tga_decode(file, false, 0xFFFFFFFFu, &oneoff);
+    TgaImage oneoff = { nullptr, nullptr, 0, 0 };
+    bool decoded = tga_decode(file, &oneoff);
     bitmap_read_end();
     if (!decoded) return false;
 
@@ -1338,7 +882,6 @@ int title_and_seed(void) {
     menu_sync();
 
     preload_game_catalog();
-    title_preload_art(0);
     title_drain_input();
 
     text_print(8, 18, "Press any button to begin");

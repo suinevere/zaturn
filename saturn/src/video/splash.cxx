@@ -1,10 +1,9 @@
 /*----------------------
  | splash.cxx
- | Description: The boot splash: fades the SUINEVERE GAMES logo in, holds for a
- |   fixed ten seconds (and, on a first cold boot, for however long the online
- |   typeahead read takes on top of that), then fades out. It used to cover the
- |   background-art preload as well; that is gone, and the hold is now the
- |   screen's whole purpose rather than a cover for work. A short PCM jingle
+ | Description: The boot splash: fades the SUINEVERE GAMES logo in, holds, and
+ |   fades out, in a fixed six seconds end to end. Nothing is loaded underneath
+ |   it -- the logo is not a cover for work, and its length does not vary with a
+ |   drive's speed or with which boot this is. A short PCM jingle
  |   (boot_music.h) plays
  |   underneath the whole thing, loaded whole into Low Work RAM before the
  |   logo itself is read so it never competes with the splash's own CD reads
@@ -16,13 +15,12 @@
  |   uploaded, so the several seconds of CD work before that show nothing
  |   rather than a bare console. Any button or key during the fade-in or the hold
  |   skips ahead: the fade-out starts immediately from whatever brightness and
- |   volume the ramp had reached. A skip during the fade-in also defers the
- |   typeahead read until behind the black screen afterwards; a skip during the
- |   hold is after it, so there is nothing left to defer. That read is the one
- |   stretch a press still cannot be caught in -- blocking CD work with no seam
- |   fine enough to catch a tap in, and the box in input.h records the four
- |   attempts at making it otherwise. The game catalogue scan runs separately, after this
- |   splash returns, during the HOUSE1.TGA window in main.cxx. Fades using the
+ |   volume the ramp had reached, so every field of the six is responsive. The
+ |   two CD reads before the ramp -- the jingle and the logo itself -- are the
+ |   one stretch a press cannot be caught in: blocking work with no seam fine
+ |   enough to catch a tap in, and the box in input.h records the four attempts
+ |   at making it otherwise. The game catalogue scan runs separately,
+ |   behind the title screen's own art (title_and_seed). Fades using the
  |   VDP2 hardware color offset (SetColorOffsetA) -- a per-frame register
  |   write -- rather than rewriting the TGA's palette or re-uploading the
  |   bitmap every frame. The offset darkens every opaque NBG0 pixel
@@ -45,37 +43,28 @@
 #include <srl.hpp>
 #include "text_map.h"
 
-#include "game_catalog.h"
-
 /*----------------------
- | SPLASH_FADE_FRAMES
- | Description: Fade-in/fade-out length, 90 frames = 1.5s at the 60fps NTSC field
- |   rate this codebase assumes elsewhere.
+ | SPLASH_FADE_FRAMES / SPLASH_HOLD_FRAMES
+ | Description: The ramp each way and the flat top between them: 90 fields is
+ |   1.5s at the 60fps NTSC field rate this codebase assumes elsewhere, and 180
+ |   is 3s, so the whole screen is a level six seconds.
  |
- |   There is no hold constant beside it any more. The screen used to sit at full
- |   brightness for a flat 420 frames so that the whole splash came to ten seconds,
- |   which was the length it had back when it covered the background-art decode.
- |   That was ten seconds of the machine visibly doing nothing. It covers real work
- |   again now -- the typeahead trie and title_preload_art() both run at
- |   peak brightness -- so the screen lasts as long as the load does and not a field
- |   longer.
+ |   Six, and fixed. It was ten once, back when the hold covered a background-art
+ |   decode; then the hold constant was dropped entirely and the screen lasted as
+ |   long as whatever loading had been put under it, which made a logo whose
+ |   length nobody could predict and which grew with every read someone parked
+ |   there. Nothing loads under it now -- the catalogue scan moved behind the
+ |   title screen's own art, and the picture cache it also fed no longer exists
+ |   -- so the length is a decision rather than a measurement.
+ |
+ |   The two ramps are equal on purpose: a logo that fades in over a second and
+ |   a half and out over a quarter reads as being cut off rather than as leaving.
+ |   A skip is the one thing that breaks the symmetry, and it is meant to (see
+ |   SPLASH_SKIP_FADE_STEP).
  | Author: suinevere
  ----------------------*/
 #define SPLASH_FADE_FRAMES   90
-
-/*----------------------
- | SPLASH_PRELOAD_SLOTS
- | Description: How many category pictures this screen caches before handing over,
- |   the rest being left to the title screen.
- |
- |   Four is what fits rather than a preference: the jingle is resident through all
- |   of this and holds ~409 KB of the zone, so tga_cache_slot stops granting after
- |   the fourth anyway (see test_lwram_splash_budget.py). Saying it out loud keeps
- |   the splash's length tied to a number someone can read instead of to whatever
- |   the allocator happened to allow.
- | Author: suinevere
- ----------------------*/
-#define SPLASH_PRELOAD_SLOTS 4
+#define SPLASH_HOLD_FRAMES   180
 
 /*----------------------
  | SPLASH_AUDIO_RAMP_FRAMES
@@ -220,13 +209,19 @@ void splash_show(void) {
     if (step > SPLASH_FADE_FRAMES) step = SPLASH_FADE_FRAMES;
     boot_music_set_level(BOOT_MUSIC_LEVEL_MAX);
 
-    if (!skipped) {
-        preload_game_catalog();
-        title_preload_art(SPLASH_PRELOAD_SLOTS);
+    // The flat top. Polled per field rather than slept through, so a press
+    // during it reaches the fade-out on the frame it was made -- the hold is
+    // the longest stretch of the screen and would be the worst one to be deaf
+    // in.
+    for (int held = 0; !skipped && held < SPLASH_HOLD_FRAMES; held++) {
+        SRL::Core::Synchronize();
+        if (splash_skip_pressed()) skipped = true;
     }
 
-    // Down from wherever the ramp got to, so a skip two frames in is a two-frame
-    // fade rather than a jarring full-length one from a nearly black screen --
+    // Down from wherever the entry ramp got to, so a skip two frames in is a
+    // two-frame fade rather than a jarring full-length one from a nearly black
+    // screen (a skip during the hold is already at the top and gets the full
+    // stride) --
     // and in SPLASH_SKIP_FADE_STEP-sized strides if the player asked to move on,
     // so the exit is half a second instead of a ninety-frame ramp they have
     // already said they do not want (see that box).
@@ -239,6 +234,7 @@ void splash_show(void) {
 
     title_bg_hide();
     // The color offset is left armed at black on purpose: main() blacks out again
-    // immediately (title_bg_fade_arm) to compose HOUSE1.TGA unseen, so clearing it
-    // here would only open a window for a stray bright frame in between.
+    // immediately (title_bg_fade_arm) to compose the title screen unseen, so
+    // clearing it here would only open a window for a stray bright frame in
+    // between.
 }

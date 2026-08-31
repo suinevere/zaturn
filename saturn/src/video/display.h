@@ -79,18 +79,18 @@ extern "C" {
 
 /*----------------------
  | DISP_PAL_DYNAMIC / DISP_PAL_PRESET0
- | Description: The palette row's layout. Index 0 is Dynamic -- "let the text
- |   category choose the picture" -- followed by the DISP_PRESET_N colour presets,
- |   and that is the whole row. Dynamic always occupies index 0 even on a disc with
- |   no art, so the display_preset_* accessors stay unconditional;
- |   display_cycle_palette steps over it in that case instead.
+ | Description: The palette row's layout. Index 0 is Dynamic -- "show the room's
+ |   own picture" -- followed by the DISP_PRESET_N colour presets, and that is the
+ |   whole row. Dynamic occupies index 0 on every disc and is reachable on every
+ |   one: it is the shipped default (display_defaults) and nothing steps over it.
+ |   On a game with no authored art it is simply black with white text and no
+ |   picture, which is a legitimate appearance rather than a broken entry.
  |
  |   The row used to carry one entry per picture as well. That worked at eight and
- |   does not at thirty-seven: it made a fifty-four-entry cycler, and since only a
- |   handful of pictures are RAM-resident at a time (see TGA_CACHE_SLOTS in
- |   title.cxx) most steps along it would read the disc, which stops the CD-DA
- |   track. Every picture is still reachable -- through the mood it belongs to,
- |   which is what the pools in display.c are for.
+ |   does not at thirty-seven: it made a fifty-four-entry cycler, and only a
+ |   handful of the pictures were ever RAM-resident at once, so most steps along
+ |   it would read the disc and stop the CD-DA track. Pictures are reached
+ |   through the room the player is standing in now, which is what Dynamic is.
  |
  |   Use these names rather than the arithmetic: the row has been renumbered once
  |   already (Dynamic took index 0 from the first colour preset) and anything
@@ -212,9 +212,13 @@ int display_bg_count(void);
  | Description: Tells the display layer whether the running game carries
  |   authored per-room art -- the pictures room_art.cxx decompresses from the
  |   original disc's own archives and puts on NBG0 itself. This is now the only
- |   art there is, so it is also the only thing that makes the Dynamic palette
- |   entry reachable: without it Dynamic cannot be selected, and the room-art
- |   path, which only runs under Dynamic, never draws at all.
+ |   art there is, so it decides whether the room-art path (which only runs under
+ |   Dynamic) ever draws.
+ |
+ |   It no longer decides whether Dynamic can be SELECTED. It used to, and since
+ |   the flag is 0 everywhere outside a running game, that hid the row's first
+ |   entry from the Options menu at the title screen and defaulted a cold boot to
+ |   a colour preset instead.
  |
  |   Nothing clears this implicitly any more. It was cleared by
  |   display_set_game, which existed to seat per-game picture state and
@@ -226,10 +230,14 @@ void display_set_authored(int has_authored);
 
 /*----------------------
  | display_has_art
- | Description: Whether the running game can show pictures at all. The one
- |   question every Dynamic gate asks. Now equivalent to the authored-art flag,
- |   since authored per-room art is the only route left, but kept as its own
- |   call because the gates read better asking this question than that one.
+ | Description: Whether the running game can show pictures at all. Equivalent to
+ |   the authored-art flag, since authored per-room art is the only route left,
+ |   but kept as its own call because the gates read better asking this question
+ |   than that one.
+ |
+ |   Asked only about DRAWING now, never about what the player may select: the
+ |   answer is 0 at the title and in the menus, where no game is running, and
+ |   gating the Palette row on it made Dynamic unreachable from exactly there.
  | Author: suinevere
  ----------------------*/
 int display_has_art(void);
@@ -269,7 +277,8 @@ void display_cycle_palette(DisplayState *d, int dir);
  | DISP_BLOB_BYTES
  | Description: The save-block size and layout: [sentinel=8][palette][bg][text]
  |   [dim][image name, NUL-padded]. bg is always a color, stored independently of
- |   any image because it is what shows through the menu frames and survives
+ |   any image because it is the ground the menus sit on -- and, through
+ |   dash_tint, the hue their marble carries -- and survives
  |   switching the picture off. palette holds 0xFE for Dynamic, which stores no
  |   name at all because its picture is a consequence of where the player is
  |   standing rather than a setting. dim is the wallpaper-offset row index (see

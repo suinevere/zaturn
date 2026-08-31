@@ -73,23 +73,39 @@ static bool         g_have_room = false;
 #define ART_DIR "BG"
 
 /*----------------------
+ | art_dir_restore
+ | Description: Puts the CD back where it was before this module stepped into
+ |   /BG. cd_restore_z3 alone is not enough on the title screen's path: the
+ |   catalogue scan has not captured /Z3 yet there, so that call is a no-op and
+ |   the drive would be left standing in /BG for whatever ran next. Climbing to
+ |   root first makes the restore correct in both phases and costs nothing in
+ |   the gameplay one, where cd_restore_z3 then steps straight back into /Z3.
+ | Author: suinevere
+ | Dependencies: title.h (cd_enter_root, cd_restore_z3)
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void art_dir_restore(void) {
+    cd_enter_root();
+    cd_restore_z3();
+}
+
+/*----------------------
  | frame_of
- | Description: Resolves one room to its frame: the image index, the area, and
- |   where the record lies inside that area's archive.
+ | Description: Resolves one room to its image index.
  | Author: suinevere
  | Dependencies: scene/presentation.h
  | Globals: g_have_game, g_release, g_serial
- | Params: obj -- the room's object number; image, area, offset, length --
- |   filled on success
+ | Params: obj -- the room's object number; image -- filled on success
  | Returns: true when the room is authored
  ----------------------*/
-static bool frame_of(unsigned int obj, int *image, int *area,
-                     unsigned long *offset, unsigned long *length) {
+static bool frame_of(unsigned int obj, int *image) {
     Presentation p;
     if (!g_have_game) return false;
     if (!pres_of_room(g_release, g_serial, obj, &p)) return false;
-    if (image != nullptr) *image = (int) p.image;
-    return pres_frame((int) p.image, area, offset, length) == 1;
+    *image = (int) p.image;
+    return true;
 }
 
 /*----------------------
@@ -126,38 +142,38 @@ static bool load_area(int area) {
     name[i] = '\0';
 
     cd_enter_root();
-    if (SRL::Cd::ChangeDir(ART_DIR) < 0) { cd_restore_z3(); return false; }
+    if (SRL::Cd::ChangeDir(ART_DIR) < 0) { art_dir_restore(); return false; }
 
     {
         SRL::Cd::File f(name);
-        if (!f.Exists()) { cd_restore_z3(); return false; }
+        if (!f.Exists()) { art_dir_restore(); return false; }
         {
             const uint32_t bytes = (uint32_t) f.Size.Bytes;
             if (bytes == 0 || SRL::Memory::LowWorkRam::GetFreeSpace()
                               < bytes + CGL_FRAME_BYTES + 4096) {
-                cd_restore_z3();
+                art_dir_restore();
                 return false;
             }
             g_archive = (unsigned char *) SRL::Memory::LowWorkRam::Malloc(bytes);
-            if (g_archive == nullptr) { cd_restore_z3(); return false; }
+            if (g_archive == nullptr) { art_dir_restore(); return false; }
             // LoadBytes wants a long-aligned destination; refuse rather than corrupt.
             if (((unsigned int) g_archive & 3) != 0) {
                 SRL::Memory::LowWorkRam::Free(g_archive);
                 g_archive = nullptr;
-                cd_restore_z3();
+                art_dir_restore();
                 return false;
             }
             if (f.LoadBytes(0, (int32_t) bytes, g_archive) <= 0) {
                 SRL::Memory::LowWorkRam::Free(g_archive);
                 g_archive = nullptr;
-                cd_restore_z3();
+                art_dir_restore();
                 return false;
             }
             g_archive_len = bytes;
             g_area = area;
         }
     }
-    cd_restore_z3();
+    art_dir_restore();
     return true;
 }
 
@@ -190,46 +206,52 @@ void room_art_set_game(unsigned int release, const char *serial) {
 int room_art_available(void) { return g_have_game ? 1 : 0; }
 
 /*----------------------
- | room_art_show
- | Description: See room_art.h.
- |     Short-circuits when the resolved image is the one g_cur_image already
- |   names AND title_bg_loaded_file() still names this area's archive -- the
- |   second check is load-bearing, not redundant: title_bg_loaded_file is what
- |   actually recorded what is on NBG0, so it catches an archive swap or
- |   another caller (Display Options, the title screen) having taken NBG0 over
- |   in between, a case g_cur_image alone cannot see since nothing outside this
- |   file can update it.
+ | nbg0_shows_area
+ | Description: Whether the picture NBG0 actually holds came from this area's
+ |   archive, by comparing title_bg_loaded_file() against the area stem
+ |   frame_put tags every upload with.
  | Author: suinevere
- | Dependencies: SRL, cgl.h, title.h
- | Globals: g_have_game, g_release, g_serial, g_area, g_archive, g_archive_len,
- |   g_pixels, g_clut, g_cur_image
- | Params: obj -- the room's object number
- | Returns: 1 when the room's picture is on screen (freshly shown or already
- |   there), 0 on failure, which holds whatever was showing before
+ | Dependencies: title.h, scene/presentation.h
+ | Globals: N/A
+ | Params: area -- the area index to test
+ | Returns: true when NBG0 is showing a frame from that area
  ----------------------*/
-int room_art_show(unsigned int obj) {
-    int image, area;
+static bool nbg0_shows_area(int area) {
+    const char *tag = pres_area_name(area);
+    const char *loaded;
+    int i = 0;
+    if (tag == nullptr) return false;
+    loaded = title_bg_loaded_file();
+    for (; tag[i] != '\0'; i++) if (loaded[i] != tag[i]) return false;
+    return loaded[i] == '\0';
+}
+
+/*----------------------
+ | frame_put
+ | Description: Puts one 1-based image on NBG0, reading its area archive first
+ |   if a different one is resident. The whole picture path, shared by the room
+ |   route and the title screen's own pick, so both get the same refusals, the
+ |   same short-circuit and the same CD restore.
+ |
+ |   Skips the decode and the upload when this image is the one already showing
+ |   -- verified against what NBG0 actually records, not only against
+ |   g_cur_image, so a picture another caller has taken the layer over for is
+ |   never mistaken for still being resident.
+ | Author: suinevere
+ | Dependencies: SRL, cgl.h, title.h, scene/presentation.h
+ | Globals: g_area, g_archive, g_archive_len, g_pixels, g_clut, g_cur_image
+ | Params: image -- 1-based image index
+ | Returns: 1 when that image is on screen, 0 on any refusal
+ ----------------------*/
+static int frame_put(int image) {
+    int area;
     unsigned long off, len;
 
-    room_art_note_room(obj);
+    if (pres_frame(image, &area, &off, &len) != 1) return 0;
 
-    if (!frame_of(obj, &image, &area, &off, &len)) return 0;
-
-    if (image == g_cur_image) {
-        const char *tag = pres_area_name(area);
-        bool same = tag != nullptr;
-        if (same) {
-            const char *loaded = title_bg_loaded_file();
-            int i = 0;
-            for (; tag[i] != '\0'; i++) {
-                if (loaded[i] != tag[i]) { same = false; break; }
-            }
-            if (same && loaded[i] != '\0') same = false;
-        }
-        if (same) {
-            SRL::VDP2::NBG0::ScrollEnable();
-            return 1;
-        }
+    if (image == g_cur_image && nbg0_shows_area(area)) {
+        SRL::VDP2::NBG0::ScrollEnable();
+        return 1;
     }
 
     if (area != g_area && !load_area(area)) return 0;
@@ -244,11 +266,52 @@ int room_art_show(unsigned int obj) {
     if (cgl_decode(g_archive + off, len, g_pixels, CGL_FRAME_BYTES)
         != (unsigned long) CGL_FRAME_BYTES) return 0;
 
-    bool ok = title_bg_show_raw(g_pixels, g_clut, CGL_WIDTH, CGL_HEIGHT,
-                                pres_area_name(area));
-    if (ok) g_cur_image = image;
-    return ok ? 1 : 0;
+    if (!title_bg_show_raw(g_pixels, g_clut, CGL_WIDTH, CGL_HEIGHT,
+                           pres_area_name(area))) return 0;
+    g_cur_image = image;
+    return 1;
 }
+
+/*----------------------
+ | room_art_show
+ | Description: See room_art.h.
+ | Author: suinevere
+ | Dependencies: frame_put, scene/presentation.h
+ | Globals: g_have_game, g_release, g_serial
+ | Params: obj -- the room's object number
+ | Returns: 1 when the room's picture is on screen (freshly shown or already
+ |   there), 0 on failure, which holds whatever was showing before
+ ----------------------*/
+int room_art_show(unsigned int obj) {
+    int image;
+
+    room_art_note_room(obj);
+
+    if (!frame_of(obj, &image)) return 0;
+    return frame_put(image);
+}
+
+/*----------------------
+ | room_art_frame_count
+ | Description: See room_art.h.
+ | Author: suinevere
+ | Dependencies: scene/presentation.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: PRES_FRAME_N
+ ----------------------*/
+int room_art_frame_count(void) { return PRES_FRAME_N; }
+
+/*----------------------
+ | room_art_show_frame
+ | Description: See room_art.h.
+ | Author: suinevere
+ | Dependencies: frame_put
+ | Globals: N/A
+ | Params: image -- 1-based image index
+ | Returns: 1 when that image is on screen, 0 on any refusal
+ ----------------------*/
+int room_art_show_frame(int image) { return frame_put(image); }
 
 /*----------------------
  | room_art_note_room

@@ -1,19 +1,19 @@
 #!/bin/sh
-# Convert the staged title-screen PNGs into 8bpp paletted TGAs for the Saturn
-# disc, and provision the asset-tool virtualenv the build depends on.
+# Convert the staged SUINEVERE logo PNG into the 8bpp paletted TGA the boot
+# splash reads, and provision the asset-tool virtualenv the build depends on.
 #
-# Room backgrounds do NOT come through here. They are Zork I's own compressed
-# CGL frames, injected into /BG by tools/assets/bg.bat after the build and
-# decoded on the Saturn -- they are never TGAs and never touch this script.
-# What is left is the title screen's own wallpaper, which has no game to key
-# off and so is addressed by literal filename.
+# That logo is the only TGA on the disc. Backgrounds do NOT come through here:
+# they are Zork I's own compressed CGL frames, injected into /BG by
+# tools/assets/bg.bat after the build and decoded on the Saturn -- never TGAs,
+# and never touching this script. The title screen shows one of those frames
+# too, picked at random on each boot.
 #
 # Invoked by saturn/pre.makefile on every build, and runnable by hand from any
 # directory. Provisions tools/.venv on first run and does no network access
 # thereafter.
 #
 # A missing interpreter, a missing dependency, or no network prints an
-# actionable warning and exits 0 -- the build then uses the TGAs already
+# actionable warning and exits 0 -- the build then uses the TGA already
 # committed under saturn/cd/data/TGA/. Only a genuine converter crash fails.
 
 set -u
@@ -26,9 +26,9 @@ DST="$REPO/saturn/cd/data/TGA"
 
 warn() {
     echo ""
-    echo "  *** title-art conversion skipped ***"
+    echo "  *** logo conversion skipped ***"
     echo "  $1"
-    echo "  The build continues using the TGAs already in saturn/cd/data/TGA/."
+    echo "  The build continues using the TGA already in saturn/cd/data/TGA/."
     echo ""
 }
 
@@ -80,4 +80,4 @@ if ! "$PY" -c 'import PIL' 2>/dev/null; then
     }
 fi
 
-"$PY" "$REPO/tools/gen_title_art.py" "$SRC" "$DST"
+"$PY" "$REPO/tools/gen_logo_tga.py" "$SRC" "$DST"

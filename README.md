@@ -57,13 +57,13 @@ Builds on Windows, Linux, or macOS:
 
 - Git for Windows (**Git Bash**) or a POSIX shell.
 - The SaturnRingLib SH-2 cross-compiler, fetched in Step 2 below (≈ needs `curl`/`unzip`).
-- **Python 3.9+** — converts the background art in `tools/assets/png/`
-  into disc-ready TGAs during the build, provisioning its own virtualenv on first
-  run. The TGAs are build artifacts (`saturn/.gitignore` excludes
-  `cd/data/**/*.TGA`), so a fresh clone needs this to get any background art at
-  all. Without it the build still completes, using whatever TGAs are already in
-  `saturn/cd/data/TGA/` — on a clean checkout that is none, and the game runs on
-  colour presets with the Dynamic palette skipped.
+- **Python 3.9+** — converts `tools/assets/png/SUINE.PNG` into `SUINE.TGA`, the
+  boot logo, during the build, provisioning its own virtualenv on first run.
+  The TGA is a build artifact (`saturn/.gitignore` excludes
+  `cd/data/**/*.TGA`), so a fresh clone needs this to get a boot logo at all.
+  Without it the build still completes and the splash simply shows nothing.
+  Room and title backgrounds do not come through here — they are Zork I's own
+  CGL archives, injected into `cd/data/BG/` by `tools/assets/bg.bat`.
 - An emulator for testing (e.g. **Mednafen** with Saturn BIOS), or real hardware.
 
 ---
@@ -360,10 +360,12 @@ Verdicts land in `tools/assets/presentation/<GAME>.json`, written through on eve
 change and reversible with Undo. Run `python tools/gen_presentation.py` to fold
 them into `game_presentation.inc`, then rebuild.
 
-`tools/gen_title_art.py` is what is left of `make_tga.py`. It converts
-`tools/assets/png/TITLE/*.png` into the title screen's own wallpaper and writes
-`title_art.inc`. It is the only remaining TGA producer, and the boot splash
-(`SUINE.TGA`) is the only other TGA on the disc.
+`tools/gen_logo_tga.py` is what is left of `make_tga.py`. It converts
+`tools/assets/png/SUINE.PNG` into `SUINE.TGA`, the SUINEVERE boot logo — which
+is the only TGA on the disc and the only one the port can read. Every
+background, the title screen's own included, is a CGL frame decoded on the
+Saturn. `saturn/pre.makefile` runs it on every build through
+`tools/convert-logo.sh`.
 
 ---
 

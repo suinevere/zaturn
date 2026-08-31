@@ -64,9 +64,11 @@ void boot_music_load(void);
 
 /*----------------------
  | boot_music_play
- | Description: Plays the loaded sample once on a free PCM channel at full level.
- |   Any fade-in is the caller's, via boot_music_set_level. A no-op
- |   if nothing was loaded or a channel is already playing it.
+ | Description: Plays the loaded sample once on a free PCM channel at full level,
+ |   and once only: when the sample reaches its end a V-blank handler stops the
+ |   channel and leaves it stopped, so the title screen is silent from there until
+ |   the player presses on. Any fade-in is the caller's, via boot_music_set_level.
+ |   A no-op if nothing was loaded or a channel is already playing it.
  | Author: suinevere
  | Dependencies: SRL (Sound::Pcm)
  ----------------------*/
@@ -74,7 +76,10 @@ void boot_music_play(void);
 
 /*----------------------
  | boot_music_playing
- | Description: Whether a channel is currently carrying the jingle. Ask before any
+ | Description: Whether the jingle is still sounding. False once the sample has
+ |   run to its end as well as before it starts, which is the point -- the cue
+ |   plays once, so a title screen left up long enough reaches the press with
+ |   nothing left to fade. Ask before any
  |   fade: boot_music_set_level moves the driver's MASTER volume, so ramping it for
  |   a sample that is not playing turns the whole machine down for nothing, and the
  |   restore that would undo it is the one boot_music_stop skips.

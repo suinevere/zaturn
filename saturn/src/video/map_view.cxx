@@ -3,7 +3,8 @@
  | Description: Implements map_view.h.
  | Author: suinevere
  | Dependencies: map_model.h, dash_map.h, room_model.h, text_map.h, dash_view.h,
- |   title.h, input.h, saturn_keyboard.h, soft_reset.h, console_view.h, menu.h
+ |   title.h, room_art.h, display.h, app_state.h, input.h, saturn_keyboard.h,
+ |   soft_reset.h, console_view.h, menu.h
  ----------------------*/
 #include <srl.hpp>
 #include "map_model.h"
@@ -13,6 +14,9 @@
 #include "text_map.h"
 #include "dash_view.h"
 #include "title.h"
+#include "room_art.h"
+#include "display.h"
+#include "app_state.h"
 #include "input.h"
 #include "saturn_keyboard.h"
 #include "soft_reset.h"
@@ -465,21 +469,28 @@ static void draw_once(int sx, int sy) {
  |   CRAM entries every NBG2 tile draws from, so the tan is captured on the way
  |   in and put back on the way out; without that the gamepad strip and every
  |   menu box wear it for the rest of the session.
+ |
+ |   The wallpaper is hidden for the map's duration and restored by asking
+ |   room_art for the room again, which is free when NBG0 still holds that
+ |   frame. It used to be restored by re-showing title_bg_loaded_file() by name,
+ |   which was wrong twice over: for a CGL frame that name is an area stem and
+ |   no file, so the picture never came back, and on a game with no art at all
+ |   the name was still the boot logo's -- so closing the map put the SUINEVERE
+ |   logo up behind the game and left it there.
  | Author: suinevere
  | Dependencies: draw_once, extent, dash_map.h, dash_view.h, menu.h, input.h,
- |   saturn_keyboard.h, soft_reset.h, console_view.h, title.h
+ |   saturn_keyboard.h, soft_reset.h, console_view.h, title.h, room_art.h,
+ |   display.h, app_state.h
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 extern "C" void map_view_show(void) {
     MenuBacking backing;
-    char was[64];
-    int i = 0, sx = 0, sy = 0;
+    int sx = 0, sy = 0;
     unsigned short tint = dash_tint_current();
-    const char *cur = title_bg_loaded_file();
-    while (cur[i] && i < (int) sizeof was - 1) { was[i] = cur[i]; i++; }
-    was[i] = 0;
+    const bool had_art = (g_display.palette == DISP_PAL_DYNAMIC)
+                         && room_art_available() != 0;
 
     title_bg_hide();
     dash_tint(MAP_GROUND_555);
@@ -525,5 +536,5 @@ extern "C" void map_view_show(void) {
     text_clear_line(27);
     text_flush();
     dash_tint(tint);
-    if (was[0]) title_bg_show(was);
+    if (had_art) room_art_reshow();
 }

@@ -108,8 +108,11 @@ void text_set_color(unsigned short rgb555, unsigned short bg555) {
  |   and install_block_glyph's cursor entry in one call; recolouring at print
  |   time is not an option, since text_print bakes the palette bank into the
  |   pattern name it writes). Sets the back plane BEFORE any
- |   image load, because it is what shows through the transparent menu frames
- |   and is on screen during the 1-2s CD read. Re-applies the held wallpaper
+ |   image load, because it is what fills the screen around the menus and is on
+ |   screen during the 1-2s CD read. It no longer shows THROUGH them: a menu box
+ |   is a marble slab now (dash_map.h), and the way the chosen background reaches
+ |   the inside of one is text_set_color's dash_tint, which carries its hue into
+ |   the stone. Re-applies the held wallpaper
  |   dim (title_bg_dim_set) unconditionally, same as the color and back-plane
  |   writes above it -- this is what makes a saved dim reach VDP2 on boot and
  |   what restores the pre-edit dim when the Display Options page cancels,

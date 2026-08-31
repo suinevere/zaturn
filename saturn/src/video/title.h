@@ -1,7 +1,7 @@
 /*----------------------
  | title.h
- | Description: Title screen, background art, TGA loading, CD directory juggling,
- |   and the boot sequence random seed.
+ | Description: Title screen, the NBG0 picture layer and its fades, the boot
+ |   logo's TGA load, CD directory juggling, and the boot sequence random seed.
  | Author: suinevere
  | Dependencies: app_state.h, display.h, menu.h, bg_dim.h, SRL
  ----------------------*/
@@ -26,38 +26,17 @@ extern "C" {
 void title_draw_art(void);
 
 /*----------------------
- | title_bg_show
- | Description: Shows a TGA image on VDP2 NBG0 behind the title text (menus and
- |   gameplay stay on solid black). Serves it from the Low Work RAM cache on a hit,
- |   which keeps the CD idle and the music playing; a miss reads the disc, which
- |   stops CD-DA for the length of the read, and takes a cache slot so the next
- |   request for the same picture is free. Accepts only uncompressed 8bpp
- |   colour-mapped TGA. Returns false if the load fails or the format is
- |   unsupported, so the caller can fall back to a colour background.
- |
- |   Callers reachable with music playing have to cover the miss -- by picking the
- |   moment (the engine only changes the wallpaper at the bottom of a fade, where
- |   the track is being swapped anyway) or by pausing around it (Options does).
- | Author: suinevere
- | Dependencies: SRL
- | Globals: N/A
- | Params: file -- filename of the TGA image to load
- | Returns: true if the requested display was applied; false if it fell back
- ----------------------*/
-bool title_bg_show(const char *file);
-
-/*----------------------
  | title_bg_show_oneoff
- | Description: Shows a TGA image on VDP2 NBG0 exactly like title_bg_show, but
- |   always decodes into a throwaway High Work RAM buffer and frees it right
- |   after the VRAM upload -- it never touches the Low Work RAM background
- |   cache (g_cache) or its TGA_CACHE_SLOTS slots. Use this for a TGA that is not
- |   one of the registered room backgrounds, so it can neither take a slot nor
- |   evict a picture out of one: the boot splash logo is the case this exists for.
+ | Description: Reads a TGA off the disc into a throwaway High Work RAM buffer,
+ |   uploads it to VDP2 NBG0 and frees the buffer again. The only TGA read left
+ |   in the port, and the boot splash logo is the only picture that takes it --
+ |   every background is a CGL frame that reaches NBG0 through
+ |   title_bg_show_raw instead. Reads the disc, so it stops CD audio; the splash
+ |   calls it before any track is playing.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
- | Params: file -- filename of the TGA image to load
+ | Params: file -- bare /TGA filename of the image to load
  | Returns: true if the image was decoded and uploaded; false otherwise
  ----------------------*/
 bool title_bg_show_oneoff(const char *file);
@@ -66,18 +45,19 @@ bool title_bg_show_oneoff(const char *file);
  | title_bg_show_raw
  | Description: Shows an already-decoded 8bpp picture on VDP2 NBG0, for callers
  |   that produced their pixels themselves rather than reading a TGA off the
- |   disc. Touches no CD, so it is safe to call with music playing -- which is
- |   the whole point for the room backgrounds, whose archive is already resident
- |   and whose per-room change must not interrupt a track.
+ |   disc. Every background takes this route: room_art.cxx decompresses one CGL
+ |   frame and hands it straight here. Touches no CD, so it is safe to call with
+ |   music playing -- which is the whole point, since the archive is already
+ |   resident and a per-room change must not interrupt a track.
  |
- |   tag is recorded as the loaded-file name so title_bg_loaded_file and the
- |   Dynamic pin's short-circuit keep working. It is a label, not a path, and
+ |   tag is recorded as the loaded-file name so title_bg_loaded_file and
+ |   room_art's short-circuit keep working. It is a label, not a path, and
  |   nothing ever reopens it.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
  | Params: pixels -- w*h 8bpp bytes; clut -- 256 Saturn RGB555 words; w, h --
- |   the picture's size; tag -- a name to record, truncated to the cache's name
+ |   the picture's size; tag -- a name to record, truncated to the loaded-name
  |   field
  | Returns: true if the picture was applied, false if an argument was bad or the
  |   palette could not be made
@@ -119,12 +99,11 @@ void title_bg_set_shift(int y);
 
 /*----------------------
  | title_bg_loaded_file
- | Description: The filename of the picture currently uploaded to NBG0, or "" if
- |   nothing has been. Re-showing this one is the only wallpaper request that
- |   cannot touch the disc -- title_bg_show compares against the same record and
- |   short-circuits to a bare ScrollEnable -- so it is what a screen that must not
- |   move the CD head asks for. Hiding the wallpaper does not clear it: the
- |   picture stays in VRAM and stays free to re-show.
+ | Description: The name of the picture currently uploaded to NBG0, or "" if
+ |   nothing has been. For a CGL frame that is its area's archive stem, which is
+ |   what room_art.cxx tests against to skip a decode and an upload it does not
+ |   need; for the boot logo it is the filename. Hiding the wallpaper does not
+ |   clear it: the picture stays in VRAM and stays free to re-show.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_nbg0_loaded
@@ -142,7 +121,7 @@ const char *title_bg_loaded_file(void);
  |   player's held wallpaper dim. Two channels rather than one because a scroll
  |   sits on only one of them, and taking the picture onto A for the length of a
  |   fade is what used to drop the dim -- see title_bg_fade_engage.
- |     title_bg_fade_arm  -- snap to full black BEFORE title_bg_show and
+ |     title_bg_fade_arm  -- snap to full black BEFORE the picture and
  |       title_draw_art, so the title is composed unseen instead of flashing
  |       at full brightness for the frames it takes to build.
  |     title_bg_fade_in   -- ramp black -> normal over `frames` fields, then
@@ -263,9 +242,8 @@ int  title_bg_dim_get(void);
  | title_and_seed
  | Description: Displays the title screen with a "Press any button" prompt and waits
  |   for user input. Returns a random seed based on the number of elapsed frames.
- |   Also handles soft reset chords while waiting on this screen. Finishes whatever
- |   loading the splash left -- everything it calls is idempotent, so on an unskipped
- |   splash that is nothing -- and fades the splash jingle out on the press.
+ |   Also handles soft reset chords while waiting on this screen. Runs the game
+ |   catalogue scan behind the art, and fades the splash jingle out on the press.
  | Author: suinevere
  | Dependencies: console_view.h, input.h, SRL
  | Globals: g_pad
@@ -273,55 +251,6 @@ int  title_bg_dim_get(void);
  | Returns: a random seed integer
  ----------------------*/
 int title_and_seed(void);
-
-/*----------------------
- | title_art_file / title_art_random
- | Description: The shared TITLE/ folder's pictures, addressed by literal
- |   filename rather than routed through display.c's scene machinery -- the
- |   title screen has no room, no scene and no game to suit. title_art_file
- |   is the disc path for one 1-based index (1..TITLE_ART_N), or NULL out of
- |   range; title_art_random is the boot's pick, reduced from `seed` modulo
- |   TITLE_ART_N, and NULL when TITLE_ART_N is 0 -- no source images exist
- |   yet, and the caller must show no wallpaper rather than read a
- |   nonexistent file.
- | Author: suinevere
- ----------------------*/
-const char *title_art_file(int index);
-const char *title_art_random(unsigned int seed);
-
-/*----------------------
- | title_preload_art
- | Description: Warms the background-art cache with the shared TITLE/
- |   pictures, in order starting from index 1, and stops as soon as Low Work
- |   RAM will not spare another slot. Runs at BOOT, before any game is
- |   selected. A no-op at TITLE_ART_N 0.
- |
- |   Reads the disc, so it must be called somewhere a stalled drive does not
- |   matter. The splash is that place: its jingle plays from RAM rather than CD-DA,
- |   so reads underneath it are inaudible, and covering a load is what the splash
- |   is for. Safe to call more than once -- pictures already held are skipped.
- | Author: suinevere
- ----------------------*/
-void title_preload_art(int max_slots);
-
-/*----------------------
- | title_bg_cache_release
- | Description: Frees every background-art cache slot and empties the cache.
- |
- |   For the soft-reset return and nothing else. A session ends with ~580 KB of
- |   cached art held, which leaves no room for the boot jingle to be reloaded -- so
- |   without this the title screen comes back silent. What is on NBG0 stays on NBG0;
- |   only the RAM copies go.
- | Author: suinevere
- ----------------------*/
-void title_bg_cache_release(void);
-
-/* display_preload_images() is gone. It decoded every registered background into
-   Low Work RAM during the boot splash, so that cycling pictures in the Options
-   menu never read the disc. That was affordable at eight pictures and is not at
-   thirty-seven -- the art alone would want ~2.6 MB of a 1 MB zone. title.cxx now
-   keeps TGA_CACHE_SLOTS pictures, filled on demand and evicted least-recently-
-   used; see the box there for where the reads it no longer avoids end up. */
 
 /*----------------------
  | cd_capture_root

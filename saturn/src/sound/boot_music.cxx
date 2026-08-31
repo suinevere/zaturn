@@ -28,13 +28,12 @@
  | Description: How much of SPLASH.PCM is ever read into Low Work RAM.
  |
  |   Twenty-two seconds because SPLASH.PCM is 21.03 and the cap has to clear the
- |   file: the jingle loops across the whole title screen, so a cap short of the
- |   end would return to the head mid-phrase, which no seam handling can disguise.
- |   A shorter file than the cap is used whole.
+ |   file: the jingle is played once, whole, and a cap short of the end would cut
+ |   it off mid-phrase. A shorter file than the cap is used whole.
  |
- |   ~453 KB of the megabyte while it is held, which is most of what the art cache
- |   has to work around during the splash. test_lwram_splash_budget.py holds the
- |   two against each other.
+ |   ~453 KB of the megabyte while it is held, which is most of what the title
+ |   screen's wallpaper archive has to work around. test_lwram_budget.py holds
+ |   the two against each other.
  | Author: suinevere
  ----------------------*/
 #define BOOT_MUSIC_MAX_SECONDS 22u
@@ -70,16 +69,22 @@ static int          g_boot_music_channel = -1;
 
 /*----------------------
  | BOOT_MUSIC_FPS / g_boot_music_frames / g_boot_music_span_frames /
- |   g_boot_music_looping / g_boot_music_hooked
- | Description: The loop's state: the field rate the sample's duration is counted
- |   in, how many fields the current pass has run and how many it lasts, whether
- |   the V-blank handler is armed, and whether it has been subscribed yet.
+ |   g_boot_music_running / g_boot_music_done / g_boot_music_hooked
+ | Description: The one pass's state: the field rate the sample's duration is
+ |   counted in, how many fields it has run and how many it lasts, whether the
+ |   V-blank handler is armed, whether the sample has reached its end, and
+ |   whether the handler has been subscribed yet.
+ |
+ |   g_boot_music_done rather than simply clearing the channel, because the
+ |   channel is what boot_music_stop's scrub keys off and that still has to run
+ |   on the way out. It is what boot_music_playing reports on instead.
  | Author: suinevere
  ----------------------*/
 #define BOOT_MUSIC_FPS 60
 static volatile int32_t g_boot_music_frames      = 0;
 static volatile int32_t g_boot_music_span_frames = 0;
-static volatile bool    g_boot_music_looping     = false;
+static volatile bool    g_boot_music_running     = false;
+static volatile bool    g_boot_music_done        = false;
 static bool             g_boot_music_hooked      = false;
 
 /*----------------------
@@ -97,41 +102,37 @@ static int32_t boot_music_span_frames(uint32_t bytes) {
 
 /*----------------------
  | boot_music_vblank
- | Description: Re-triggers the sample when its run is up, so the jingle carries
- |   across the splash and the whole of the title screen rather than stopping at
- |   BOOT_MUSIC_MAX_SECONDS. Every pass starts where the music does: the entry ramp
- |   shapes the output level rather than the sample, so no part is pre-ducked and
- |   none has to be skipped.
+ | Description: Stops the sample when its run is up, and leaves it stopped. The
+ |   jingle is heard once, end to end, and the title screen is silent from there
+ |   until the player presses on and the menu's CD-DA track starts.
  |
- |   The stop and the restart are deliberately a frame apart. Doing both in one
- |   pass sounds wrong: StopSound does not
- |   flush what the driver has already staged, so the fresh Play bleeds the tail of
- |   the pass that just ended over the head of the next one. Spending one field
- |   with the channel stopped is what makes the seam a seam rather than an overlap.
+ |   It used to re-trigger here instead, so the cue looped for as long as the
+ |   player left the title screen up. A ~21-second phrase repeating behind a
+ |   screen with one prompt on it wears out well before anybody reads the prompt,
+ |   and the seam handling that made the repeat bearable was solving a problem the
+ |   piece did not need to have.
+ |
+ |   Nothing here clears g_boot_music_channel: boot_music_stop keys its buffer
+ |   scrub off that, and the scrub still has to run on the way out. What tells the
+ |   rest of the port the cue is over is g_boot_music_done, which is what
+ |   boot_music_playing reports.
  | Author: suinevere
  | Dependencies: SRL (Sound::Pcm)
- | Globals: g_boot_music_*, g_boot_music_pcm
+ | Globals: g_boot_music_*
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void boot_music_vblank(void) {
-    if (!g_boot_music_looping || !g_boot_music_buf || g_boot_music_channel < 0) return;
+    if (!g_boot_music_running || !g_boot_music_buf || g_boot_music_channel < 0) return;
     if (g_boot_music_span_frames <= 0) return;
 
     int32_t f = g_boot_music_frames + 1;
     g_boot_music_frames = f;
     if (f < g_boot_music_span_frames) return;
 
-    if (f == g_boot_music_span_frames) {
-        SRL::Sound::Pcm::StopSound((uint8_t) g_boot_music_channel);
-        return;
-    }
-
-    g_boot_music_pcm.set(g_boot_music_buf, g_boot_music_size, BOOT_MUSIC_RATE);
-    int8_t ch = g_boot_music_pcm.Play(BOOT_MUSIC_LEVEL_MAX);
-    if (ch >= 0) g_boot_music_channel = ch;
-    g_boot_music_frames      = 0;
-    g_boot_music_span_frames = boot_music_span_frames(g_boot_music_size);
+    SRL::Sound::Pcm::StopSound((uint8_t) g_boot_music_channel);
+    g_boot_music_running = false;
+    g_boot_music_done    = true;
 }
 
 /*----------------------
@@ -204,10 +205,11 @@ extern "C" void boot_music_play(void) {
     if (!g_boot_music_buf || g_boot_music_channel >= 0) return;
     g_boot_music_frames      = 0;
     g_boot_music_span_frames = boot_music_span_frames(g_boot_music_size);
+    g_boot_music_done        = false;
     g_boot_music_channel     = g_boot_music_pcm.Play(BOOT_MUSIC_LEVEL_MAX);
     if (g_boot_music_channel >= 0) {
         boot_music_hook();
-        g_boot_music_looping = true;
+        g_boot_music_running = true;
     }
 }
 
@@ -247,12 +249,12 @@ static void boot_master_restore(void) {
  | Description: See boot_music.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_boot_music_channel
+ | Globals: g_boot_music_channel, g_boot_music_done
  | Params: N/A
  | Returns: true while a channel is carrying the jingle
  ----------------------*/
 extern "C" bool boot_music_playing(void) {
-    return g_boot_music_channel >= 0;
+    return g_boot_music_channel >= 0 && !g_boot_music_done;
 }
 
 /*----------------------
@@ -335,7 +337,7 @@ extern "C" void boot_music_set_level(int level) {
  | Returns: N/A
  ----------------------*/
 extern "C" void boot_music_stop(void) {
-    g_boot_music_looping = false;
+    g_boot_music_running = false;
 
     if (g_boot_music_channel >= 0 && g_boot_music_buf) {
         for (uint32_t i = 0; i < g_boot_music_size; i++) g_boot_music_buf[i] = 0;
@@ -347,6 +349,7 @@ extern "C" void boot_music_stop(void) {
         g_boot_music_channel = -1;
     }
     boot_master_restore();
+    g_boot_music_done = false;   // a soft-reset return reloads and plays again
     if (g_boot_music_buf) {
         SRL::Memory::Free(g_boot_music_buf);
         g_boot_music_buf = nullptr;

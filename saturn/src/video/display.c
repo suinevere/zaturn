@@ -376,30 +376,29 @@ const char *display_palette_name(const DisplayState *d) {
 
 /*----------------------
  | display_defaults
- | Description: Resets a DisplayState to the default appearance (IBM PC MDA, the
- |   closest match to the previous hardcoded look, with no image).
+ | Description: Resets a DisplayState to the default appearance: Dynamic, the
+ |   picture over black with white text.
+ |
+ |   Unconditionally Dynamic, where this used to fall back to IBM PC (MDA)
+ |   whenever display_has_art() read 0. That condition was answered at the wrong
+ |   time far more often than at the right one: no game is selected at the title
+ |   or in the menus, so the flag is 0 there and a cold boot defaulted to MDA and
+ |   only offered Dynamic once a game with art was already running. Dynamic on a
+ |   game with no art is not a broken state -- it is black with white text and no
+ |   picture, which is a legitimate appearance and the one this port looks like
+ |   with the wallpaper off.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: PRESETS
+ | Globals: N/A
  | Params: d -- the state to reset
  | Returns: N/A
  ----------------------*/
 void display_defaults(DisplayState *d) {
-    if (display_has_art()) {
-        /* Dynamic: the picture follows the room's mood. The shipped default. */
-        d->palette = DISP_PAL_DYNAMIC;
-        d->bg      = DISP_BG_BLACK;
-        d->text    = DISP_TEXT_WHITE;
-        d->image   = display_dynamic_slot();
-        d->dim     = DISP_DIM_DEFAULT;
-    } else {
-        /* No art on this disc, so Dynamic has nothing to show. */
-        d->palette = DISP_PAL_PRESET0;         /* IBM PC (MDA): closest to the */
-        d->bg      = PRESETS[0].bg;            /* previous hardcoded appearance */
-        d->text    = PRESETS[0].text;
-        d->image   = DISP_IMAGE_NONE;
-        d->dim     = DISP_DIM_DEFAULT;
-    }
+    d->palette = DISP_PAL_DYNAMIC;
+    d->bg      = DISP_BG_BLACK;   /* black so frames and letterboxing read as */
+    d->text    = DISP_TEXT_WHITE; /* deliberate; white to stay legible on art */
+    d->image   = display_dynamic_slot();
+    d->dim     = DISP_DIM_DEFAULT;
 }
 
 /*----------------------
@@ -493,8 +492,15 @@ void display_cycle_text(DisplayState *d, int dir) {
 /*----------------------
  | display_cycle_palette
  | Description: Cycle the palette one step in `dir`, applying the new preset's
- |   bg/text/image. Dynamic is stepped over on a disc with no art, since it would
- |   land the player on an entry that shows nothing.
+ |   bg/text/image. Every entry is reachable, Dynamic included.
+ |
+ |   Dynamic used to be stepped over whenever display_has_art() read 0, on the
+ |   grounds that it would land the player on an entry showing nothing. The flag
+ |   is 0 for every game without authored art AND everywhere outside a running
+ |   game, so what that actually did was remove the row's first entry from the
+ |   Options menu at the title screen -- the one place a player is most likely to
+ |   go looking for it. Landing on it there is correct: it is the appearance the
+ |   port defaults to, and a game with art will honour it the moment one starts.
  |
  |   Custom is not a position on the row and never was -- it is what
  |   display_palette_name reports when the colours have been edited away from the
@@ -514,12 +520,6 @@ void display_cycle_text(DisplayState *d, int dir) {
 void display_cycle_palette(DisplayState *d, int dir) {
     int count = display_palette_count();
     int next  = step(d->palette, dir, count);
-    /* Dynamic holds index 0 on every disc, art or not, so the display_preset_*
-       accessors above can stay single unconditional expressions. The cost is one
-       unreachable entry to step past here, which is cheaper than the row changing
-       shape -- that would put the arithmetic behind display_has_art() everywhere. */
-    if (next == DISP_PAL_DYNAMIC && !display_has_art())
-        next = step(next, dir, count);
     d->palette = next;
     d->bg      = display_preset_bg(next);
     d->text    = display_preset_text(next);
@@ -654,9 +654,13 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         slot = image_slot_of(name);
 
         if (buf[1] == DISP_BLOB_DYNAMIC) {
-            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
+            /* Accepted whatever display_has_art() says. It used to be refused
+               when that read 0, which is the answer at the title screen where
+               options are loaded -- so a player who chose Dynamic found it
+               silently reset to a colour preset on the next boot. */
+            d->palette = DISP_PAL_DYNAMIC;
         } else if (buf[1] == DISP_BLOB_IMAGE) {
-            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;
+            d->palette = DISP_PAL_DYNAMIC;
             ok = 0;
         } else if (buf[1] <= DISP_PRESET_N) {
             /* Post-Dynamic indices run DISP_PAL_PRESET0 (1) through DISP_PRESET_N
@@ -694,16 +698,17 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         slot = image_slot_of(name);
 
         if (buf[1] == DISP_BLOB_DYNAMIC) {
-            /* Only sentinel 4 writes this, and only from a disc that had art.
-               Reloaded onto one that has none, Dynamic has nothing to show. */
-            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
+            /* Only sentinel 4 writes this. Accepted unconditionally, same as the
+               current form above: Dynamic is a valid appearance on a disc with no
+               art -- black, white text, no picture -- not an unshowable one. */
+            d->palette = DISP_PAL_DYNAMIC;
         } else if (buf[1] == DISP_BLOB_IMAGE) {
             /* A blob from when the row let one picture be pinned. It cannot be
                honoured -- there is no palette index for a single picture any more
                -- so it lands on Dynamic, the one entry that still shows art at
                all. Reported as not-verbatim either way: the player is getting
                something other than what they saved. */
-            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;
+            d->palette = DISP_PAL_DYNAMIC;
             ok = 0;
         } else if (buf[0] == 4
                        ? (buf[1] >= DISP_PAL_PRESET0 && buf[1] <= DISP_PRESET_N)

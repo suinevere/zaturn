@@ -39,8 +39,12 @@ extern "C" {
  |   opens with DT_MODLEFT in the cell after it.
  |
  |   The DT_BOX_* set is the same bevel over transparency instead of over
- |   marble, for the menu boxes: no field, so nothing to hold in register, so
- |   one tile per edge rather than four.
+ |   marble, one tile per edge rather than four because there is no field to
+ |   hold in register. Nothing paints it any more -- menu boxes take the marble
+ |   path with everything else (see cell_at) -- but the tiles stay in the set
+ |   rather than being cut, because every index after them is a literal in
+ |   dash_tiles.c and removing eight would renumber the map tiles for 256 bytes
+ |   of VRAM.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -86,10 +90,10 @@ enum {
  | DASH_NONE .. DASH_VARIANT_N
  | Description: The fixed panel shapes, the nothing-painted state the shadow
  |   starts in, and the runtime rectangle. PANEL and GAMEKB are the two in-game
- |   gamepad strips and OVERLAY is PANEL without its dividers. BOX is the odd
- |   one out: its geometry is not in the table but supplied per call by
- |   dash_box, and it paints a bevel with nothing inside it rather than a
- |   marble field.
+ |   gamepad strips and OVERLAY is PANEL without its dividers. BOX is OVERLAY's
+ |   shape with its rectangle supplied per call by dash_box rather than read
+ |   from the table, since a menu is sized and placed at runtime; it paints the
+ |   same bevel and marble field every other variant does.
  | Author: suinevere
  ----------------------*/
 enum { DASH_NONE = 0, DASH_PANEL, DASH_GAMEKB, DASH_OVERLAY,
@@ -113,9 +117,11 @@ void dash_build(int variant, int base_row);
 
 /*----------------------
  | dash_box
- | Description: Paints an arbitrary rectangle as a bevelled frame with a
- |   transparent interior, for the menu boxes -- the DT_BOX_* tiles rather than
- |   the panel's marble ones, so whatever the menu draws inside is untouched.
+ | Description: Paints an arbitrary rectangle as a bevelled frame over a marble
+ |   field, for the menu boxes -- the same stone the gamepad panel is made of, so
+ |   a menu is a slab rather than an outline with the wallpaper showing through
+ |   it. dash_tint carries the player's background hue into that stone, which is
+ |   what the flat colour behind a transparent box used to do.
  |   Takes the same rectangle menu_frame does, in the same units. Idempotent on
  |   the whole rectangle, not just its top row, so a page may call it every
  |   frame. Clears whatever was painted before, exactly as dash_build does: one

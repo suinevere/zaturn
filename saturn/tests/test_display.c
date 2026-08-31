@@ -73,16 +73,17 @@ static void test_preset_contents(void) {
 
 static void test_defaults_and_palette_name(void) {
     DisplayState d;
-    /* No game ships scene art yet -- every GAME_SCENE row is {0,0} -- so
-       display_has_art() reads 0 with no authored art set and display_defaults
-       lands on the no-art branch (a colour preset) regardless of what
-       test_scene_art_shape below leaves g_game pointing at. */
+    /* Dynamic unconditionally, art or not. It used to fall back to a colour
+       preset whenever display_has_art() read 0 -- which is the answer everywhere
+       outside a running game, so a cold boot defaulted to IBM PC (MDA) and only
+       ever offered Dynamic once a game with art was already loaded. */
     display_defaults(&d);
-    assert(d.palette == DISP_PAL_PRESET0);
-    assert(d.bg      == display_preset_bg(DISP_PAL_PRESET0));
-    assert(d.text    == display_preset_text(DISP_PAL_PRESET0));
-    assert(d.image   == DISP_IMAGE_NONE);
-    assert(strcmp(display_palette_name(&d), display_preset_name(DISP_PAL_PRESET0)) == 0);
+    assert(display_has_art() == 0);          /* no authored art set: the old fallback case */
+    assert(d.palette == DISP_PAL_DYNAMIC);
+    assert(d.bg      == DISP_BG_BLACK);
+    assert(d.text    == DISP_TEXT_WHITE);
+    assert(d.image   == display_dynamic_slot());
+    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
 
     /* Dynamic's own naming logic, built by hand: display_palette_count() always
        counts it as a stop on the row, art or not, so it needs no disc art to
@@ -197,11 +198,9 @@ static void test_guard_follows_bg_color_under_image(void) {
 
 static void test_cycle_palette(void) {
     DisplayState d;
-    /* Dynamic is excluded from the row entirely right now: display_cycle_palette
-       steps over it whenever display_has_art() is 0, which it is for every
-       game until one ships scene art (see test_cycle_palette_skips_dynamic_
-       without_art below for that branch on its own). So this walks the colour
-       presets only, built by hand rather than through display_defaults. */
+    /* The colour presets on their own; Dynamic's place on the row is covered by
+       test_cycle_palette_reaches_dynamic_without_art below. Built by hand rather
+       than through display_defaults, which lands on Dynamic. */
     d.palette = PAL(0);
     d.bg      = display_preset_bg(PAL(0));
     d.text    = display_preset_text(PAL(0));
@@ -249,10 +248,9 @@ static void test_cycle_palette(void) {
 static void test_custom_on_dynamic_steps_forward(void) {
     /* The regression display_cycle_palette's own comment describes: a Custom
        built on Dynamic (index 0) must step onto PAL(0)/PAL(last), not re-select
-       Dynamic and wipe the player's colours back to black and white. No game
-       ships scene art yet, so display_defaults cannot be trusted to land on
-       Dynamic itself -- d.palette is set directly instead, which reaches the
-       same state without needing art on disc. */
+       Dynamic and wipe the player's colours back to black and white. Built by
+       hand rather than through display_defaults so the diverged text colour is
+       explicit. */
     DisplayState d;
 
     d.palette = DISP_PAL_DYNAMIC;
@@ -275,10 +273,11 @@ static void test_custom_on_dynamic_steps_forward(void) {
         && d.text == display_preset_text(PAL(DISP_PRESET_N - 1)));
 }
 
-static void test_cycle_palette_skips_dynamic_without_art(void) {
-    /* No game ships scene art yet, so display_cycle_palette treats Dynamic as
-       an unreachable stop and steps straight past it in both directions --
-       the one branch of the function nothing above exercises. */
+static void test_cycle_palette_reaches_dynamic_without_art(void) {
+    /* Dynamic is a reachable stop on the row with no authored art set -- which
+       is the state the Options menu is in at the title screen, and the one place
+       a player is most likely to go looking for it. This used to step straight
+       past it in both directions. */
     DisplayState d;
     assert(display_has_art() == 0);
 
@@ -288,10 +287,15 @@ static void test_cycle_palette_skips_dynamic_without_art(void) {
     d.image   = DISP_IMAGE_NONE;
 
     display_cycle_palette(&d, -1);
-    assert(d.palette == PAL(DISP_PRESET_N - 1));   /* wrapped past Dynamic */
+    assert(d.palette == DISP_PAL_DYNAMIC);         /* landed on it, not past it */
+    assert(strcmp(display_palette_name(&d), "Dynamic") == 0);
+
+    display_cycle_palette(&d, -1);
+    assert(d.palette == PAL(DISP_PRESET_N - 1));   /* and on round the row */
 
     display_cycle_palette(&d, 1);
-    assert(d.palette == PAL(0));                   /* and back, past it again */
+    display_cycle_palette(&d, 1);
+    assert(d.palette == PAL(0));                   /* back forward through it */
 }
 
 /* The MOJOOPTS blob locates its display block by finding a byte that is not one
@@ -354,6 +358,10 @@ static void test_collisions_roundtrip(void) {
     for (p = 0; p < 2; p++) {
         for (s = 0; s < 2; s++) {
             int idx = pairs[p][s];
+            /* Seeded rather than left as stack garbage: encode writes every
+               field, and an out-of-range dim byte is one decode defaults, which
+               would fail the round-trip for a reason this test is not about. */
+            display_defaults(&a);
             a.palette = idx;
             a.bg = display_preset_bg(idx);
             a.text = display_preset_text(idx);
@@ -496,11 +504,14 @@ static void test_color_state_needs_no_image(void) {
     DisplayState d, saved;
     unsigned char blob[DISP_BLOB_BYTES];
 
+    display_defaults(&saved);          /* every field encode reads: an indeterminate
+                                          dim byte is one decode defaults, which
+                                          would fail the round-trip for a reason
+                                          this test is not about */
     saved.palette = PAL(3);
     saved.bg      = display_preset_bg(PAL(3));
     saved.text    = display_preset_text(PAL(3));
-    saved.image   = DISP_IMAGE_NONE;   /* encode reads this; leaving it indeterminate
-                                          made the stored name a coin toss */
+    saved.image   = DISP_IMAGE_NONE;
     display_encode(&saved, blob);
 
     assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 1);
@@ -638,15 +649,18 @@ static void test_blob_roundtrip(void) {
         assert(b.image == DISP_IMAGE_NONE);
     }
 
-    /* A blob carrying the Dynamic marker is refused, reported as defaulted,
-       while no game has authored art set -- decode's own display_has_art()
-       guard, the read-side twin of display_cycle_palette's. It lands on the
-       same no-art fallback display_defaults would. */
+    /* A blob carrying the Dynamic marker round-trips with no authored art set,
+       which is the state options are loaded in: the title screen has no game.
+       Refusing it here was the read-side twin of display_cycle_palette's skip,
+       and between them a player who chose Dynamic got it reset on every boot. */
+    display_defaults(&a);
     a.palette = DISP_PAL_DYNAMIC;
     a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE; a.image = DISP_IMAGE_NONE;
     display_encode(&a, buf);
-    assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 0);
-    assert(b.palette == DISP_PAL_PRESET0);
+    assert(display_has_art() == 0);
+    assert(display_decode(buf, DISP_BLOB_BYTES, &b) == 1);
+    assert(b.palette == DISP_PAL_DYNAMIC);
+    assert(strcmp(display_palette_name(&b), "Dynamic") == 0);
 }
 
 static void test_preset_sweep_round_trips(void) {
@@ -913,7 +927,7 @@ int main(void) {
     test_guard_follows_bg_color_under_image();
     test_cycle_palette();
     test_custom_on_dynamic_steps_forward();
-    test_cycle_palette_skips_dynamic_without_art();
+    test_cycle_palette_reaches_dynamic_without_art();
     test_five_is_not_a_display_sentinel();
     test_seven_is_not_a_display_sentinel();
     test_encode_decode_roundtrip();

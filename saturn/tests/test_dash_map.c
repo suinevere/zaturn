@@ -162,10 +162,32 @@ int main(void) {
     dash_frame_end();                      /* claimed by the dash_box above */
     dash_box_hold();
     dash_frame_end();
-    assert(dash_cell(6, 4) == DT_BOX_TL);
+    assert(dash_cell(6, 4) == DT_CORNER_TL);
     dash_box_hold();
     dash_frame_end();
-    assert(dash_cell(6, 4) == DT_BOX_TL);
+    assert(dash_cell(6, 4) == DT_CORNER_TL);
+
+    /* A menu box is a marble slab, not an outline: the same bevelled frame the
+       gamepad panel wears and the same field inside it, so a menu does not show
+       the wallpaper or the back colour through its middle. It used to paint the
+       DT_BOX_* set over DT_BLANK, and nothing pins that it no longer does
+       except this. The field tile is chosen by the cell's own coordinates, so
+       the stone repeats every 32 pixels rather than every 8 -- check two
+       interior cells a phase apart, or a constant would satisfy this. */
+    {
+        int bx = 6, by = 4, bw = 12, bh = 8;
+        int ix, iy;
+        assert(dash_cell(bx + bw - 1, by) == DT_CORNER_TR);
+        assert(dash_cell(bx, by + bh - 1) == DT_CORNER_BL);
+        assert(dash_cell(bx + bw - 1, by + bh - 1) == DT_CORNER_BR);
+        assert(dash_cell(bx + 1, by) == (unsigned char) (DT_TOP0 + ((bx + 1) & 3)));
+        assert(dash_cell(bx, by + 1) == (unsigned char) (DT_LEFT0 + ((by + 1) & 3)));
+        for (iy = by + 1; iy < by + bh - 1; iy++)
+            for (ix = bx + 1; ix < bx + bw - 1; ix++)
+                assert(dash_cell(ix, iy)
+                       == (unsigned char) (DT_FIELD0 + ((iy & 3) << 2) + (ix & 3)));
+        assert(dash_cell(bx + 1, by + 1) != dash_cell(bx + 2, by + 1));
+    }
 
     /* Without the hold it expires, which is what makes the hold load-bearing
        rather than decorative. */

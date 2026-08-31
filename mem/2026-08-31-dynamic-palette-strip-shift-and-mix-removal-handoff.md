@@ -5,6 +5,12 @@ metadata:
   type: project
 ---
 
+**PARTLY STALE as of 2026-08-31 (later the same day).** The `.CGL` tracking
+question this file leaves open is now settled and reversed -- the archives are
+extracted per build and injected into `/BG`, not committed -- and the category
+art system it describes the music engine falling back to no longer exists. The
+three fixes it records still stand. See [[cgl-only-presentation-handoff]].
+
 Continues [[zork1-authentic-presentation-handoff]], which still holds everything
 about the presentation project itself (spec, plan, ledger, the two alias rows,
 the twenty unproven room orderings, Task 9's rejection). This file covers only

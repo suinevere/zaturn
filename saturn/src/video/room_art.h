@@ -49,20 +49,6 @@ void room_art_set_game(unsigned int release, const char *serial);
 int room_art_available(void);
 
 /*----------------------
- | room_art_needs_disc
- | Description: Whether showing this room would have to read the disc, which
- |   stops CD-DA. True exactly when the room's frame lives in an archive other
- |   than the resident one. The caller uses this to decide whether to fade: a
- |   room change inside an area is a cut, an area change is a fade.
- | Author: suinevere
- | Dependencies: scene/presentation.h
- | Globals: g_area, g_release, g_serial
- | Params: obj -- the room's object number
- | Returns: 1 when a disc read is required, 0 otherwise
- ----------------------*/
-int room_art_needs_disc(unsigned int obj);
-
-/*----------------------
  | room_art_show
  | Description: Puts one room's original background on NBG0, reading its area
  |   archive first if a different one is resident. Every failure -- no game set,
@@ -75,7 +61,8 @@ int room_art_needs_disc(unsigned int obj);
  |   out of it, which is the obligation every post-selection detour owes.
  | Author: suinevere
  | Dependencies: SRL, cgl.h, scene/presentation.h, title.h
- | Globals: g_area, g_archive, g_archive_len, g_pixels, g_clut
+ | Globals: g_have_game, g_release, g_serial, g_area, g_archive, g_archive_len,
+ |   g_pixels, g_clut
  | Params: obj -- the room's object number
  | Returns: 1 when a new picture was applied, 0 when nothing changed
  ----------------------*/

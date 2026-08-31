@@ -71,9 +71,13 @@ static bool frame_of(unsigned int obj, int *area,
 
 /*----------------------
  | load_area
- | Description: Reads one area's archive into Low Work RAM, replacing whatever
- |   was resident. Leaves g_area at -1 and frees nothing new on any failure, so
- |   a failed read cannot leave a half-loaded archive claiming to be an area.
+ | Description: Reads one area's archive into Low Work RAM. Frees whatever
+ |   archive was resident first, unconditionally, before the disc is even
+ |   touched -- so two archives are never resident at once, but it also means a
+ |   failed load below leaves nothing resident rather than falling back to what
+ |   was there. Also frees the block it just allocated if that block is not
+ |   long-aligned or the read comes up short. g_area stays -1 until the read
+ |   fully succeeds.
  | Author: suinevere
  | Dependencies: SRL, title.h (cd_enter_root, cd_restore_z3)
  | Globals: g_area, g_archive, g_archive_len
@@ -113,6 +117,13 @@ static bool load_area(int area) {
             }
             g_archive = (unsigned char *) SRL::Memory::LowWorkRam::Malloc(bytes);
             if (g_archive == nullptr) { cd_restore_z3(); return false; }
+            // LoadBytes wants a long-aligned destination; refuse rather than corrupt.
+            if (((unsigned int) g_archive & 3) != 0) {
+                SRL::Memory::LowWorkRam::Free(g_archive);
+                g_archive = nullptr;
+                cd_restore_z3();
+                return false;
+            }
             if (f.LoadBytes(0, (int32_t) bytes, g_archive) <= 0) {
                 SRL::Memory::LowWorkRam::Free(g_archive);
                 g_archive = nullptr;
@@ -156,27 +167,12 @@ void room_art_set_game(unsigned int release, const char *serial) {
 int room_art_available(void) { return g_have_game ? 1 : 0; }
 
 /*----------------------
- | room_art_needs_disc
- | Description: See room_art.h.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_area
- | Params: obj -- the room's object number
- | Returns: 1 when a disc read is required
- ----------------------*/
-int room_art_needs_disc(unsigned int obj) {
-    int area;
-    unsigned long off, len;
-    if (!frame_of(obj, &area, &off, &len)) return 0;
-    return (area == g_area) ? 0 : 1;
-}
-
-/*----------------------
  | room_art_show
  | Description: See room_art.h.
  | Author: suinevere
  | Dependencies: SRL, cgl.h, title.h
- | Globals: g_area, g_archive, g_archive_len, g_pixels, g_clut
+ | Globals: g_have_game, g_release, g_serial, g_area, g_archive, g_archive_len,
+ |   g_pixels, g_clut
  | Params: obj -- the room's object number
  | Returns: 1 when a new picture was applied
  ----------------------*/

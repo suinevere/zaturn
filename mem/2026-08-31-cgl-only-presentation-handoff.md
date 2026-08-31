@@ -33,23 +33,28 @@ Answers given during the work that shaped it:
 
 ## Where the repo is
 
-`main` is at `e1329d8`, **9 commits ahead of `origin/main`, unpushed** -- the 5
-that were already local (see the previous handoff) plus these 4:
+`main` is at `2330860`, **13 commits ahead of `origin/main`, unpushed** -- the 5
+that were already local (see the previous handoff) plus the 8 code commits below
+and their 4 handoff commits. Read the commit messages for the what; this file
+only carries what is not in them.
 
 | Commit | What |
 |---|---|
-| `d9ebd67` | `/BG` injection: `tools/extract_bg.py`, `tools/assets/bg.bat`, two-map xorriso commit; `saturn/cd/data/BG/` deleted |
+| `d9ebd67` | `/BG` injection: `tools/extract_bg.py`, `tools/assets/bg.bat`, two-map xorriso commit |
 | `5788345` | `tools/gen_pool.py` -> `tools/assets/zork1_pool.json`, the picture/track catalogue and per-scene evidence |
 | `ade1818` | The category art system removed, engine and tools |
 | `e1329d8` | Presentation table extended to 31 games; `tools/pres_server.py` review app |
 | `ea3aae5` | Build fix: `pre_build` repointed off the deleted `make_tga.py` |
+| `91a7330` | **The owner's own**, mid-session: gitignore `saturn/cd/data/BG/*.CGL` |
 | `4bef44d` | CI fix: `bg.bat` now runs in the full-image workflow, gated by a disc-level check |
 | `4525154` | `bg.bat` mirrors into `saturn/cd/data/BG` so a local build can show room art |
 
-The `.CGL` tracking question the two earlier handoffs both flagged is **settled
-and reversed**: `saturn/cd/data/BG/` is gone, `tools/assets/BG/` is gitignored,
-and the archives are extracted per build. `analysis/zork_bg/raw/` still holds
-its own tracked copy -- that is the reverse-engineering record, untouched.
+The `.CGL` tracking question the two earlier handoffs both flagged is **settled**:
+nothing under `saturn/cd/data/BG/` is committed any more. The directory is
+present in a working tree and gitignored (`saturn/.gitignore:17`), filled by
+`bg.bat` per build -- see "the locally built ISO had no backgrounds either"
+below for why it exists at all. `analysis/zork_bg/raw/` still holds its own
+tracked copy; that is the reverse-engineering record, untouched.
 
 ## The pipeline now
 
@@ -277,19 +282,39 @@ ceiling as both previous handoffs.
 
 ## What a next session would do
 
-1. Build (`saturn/compile-cd.bat`) and run `tools/assets/update.bat`, then walk
-   Zork I on Mednafen. This is still the first time any of the presentation work
-   would be seen. Watch that `/BG` is actually on the disc and `room_art` opens
-   it -- the injection is proven at the ISO level but never proven against the
-   Saturn's own ISO9660 parser.
-2. Start assigning: `start_review_server.bat`, then `/reference` first to see
-   what the suggestions rest on. `Accept every strong suggestion` clears the
-   well-founded ones per game; the weak, analogue and unfounded ones are the
-   actual work. Run `python tools/gen_presentation.py` after, and rebuild.
-3. Decide the push (still 9 commits unpushed) and the two stale remote branches
-   from the previous handoff.
-4. Unchanged from before: the Mednafen breakpoint capture at `0x060A597C` for
+1. **Finish a build.** `saturn/compile-cd.bat` gets past `pre_build` and starts
+   compiling; the link was never reached here (sandbox, see above). This is the
+   first gate and everything below waits on it.
+2. **Walk Zork I on Mednafen.** Still the first time any of the presentation work
+   would be seen, across all three handoffs. `bg.bat` has already mirrored the
+   archives into `saturn/cd/data/BG`, so a plain `compile-cd.bat` ISO should show
+   room art without running the asset pipeline at all. Watch that `room_art`
+   actually opens `/BG/<STEM>.CGL` -- the injection is proven at the ISO level
+   and byte-verified, but never against the Saturn's own ISO9660 parser, which is
+   the parser that made `-rockridge off` necessary in the first place.
+3. **Run `tools/assets/update.bat` end to end at least once.** Every step of it
+   has been exercised except a real `music.bat` run against the shared cache that
+   `4bef44d` introduced -- `bg.bat` was only ever run here against a local
+   `ZORK_DISC`, so the download-and-share path has never actually downloaded.
+4. **Start assigning.** `start_review_server.bat`, and read `/reference` first --
+   it shows what every suggestion rests on. "Accept every strong suggestion"
+   clears the well-founded ones per game; the weak, analogue and unfounded ones
+   are the actual work. Then `python tools/gen_presentation.py` and rebuild.
+5. **Decide the push** -- 13 commits, and the three stale branches
+   (`zork1-authentic-presentation` local and remote,
+   `zork1-presentation-presquash`) the previous handoff wanted deleted.
+6. Unchanged from before: the Mednafen breakpoint capture at `0x060A597C` for
    the maze/river ordering and the seven unattributed tracks.
+
+## If the CI is run
+
+`full-image.yml` is `workflow_dispatch` only and was never run from here. Its new
+"Stage room backgrounds" and "Check the room backgrounds reached the disc" steps
+were verified locally against purpose-built discs, not on a runner. Two things
+worth watching on a first run: `bg.bat` there takes the download path rather than
+`ZORK_DISC` (which does not exist on a runner), and its sh half runs under a real
+Linux shell rather than git-bash, so the MSYS argument-mangling trap recorded
+above does not apply.
 
 ## Suggested skills
 
@@ -298,5 +323,10 @@ ceiling as both previous handoffs.
   here is compile-checked only.
 - **`diagnosing-bugs`** -- the two defects found this session were both "the
   signal never reaches the code", same as the last two. Start at the subscriber.
-- **`superpowers:finishing-a-development-branch`** -- for the still-unpushed 9
-  commits and the stale remotes.
+- **`superpowers:finishing-a-development-branch`** -- for the still-unpushed 13
+  commits and the three stale branches.
+- **`superpowers:verification-before-completion`** applies with unusual force to
+  the *pipeline* work specifically: three separate "wired it up" claims in this
+  session turned out to be wrong when actually executed (`pre_build`, the CI
+  workflow, the locally built ISO). Each was found by running the thing, never by
+  reading it. Run the build, run the pipeline, run the workflow.

@@ -438,18 +438,20 @@ static int pick_prefer_long(int cat) {
 
 /*----------------------
  | pick_dynamic_track
- | Description: Chooses a track for a target the room-scene lookup or the
- |   event scan named. An event still comes from its pool the way a room mood
- |   always did (pick_prefer_long). A scene with authored tracks draws the
- |   r-th set bit of its mask (music_track_from_mask); one with none authored
- |   -- the same as no scene at all, CAT_KIND_NONE -- falls back to the
- |   neutral pool.
+ | Description: Chooses a track for a target the room's authored presentation,
+ |   the room-scene lookup, or the event scan named. On CAT_KIND_ROOM the track
+ |   IS the category, so there is nothing to pick -- it is returned unchanged.
+ |   An event still comes from its pool the way a room mood always did
+ |   (pick_prefer_long). A scene with authored tracks draws the r-th set bit of
+ |   its mask (music_track_from_mask); one with none authored -- the same as no
+ |   scene at all, CAT_KIND_NONE -- falls back to the neutral pool.
  | Author: suinevere
  | Dependencies: scene/scene_map.h (scene_track_mask), music_track_from_mask,
  |   pick_prefer_long
  | Globals: g_game_idx (read)
- | Params: kind -- CAT_KIND_SCENE, CAT_KIND_EVENT, or CAT_KIND_NONE; cat --
- |   the SC_* or EV_* value, meaningless when kind is CAT_KIND_NONE
+ | Params: kind -- CAT_KIND_ROOM, CAT_KIND_SCENE, CAT_KIND_EVENT, or
+ |   CAT_KIND_NONE; cat -- the track number, SC_*, or EV_* value depending on
+ |   kind, meaningless when kind is CAT_KIND_NONE
  | Returns: a track number
  ----------------------*/
 static int pick_dynamic_track(int kind, int cat) {
@@ -786,17 +788,22 @@ void music_start_menu(void) {
  |   ignores is_playing() until the just-issued track has actually started (this
  |   clears the CD seek window that would otherwise read as loop-end). On a real
  |   loop-end it advances Sequential (wrapping at MUSIC_TRACK_MAX), re-rolls
- |   Random, and for Dynamic either replays the same track for another pass or, once
- |   it has had MUSIC_DYN_LOOPS of them, cycles to another track in the category it
- |   is already in -- the player has heard that one enough by then, whether or not
- |   the mood has moved. pick_dynamic_track steers off the current track where the
- |   source allows, so the cycle is audible. This runs wherever music_tick does, so
- |   the passes keep counting in the in-game menus as well as at the prompt.
- |   Override repeats on its own, so there is nothing to do.
+ |   Random, and for Dynamic: a danger/triumph sting sounding over a room with its
+ |   own authored track (g_base_kind == CAT_KIND_ROOM) returns to that room's track
+ |   rather than picking again inside the event pool -- except the win jingle
+ |   (EV_WIN), which is excluded from that return because the victory screen holds
+ |   it on screen and the game never resumes to the room. Otherwise it either
+ |   replays the same track for another pass or, once it has had MUSIC_DYN_LOOPS of
+ |   them, cycles to another track in the category it is already in -- the player
+ |   has heard that one enough by then, whether or not the mood has moved.
+ |   pick_dynamic_track steers off the current track where the source allows, so
+ |   the cycle is audible. This runs wherever music_tick does, so the passes keep
+ |   counting in the in-game menus as well as at the prompt. Override repeats on
+ |   its own, so there is nothing to do.
  | Author: suinevere
  | Dependencies: N/A (plays via g_play, reads g_isplaying)
  | Globals: g_pending_*, g_await_play, g_active_track, g_active_kind, g_active_cat,
- |   g_dyn_pass, g_seq_track, g_mix_mode
+ |   g_base_kind, g_base_cat, g_event_cat, g_dyn_pass, g_seq_track, g_mix_mode
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -848,7 +855,10 @@ void music_tick(void) {
             g_await_play = 1;
             if (g_play) g_play(g_override_track, 1);
         } else if (g_mix_mode == MIX_DYNAMIC) {
-            if (g_active_kind == CAT_KIND_EVENT && g_base_kind == CAT_KIND_ROOM) {
+            // Winning holds the win jingle on its own pass loop, never the room's
+            // track: the victory screen is still up, and the game does not resume.
+            if (g_active_kind == CAT_KIND_EVENT && g_base_kind == CAT_KIND_ROOM
+                && g_active_cat != EV_WIN) {
                 g_event_cat = -1;
                 g_active_kind = CAT_KIND_ROOM;
                 g_active_cat = g_base_cat;
@@ -903,24 +913,27 @@ void music_note_output(const char* str, unsigned int len) {
  | music_on_turn
  | Description: The Dynamic-mode decision made once per turn (a no-op that just
  |   clears the buffer in other modes). obj is the room's Z-machine object number:
- |   scene_of_room looks up its authored scene directly, so there is no
- |   classification left to memoize. event_scan's result overrides the room's
- |   scene for the rest of the room's stay, same as before, but is kept in its own
- |   slot (g_event_cat) rather than folded into g_base_cat -- an SC_* and an EV_*
- |   value are different vocabularies that both start at 0.
+ |   pres_of_room is tried first, and its track becomes the category directly
+ |   (CAT_KIND_ROOM, recorded in g_base_kind) -- only a room with no presentation
+ |   entry falls back to scene_of_room's authored scene (CAT_KIND_SCENE). Either
+ |   way there is no classification left to memoize. event_scan's result overrides
+ |   the room's own category for the rest of the room's stay, same as before, but
+ |   is kept in its own slot (g_event_cat) rather than folded into g_base_cat -- an
+ |   SC_* value, an EV_* value, and a track number are three vocabularies that all
+ |   start at 0.
  |
- |   scene_of_room returning -1 means "this room has no authored scene"; per its
- |   contract that is "hold whatever is showing", so with no event either the turn
- |   changes nothing at all rather than falling back to a category. If the target
- |   already sounds it keeps the stream; on the very first switch it plays
- |   immediately; otherwise it arms a debounced pending switch (restarting the
- |   countdown when the target changes), so brief passes through a room do not
- |   thrash the music.
+ |   Neither lookup finding the room means "hold whatever is showing", so with no
+ |   event either the turn changes nothing at all rather than falling back to a
+ |   category. If the target already sounds it keeps the stream; on the very first
+ |   switch it plays immediately; otherwise it arms a debounced pending switch
+ |   (restarting the countdown when the target changes), so brief passes through a
+ |   room do not thrash the music.
  | Author: suinevere
- | Dependencies: scene/scene_map.h (scene_of_room), event_scan.h (event_scan)
+ | Dependencies: scene/presentation.h (pres_of_room), scene/scene_map.h
+ |   (scene_of_room), event_scan.h (event_scan)
  | Globals: g_mix_mode, g_turn_text, g_cur_room, g_have_room, g_base_cat,
- |   g_event_cat, g_active_kind, g_active_cat, g_active_track, g_pending_*,
- |   g_same_cat_rooms
+ |   g_base_kind, g_event_cat, g_active_kind, g_active_cat, g_active_track,
+ |   g_pending_*, g_same_cat_rooms
  | Params: obj -- the current room's Z-machine object number
  | Returns: N/A
  ----------------------*/

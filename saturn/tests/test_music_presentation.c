@@ -17,6 +17,7 @@ static int g_issued[64];
 static int g_issued_n = 0;
 static unsigned int g_last_room = 0;
 static int g_room_calls = 0;
+static int g_playing = 1;
 
 static void check(int cond, const char *what) {
     if (!cond) { printf("FAIL %s\n", what); fails++; }
@@ -28,17 +29,26 @@ static void play_stub(int track, int loop) {
 }
 
 static void room_stub(unsigned int obj) { g_last_room = obj; g_room_calls++; }
+static int isplaying_stub(void) { return g_playing; }
 
 static void settle(void) {
     int i;
     for (i = 0; i < 8; i++) music_tick();
 }
 
+static void finish_track(void) {
+    g_playing = 1; music_tick();
+    g_playing = 0; music_tick();
+    g_playing = 1;
+}
+
 static void reset_all(void) {
     music_set_backend(play_stub);
     music_set_room_fn(room_stub);
+    music_set_isplaying(isplaying_stub);
     music_reset();
     g_issued_n = 0; g_room_calls = 0;
+    g_playing = 1;
     music_set_debounce_frames(0);
     music_set_mix(MIX_DYNAMIC, 0);
     music_set_game(88, "840726");
@@ -102,6 +112,30 @@ int main(void) {
     music_on_turn(a);
     settle();
     check(g_room_calls >= 1, "a story with no table still announces rooms");
+
+    reset_all();
+    music_on_turn(a);
+    settle();
+    music_note_output("**** You have died ****", 23);
+    music_on_turn(a);
+    settle();
+    check(g_issued_n == 2, "the death banner takes over the track");
+    finish_track();
+    check(g_issued_n == 3 && g_issued[2] == (int) a_track,
+          "a death sting, once it ends, resumes the room's own authored track");
+
+    reset_all();
+    music_on_turn(a);
+    settle();
+    int before_win = g_issued_n;
+    music_on_win();
+    check(g_issued_n == before_win + 1, "winning issues the win jingle");
+    int win_track = g_issued[g_issued_n - 1];
+    finish_track();
+    check(g_issued[g_issued_n - 1] == win_track,
+          "the win jingle, once its pass ends, is not replaced by the room's track");
+    check(g_issued[g_issued_n - 1] != (int) a_track,
+          "specifically: winning never falls back to playing the room's own track");
 
     printf(fails ? "%d FAILED\n" : "ok\n", fails);
     return fails ? 1 : 0;

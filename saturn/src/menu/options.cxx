@@ -137,39 +137,22 @@ void text_set_color(unsigned short rgb555, unsigned short bg555) {
  | Params: N/A
  | Returns: true if applied; false if a load failed and the fallback was
  |   installed
- |   Under NETBIN the image branch is compiled out entirely -- that build links
- |   no title.cxx and scans no TGA directory, so g_display.image is never set
- |   and the solid back-colour path is the only reachable one.
+ |   Under NETBIN the picture branch is compiled out entirely -- that build
+ |   links no title.cxx and reads no disc, so there is no room art to show and
+ |   the solid back-colour path is the only reachable one.
  ----------------------*/
 bool display_apply(void) {
     text_set_color(display_text_rgb(g_display.text), display_bg_rgb(g_display.bg));
     SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
 #ifndef NETBIN
     title_bg_dim_set(display_dim_offset(g_display.dim));
-    if (display_is_image(&g_display)) {
-        if (!title_bg_show(display_image_file(g_display.image))) {
-            int p = g_display.palette;
-            // Colour presets run 1..DISP_PRESET_N since Dynamic took index 0, so a
-            // failed picture falls back one further along than it used to.
-            if (p > DISP_PRESET_N || p < DISP_PAL_PRESET0) p = 13;   // IBM PC (MDA)
-            g_display.palette = p;
-            g_display.bg      = display_preset_bg(p);
-            g_display.text    = display_preset_text(p);
-            g_display.image   = DISP_IMAGE_NONE;
-            text_set_color(display_text_rgb(g_display.text), display_bg_rgb(g_display.bg));
-            title_bg_hide();
-            SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
-            return false;
-        }
-    } else if (g_display.palette == DISP_PAL_DYNAMIC && room_art_available()) {
-        // Dynamic on an authored game has no slot to resolve to (the loaded
-        // file is an area stem, not a disc image name), so the branch above
-        // cannot reach it: room_art owns NBG0 here. Redraw rather than merely
-        // leave it alone -- this is the path the Palette row takes when it
-        // lands on Dynamic, and the room subscriber fires only on a room
-        // change, so otherwise the picture would not appear until the player
-        // walked somewhere. Free when it is already up: room_art_show
-        // short-circuits to a bare ScrollEnable.
+    if (g_display.palette == DISP_PAL_DYNAMIC && room_art_available()) {
+        // The only picture route there is. Redraw rather than merely leave it
+        // alone -- this is the path the Palette row takes when it lands on
+        // Dynamic, and the room subscriber fires only on a room change, so
+        // otherwise the picture would not appear until the player walked
+        // somewhere. Free when it is already up: room_art_show short-circuits
+        // to a bare ScrollEnable.
         room_art_reshow();
     } else {
         title_bg_hide();

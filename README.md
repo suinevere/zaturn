@@ -264,58 +264,69 @@ Microsoft has open-sourced, while the rest are included as-is from the catalog.
 
 ---
 
-## 6. Adding a background image
+## 6. Room backgrounds and music
 
-Backgrounds are reached through the room's **scene** (`scene_vocab.SCENES`, e.g.
-`FOREST`, `CAVE`, `PARLOR`), not picked one by one. A room's scene is authored per
-game — `tools/assets/scenes/<STEM>.json`, keyed by object number — not scored from
-its text; a room named nothing keeps the picture already showing rather than
-cutting to an arbitrary one. The Display Options **Palette** row offers `Dynamic`
-plus the colour presets; which picture Dynamic shows is decided by the scene the
-current room resolves to. The `*.TGA` files in `saturn/cd/data/TGA/` are generated
-from the PNGs in `tools/assets/png/` on every build — you do not create them by
-hand.
+Every picture and every music track on this disc comes from **one place**: the
+original Japanese Saturn release of Zork I. Its eleven area archives hold 74
+room backgrounds, and its CD-DA layout holds 31 tracks. Nothing is downloaded,
+generated, or picked at random, and there is no per-game artwork to author.
 
-1. Save your artwork as a **320x224** PNG (JPEG works too) under
-   `tools/assets/png/<GAME>/<SCENE>/`, e.g. `tools/assets/png/ZORK1/CAVE/`. The
-   game folder is the story's stem (`ZORK1`, `DEADLINE`, ...); the scene folder is
-   one of `scene_vocab.SCENES`. Any filename works — `make_tga.py` assigns disc
-   names itself.
-2. Run `python tools/make_tga.py` to convert. It walks every game's scenes in
-   `scene_vocab.SCENES` order, writes `saturn/cd/data/TGA/<GAME>/01.TGA..NN.TGA`,
-   and regenerates `game_scenes.inc` (`GAME_DIR` / `GAME_SCENE`) so `display.c`
-   knows how many pictures each scene has and where they start.
-3. Rebuild: `cd saturn && ./compile.bat debug`.
+**The pictures never become TGAs.** They stay in the disc's own compressed CGL
+format, are injected into `/BG` after the build, and are decompressed on the
+Saturn one frame at a time. `room_art.cxx` holds one area archive resident in
+Low Work RAM, so walking around inside an area touches no disc at all.
 
-`tools/tests/test_make_tga.py` and `tools/tests/test_gen_scene_tables.py` are the
-guard: they check the scene walk order, that a game folder or scene folder that
-does not match a known stem or `scene_vocab.SCENES` entry is reported and
-skipped rather than silently mis-filed, and that a scene's recorded count never
-names a picture the disc lacks.
+### How the archives get onto the disc
 
-A scene with **no** pictures at all means "hold whatever is showing" rather than
-"art missing" — `display_scene_image` returns nothing for an empty scene, and the
-caller leaves the current wallpaper alone instead of cutting to a blank one.
+`tools/assets/bg.bat` lifts the eleven `B*.CGL` archives out of the data track of
+the original Zork I (Japan) disc and stages them in `tools/assets/BG/`.
+`games.bat` then maps that directory to `/BG` in the same `xorriso` commit that
+places the Z3 stories, and `music.bat` promotes the result to Track 01.
 
-> **At most 99 pictures convert per game**, across all of that game's scenes
-> combined, not per scene — `convert_game_tree` stops there and reports anything
-> past it rather than silently dropping it. How many pictures are held in RAM at
-> once is a separate and much smaller number, `TGA_CACHE_SLOTS` in
-> `saturn/src/video/title.cxx`.
+The source disc is the one `AUDIO_URL` in `CONFIG.ME` already names — the same
+download `music.bat` uses for the CD audio, whose data track it discards. Set
+`ZORK_DISC` to a local copy to skip the download entirely. Nothing copyrighted
+is committed: `tools/assets/BG/` is gitignored, exactly like the Z3 stories.
 
-The size limit is enforced, not advisory: the converter skips anything that is
-not exactly 320x224 rather than guessing at a crop, and reports it rather than
-failing the build. Disc names are still ISO9660 8.3 (the build passes
-`--norock`), but `make_tga.py` assigns them, not the source filename.
+Each archive is verified by size and SHA-256 against `BG_MANIFEST` in
+`tools/extract_bg.py` before it is staged. That check is load-bearing rather
+than defensive — `game_presentation.inc` records a byte offset and length per
+frame, measured against those exact bytes, so a different disc revision would
+not fail to open, it would decompress from the wrong offset and show garbage.
 
-Do not commit the generated `saturn/cd/data/TGA/*.TGA` — `saturn/.gitignore`
-excludes them, and at ~72 KB each the 37 shipped backgrounds would put 2.6 MB of
-regenerable binary in every art change. The PNG is the source of record.
+### Which picture and which track a room gets
 
-Conversion is handled by `tools/make_tga.py`, which quantizes to 255 colors and
-reserves palette index 0 (VDP2 renders index 0 as transparent) and emits 8bpp
-paletted output (an RGB555 bitmap would span two VRAM banks and render as
-static). Run `python tools/tests/test_make_tga.py` to exercise it directly.
+A per-room table, `saturn/src/scene/game_presentation.inc`, maps
+`(release, serial, object number)` to a picture index and a CD-DA track. Zork I's
+110 rooms are **measured** from the original disc's own presentation table by
+`tools/gen_presentation.py` and are not anyone's to edit. Every other game's
+rooms are **assigned** by hand through the review app, which suggests values
+from what Zork I did with comparable rooms.
+
+The Display Options **Palette** row offers `Dynamic` plus the colour presets;
+`Dynamic` is the only entry that shows a picture, and it shows the room's own.
+A room with no entry keeps the picture already showing rather than cutting to a
+blank one, and a room whose track is 0 is silent on purpose.
+
+### The retired category system
+
+Backgrounds used to be reached through a room's **scene** (`FOREST`, `CAVE`,
+`PARLOR`, ...), with pictures fetched from the web per category, converted to
+TGA, and rotated at random within a scene. All of it is gone: the fetchers, the
+two review servers, `make_tga.py`, `scene_map.c`, and the `GAME_DIR` /
+`GAME_SCENE` tables. It shipped no pictures — every scene's count was zero and
+every scene's track mask was zero — so removing it changed nothing on screen.
+
+Two pieces survive, as **inference inputs only**, never as runtime pickers:
+`tools/scene_vocab.py` (the 32-scene vocabulary and its ordered title rules) and
+`tools/assets/scenes/<STEM>.json` (1,021 hand- and rule-tagged rooms). The
+review app reads both to suggest a picture and a track for a room; a human
+decides.
+
+`tools/gen_title_art.py` is what is left of `make_tga.py`. It converts
+`tools/assets/png/TITLE/*.png` into the title screen's own wallpaper and writes
+`title_art.inc`. It is the only remaining TGA producer, and the boot splash
+(`SUINE.TGA`) is the only other TGA on the disc.
 
 ---
 

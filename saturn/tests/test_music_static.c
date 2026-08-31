@@ -1,13 +1,11 @@
 /*----------------------
  | test_music_static.c
- | Description: Static room music, and the two endings. Stubs the scene map
- |   rather than linking it, because the whole point is to control what
- |   scene_track_mask answers: the shipped table is all zeros until someone
- |   authors tracks.json, and a test that waited for that would assert
- |   nothing. Stubs pres_of_room the same way, always answering "unauthored",
- |   for the same reason music.c now calls into it too: linking the real
- |   presentation.c would let Zork I's own authored table answer for these
- |   rooms instead of this file's g_scene/g_mask controls.
+ | Description: Static room music, and the two endings. Stubs pres_of_room
+ |   rather than linking presentation.c, because the whole point is to control
+ |   what the room table answers: linking the real one would let Zork I's own
+ |   authored table answer for these object numbers instead of this file's
+ |   g_room_track control, and the cases below would then be asserting Zork I's
+ |   table rather than the engine.
  |   gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/tmt \
  |       saturn/tests/test_music_static.c saturn/src/sound/music.c \
  |       saturn/src/sound/music_data.c saturn/src/sound/event_scan.c && /tmp/tmt
@@ -28,19 +26,21 @@ static int g_track = 0, g_plays = 0;
 static void rec_play(int track, int loop) { (void) loop; g_track = track; g_plays++; }
 static int isplaying_true(void) { return 1; }
 
-/* The mask every room lookup answers with, set per case. */
-static unsigned long g_mask = 0UL;
-static int g_scene = 0;
+/*----------------------
+ | g_room_track / pres_of_room
+ | Description: The track the authored table answers with for every room, set
+ |   per case. Zero means the story has no authored entry at all, which the
+ |   engine reads as "no category" and answers from the neutral pool -- so one
+ |   control covers both the authored and the unauthored case.
+ | Author: suinevere
+ ----------------------*/
+static unsigned char g_room_track = 0;
 
-unsigned long scene_track_mask(int scene) { (void) scene; return g_mask; }
-int scene_of_room(unsigned short release, const char *serial, unsigned int obj) {
-    (void) release; (void) serial; (void) obj; return g_scene;
-}
-int scene_game_index(unsigned short release, const char *serial) {
-    (void) release; (void) serial; return 0;
-}
 int pres_of_room(unsigned int release, const char *serial, unsigned int obj, Presentation *out) {
-    (void) release; (void) serial; (void) obj; (void) out; return 0;
+    (void) release; (void) serial; (void) obj;
+    if (g_room_track == 0) return 0;
+    out->image = 1; out->track = g_room_track; out->se_bank = 0;
+    return 1;
 }
 
 /*----------------------
@@ -70,14 +70,14 @@ static void arm(void) {
 }
 
 int main(void) {
-    /* One authored track is static music: the draw has nothing to choose
-       between, so the same room scene always sounds the same. */
+    /* An authored room's track IS its category, so the engine has nothing to
+       choose between and the room always sounds the same. */
     {
-        g_scene = 7; g_mask = 1UL << (23 - MUSIC_TRACK_MIN);
+        g_room_track = 23;
         arm();
         music_on_turn(100);
         settle();
-        check(g_track == 23, "a one-track scene plays that track");
+        check(g_track == 23, "an authored room plays its own track");
 
         int before = g_plays;
         music_on_turn(101);
@@ -90,39 +90,33 @@ int main(void) {
         settle();
         check(g_track == 23, "and keeps playing it across four more rooms");
         check(g_plays == before,
-              "with no restart: rotating to the track already sounding would "
-              "fade out and begin it again every third room");
+              "with no restart: rooms that share a track share a category, and "
+              "re-issuing it would fade out and begin it again on every step");
     }
 
-    /* Several authored tracks still rotate -- the guard must not freeze a
-       scene that has somewhere to go. */
+    /* Walking into a room the table gives a different track must swing the
+       music. The static case above must not have frozen it. */
     {
-        g_scene = 7;
-        g_mask = (1UL << (18 - MUSIC_TRACK_MIN)) | (1UL << (19 - MUSIC_TRACK_MIN))
-               | (1UL << (20 - MUSIC_TRACK_MIN));
+        g_room_track = 18;
         arm();
         music_on_turn(100);
         settle();
-        int first = g_track;
-        check(first == 18 || first == 19 || first == 20,
-              "a multi-track scene draws from its own mask");
+        check(g_track == 18, "the first room's authored track");
 
-        int moved = 0, i;
-        for (i = 0; i < 8 && !moved; i++) {
-            music_on_turn((unsigned int)(200 + i));
-            settle();
-            if (g_track != first) moved = 1;
-        }
-        check(moved, "and does rotate once it has walked far enough");
+        g_room_track = 20;
+        music_on_turn(101);
+        settle();
+        check(g_track == 20, "and a room with a different track swings to it");
     }
 
-    /* An unauthored scene falls back to the neutral pool rather than silence. */
+    /* A room with no authored entry falls back to the neutral pool rather than
+       to silence. */
     {
-        g_scene = 7; g_mask = 0UL;
+        g_room_track = 0;
         arm();
         music_on_turn(100);
         settle();
-        check(g_track >= MUSIC_TRACK_MIN, "an unauthored scene still plays something");
+        check(g_track >= MUSIC_TRACK_MIN, "an unauthored room still plays something");
     }
 
     /* Losing is the death routine's banner, and nothing else. */
@@ -145,9 +139,9 @@ int main(void) {
         check(event_scan(0) == EV_NONE, "a null pointer is not an ending");
     }
 
-    /* The death banner takes the mix away from the room's scene. */
+    /* The death banner takes the music away from the room's own track. */
     {
-        g_scene = 7; g_mask = 1UL << (23 - MUSIC_TRACK_MIN);
+        g_room_track = 23;
         arm();
         music_on_turn(100);
         settle();
@@ -161,7 +155,7 @@ int main(void) {
     /* Winning arrives from the interpreter, not from the text, and does not
        wait for a settle: there is no next room to walk to. */
     {
-        g_scene = 7; g_mask = 1UL << (23 - MUSIC_TRACK_MIN);
+        g_room_track = 23;
         arm();
         music_on_turn(100);
         settle();

@@ -8,10 +8,10 @@
  |   rule holds in the menus and in Sound Options too, not only at the prompt.
  |
  |   The category argument music_track_pool and music_category_track take
- |   is a scene's music category (scene/scene_map.h) rather than anything this
- |   header defines; music.h stopped owning that vocabulary once room mood
- |   moved from a text classifier to authored scenes. The display subscribes
- |   to category changes via music_set_category_fn rather than re-deriving the
+ |   is a pool index rather than anything this header defines; music.h stopped
+ |   owning that vocabulary once room mood moved from a text classifier to the
+ |   story's own authored per-room table. The display subscribes
+ |   to room changes via music_set_room_fn rather than re-deriving the
  |   mood on its own clock, so a picture cannot end up describing a mood the
  |   music has already left.
  | Author: suinevere
@@ -121,8 +121,7 @@ void music_on_win(void);
 
 /*----------------------
  | music_track_from_mask
- | Description: The r-th set bit of a scene's track mask (scene/scene_map.h's
- |   scene_track_mask), as a CD-DA track number. r is reduced modulo the
+ | Description: The r-th set bit of a pool mask, as a CD-DA track number. r is reduced modulo the
  |   number of set bits, so any value is legal and an empty mask answers 0
  |   rather than dividing by zero.
  | Author: suinevere
@@ -170,8 +169,6 @@ void music_set_isshort(int (*fn)(int track));          /* backend: 1 = track pla
 void music_set_pausefns(void (*pause_fn)(void), void (*resume_fn)(void));
 void music_set_duckfns(void (*duck_fn)(void), void (*unduck_fn)(void));
 void music_set_debounce_frames(int n);                 /* room-switch debounce length */
-void music_set_category_fn(void (*fn)(int cat));       /* announce the active SCENE only; events are silent */
-void music_set_rotate_fn(void (*fn)(int cat));         /* ...and same-scene rotations; also scene-only */
 
 /*----------------------
  | music_set_room_fn

@@ -672,7 +672,7 @@ static void controls_dispatch(void) {
  |   Ok and Cancel. Lifted from menu_pages.cxx minus everything that serves the
  |   Dynamic palette -- the pin/unpin of the wallpaper's image slot, and the
  |   Dimming row, which only ever appeared under Dynamic because it offsets a
- |   picture. Dynamic is unreachable in this build anyway (display_image_count()
+ |   picture. Dynamic is unreachable in this build anyway (display_has_art()
  |   is 0 with no game selected, so display_cycle_palette already steps past it,
  |   and display_apply's image branch is #ifndef NETBIN), but dropping the calls
  |   rather than relying on that is what keeps title.cxx out of the link.

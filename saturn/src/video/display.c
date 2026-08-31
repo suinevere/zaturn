@@ -7,10 +7,8 @@
  |   loads the actual images and applies colors to VDP2.
  | Author: suinevere
  | Dependencies: display.h (DISP_* constants, DisplayState, DISP_RGB555),
- |   scene/scene_map.h (SC_*, SCENE_N, GAME_N)
  ----------------------*/
 #include "display.h"
-#include "scene/scene_map.h"   /* SC_* / SCENE_N / GAME_N: the scenes the art follows */
 #include <string.h>        /* strcmp: parsing "GAMEDIR/NN.TGA" back to a slot */
 
 /*----------------------
@@ -210,45 +208,6 @@ const char *display_text_name(int index) {
 }
 
 /*----------------------
- | GameScene / GAME_DIR / GAME_SCENE / g_game
- | Description: Every game gets its own flat disc folder now, rather than
- |   games sharing mood folders -- GAME_DIR is that folder name (the story
- |   stem, already 8.3-safe), and GAME_SCENE[game][scene] is where a scene's
- |   pictures sit inside that game's own 1..99 index range: base is 0-based,
- |   so the nth picture of a scene is index base + n + 1. g_game is the
- |   running game's row into both tables, or negative when no game is
- |   selected -- see display_set_game.
- |
- |   A folder per scene was not possible: g_file_buf is exactly
- |   "UNDRGRND/99.TGA" and the ISO 8.3 rule caps a stem at eight characters,
- |   so a suffixed name overflows both that buffer and the save blob's frozen
- |   name field. "STARCROS/99.TGA" is the same 15 characters, so this stays a
- |   rename rather than a restructuring.
- | Author: suinevere
- ----------------------*/
-typedef struct { unsigned char base, count; } GameScene;
-static int g_game = -1;
-
-#include "scene/game_scenes.inc"
-
-#define SLOT_STRIDE 100
-
-/*----------------------
- | g_scene_rot
- | Description: Where each scene's pool is currently pointing, as a 0-based
- |   offset within that scene's own range (0..count-1), not an absolute
- |   index into the game's folder -- display_image_file adds the scene's
- |   base separately. Rotation is round-robin rather than random so a pool of
- |   two cannot hand back what is already showing, which is the whole ask;
- |   it also means leaving a scene and returning to it later resumes at a
- |   different picture instead of always opening on the same one. Re-seated
- |   whenever display_set_game changes the running game, since a rotor left
- |   over from a different game's scene ranges means nothing here.
- | Author: suinevere
- ----------------------*/
-static unsigned char g_scene_rot[SCENE_N];
-
-/*----------------------
  | g_authored_art
  | Description: Whether the running game carries authored per-room art. Held as
  |   a plain flag rather than derived, because the table that answers it lives
@@ -257,36 +216,9 @@ static unsigned char g_scene_rot[SCENE_N];
  | Author: suinevere
  ----------------------*/
 static int g_authored_art = 0;
-
-/*----------------------
- | display_set_game
- | Description: See display.h. Re-seats every scene's rotor to its range's
- |   start on an actual change, because a rotor left over from a different
- |   game validates against that game's own GAME_SCENE row at best by
- |   coincidence and would otherwise surface the wrong game's picture,
- |   silently. A no-op when game_index already names the current game, so a
- |   caller that calls this ahead of every room change does not reset an
- |   in-progress rotation. Any index outside 0..GAME_N-1, including every negative one,
- |   normalizes to "no game selected" -- the one answer every later scene
- |   accessor treats as "nothing."
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_game, g_scene_rot
- | Params: game_index -- a row from scene_game_index, or any value for "none"
- | Returns: N/A
- ----------------------*/
-void display_set_game(int game_index) {
-    int scene;
-    if (game_index < 0 || game_index >= GAME_N) game_index = -1;
-    g_authored_art = 0;
-    if (game_index == g_game) return;
-    g_game = game_index;
-    for (scene = 0; scene < SCENE_N; scene++) g_scene_rot[scene] = 0;
-}
-
 /*----------------------
  | display_set_authored
- | Description: See display.h. Set after display_set_game, which clears it.
+ | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_authored_art
@@ -307,44 +239,19 @@ void display_set_authored(int has_authored) {
  | Returns: non-zero when the running game can show a picture by either route
  ----------------------*/
 int display_has_art(void) {
-    return g_authored_art || display_image_count() > 0;
+    return g_authored_art;
 }
-
 /*----------------------
- | display_next_in_band
+ | display_dynamic_slot
  | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: N/A
- | Params: cur -- the current absolute 0-based index; base -- the band's base;
- |   count -- the band's width
- | Returns: the next absolute index inside the band, wrapping; cur unchanged
- |   if count <= 0; snapped to base if cur falls outside the band
+ | Globals: (via display_has_art)
+ | Params: N/A
+ | Returns: DISP_IMAGE_ROOM when this game has art, DISP_IMAGE_NONE otherwise
  ----------------------*/
-int display_next_in_band(int cur, int base, int count) {
-    int off;
-    if (count <= 0) return cur;
-    off = cur - base;
-    if (off < 0 || off >= count) return base;
-    return base + ((off + 1) % count);
-}
-
-/*----------------------
- | display_slot_make
- | Description: See display.h.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_game, GAME_SCENE
- | Params: scene -- an SC_* scene; index -- 1-based, 1..the scene's count in
- |   the running game
- | Returns: the slot, or DISP_IMAGE_NONE when no game is selected, or the
- |   scene or index is out of range
- ----------------------*/
-int display_slot_make(int scene, int index) {
-    if (g_game < 0) return DISP_IMAGE_NONE;
-    if (scene < 0 || scene >= SCENE_N) return DISP_IMAGE_NONE;
-    if (index < 1 || index > (int) GAME_SCENE[g_game][scene].count) return DISP_IMAGE_NONE;
-    return scene * SLOT_STRIDE + index;
+int display_dynamic_slot(void) {
+    return display_has_art() ? DISP_IMAGE_ROOM : DISP_IMAGE_NONE;
 }
 
 /*----------------------
@@ -352,124 +259,52 @@ int display_slot_make(int scene, int index) {
  | Description: See display.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_game (via display_slot_make)
- | Params: slot -- a slot, or DISP_IMAGE_NONE
- | Returns: 1 when the slot names a picture the running game carries, else 0
+ | Globals: N/A
+ | Params: slot -- an image value
+ | Returns: 1 when slot names a picture this disc can show
  ----------------------*/
 int display_slot_valid(int slot) {
-    if (slot < 0 || g_game < 0) return 0;
-    return display_slot_make(slot / SLOT_STRIDE, slot % SLOT_STRIDE) == slot;
+    return slot == DISP_IMAGE_ROOM && display_has_art();
 }
 
-static int image_slot_of(const char *name);   /* defined with the save-blob helpers */
-
 /*----------------------
- | g_dyn_slot
- | Description: The image slot the Dynamic palette is currently showing.
- | Author: suinevere
- ----------------------*/
-static int g_dyn_slot = DISP_IMAGE_NONE;
-
-/*----------------------
- | g_dyn_pin
- | Description: While set, the slot display_dynamic_slot hands back instead of
- |   g_dyn_slot. See display_pin_dynamic_slot.
- | Author: suinevere
- ----------------------*/
-static int g_dyn_pin = DISP_IMAGE_NONE;
-
-/*----------------------
- | display_set_dynamic_category
+ | display_preset_image
  | Description: See display.h.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_dyn_slot
- | Params: cat -- the SC_* scene to resolve
- | Returns: N/A
- ----------------------*/
-void display_set_dynamic_category(int cat) {
-    const char *file = display_scene_image(cat);
-    int slot;
-    if (!file) return;                 /* no art for this scene: hold what is showing */
-    slot = image_slot_of(file);
-    if (slot >= 0) g_dyn_slot = slot;  /* absent from this game's folder: likewise hold */
-}
-
-/*----------------------
- | display_dynamic_slot
- | Description: See display.h.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_dyn_slot, g_dyn_pin
- | Params: N/A
- | Returns: the Dynamic palette's image slot, or DISP_IMAGE_NONE
- ----------------------*/
-int display_dynamic_slot(void) {
-    if (display_slot_valid(g_dyn_pin)) return g_dyn_pin;
-    if (display_slot_valid(g_dyn_slot)) return g_dyn_slot;
-    return DISP_IMAGE_NONE;
-}
-
-/*----------------------
- | g_dyn_pin / display_pin_dynamic_slot
- | Description: An override that makes Dynamic resolve to one fixed slot while it
- |   is set, without disturbing g_dyn_slot -- so the mood the engine is tracking
- |   is still there, unchanged, when the pin comes off.
- |
- |   For screens that must not move the CD head. Resolving Dynamic normally can
- |   name a picture that is neither uploaded nor cached, and loading it reads the
- |   disc, which stops CD-DA mid-track. Pinning to the picture already on NBG0
- |   makes every display_apply() on that screen a short-circuit in title_bg_show.
- |   The Display options page is the caller: it is the one page under Options that
- |   applies a wallpaper, and this is what lets the menu track keep playing
- |   through it.
- |
- |   DISP_IMAGE_NONE, or any slot this disc does not carry, clears the pin.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_dyn_pin
- | Params: slot -- the slot to hold Dynamic at, or DISP_IMAGE_NONE to release
- | Returns: N/A
- ----------------------*/
-void display_pin_dynamic_slot(int slot) {
-    g_dyn_pin = display_slot_valid(slot) ? slot : DISP_IMAGE_NONE;
-}
-
-/*----------------------
- | display_image_slot
- | Description: The slot holding `name`, or DISP_IMAGE_NONE if this disc does not
- |   carry it. The public face of image_slot_of, for callers that hold a filename
- |   and need the slot the DisplayState stores.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: name -- the image filename; "" and NULL both miss
- | Returns: the slot index, or DISP_IMAGE_NONE
+ | Params: index -- a palette index
+ | Returns: the image value that palette entry implies
  ----------------------*/
-int display_image_slot(const char *name) {
-    int slot;
-    if (!name) return DISP_IMAGE_NONE;
-    slot = image_slot_of(name);
-    return (slot >= 0) ? slot : DISP_IMAGE_NONE;
+int display_preset_image(int index) {
+    return index == DISP_PAL_DYNAMIC ? display_dynamic_slot() : DISP_IMAGE_NONE;
 }
 
 /*----------------------
- | display_image_count
- | Description: See display.h. Only ever compared against zero now -- the slot
- |   space is sparse, so this is not an upper bound and display_slot_valid is what
- |   answers "is this slot real". 0 when no game is selected.
+ | image_slot_of
+ | Description: Resolves a picture name saved in an options blob back to an
+ |   image value. Always refuses now, and deliberately still exists.
+ |
+ |   Only the retired scene-art pipeline ever wrote a name here -- paths like
+ |   "UNDRGRND/99.TGA" naming one of a game's downloaded pictures. Those
+ |   pictures are gone, so no saved name can be honoured. Refusing is not a
+ |   failure mode the decoder has to learn: it already treats an unresolvable
+ |   name as "not verbatim" and falls back to Dynamic or to the preset's own
+ |   colours, which is exactly the right outcome for a save asking for a
+ |   picture the disc no longer carries. Deleting this instead would have meant
+ |   rewriting three sentinel branches of display_decode and re-proving the
+ |   save-format compatibility they encode.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_game, GAME_SCENE
- | Params: N/A
- | Returns: how many pictures the running game carries in total
+ | Globals: N/A
+ | Params: name -- the NUL-terminated name from the blob
+ | Returns: DISP_IMAGE_NONE, always
  ----------------------*/
-int display_image_count(void) {
-    int scene, n = 0;
-    if (g_game < 0) return 0;
-    for (scene = 0; scene < SCENE_N; scene++) n += (int) GAME_SCENE[g_game][scene].count;
-    return n;
+static int image_slot_of(const char *name) {
+    (void) name;
+    return DISP_IMAGE_NONE;
 }
+
 
 /*----------------------
  | display_bg_count
@@ -481,50 +316,6 @@ int display_image_count(void) {
 int display_bg_count(void)    { return DISP_BG_COLOR_N; }
 
 /*----------------------
- | g_file_buf
- | Description: Two rotating buffers for display_image_file, so one screen draw
- |   can hold two filenames at once -- the Palette row prints one while resolving
- |   another. "UNDRGRND/99.TGA" is 15 characters plus a terminator.
- | Author: suinevere
- ----------------------*/
-static char g_file_buf[2][16];
-static int  g_file_turn = 0;
-
-/*----------------------
- | display_image_file
- | Description: See display.h. The folder is the running game's; the two digits
- |   are the picture's absolute index inside that folder, which is the scene's
- |   base plus the slot's 1-based local index.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: GAME_DIR, GAME_SCENE, g_game, g_file_buf, g_file_turn
- | Params: slot -- a slot, or DISP_IMAGE_NONE
- | Returns: the disc path, or "" when the slot names no picture
- ----------------------*/
-const char *display_image_file(int slot) {
-    char *out;
-    const char *dir;
-    int scene, local, index, k = 0;
-
-    if (g_game < 0 || !display_slot_valid(slot)) return "";
-    scene = slot / SLOT_STRIDE;
-    local = slot % SLOT_STRIDE;
-    index = GAME_SCENE[g_game][scene].base + local;
-    dir   = GAME_DIR[g_game];
-
-    out = g_file_buf[g_file_turn];
-    g_file_turn ^= 1;
-
-    while (*dir) out[k++] = *dir++;
-    out[k++] = '/';
-    out[k++] = (char) ('0' + index / 10);
-    out[k++] = (char) ('0' + index % 10);
-    out[k++] = '.'; out[k++] = 'T'; out[k++] = 'G'; out[k++] = 'A';
-    out[k]   = '\0';
-    return out;
-}
-
-/*----------------------
  | display_palette_count
  | Description: The palette row length: Dynamic, then the microcomputer presets.
  |   Fixed -- it does not grow with the art on the disc, because the row no longer
@@ -532,105 +323,6 @@ const char *display_image_file(int slot) {
  | Author: suinevere
  ----------------------*/
 int display_palette_count(void) { return 1 + DISP_PRESET_N; }
-
-/*----------------------
- | display_scene_image
- | Description: See display.h.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_game, g_scene_rot, GAME_SCENE
- | Params: scene -- an SC_* scene
- | Returns: the pool's current filename, or NULL to hold what is showing
- ----------------------*/
-const char *display_scene_image(int scene) {
-    if (g_game < 0) return 0;
-    if (scene < 0 || scene >= SCENE_N) return 0;
-    if (GAME_SCENE[g_game][scene].count == 0) return 0;
-    return display_image_file(display_slot_make(scene, (int) g_scene_rot[scene] + 1));
-}
-
-/*----------------------
- | display_scene_image_count
- | Description: See display.h.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_game, GAME_SCENE
- | Params: scene -- an SC_* scene
- | Returns: how many pictures the scene can draw on in the running game, 0 if none
- ----------------------*/
-int display_scene_image_count(int scene) {
-    if (g_game < 0) return 0;
-    if (scene < 0 || scene >= SCENE_N) return 0;
-    return (int) GAME_SCENE[g_game][scene].count;
-}
-
-/*----------------------
- | display_shuffle_scene
- | Description: Points a scene's pool at an arbitrary one of its pictures,
- |   chosen by `r`. Unlike display_rotate_scene this does NOT touch the
- |   showing slot -- it only moves where the pool is pointing, so the caller
- |   decides whether and when that becomes visible.
- |
- |   Written for the art warm that used to run at game start, which wanted a random
- |   pick from each scene rather than the scene's own current rotor position. That
- |   warm is gone and this currently has no caller. Kept here rather than done by
- |   the caller
- |   because g_scene_rot is what display_scene_image reads, and a caller picking
- |   its own filename would leave the pool pointing somewhere else -- a later
- |   read of the same scene would then resolve to a different picture than the
- |   one just cached.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_game, g_scene_rot, GAME_SCENE
- | Params: scene -- an SC_* scene; r -- any value, reduced modulo the scene's
- |   count in the running game
- | Returns: N/A
- ----------------------*/
-void display_shuffle_scene(int scene, unsigned int r) {
-    unsigned char n;
-    if (g_game < 0) return;
-    if (scene < 0 || scene >= SCENE_N) return;
-    n = GAME_SCENE[g_game][scene].count;
-    if (!n) return;
-    g_scene_rot[scene] = (unsigned char)(r % (unsigned int) n);
-}
-
-/*----------------------
- | display_rotate_scene
- | Description: See display.h.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_game, g_scene_rot, g_dyn_slot, GAME_SCENE
- | Params: scene -- the SC_* scene to advance
- | Returns: N/A
- ----------------------*/
-void display_rotate_scene(int scene) {
-    int n, i;
-    if (g_game < 0) return;
-    if (scene < 0 || scene >= SCENE_N) return;
-    n = (int) GAME_SCENE[g_game][scene].count;
-    if (n <= 1) return;
-
-    for (i = 0; i < n; i++) {
-        int slot;
-        g_scene_rot[scene] = (unsigned char) display_next_in_band(
-            (int) g_scene_rot[scene], 0, n);
-        slot = display_slot_make(scene, (int) g_scene_rot[scene] + 1);
-        if (slot >= 0 && slot != g_dyn_slot) { g_dyn_slot = slot; return; }
-    }
-}
-
-/*----------------------
- | display_preset_image
- | Description: The image slot a palette index maps to, or DISP_IMAGE_NONE for a
- |   color preset.
- | Author: suinevere
- ----------------------*/
-int display_preset_image(int index) {
-    if (index == DISP_PAL_DYNAMIC) return display_dynamic_slot();
-    return DISP_IMAGE_NONE;
-}
-
 /*----------------------
  | display_preset_name
  | Description: The name for a palette index -- Dynamic, or a machine's name ("?"
@@ -825,7 +517,7 @@ void display_cycle_palette(DisplayState *d, int dir) {
     /* Dynamic holds index 0 on every disc, art or not, so the display_preset_*
        accessors above can stay single unconditional expressions. The cost is one
        unreachable entry to step past here, which is cheaper than the row changing
-       shape -- that would put the arithmetic behind display_image_count() everywhere. */
+       shape -- that would put the arithmetic behind display_has_art() everywhere. */
     if (next == DISP_PAL_DYNAMIC && !display_has_art())
         next = step(next, dir, count);
     d->palette = next;
@@ -833,45 +525,6 @@ void display_cycle_palette(DisplayState *d, int dir) {
     d->text    = display_preset_text(next);
     d->image   = display_preset_image(next);
 }
-
-/*----------------------
- | image_slot_of
- | Description: The slot a disc path names, or -1. Parses the form
- |   display_image_file writes and nothing else, so a flat name from an older
- |   save blob misses -- which is the wanted answer, since the Palette row
- |   stopped honouring pinned pictures. The path names the running game's
- |   folder and an absolute index inside it; that index is matched against
- |   each scene's [base+1, base+count] range in turn to recover the scene and
- |   the slot's 1-based local index.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_game, GAME_DIR, GAME_SCENE
- | Params: name -- a disc path; NULL and "" both miss
- | Returns: the slot, or -1
- ----------------------*/
-static int image_slot_of(const char *name) {
-    int scene, i, index;
-    const char *dir, *p;
-
-    if (!name || !name[0] || g_game < 0) return -1;
-    dir = GAME_DIR[g_game];
-    for (i = 0; dir[i] && name[i] == dir[i]; i++) { }
-    if (dir[i] || name[i] != '/') return -1;
-    p = name + i + 1;
-    if (p[0] < '0' || p[0] > '9' || p[1] < '0' || p[1] > '9') return -1;
-    index = (p[0] - '0') * 10 + (p[1] - '0');
-    if (strcmp(p + 2, ".TGA") != 0) return -1;
-
-    for (scene = 0; scene < SCENE_N; scene++) {
-        int base  = (int) GAME_SCENE[g_game][scene].base;
-        int count = (int) GAME_SCENE[g_game][scene].count;
-        if (count && index > base && index <= base + count) {
-            return display_slot_make(scene, index - base);
-        }
-    }
-    return -1;
-}
-
 /*----------------------
  | DISP_BLOB_IMAGE
  | Description: The palette/bg marker byte in a save blob meaning "the image named

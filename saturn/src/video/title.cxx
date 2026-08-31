@@ -3,7 +3,7 @@
  | Description: Title screen, background art, TGA loading and its Low Work RAM
  |   cache, CD directory juggling, and the boot sequence random seed.
  | Author: suinevere
- | Dependencies: app_state.h, display.h, scene/scene_map.h, scene/title_art.inc,
+ | Dependencies: app_state.h, display.h, scene/title_art.inc,
  |   menu.h, soft_reset.h, game_catalog.h (the Z3 directory record
  |   cd_restore_z3 re-applies), online.h, boot_music.h, sound/music.h,
  |   text_map.h, bg_dim.h, SRL
@@ -12,7 +12,6 @@
 #include "bg_dim.h"
 #include "app_state.h"
 #include "display.h"
-#include "scene/scene_map.h"   /* SCENE_N: the scenes the game-start warm walks */
 #include "scene/title_art.inc" /* TITLE_ART_N: the shared title-folder picture count */
 #include "sound/music.h"       /* music_start_menu */
 #include "menu.h"
@@ -424,8 +423,7 @@ static void tga_image_free(TgaImage *img) {
  | Author: suinevere
  | Dependencies: SRL, cd_enter_mood, cd_enter_root
  | Globals: N/A
- | Params: file -- the folder-relative path from display_image_file/
- |   display_scene_image or title_art_file, e.g. "ZORK1/07.TGA" or
+ | Params: file -- the folder-relative path from title_art_file, e.g.
  |   "TITLE/01.TGA", or a bare /TGA filename like "SUINE.TGA"; low -- true to
  |   allocate in Low Work RAM (ignored when reusing);
  |   limit -- most bytes the pixel plane may take; out -- filled on success, Cap

@@ -32,15 +32,14 @@
      gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/t \
          saturn/tests/test_music_pause.c saturn/src/sound/music.c \
          saturn/src/sound/music_data.c saturn/src/sound/event_scan.c \
-         saturn/src/scene/scene_map.c saturn/src/scene/presentation.c && /tmp/t
+         saturn/src/scene/presentation.c && /tmp/t
 */
 #include "../src/sound/music.h"
 #include <stdio.h>
 #include <assert.h>
 
-static int g_pauses, g_resumes, g_ducks, g_unducks, g_plays, g_playing, g_cats;
+static int g_pauses, g_resumes, g_ducks, g_unducks, g_plays, g_playing;
 
-static void record_cat(int cat) { (void) cat; g_cats++; }
 
 static void fake_pause(void)  { g_pauses++;  g_playing = 0; }
 static void fake_resume(void) { g_resumes++; g_playing = 1; }
@@ -50,7 +49,7 @@ static void fake_play(int track, int loop) { (void) loop; g_plays++; g_playing =
 static int  fake_isplaying(void) { return g_playing; }
 
 static void reset_probe(void) {
-    g_pauses = g_resumes = g_ducks = g_unducks = g_plays = g_cats = 0;
+    g_pauses = g_resumes = g_ducks = g_unducks = g_plays = 0;
 }
 
 /* Bring the engine up with something actually sounding, the way both menus are
@@ -267,27 +266,27 @@ static void test_tick_advances_while_ducked(void) {
     printf("  tick advances while duck:  OK\n");
 }
 
-/* And the withheld half: an armed category change must not commit under a duck,
-   since committing is what reaches for art. */
+/* And the withheld half: an armed change must not commit under a duck.
+   Observed through the play count, since committing is what issues a track --
+   this used to watch the category subscriber, which went with the scene art it
+   existed to feed. */
 static void test_duck_withholds_category_commit(void) {
     engine_up();
-    music_set_category_fn(record_cat);
     music_set_debounce_frames(1);
-    /* Adventure (release 1, serial "151001"), object 21 -> an authored scene
-       (SC_MAZE), so the turn actually has something to commit. Without a game
-       set, scene_of_room finds no row and the room is "hold whatever is
-       showing" -- nothing this test could ever observe as withheld. */
+    /* Adventure (release 1, serial "151001") carries no authored room table, so
+       every room shares the neutral-pool category and the turn still has
+       something to commit. */
     music_set_game(1, "151001");
     music_duck();
     reset_probe();
 
     music_on_turn(21);
     for (int i = 0; i < 120; i++) music_tick();
-    assert(g_cats == 0);            /* nothing announced, so no picture asked for */
+    assert(g_plays == 0);           /* nothing committed, so no track issued */
 
     music_resume();
     for (int i = 0; i < 120; i++) music_tick();
-    assert(g_cats > 0);             /* and it lands once the hold is lifted */
+    assert(g_plays > 0);            /* and it lands once the hold is lifted */
     printf("  duck withholds category:   OK\n");
 }
 

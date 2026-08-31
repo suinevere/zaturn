@@ -1,10 +1,12 @@
 /* Build:
      gcc -O2 -I saturn/src -o /tmp/td saturn/tests/test_display.c \
-         saturn/src/video/display.c saturn/src/scene/scene_map.c && /tmp/td
-   The -I is needed because display.c reaches for "scene/scene_map.h" -- the
-   display model resolves art by SC_* scene now, not by the old TC_* mood. */
+         saturn/src/video/display.c && /tmp/td
+   The -I is needed because display.c reaches for headers by subdirectory -- the
+   display model has one art route now -- the story's authored per-room
+   pictures -- so the image field is a two-state flag, not a slot index. Several
+   cases below still poke stale slot-shaped numbers into it on purpose, to prove
+   they are refused. */
 #include "../src/video/display.h"
-#include "../src/scene/scene_map.h"
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
@@ -72,7 +74,7 @@ static void test_preset_contents(void) {
 static void test_defaults_and_palette_name(void) {
     DisplayState d;
     /* No game ships scene art yet -- every GAME_SCENE row is {0,0} -- so
-       display_image_count() reads 0 for any selected game and display_defaults
+       display_has_art() reads 0 with no authored art set and display_defaults
        lands on the no-art branch (a colour preset) regardless of what
        test_scene_art_shape below leaves g_game pointing at. */
     display_defaults(&d);
@@ -118,9 +120,10 @@ static void test_bg_name_and_is_image(void) {
     assert(strcmp(display_bg_name(&d), "Black") == 0);
 
     /* The Background row keeps naming a colour even when the image field holds
-       a value -- true whether or not that value names a picture this build's
-       all-zero scene art can validate. */
-    d.image = SC_FOREST * 100 + 1;
+       a value -- true whether or not that value names a picture this build can
+       validate. 1201 is a stale slot number from the retired scene art, exactly
+       the kind of value an old save can still carry. */
+    d.image = 1201;
     assert(strcmp(display_bg_name(&d), "Black") == 0);
 }
 
@@ -195,7 +198,7 @@ static void test_guard_follows_bg_color_under_image(void) {
 static void test_cycle_palette(void) {
     DisplayState d;
     /* Dynamic is excluded from the row entirely right now: display_cycle_palette
-       steps over it whenever display_image_count() is 0, which it is for every
+       steps over it whenever display_has_art() is 0, which it is for every
        game until one ships scene art (see test_cycle_palette_skips_dynamic_
        without_art below for that branch on its own). So this walks the colour
        presets only, built by hand rather than through display_defaults. */
@@ -277,7 +280,7 @@ static void test_cycle_palette_skips_dynamic_without_art(void) {
        an unreachable stop and steps straight past it in both directions --
        the one branch of the function nothing above exercises. */
     DisplayState d;
-    assert(display_image_count() == 0);
+    assert(display_has_art() == 0);
 
     d.palette = PAL(0);
     d.bg      = display_preset_bg(PAL(0));
@@ -553,7 +556,7 @@ static void test_decode_truncated_name_block(void) {
     display_defaults(&def);
     saved.palette = PAL(0);
     saved.bg      = DISP_BG_BLACK;
-    saved.image   = display_slot_make(SC_FOREST, 1);   /* display_encode ignores this */
+    saved.image   = 1201;                    /* stale slot; display_encode ignores it */
     saved.text    = DISP_TEXT_WHITE;
     display_encode(&saved, blob);
 
@@ -578,7 +581,7 @@ static void test_bg_color_under_image_survives_a_save(void) {
     saved.palette = PAL(0);
     saved.bg      = DISP_BG_BLUE;           /* deliberately not the preset's black */
     saved.text    = DISP_TEXT_WHITE;
-    saved.image   = display_slot_make(SC_FOREST, 1);
+    saved.image   = 1201;                    /* a stale slot from the retired scene art */
     display_encode(&saved, blob);
 
     assert(display_decode(blob, DISP_BLOB_BYTES, &d) == 1);
@@ -588,125 +591,6 @@ static void test_bg_color_under_image_survives_a_save(void) {
     /* Diverged from the preset's black, so it reads Custom. */
     assert(strcmp(display_palette_name(&d), "Custom") == 0);
 }
-
-/* --- the scene -> picture mapping ------------------------------------------- */
-
-static void test_scene_art_shape(void) {
-    /* No game ships scene art yet -- every GAME_SCENE row is {0,0} -- so
-       every scene resolves the way an unauthored one always has: NULL ("hold
-       whatever is showing") from display_scene_image and an empty pool from
-       display_scene_image_count. This is the one place that behaviour is
-       exercised across the whole vocabulary rather than one scene at a time. */
-    int scene, zork = scene_game_index(88, "840726");
-    assert(zork >= 0);
-    display_set_game(zork);
-
-    for (scene = 0; scene < SCENE_N; scene++) {
-        assert(display_scene_image(scene) == NULL);
-        assert(display_scene_image_count(scene) == 0);
-    }
-
-    /* Out of range is "keep current" / "no pool", never a stray read. */
-    assert(display_scene_image(-1) == NULL);
-    assert(display_scene_image(SCENE_N) == NULL);
-    assert(display_scene_image_count(-1) == 0);
-    assert(display_scene_image_count(SCENE_N) == 0);
-
-    /* No game selected answers the same way. */
-    display_set_game(-1);
-    assert(display_scene_image(SC_FOREST) == NULL);
-    assert(display_scene_image_count(SC_FOREST) == 0);
-
-    display_set_game(zork);
-}
-
-static void test_slot_arithmetic(void) {
-    /* Index 0 is never a filename (the gap below every scene's 1-based range),
-       and an index past a scene's count is refused the same way an index into
-       a scene with no art at all is -- which today is every scene, so both
-       cases collapse onto the same answer. */
-    int zork = scene_game_index(88, "840726");
-    assert(zork >= 0);
-    display_set_game(zork);
-
-    assert(display_slot_make(SC_FOREST, 0) == DISP_IMAGE_NONE);
-    assert(display_slot_make(SC_FOREST, 1) == DISP_IMAGE_NONE);
-    assert(!display_slot_valid(SC_FOREST * 100));
-    assert(!display_slot_valid(SC_FOREST * 100 + 1));
-    assert(!display_slot_valid(-1));
-
-    /* An old flat blob name, and any name naming a scene this game has not
-       authored, both miss. */
-    assert(display_image_slot("HOUSE1.TGA") == DISP_IMAGE_NONE);
-    assert(display_image_slot("ZORK1/01.TGA") == DISP_IMAGE_NONE);
-    assert(display_image_slot("") == DISP_IMAGE_NONE);
-    assert(display_image_slot(NULL) == DISP_IMAGE_NONE);
-
-    /* display_image_file's rotating buffers still each answer independently,
-       even though both answers are "" today. */
-    {
-        const char *a = display_image_file(display_slot_make(SC_FOREST, 1));
-        const char *b = display_image_file(display_slot_make(SC_VILLAGE, 1));
-        assert(a[0] == '\0' && b[0] == '\0');
-    }
-    assert(display_image_file(DISP_IMAGE_NONE)[0] == '\0');
-}
-
-static void test_rotate_and_shuffle_scene_without_art(void) {
-    /* Rotation and the shuffle-a-pool primitive both degrade to a silent no-op
-       when a scene has fewer than two pictures -- which every scene does right
-       now, art or none -- rather than crashing or fabricating a slot. */
-    int zork = scene_game_index(88, "840726");
-    int prev;
-    assert(zork >= 0);
-    display_set_game(zork);
-
-    display_pin_dynamic_slot(DISP_IMAGE_NONE);
-    display_set_dynamic_category(SC_FOREST);
-    prev = display_dynamic_slot();
-    assert(prev == DISP_IMAGE_NONE);
-
-    display_rotate_scene(SC_FOREST);
-    assert(display_dynamic_slot() == prev);
-
-    display_shuffle_scene(SC_FOREST, 5);
-    assert(display_scene_image_count(SC_FOREST) == 0);
-
-    /* An out-of-range scene is the same no-op, not a fault. */
-    display_rotate_scene(-1);
-    display_rotate_scene(SCENE_N);
-    display_shuffle_scene(-1, 5);
-    display_shuffle_scene(SCENE_N, 5);
-}
-
-static void test_pin_dynamic_slot_needs_real_art(void) {
-    /* A pin only takes hold when the slot names a picture the running game
-       actually carries -- so with no game shipping art yet, any pin clears
-       straight back to DISP_IMAGE_NONE. */
-    int zork = scene_game_index(88, "840726");
-    assert(zork >= 0);
-    display_set_game(zork);
-
-    display_pin_dynamic_slot(SC_FOREST * 100 + 1);
-    assert(display_dynamic_slot() == DISP_IMAGE_NONE);
-    display_pin_dynamic_slot(DISP_IMAGE_NONE);
-}
-
-static void test_next_in_band_wraps_inside_its_band(void) {
-    /* Pure arithmetic: base 5, count 3, so the band covers absolute indices
-       5, 6, 7. Non-zero base, asymmetric numbers on purpose -- a base equal
-       to 0 or a count of 1 would hide a dropped "base +" in the wrap. */
-    assert(display_next_in_band(5, 5, 3) == 6);
-    assert(display_next_in_band(6, 5, 3) == 7);
-    assert(display_next_in_band(7, 5, 3) == 5);
-
-    /* cur outside the band snaps to base rather than wrapping in place. */
-    assert(display_next_in_band(0, 5, 3) == 5);
-
-    /* An empty band is a no-op: nothing to advance to. */
-    assert(display_next_in_band(42, 5, 0) == 42);
-}
-
 static void test_blob_roundtrip(void) {
     unsigned char buf[DISP_BLOB_BYTES];
     DisplayState a, b;
@@ -728,7 +612,7 @@ static void test_blob_roundtrip(void) {
        silently dropped, on purpose. */
     a.palette = PAL(0);
     a.bg = DISP_BG_BLACK; a.text = DISP_TEXT_WHITE;
-    a.image = SC_KITCHEN * 100 + 2;
+    a.image = 1702;                          /* another stale slot */
     display_encode(&a, buf);
     {
         int i;
@@ -755,7 +639,7 @@ static void test_blob_roundtrip(void) {
     }
 
     /* A blob carrying the Dynamic marker is refused, reported as defaulted,
-       while no game ships scene art -- decode's own display_image_count()
+       while no game has authored art set -- decode's own display_has_art()
        guard, the read-side twin of display_cycle_palette's. It lands on the
        same no-art fallback display_defaults would. */
     a.palette = DISP_PAL_DYNAMIC;
@@ -847,11 +731,7 @@ static void test_sentinel_2_decode(void) {
     unsigned char old[17];
     DisplayState d;
     static const char *const path = "ZORK1/01.TGA";
-    int zork = scene_game_index(88, "840726");
     int i;
-
-    assert(zork >= 0);
-    display_set_game(zork);
 
     for (i = 0; i < 17; i++) old[i] = 0;
     old[0] = 2;                              /* pre-Dynamic, image-packed-in-bg form */
@@ -1049,11 +929,6 @@ int main(void) {
     test_legacy_blob_image_index_rejected();
     test_decode_truncated_name_block();
     test_bg_color_under_image_survives_a_save();
-    test_scene_art_shape();
-    test_slot_arithmetic();
-    test_rotate_and_shuffle_scene_without_art();
-    test_pin_dynamic_slot_needs_real_art();
-    test_next_in_band_wraps_inside_its_band();
     test_blob_roundtrip();
     test_preset_sweep_round_trips();
     test_old_form_preset_sweep_round_trips();

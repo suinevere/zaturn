@@ -65,6 +65,19 @@ extern "C" {
 #define DISP_IMAGE_NONE (-1)
 
 /*----------------------
+ | DISP_IMAGE_ROOM
+ | Description: The only picture value left. It does not name a picture -- it
+ |   says "whatever room_art.cxx has put on NBG0 for the room the player is
+ |   standing in". The field used to hold a slot number selecting one of a
+ |   game's downloaded scene pictures; there is one art route now, so the field
+ |   is really a two-state flag and this is its set state. Kept as an int rather
+ |   than collapsed into a bool because the save blob stores it and the decoder
+ |   still has to tell a refused old slot from a present picture.
+ | Author: suinevere
+ ----------------------*/
+#define DISP_IMAGE_ROOM 0
+
+/*----------------------
  | DISP_PAL_DYNAMIC / DISP_PAL_PRESET0
  | Description: The palette row's layout. Index 0 is Dynamic -- "let the text
  |   category choose the picture" -- followed by the DISP_PRESET_N colour presets,
@@ -170,170 +183,56 @@ const char *display_palette_name(const DisplayState *d);
 void display_defaults(DisplayState *d);
 
 /*----------------------
- | display_slot_make / display_slot_valid
- | Description: A slot is a scene and a 1-based index encoded together
- |   (scene * 100 + index) rather than a position in a scanned list, so it names a
- |   picture without ever reading the disc. make builds one from the pair, refusing
- |   an index the scene does not carry in the running game; valid answers whether a
- |   slot (however it was built, including DISP_IMAGE_NONE) names a picture the
- |   running game actually has.
+ | display_dynamic_slot / display_slot_valid / display_preset_image
+ | Description: The image value the Dynamic palette entry carries, whether a
+ |   value names a present picture, and the value a palette index implies.
+ |   All three collapsed to near-nothing when scene art was removed -- they used
+ |   to index per-game picture pools -- but they are kept as calls because every
+ |   caller reads better asking them than testing DISP_IMAGE_ROOM by hand, and
+ |   because the save decoder needs the "is this still a real picture" question
+ |   to have somewhere to live.
  | Author: suinevere
  ----------------------*/
-int display_slot_make(int cat, int index);
+/*----------------------
+ | display_palette_count
+ | Description: The palette row's length: Dynamic, then the microcomputer
+ |   presets. Fixed -- it does not grow or shrink with what art the disc
+ |   carries, because Dynamic holds index 0 on every disc and is merely stepped
+ |   over when there is nothing to show.
+ | Author: suinevere
+ ----------------------*/
+int display_palette_count(void);
+
+int display_dynamic_slot(void);
 int display_slot_valid(int slot);
-
-/*----------------------
- | display_image_count / display_bg_count
- | Description: image_count is how many pictures the running game carries in
- |   total, summed from every scene's pool (0 when no game is selected); bg_count
- |   is DISP_BG_COLOR_N (the Background row is colors only).
- | Author: suinevere
- ----------------------*/
-int display_image_count(void);
+int display_preset_image(int index);
 int display_bg_count(void);
-
-/*----------------------
- | display_image_file
- | Description: Synthesises the on-disc path from a slot ("HORROR/07.TGA"), or ""
- |   for a slot this disc does not carry. Held in a small rotating buffer -- copy
- |   it if you need to keep it past a couple of uses.
- | Author: suinevere
- ----------------------*/
-const char *display_image_file(int slot);
-
-/*----------------------
- | display_scene_image
- | Description: The picture a scene shows in the running game, as an on-disc
- |   filename, or NULL for "keep whatever is showing". Returns a filename
- |   rather than a slot so display_set_dynamic_category can resolve it with
- |   display_image_slot the same way it would resolve any other disc path.
- |   NULL also comes back when no game is selected, or the scene carries no
- |   pictures in this game.
- | Author: suinevere
- ----------------------*/
-const char *display_scene_image(int scene);
-
-/*----------------------
- | display_scene_image_count / display_rotate_scene
- | Description: image_count is how many pictures a scene can draw on in the
- |   running game (0 when no game is selected, or the scene is unauthored for
- |   it). rotate moves that scene to a different one of them and makes it
- |   current -- what the engine asks for after MUSIC_ROTATE_ROOMS rooms of one
- |   unbroken mood, so a long stretch in one scene does not sit on one
- |   picture. A scene with fewer than two pictures holds what it has, which is
- |   also how a pool of one behaves: the rotation becomes a no-op rather than
- |   a flicker back to the same image.
- | Author: suinevere
- ----------------------*/
-int  display_scene_image_count(int scene);
-void display_rotate_scene(int scene);
-
-/*----------------------
- | display_shuffle_scene
- | Description: Points a scene's pool at an arbitrary one of its pictures,
- |   chosen by `r` (reduced modulo the scene's count in the running game; any
- |   value is legal, and a scene with no pictures is a no-op). Unlike
- |   display_rotate_scene it does not change what is currently on screen --
- |   follow it with display_set_dynamic_category if the new pick should
- |   become the showing slot. Written for the game-start art warm, which has
- |   since been removed; nothing calls it today.
- | Author: suinevere
- ----------------------*/
-void display_shuffle_scene(int scene, unsigned int r);
-
-/*----------------------
- | display_set_game
- | Description: Selects the folder (GAME_DIR) and scene ranges (GAME_SCENE)
- |   every later resolve uses. Re-seats every scene's rotor to its new range's
- |   start whenever the running game actually changes, so a rotor left over
- |   from a different game cannot surface the wrong game's picture on a read
- |   path that does not rotate or shuffle first. A no-op when game_index
- |   already names the current game, so calling this ahead of every room
- |   change does not reset an in-progress rotation. Any value outside
- |   0..GAME_N-1 -- including every negative one -- means "no game selected",
- |   which every scene accessor treats as "nothing."
- | Author: suinevere
- ----------------------*/
-void display_set_game(int game_index);
-
 /*----------------------
  | display_set_authored
- | Description: Tells the display layer that the running game carries authored
- |   per-room art, which lives outside GAME_SCENE entirely -- room_art.cxx
- |   decompresses it from the original disc's own archives and puts it on NBG0
- |   itself. Without this the Dynamic palette entry is skipped for such a game,
- |   because display_image_count() counts only scene pictures and correctly
- |   reports none; Dynamic then cannot be selected, and the room-art path,
- |   which only runs under Dynamic, never draws at all.
+ | Description: Tells the display layer whether the running game carries
+ |   authored per-room art -- the pictures room_art.cxx decompresses from the
+ |   original disc's own archives and puts on NBG0 itself. This is now the only
+ |   art there is, so it is also the only thing that makes the Dynamic palette
+ |   entry reachable: without it Dynamic cannot be selected, and the room-art
+ |   path, which only runs under Dynamic, never draws at all.
  |
- |   Cleared by display_set_game, so returning to the title or selecting a game
- |   without authored art needs no second call.
+ |   Nothing clears this implicitly any more. It was cleared by
+ |   display_set_game, which existed to seat per-game picture state and
+ |   went with it, so every caller that returns to the title or selects a game
+ |   without authored art must now call this with 0 itself.
  | Author: suinevere
  ----------------------*/
 void display_set_authored(int has_authored);
 
 /*----------------------
  | display_has_art
- | Description: Whether the running game can show pictures at all, by either
- |   route -- scene pools counted in GAME_SCENE, or authored per-room art. The
- |   one question every Dynamic gate asks; asking display_image_count() instead
- |   sees only half the answer.
+ | Description: Whether the running game can show pictures at all. The one
+ |   question every Dynamic gate asks. Now equivalent to the authored-art flag,
+ |   since authored per-room art is the only route left, but kept as its own
+ |   call because the gates read better asking this question than that one.
  | Author: suinevere
  ----------------------*/
 int display_has_art(void);
-
-/*----------------------
- | display_next_in_band
- | Description: The next absolute 0-based index inside a range, wrapping --
- |   the arithmetic display_rotate_scene walks with. If cur falls outside
- |   [base, base+count), it snaps to base rather than wrapping from where it
- |   happens to sit; that path is load-bearing, not defensive padding -- it
- |   is what a rotor left over from a different game's range lands on: the
- |   old range's index, snapped into the new one.
- | Author: suinevere
- ----------------------*/
-int display_next_in_band(int cur, int base, int count);
-
-/*----------------------
- | display_set_dynamic_category / display_dynamic_slot
- | Description: set_dynamic_category resolves a scene to an image slot and
- |   remembers it, ignoring any scene with no art so the wallpaper holds;
- |   dynamic_slot returns that slot. It stores the resolved SLOT rather than the
- |   raw scene so "keep current" is never a transient answer: cycling onto
- |   Dynamic during a scene-less moment would otherwise have no current picture to
- |   keep and would land on no wallpaper at all. DISP_IMAGE_NONE comes back only
- |   when no game is selected, or the running game carries no art.
- | Author: suinevere
- ----------------------*/
-void display_set_dynamic_category(int cat);
-int  display_dynamic_slot(void);
-
-/*----------------------
- | display_pin_dynamic_slot / display_image_slot
- | Description: pin_dynamic_slot holds Dynamic at one fixed slot until released
- |   with DISP_IMAGE_NONE, leaving the mood the engine is tracking untouched
- |   underneath. For a screen that must not move the CD head: resolving Dynamic
- |   normally can name a picture that is neither uploaded nor cached, and loading
- |   that reads the disc, which stops CD-DA mid-track. Pin to the picture already
- |   on NBG0 (title_bg_loaded_file) and every display_apply() on that screen
- |   short-circuits inside title_bg_show instead.
- |     image_slot returns the slot holding a filename, or DISP_IMAGE_NONE -- the
- |   lookup that turns that filename into something a DisplayState can hold.
- | Author: suinevere
- ----------------------*/
-void display_pin_dynamic_slot(int slot);
-int  display_image_slot(const char *name);
-
-/*----------------------
- | display_palette_count / display_preset_image
- | Description: palette_count is Dynamic plus the DISP_PRESET_N colour presets --
- |   a fixed length that does not depend on what art the disc carries; preset_image
- |   is the image slot a palette index selects, which is the Dynamic palette's
- |   current picture for index 0 and DISP_IMAGE_NONE for every colour preset.
- | Author: suinevere
- ----------------------*/
-int display_palette_count(void);
-int display_preset_image(int index);
 
 /*----------------------
  | display_is_image / display_bg_name

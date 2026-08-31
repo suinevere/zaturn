@@ -803,23 +803,15 @@ void sound_options_page(void) {
  |   result is visible behind the menu immediately; Cancel (or B/Backspace)
  |   restores the g_display snapshot taken on entry and re-applies it with
  |   display_apply(); Ok and Start/Esc persist it with options_save().
- |     Pins the Dynamic palette to the picture already uploaded to NBG0 for its
- |   own duration (display_pin_dynamic_slot, released after the exit fade), which
- |   is what lets the menu track keep playing through this page. Without it,
- |   cycling onto Dynamic resolves whatever mood the engine is currently tracking,
- |   and that picture is only guaranteed to be on screen when Dynamic was already
- |   selected -- a player sitting on a colour preset while the rooms change ends up
- |   asking for art that is neither uploaded nor cached, which reads the disc and
- |   stops the CD-DA head mid-track. Pinned, every display_apply() here re-requests
- |   what is already loaded and title_bg_show short-circuits to a bare
- |   ScrollEnable: the current room's category picture in game, the house picture
- |   the title screen put up in the main menu. The engine's own g_dyn_slot is
- |   untouched underneath, so the next mood change resolves normally.
- |     The pin cannot resolve on an authored game: title_bg_loaded_file returns
- |   the area stem room_art_show passed to title_bg_show_raw ("BCEL"), not a
- |   disc image name, so display_image_slot always misses and the pin stays
- |   empty. display_apply() has its own guard for that case -- see its header --
- |   so the room picture holds regardless.
+ |     This page used to pin the Dynamic palette to the picture already on NBG0
+ |   for its own duration, so that cycling onto Dynamic could not send the
+ |   category art system off to resolve a different mood picture, read the disc
+ |   and stop the CD-DA head mid-track. There is no category art system now:
+ |   Dynamic resolves to the room's own picture, which room_art holds resident
+ |   in Low Work RAM, so cycling onto it costs a blit and never a disc read.
+ |   The pin had already stopped doing anything on an authored game -- it
+ |   resolved a disc image name and title_bg_loaded_file returns an area stem --
+ |   and it is gone.
  |     Uses the full 40
  |   columns rather than the 38 the other pages use. Values print at x + 17,
  |   leaving 20 columns before the border, so "< %s >" fits a name of at most
@@ -838,8 +830,7 @@ void sound_options_page(void) {
  |   clears the value column at 19.
  | Author: suinevere
  | Dependencies: display.c (DisplayState/display_palette_name/
- |   display_bg_name/display_text_name/display_pin_dynamic_slot/
- |   display_image_slot), title.h (title_bg_loaded_file), options.c
+ |   display_bg_name/display_text_name), options.c
  |   (display_apply/display_cycle_row/DCR_* / options_save), console_view.c
  |   (note_input_device/hint/g_kbd_visible), input.c (pad_repeat_update),
  |   menu.c, menu_layout.c (MENU_DIGIT_COLS), soft_reset.h
@@ -867,7 +858,6 @@ static void display_options_page(void) {
     static int last_row = DR_PALETTE;
     int resume = last_row;
     int sel = 0;
-    display_pin_dynamic_slot(display_image_slot(title_bg_loaded_file()));
     if (g_display.palette == DISP_PAL_DYNAMIC) g_display.image = display_dynamic_slot();
     DisplayState snapshot = g_display;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
@@ -970,7 +960,6 @@ static void display_options_page(void) {
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
     page_fade_out(g_menu_page_fade);
-    display_pin_dynamic_slot(DISP_IMAGE_NONE);
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
 }
 

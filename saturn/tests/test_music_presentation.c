@@ -4,7 +4,7 @@
  |   Run from the repository root:
  |   gcc -O2 -I saturn/src -I saturn/src/scene -o /tmp/tmpres \
  |       saturn/tests/test_music_presentation.c saturn/src/sound/music.c \
- |       saturn/src/scene/scene_map.c saturn/src/scene/presentation.c \
+ |       saturn/src/scene/presentation.c \
  |       saturn/src/sound/event_scan.c saturn/src/sound/music_data.c && /tmp/tmpres
  | Author: suinevere
  ----------------------*/

@@ -3,8 +3,8 @@
  | Description: The tunable data the music engine reads: the neutral CD-DA
  |   track pool used whenever a scene has no authored tracks, and the two
  |   event pools (danger/triumph) still driven by event_scan. Per-room mood is
- |   no longer table data here -- it lives in scene/game_rooms.inc and
- |   scene/game_tracks.inc, generated from the authored scene corpus rather
+ |   no longer table data here -- it lives in scene/game_presentation.inc,
+ |   generated from the story's own authored per-room table rather
  |   than hand-picked per category.
  | Author: suinevere
  | Dependencies: music.h (music_track_pool's declaration), event_scan.h

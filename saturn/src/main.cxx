@@ -14,7 +14,7 @@
  | Dependencies: app_state.h, console.h, console_view.h, display.h, options.h,
  |   menu.h, menu_pages.h, save_ui.h, title.h, game_catalog.h, online.h,
  |   soft_reset.h, saturn_glue.h, saturn_backup.h, sound.h, music.h,
- |   scene/scene_map.h, input.h, SRL/GFS/SGL.
+ |   input.h, SRL/GFS/SGL.
  ----------------------*/
 
 #include <srl.hpp>
@@ -43,8 +43,6 @@ extern "C" {
 #include "splash.h"
 #include "game_catalog.h"
 #include "online.h"
-#include "scene/scene_map.h"
-
 using namespace SRL::Types;
 
 /*----------------------
@@ -108,82 +106,6 @@ using namespace SRL::Types;
  | Author: suinevere
  ----------------------*/
 #define STORY_READ_CHUNK (2048 * 8)
-
-/*----------------------
- | on_text_category
- | Description: The background art's half of a scene change. Moves the
- |   Dynamic palette's picture to the new scene's art and repaints. A scene
- |   with no art of its own leaves display_set_dynamic_category's stored slot
- |   alone, so this re-requests the picture already showing and title_bg_show
- |   short-circuits: the wallpaper holds without a special case here.
- |
- |   Goes through display_apply rather than title_bg_show directly, so a picture
- |   that fails to load takes the same colour-preset fallback every other display
- |   change does, instead of this path inventing its own.
- |
- |   Wipes the console rows in-game because this runs at the BOTTOM of the fade,
- |   with the screen black: without it the ramp back up would reveal the new
- |   picture underneath the PREVIOUS turn's text, which is still on the text layer
- |   because run_room_transition deliberately does not render during the fade. The
- |   wipe costs nothing, since render_console repaints from the scrollback the
- |   moment the transition ends. Menus are excluded -- the console is not the
- |   visible view there, and clearing would take the menu's own rows with it.
- |
- |   May read the disc. Only a handful of the shipped pictures are held in Low
- |   Work RAM at once (TGA_CACHE_SLOTS in title.cxx), so a scene the player has not
- |   been in lately costs one read, and a read stops CD-DA. That is survivable only
- |   because of WHERE this is called from: the engine fires it at the bottom of the
- |   transition fade, with the screen black and the outgoing track about to be
- |   replaced by play_dyn anyway (see commit_pending in sound/music.c). Calling it
- |   from anywhere else -- mid-turn, or on a frame where the picture is visible --
- |   would put an audible gap in the middle of whatever is playing.
- |
- |   The engine guarantees events (danger/triumph) are never announced through
- |   this callback, so `cat` is always a scene index -- see music.h's
- |   set_category_fn note.
- | Author: suinevere
- | Dependencies: display.h, options.h
- | Globals: g_display
- | Params: cat -- the SC_* scene now sounding
- | Returns: N/A
- ----------------------*/
-static void on_text_category(int cat) {
-    display_set_dynamic_category(cat);
-    if (g_in_game) {
-        for (int r = 0; r < console_height(); r++) text_clear_line(r);
-    }
-    if (g_display.palette != DISP_PAL_DYNAMIC) return;
-    int slot = display_dynamic_slot();
-    if (slot == DISP_IMAGE_NONE) return;      // disc carries no art
-    g_display.image = slot;
-    display_apply();
-}
-
-/*----------------------
- | on_text_rotate
- | Description: The art's half of a same-scene rotation. The scene has not
- |   changed -- the player has simply walked MUSIC_ROTATE_ROOMS rooms of it -- so
- |   this moves to a different picture within that scene rather than resolving
- |   the scene afresh, which would hand back the one already showing.
- |
- |   A scene with fewer than two pictures holds what it has, so the track
- |   rotates underneath an unchanged wallpaper. That is the intended degradation,
- |   not a gap: with one picture there is nothing truthful to change to.
- | Author: suinevere
- | Dependencies: display.h, options.h
- | Globals: g_display
- | Params: cat -- the SC_* scene being rotated within
- | Returns: N/A
- ----------------------*/
-static void on_text_rotate(int cat) {
-    display_rotate_scene(cat);
-    if (g_display.palette != DISP_PAL_DYNAMIC) return;
-    int slot = display_dynamic_slot();
-    if (slot == DISP_IMAGE_NONE || slot == g_display.image) return;
-    g_display.image = slot;
-    display_apply();
-}
-
 /*----------------------
  | on_text_room
  | Description: The authored art's half of a room change, for stories that carry
@@ -428,8 +350,9 @@ int main(void) {
     g_z3_dir_valid = false;
     g_menu_backing_depth = 0;
     g_in_game = false;
-    display_set_game(-1);   // no game is selected at the title/menu; a longjmp
-                             // back here does not otherwise clear the last game
+    display_set_authored(0); // no game is selected at the title/menu, so there is
+                             // no room art; a longjmp back here does not otherwise
+                             // clear the last game's flag
     slScrWindowModeNbg0(0);
     title_bg_fade_arm();     // a reset chord can fire mid-ramp, so overwrite any held
                              // offset -- with black, not with clear: nothing between
@@ -492,8 +415,6 @@ int main(void) {
     // deliberately after this display_apply: the title screen picks and shows its
     // own house, and music_start_menu() announces the neutral category, and
     // neither is meant to repaint the title out from under itself.
-    music_set_category_fn(on_text_category);
-    music_set_rotate_fn(on_text_rotate);
     music_set_room_fn(on_text_room);
     music_set_fade_fn(on_music_fade);
     music_set_fade_frames(MUSIC_FADE_FRAMES);
@@ -631,11 +552,10 @@ int main(void) {
         menu_fade_out_tick();
     }
 
-    // Every later picture choice resolves against this, so it is set the moment the
-    // story's header is readable.
+    // Every later picture choice resolves against this, so it is read the moment
+    // the story's header is readable.
     const unsigned int game_release = (unsigned int)((story[2] << 8) | story[3]);
     const char        *game_serial  = (const char*) (story + 0x12);
-    display_set_game(scene_game_index(game_release, game_serial));
 
     // The one Low Work RAM claimant left on this path, now that the art is not
     // warmed here, so it gets the whole zone and an honest reading of it. Built here
@@ -664,9 +584,10 @@ int main(void) {
         music_set_level(g_music_level);
         music_set_game(game_release, game_serial);
         room_art_set_game(game_release, game_serial);
-        // After display_set_game above, which clears the flag: authored art lives
-        // outside GAME_SCENE, so without this the Dynamic palette entry is skipped
-        // and the room-art path, which only runs under Dynamic, never draws.
+        // Authored per-room art is the only art there is, so this flag is what
+        // makes the Dynamic palette entry reachable at all: without it Dynamic is
+        // skipped, and the room-art path, which only runs under Dynamic, never
+        // draws. Cleared back to 0 on the way to the title screen above.
         display_set_authored(room_art_available());
         if (room_art_available()) title_bg_cache_release();
         music_seed((unsigned int) seed);

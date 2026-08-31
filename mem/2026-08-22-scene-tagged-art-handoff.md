@@ -9,6 +9,14 @@ metadata:
 `ecd2808` and the undo/review work landed in `d674a0d`; where this document and
 those commits disagree, the commits win. The scene-tagging half still stands.
 
+**As of 2026-08-30, this document's two Zork I owner tasks below — "Bless
+Zork I" and "Source its art" — are discharged for Zork I specifically.** An
+authored, measured presentation table now answers by measurement the same
+question those tasks asked the owner to answer by judgement: every Zork I
+room has its original picture and track, not a blessed scene and curated
+art. Both tasks still stand for the other thirty games in the catalogue. See
+[[zork1-authentic-presentation-handoff]].
+
 Landed on `main` as a single squashed commit `f381dac`, +26,584 / −5,740 across
 166 files, pushed to `origin/main`. Suite **231 passed, 0 failed**. All eight host
 C tests pass, every SH-2 `syntax-check.sh` is clean with zero warnings, and both

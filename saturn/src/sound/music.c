@@ -11,10 +11,12 @@
  | Author: suinevere
  | Dependencies: music.h (mix modes, track bounds, pool accessor),
  |   scene/scene_map.h (scene_of_room, scene_game_index, scene_track_mask),
- |   event_scan.h (event_scan, EV_*), string.h
+ |   scene/presentation.h (pres_of_room), event_scan.h (event_scan, EV_*),
+ |   string.h
  ----------------------*/
 #include "music.h"
 #include "scene/scene_map.h"
+#include "scene/presentation.h"
 #include "event_scan.h"
 #include <string.h>
 
@@ -38,7 +40,18 @@
  |   alongside the numeric id so the two vocabularies can never collide.
  | Author: suinevere
  ----------------------*/
-enum { CAT_KIND_NONE = 0, CAT_KIND_SCENE = 1, CAT_KIND_EVENT = 2 };
+enum { CAT_KIND_NONE = 0, CAT_KIND_SCENE = 1, CAT_KIND_EVENT = 2, CAT_KIND_ROOM = 3 };
+
+/*----------------------
+ | CAT_KIND_ROOM / g_base_kind
+ | Description: The kind of the room's own category. On CAT_KIND_SCENE the
+ |   category is an SC_* index and a pool supplies the track; on CAT_KIND_ROOM it
+ |   IS the track, taken from the story's authored table. Making the track the
+ |   category is what lets the existing unchanged-target branch stop the music
+ |   restarting between two rooms that share one.
+ | Author: suinevere
+ ----------------------*/
+static int g_base_kind = CAT_KIND_SCENE;
 
 /*----------------------
  | g_rng
@@ -440,6 +453,7 @@ static int pick_prefer_long(int cat) {
  | Returns: a track number
  ----------------------*/
 static int pick_dynamic_track(int kind, int cat) {
+    if (kind == CAT_KIND_ROOM) return cat;
     if (kind == CAT_KIND_EVENT) return pick_prefer_long(cat);
     if (kind == CAT_KIND_SCENE) {
         unsigned long mask = scene_track_mask(cat);
@@ -834,8 +848,16 @@ void music_tick(void) {
             g_await_play = 1;
             if (g_play) g_play(g_override_track, 1);
         } else if (g_mix_mode == MIX_DYNAMIC) {
-            if (g_dyn_pass < MUSIC_DYN_LOOPS) play_dyn(g_active_track, g_dyn_pass + 1);
-            else                              play_dyn(pick_dynamic_track(g_active_kind, g_active_cat), 1);
+            if (g_active_kind == CAT_KIND_EVENT && g_base_kind == CAT_KIND_ROOM) {
+                g_event_cat = -1;
+                g_active_kind = CAT_KIND_ROOM;
+                g_active_cat = g_base_cat;
+                play_dyn(g_base_cat, 1);
+            } else if (g_dyn_pass < MUSIC_DYN_LOOPS) {
+                play_dyn(g_active_track, g_dyn_pass + 1);
+            } else {
+                play_dyn(pick_dynamic_track(g_active_kind, g_active_cat), 1);
+            }
         }
     }
 }
@@ -936,14 +958,22 @@ void music_on_turn(unsigned int obj) {
     int event_cat = event_scan(g_turn_text);
     int room_changed = (!g_have_room || obj != g_cur_room);
     if (room_changed) {
-        int base = scene_of_room(g_release, g_serial, obj);
+        Presentation p;
+        int base;
+        if (pres_of_room(g_release, g_serial, obj, &p)) {
+            base = (int) p.track;
+            g_base_kind = CAT_KIND_ROOM;
+        } else {
+            base = scene_of_room(g_release, g_serial, obj);
+            g_base_kind = CAT_KIND_SCENE;
+        }
         g_cur_room = obj; g_have_room = 1; g_base_cat = base; g_event_cat = -1;
         if (g_room_fn) g_room_fn(obj);
     }
     if (event_cat >= 0) g_event_cat = event_cat;
 
     int target_kind = (g_event_cat >= 0) ? CAT_KIND_EVENT
-                     : (g_base_cat  >= 0) ? CAT_KIND_SCENE : CAT_KIND_NONE;
+                     : (g_base_cat  >= 0) ? g_base_kind : CAT_KIND_NONE;
     if (target_kind == CAT_KIND_NONE) { g_turn_len = 0; g_turn_text[0] = 0; return; }
     int target = (g_event_cat >= 0) ? g_event_cat : g_base_cat;
 
@@ -976,7 +1006,8 @@ void music_on_turn(unsigned int obj) {
             g_same_cat_rooms++;
             if (g_pending_rotate) {
                 g_pending_frames = g_debounce_frames;  /* still walking: keep settling */
-            } else if (g_same_cat_rooms >= MUSIC_ROTATE_ROOMS) {
+            } else if (g_active_kind != CAT_KIND_ROOM
+                       && g_same_cat_rooms >= MUSIC_ROTATE_ROOMS) {
                 /* Three rooms of one scene. Move to another track in the same
                    category -- pick_dynamic_track steers off what is sounding, so
                    the change is audible -- and tell the art to move too.

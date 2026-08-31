@@ -155,6 +155,13 @@ jobs:
           cp -r tools/assets/. "$STAGE/"
           rm -rf "$STAGE/png"
           rm -rf "$STAGE/tests"
+          # Both are gitignored, so a CI checkout never has them -- this is for a
+          # packaging run on a working tree that has already built a disc. BG is
+          # the extracted room-background archives (2 MB, and the end user's own
+          # bg.bat re-fetches them); cache is the several-hundred-megabyte disc
+          # download those archives came out of.
+          rm -rf "$STAGE/BG"
+          rm -rf "$STAGE/cache"
 
           
           # Ensure working dirs exist but are empty save for .gitkeep.

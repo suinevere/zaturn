@@ -57,9 +57,49 @@ jobs:
           mkdir -p "tools/assets/$DISC"
           cp "saturn/BuildDrop/${DISC}.iso" "tools/assets/$DISC/${DISC}.iso"
 
+      # Must precede the injection step: games.bat maps tools/assets/BG to /BG in
+      # the same xorriso commit that places the stories, so a BG staged after it
+      # would never reach the disc. Lifted out of the data track of the Zork I
+      # (Japan) disc that AUDIO_URL already names -- the same download the audio
+      # step makes, cached so it is only fetched once.
+      - name: Stage room backgrounds
+        working-directory: tools/assets
+        run: |
+          set -e
+          bash bg.bat
+          test "$(ls -1 BG/*.CGL | wc -l)" -eq 11
+
       - name: Download games + inject
         working-directory: tools/assets
         run: bash games.bat
+
+      # The archives are what every room background on the disc is decoded from,
+      # and room_art.cxx opens them by the literal path /BG/<STEM>.CGL. Nothing
+      # upstream fails if they are absent: the disc boots, and every room simply
+      # shows no picture. So it is checked here, against the finished image.
+      - name: Check the room backgrounds reached the disc
+        working-directory: tools/assets
+        run: |
+          set -e
+          python3 - <<'PY'
+          import hashlib, sys
+          sys.path.insert(0, "../..")
+          sys.path.insert(0, "../../tools")
+          from saturn_translate.iso import SaturnImage
+          from extract_bg import BG_MANIFEST
+
+          disc = "Zaturn - Complete (USA) (Netlink Edition)"
+          img = SaturnImage.from_file(f"{disc}/{disc}.bin")
+          names = {e.path for e in img.list_files()}
+          missing = [n for n in BG_MANIFEST if f"/BG/{n}" not in names]
+          assert not missing, f"/BG is missing {missing} -- every room would show no picture"
+          for name, (size, digest) in BG_MANIFEST.items():
+              data = img.extract("/BG/" + name)
+              assert len(data) == size, f"{name} is {len(data)} bytes on the disc, expected {size}"
+              got = hashlib.sha256(data).hexdigest()
+              assert got == digest, f"{name} sha256 {got} on the disc, expected {digest}"
+          print(f"/BG: {len(BG_MANIFEST)} archives present and byte-identical on the built disc")
+          PY
 
       - name: Check the disc's story manifest covers every injected game
         working-directory: tools/assets

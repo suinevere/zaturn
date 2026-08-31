@@ -11,11 +11,24 @@
 :; DISC_NAME=$(cfg DISC_NAME)
 :; OUTPUT_DIR=$(cfg OUTPUT_DIR); OUTPUT_DIR=${OUTPUT_DIR:-./Zaturn - Complete (USA) (Netlink Edition)}
 :;
-:; # 2. Download and Extract Audio
+:; # 2. Download and Extract Audio.
+:; # AUDIO_URL is the Zork I (Japan) disc, and bg.bat pulls the room-background
+:; # archives out of that same download. Share its cache rather than fetching
+:; # several hundred megabytes twice per build -- the two agree on the path by
+:; # convention, and a miss here costs a download, not a failure. Staged through
+:; # .part so an interrupted fetch cannot leave a truncated zip that the next
+:; # run trusts.
 :; tmp=$(mktemp -d)
-:; echo "Downloading audio files: $AUDIO_URL"
-:; curl -L -o "$tmp/audio.zip" "$AUDIO_URL"
-:; unzip -qo "$tmp/audio.zip" -d "$tmp/img"
+:; CACHE="cache/zork1jp.zip"
+:; if [ ! -f "$CACHE" ]; then
+:;   mkdir -p cache
+:;   echo "Downloading audio files: $AUDIO_URL"
+:;   curl -fL --retry 2 -o "$CACHE.part" "$AUDIO_URL"
+:;   mv "$CACHE.part" "$CACHE"
+:; else
+:;   echo "Using the disc image bg.bat already cached: $CACHE"
+:; fi
+:; unzip -qo "$CACHE" -d "$tmp/img"
 :;
 :; # 3. Setup Final Output Directory -- OUTPUT_DIR *is* the disc folder; DISC_NAME
 :; # only names the files inside it (matching what games.bat writes there).
@@ -52,11 +65,23 @@ SET "TMP_IMG=%TEMP%\mzaudio"
 IF EXIST "%TMP_IMG%" RMDIR /S /Q "%TMP_IMG%"
 MKDIR "%TMP_IMG%"
 
-ECHO Downloading audio files: %AUDIO_URL%
-curl -L -o "%TEMP%\mzaudio.zip" "%AUDIO_URL%"
-IF ERRORLEVEL 1 ( ECHO ERROR: audio download failed & EXIT /B 1 )
+REM AUDIO_URL is the Zork I (Japan) disc, and bg.bat pulls the room-background
+REM archives out of that same download. Share its cache rather than fetching
+REM several hundred megabytes twice per build. The path must match the sh block
+REM above and bg.bat's SUINEVERE-style cache exactly, or a build that switches
+REM shells re-downloads.
+SET "CACHE=cache\zork1jp.zip"
+IF NOT EXIST "%CACHE%" (
+    IF NOT EXIST "cache" MKDIR "cache"
+    ECHO Downloading audio files: %AUDIO_URL%
+    curl -fL --retry 2 -o "%CACHE%.part" "%AUDIO_URL%"
+    IF ERRORLEVEL 1 ( ECHO ERROR: audio download failed & EXIT /B 1 )
+    MOVE /Y "%CACHE%.part" "%CACHE%" >NUL
+) ELSE (
+    ECHO Using the disc image bg.bat already cached: %CACHE%
+)
 
-powershell -NoProfile -Command "Expand-Archive -Path '%TEMP%\mzaudio.zip' -DestinationPath '%TMP_IMG%' -Force"
+powershell -NoProfile -Command "Expand-Archive -Path '%CACHE%' -DestinationPath '%TMP_IMG%' -Force"
 IF ERRORLEVEL 1 ( ECHO ERROR: failed to extract audio zip & EXIT /B 1 )
 
 ECHO Processing files and merging directories...

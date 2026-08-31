@@ -868,6 +868,11 @@ void sound_options_page(void) {
  |   ScrollEnable: the current room's category picture in game, the house picture
  |   the title screen put up in the main menu. The engine's own g_dyn_slot is
  |   untouched underneath, so the next mood change resolves normally.
+ |     The pin cannot resolve on an authored game: title_bg_loaded_file returns
+ |   the area stem room_art_show passed to title_bg_show_raw ("BCEL"), not a
+ |   disc image name, so display_image_slot always misses and the pin stays
+ |   empty. display_apply() has its own guard for that case -- see its header --
+ |   so the room picture holds regardless.
  |     Uses the full 40
  |   columns rather than the 38 the other pages use. Values print at x + 17,
  |   leaving 20 columns before the border, so "< %s >" fits a name of at most

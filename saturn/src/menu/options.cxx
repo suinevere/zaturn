@@ -18,6 +18,7 @@
 #include "dash_view.h"  // dash_tint, the marble's sixteen CRAM entries
 #ifndef NETBIN
 #include "title.h"
+#include "room_art.h"
 #endif
 
 extern "C" {
@@ -124,8 +125,13 @@ void text_set_color(unsigned short rgb555, unsigned short bg555) {
  |   caller that can be reached with CD-DA playing has to cover that: the mode
  |   menu pauses the track around options_menu() (main.cxx) and the in-game
  |   Options menu already did (saturn_glue.cxx).
+ |     When no image resolves and the palette is Dynamic on an authored game,
+ |   the "no image" branch is skipped instead of hiding NBG0: room_art owns that
+ |   layer on this path and title_bg_loaded_file's area stem can never resolve
+ |   through display_image_slot, so hiding here would blank the room picture
+ |   every time this page re-applies (Display Options cancel, any cycler press).
  | Author: suinevere
- | Dependencies: display.h, title.h, SRL
+ | Dependencies: display.h, title.h, room_art.h, SRL
  | Globals: g_display
  | Params: N/A
  | Returns: true if applied; false if a load failed and the fallback was
@@ -154,7 +160,10 @@ bool display_apply(void) {
             SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
             return false;
         }
-    } else {
+    } else if (g_display.palette != DISP_PAL_DYNAMIC || !room_art_available()) {
+        // Dynamic on an authored game has no slot to resolve to (the loaded
+        // file is an area stem, not a disc image name) -- leave room_art's
+        // picture on NBG0 rather than blank it.
         title_bg_hide();
     }
 #endif

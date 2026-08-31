@@ -5,6 +5,16 @@
 #include <string.h>
 #include <assert.h>
 
+static void test_menu_screen_rows_matches_hardware(void) {
+    /* The real screen is 30 text rows -- console_view.cxx's SCREEN_ROWS, which
+       is defined FROM this constant rather than carrying its own copy (see
+       menu_layout.h). Pinned here as a bare literal, not MENU_SCREEN_ROWS
+       itself, so a future edit to the constant that does not also match the
+       real hardware row count fails this test rather than just moving every
+       centred box together and off true center. */
+    assert(MENU_SCREEN_ROWS == 30);
+}
+
 static void test_fit_centers_a_normal_box(void) {
     int x0, y0, w, h;
     /* title 5 cols, content 20 cols, 5 rows -> w = 20+4, h = 5+4 */
@@ -12,7 +22,7 @@ static void test_fit_centers_a_normal_box(void) {
     assert(w == 24);
     assert(h == 9);
     assert(x0 == (40 - 24) / 2);   /* 8 */
-    assert(y0 == (28 - 9) / 2);    /* 9 */
+    assert(y0 == (30 - 9) / 2);    /* 10 */
 }
 
 static void test_fit_widens_for_a_long_title(void) {
@@ -22,14 +32,14 @@ static void test_fit_widens_for_a_long_title(void) {
     assert(w == 26);
     assert(h == 6);
     assert(x0 == 7);
-    assert(y0 == 11);
+    assert(y0 == 12);
 }
 
 static void test_fit_clamps_to_the_screen(void) {
     int x0, y0, w, h;
     menu_box_fit("X", 50, 40, &x0, &y0, &w, &h);
     assert(w == 40);            /* clamped to MENU_SCREEN_COLS */
-    assert(h == 28);            /* clamped to MENU_SCREEN_ROWS */
+    assert(h == 30);            /* clamped to MENU_SCREEN_ROWS */
     assert(x0 == 0);
     assert(y0 == 0);
 }
@@ -41,7 +51,7 @@ static void test_fit_never_goes_negative(void) {
     assert(h >= 4);
     assert(x0 >= 0 && y0 >= 0);
     assert(x0 + w <= 40);
-    assert(y0 + h <= 28);
+    assert(y0 + h <= 30);
 }
 
 static void test_fit_handles_null_title(void) {
@@ -53,7 +63,7 @@ static void test_fit_handles_null_title(void) {
     assert(h == 7);
     assert(x0 >= 0 && y0 >= 0);
     assert(x0 + w <= 40);
-    assert(y0 + h <= 28);
+    assert(y0 + h <= 30);
 }
 
 static void test_fit_clamps_negative_inputs(void) {
@@ -62,12 +72,12 @@ static void test_fit_clamps_negative_inputs(void) {
        clamp on menu_layout.c:13-14, not just fall through by luck.
        With empty title: tlen=0, content_w clamped to 0, rows clamped to 0,
        so bw = max(0, 0) + 4 = 4, bh = 0 + 4 = 4,
-       x0 = (40-4)/2 = 18, y0 = (28-4)/2 = 12. */
+       x0 = (40-4)/2 = 18, y0 = (30-4)/2 = 13. */
     menu_box_fit("", -50, -40, &x0, &y0, &w, &h);
     assert(w == 4);
     assert(h == 4);
     assert(x0 == 18);
-    assert(y0 == 12);
+    assert(y0 == 13);
 }
 
 static void test_fit_survives_int_max_inputs(void) {
@@ -79,13 +89,13 @@ static void test_fit_survives_int_max_inputs(void) {
     assert(w == 40);
     assert(x0 >= 0 && y0 >= 0);
     assert(x0 + w <= 40);
-    assert(y0 + h <= 28);
+    assert(y0 + h <= 30);
 
     menu_box_fit("X", 5, INT_MAX, &x0, &y0, &w, &h);
-    assert(h == 28);
+    assert(h == 30);
     assert(x0 >= 0 && y0 >= 0);
     assert(x0 + w <= 40);
-    assert(y0 + h <= 28);
+    assert(y0 + h <= 30);
 }
 
 static void test_plain_digit_picks_a_row_forward(void) {
@@ -182,6 +192,7 @@ static void test_dim_row_label_fits(void) {
 }
 
 int main(void) {
+    test_menu_screen_rows_matches_hardware();
     test_fit_centers_a_normal_box();
     test_fit_widens_for_a_long_title();
     test_fit_clamps_to_the_screen();

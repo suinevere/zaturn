@@ -21,17 +21,20 @@
 #include "game_kb.h"
 #include "input.h"
 #include "dash_view.h"
+#include "menu_layout.h"   // MENU_SCREEN_ROWS, the one place the row count is literal
 
 // ---- rendering -------------------------------------------------------------
 
 /*----------------------
  | SCREEN_ROWS
- | Description: The 30 text rows (0..29) the debug layer provides. The on-screen
- |   keyboard occupies the bottom rows when shown; when hidden (real keyboard in
- |   hand) those rows go back to the console for more text.
+ | Description: The text rows (0..MENU_SCREEN_ROWS-1) the debug layer provides,
+ |   taken from menu_layout.h rather than a second literal so this and the menu
+ |   framework's own screen geometry cannot read different row counts. The
+ |   on-screen keyboard occupies the bottom rows when shown; when hidden (real
+ |   keyboard in hand) those rows go back to the console for more text.
  | Author: suinevere
  ----------------------*/
-static const int SCREEN_ROWS = 30;
+static const int SCREEN_ROWS = MENU_SCREEN_ROWS;
 
 /*----------------------
  | TOP_MARGIN

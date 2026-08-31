@@ -17,7 +17,7 @@ extern "C" {
 /*----------------------
  | DASH_COLS / DASH_ROWS
  | Description: The shadow's shape: the 40 columns a 320-pixel screen shows, and
- |   32 rows covering the 28 the program draws on with room to spare, matching
+ |   32 rows covering the 30 the program draws on with room to spare, matching
  |   text_map's TEXT_ROWS. The hardware map's pitch is 64 cells; dash_view
  |   supplies that when it flushes.
  | Author: suinevere

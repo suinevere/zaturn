@@ -25,8 +25,8 @@
 /*----------------------
  | TEXT_ROWS / TEXT_COLS / TEXT_CLEAR_COLS
  | Description: The shadow's shape. TEXT_COLS is the hardware map's 64-cell pitch
- |   (only the leftmost 40 are on screen at 320px); TEXT_ROWS covers the 29 rows
- |   (0..28) the program draws on with room to spare. TEXT_CLEAR_COLS is how wide
+ |   (only the leftmost 40 are on screen at 320px); TEXT_ROWS covers the 30 rows
+ |   (0..29) the program draws on with room to spare. TEXT_CLEAR_COLS is how wide
  |   text_clear_line blanks, matching the 44 columns SRL::Debug::PrintClearLine
  |   cleared so no caller loses coverage it used to have.
  | Author: suinevere

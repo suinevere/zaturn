@@ -32,7 +32,7 @@
      gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/t \
          saturn/tests/test_music_pause.c saturn/src/sound/music.c \
          saturn/src/sound/music_data.c saturn/src/sound/event_scan.c \
-         saturn/src/scene/scene_map.c && /tmp/t
+         saturn/src/scene/scene_map.c saturn/src/scene/presentation.c && /tmp/t
 */
 #include "../src/sound/music.h"
 #include <stdio.h>

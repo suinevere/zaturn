@@ -7,7 +7,7 @@
  |   gcc -O2 -I saturn/src -I saturn/src/sound -I saturn/src/scene -o /tmp/tms \
  |       saturn/tests/test_music_scene.c saturn/src/sound/music.c \
  |       saturn/src/sound/music_data.c saturn/src/sound/event_scan.c \
- |       saturn/src/scene/scene_map.c && /tmp/tms
+ |       saturn/src/scene/scene_map.c saturn/src/scene/presentation.c && /tmp/tms
  | Author: suinevere
  ----------------------*/
 #include <stdio.h>
@@ -48,28 +48,32 @@ int main(void) {
     check(music_track_from_mask(1UL << 30, 0) == 32, "the last disc track is reachable");
     check(music_track_from_mask(1UL << 0, 0) == MUSIC_TRACK_MIN, "bit 0 is the first track");
 
-    /* An event taking over the track must NOT announce a category. Object 38
-       of Zork I (release 88, serial "840726") carries an authored scene
-       (SC_CAVE, per saturn/src/scene/game_rooms.inc's GAME_ROOM_ZORK1) so
-       entering it fires the category callback once. Then the very same room
-       prints the death banner; the event overrides the mix, the callback must
-       stay silent, and the track must still audibly move. */
+    /* An event taking over the track must NOT announce a category. Object 21
+       of ADVENT (release 1, serial "151001") carries an authored scene
+       (SC_MAZE, per saturn/src/scene/game_rooms.inc's GAME_ROOM_ADVENT) so
+       entering it fires the category callback once. ADVENT, not Zork I: it
+       carries no presentation table (only Zork I does), so its rooms stay on
+       the scene path this test means to exercise -- Zork I's own rooms now
+       take the room-track path instead (see test_music_presentation.c) and
+       would silence the very callback this test is checking. Then the very
+       same room prints the death banner; the event overrides the mix, the
+       callback must stay silent, and the track must still audibly move. */
     {
         music_set_backend(rec_play);
         music_set_isplaying(isplaying_true);
         music_set_category_fn(rec_cat);
-        music_set_game(88, "840726");
+        music_set_game(1, "151001");
         music_set_mix(MIX_DYNAMIC, 10);
         music_reset();
         music_set_debounce_frames(0);
 
         g_cat_calls = 0;
-        music_on_turn(38);
+        music_on_turn(21);
         check(g_cat_calls == 1, "entering a scene fires the category callback once");
         int scene_track = g_track;
 
         music_note_output("**** You have died ****", 23);
-        music_on_turn(38);      /* same room: the death banner overrides the mix */
+        music_on_turn(21);      /* same room: the death banner overrides the mix */
         music_tick();           /* commit the (zero-frame) debounced switch */
         check(g_cat_calls == 1,
               "an event taking over the track must NOT announce a category");

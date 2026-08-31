@@ -42,6 +42,7 @@ that were already local (see the previous handoff) plus these 4:
 | `5788345` | `tools/gen_pool.py` -> `tools/assets/zork1_pool.json`, the picture/track catalogue and per-scene evidence |
 | `ade1818` | The category art system removed, engine and tools |
 | `e1329d8` | Presentation table extended to 31 games; `tools/pres_server.py` review app |
+| `ea3aae5` | Build fix: `pre_build` repointed off the deleted `make_tga.py` |
 
 The `.CGL` tracking question the two earlier handoffs both flagged is **settled
 and reversed**: `saturn/cd/data/BG/` is gone, `tools/assets/BG/` is gitignored,
@@ -115,6 +116,32 @@ screen, which is the only reason a removal this wide was safe.
    and `saturn/tests/test_netbin_story_pin.py` imports it. Caught by running
    that test, not by reading.
 
+### The one thing the removal broke, and how it was missed
+
+`saturn/pre.makefile`'s `pre_build` recipe ran `tools/convert-backgrounds.sh`,
+which ran `make_tga.py` on **every build**. Deleting `make_tga.py` broke the
+build outright -- the owner hit it immediately:
+
+    ****** Converting PNG backgrounds to TGA ******
+    can't open file '...tools\make_tga.py': [Errno 2] No such file or directory
+    make: *** [pre.makefile:6: pre_build] Error 2
+
+The reconnaissance had asked which `.bat` scripts and CI workflows invoked the
+deleted tools, and correctly answered "none". It never asked about the
+**makefile**, and neither did I. `pre.makefile` is four lines long and I had
+already read it once, looking for something else.
+
+Fixed in `ea3aae5`: `gen_title_art.py` now takes the same two optional roots
+`make_tga.py` did, the wrapper is renamed `convert-title-art.sh` (room
+backgrounds do not pass through it at all any more), and `pre.makefile` says
+"Converting title art to TGA". Verified by running `sh ../tools/convert-title-art.sh`
+from `saturn/` exactly as `make` does, and by running `make all DEBUG=1` far
+enough to see `pre_build` succeed and compilation begin.
+
+**The lesson for the next wide deletion:** grep the build system, not just the
+scripts. `saturn/makefile`, `pre.makefile`, `post.makefile`, `compile*.bat`,
+`CMakeLists.txt` and `.github/` were all swept clean afterwards and are.
+
 ## Two real defects found by tests, both fixed
 
 **Thirty games would have fallen silent.** An unmapped room used to get a scene
@@ -171,7 +198,14 @@ are stacked and only one has evidence.
 **Nothing has been built for the SH-2 or run, on Mednafen or hardware.** Same
 ceiling as both previous handoffs.
 
-- `sh saturn/syntax-check.sh` clean, DEBUG and release, and again under `NETBIN=1`.
+- `sh saturn/syntax-check.sh` clean, DEBUG and release, and again under
+  `NETBIN=1` -- this runs the real `sh2eb-elf-g++` in `-fsyntax-only` mode over
+  every source, so every file type-checks against the actual SRL headers for the
+  actual target.
+- `make all DEBUG=1` gets through `pre_build` and starts compiling. It could not
+  be run to completion here: this session's sandbox denies the cross-compiler a
+  temp file (`Cannot create temporary file in C:\WINDOWS\`), so no ELF or ISO
+  was produced. **The link step remains unproven.**
 - 20 host C tests build and pass, including the rewritten `test_display.c`,
   `test_music_static.c`, `test_music_pause.c` and `test/music_mix_test.c`.
 - 67 Python tests pass (`tools/tests/`), including 22 new ones in

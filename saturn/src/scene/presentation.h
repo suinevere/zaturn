@@ -4,8 +4,23 @@
  |   tools/gen_presentation.py -- the picture, CD-DA track and sound-effect bank
  |   the original console release used for one room of one game. Games without a
  |   table are unaffected and keep the scene path in scene_map.h.
+ |     game_presentation.inc itself is included only by presentation.c, the way
+ |   scene_map.c alone includes game_rooms.inc/game_tracks.inc -- its 256-entry
+ |   room table, IMAGE_FRAME and PRES_AREA have no business being copied into
+ |   every translation unit that just wants to call pres_of_room. What every
+ |   caller does need -- the three record types and the two counts a caller can
+ |   size an array or a loop against -- are declared below instead, copied by
+ |   hand from the .inc and required to stay byte-identical to it (a generator
+ |   run that changes them has to update both).
+ |     The block is guarded on PRES_FRAME_N rather than unconditional: when
+ |   presentation.c includes game_presentation.inc ahead of this header (the
+ |   only place both ever meet), the .inc's own typedefs and counts have
+ |   already landed and redeclaring them here would conflict -- a
+ |   typedef-of-an-anonymous-struct is a distinct type on every occurrence,
+ |   even with identical members, so "harmless duplicate" is not available the
+ |   way it is for a #define.
  | Author: suinevere
- | Dependencies: game_presentation.inc
+ | Dependencies: N/A
  ----------------------*/
 #ifndef PRESENTATION_H
 #define PRESENTATION_H
@@ -14,7 +29,33 @@
 extern "C" {
 #endif
 
-#include "game_presentation.inc"
+#ifndef PRES_FRAME_N
+typedef struct {
+    unsigned char image;
+    unsigned char track;
+    unsigned char se_bank;
+} Presentation;
+typedef struct {
+    unsigned char area;
+    unsigned long offset;
+    unsigned long length;
+} PresFrame;
+typedef struct {
+    unsigned short release;
+    const char *serial;
+    const Presentation *rooms;
+} GamePresMap;
+
+/*----------------------
+ | PRES_FRAME_N / PRES_AREA_N
+ | Description: The frame and area-archive counts from game_presentation.inc,
+ |   copied here so a caller (or a test) can size against them without pulling
+ |   in the table itself. Must equal the .inc's own PRES_FRAME_N/PRES_AREA_N.
+ | Author: suinevere
+ ----------------------*/
+#define PRES_FRAME_N 74
+#define PRES_AREA_N 11
+#endif /* PRES_FRAME_N */
 
 /*----------------------
  | pres_game_index

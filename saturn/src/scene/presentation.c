@@ -2,10 +2,14 @@
  | presentation.c
  | Description: See presentation.h.
  | Author: suinevere
- | Dependencies: string.h, presentation.h
+ | Dependencies: string.h, presentation.h, game_presentation.inc
  | Globals: GAME_PRES_MAP, IMAGE_FRAME, PRES_AREA
  ----------------------*/
 #include <string.h>
+
+// Ahead of presentation.h: its typedef/count block is guarded on PRES_FRAME_N
+// so it steps aside once the .inc below has already defined the same names.
+#include "game_presentation.inc"
 #include "presentation.h"
 
 /*----------------------

@@ -33,6 +33,7 @@
 #include "options.h"
 #include "saturn_keyboard.h"
 #include "soft_reset.h"
+#include "map_view.h"
 
 extern "C" {
 #include "keyboard.h"
@@ -804,9 +805,12 @@ static void gameplay_page(void) {
     const int GP_ROW_W   = 29;
     const int GP_VALUE_W = 10;
     static const char *const NAMES[] = { "Easy", "Medium", "Hard" };
-    static const char *const DESC[]  = { "Typeahead by Walkthrough",
-                                         "Typeahead by Valid Words",
-                                         "Typeahead Off" };
+    // Both things the difficulty governs, matching the CD build's wording: the
+    // Map row on the pause menu goes when Hard is picked, and this line is the
+    // only warning of it.
+    static const char *const DESC[]  = { "Full map; typeahead: walkthrough",
+                                         "Explored map; typeahead: words",
+                                         "No map; typeahead off" };
     static const char *const VNAMES[] = { "Superbrief", "Brief", "Verbose" };
     static const char *const VDESC[]  = { "Room names only",
                                           "Full text on first visit",
@@ -875,70 +879,92 @@ static void gameplay_page(void) {
 
 /*----------------------
  | netbin_pause_menu
- | Description: See netbin_pages.h.
+ | Description: See netbin_pages.h. The Map row is present at Easy and Medium
+ |   and absent at Hard, the same rule the CD build's options_menu applies. The
+ |   row set is therefore built by a closure that runs again when Gameplay
+ |   returns, since that page is where the difficulty changes.
  | Author: suinevere
  | Dependencies: menu.c, menu_layout.c, console_view.c, input.c,
  |   saturn_keyboard.h, soft_reset.h (check_soft_reset,
- |   confirm_return_to_title)
- | Globals: g_kbd_visible, g_menu_page_fade
+ |   confirm_return_to_title), map_view.h (map_view_show)
+ | Globals: g_kbd_visible, g_menu_page_fade, g_difficulty
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void netbin_pause_menu(void) {
     MenuBacking backing;
-    enum { PI_RESUME, PI_DISPLAY, PI_GAMEPLAY, PI_CONTROLS, PI_RESTART, PI_N };
+    enum { PI_RESUME, PI_MAP, PI_DISPLAY, PI_GAMEPLAY, PI_CONTROLS, PI_RESTART, PI_N };
     static const char *const LABEL[PI_N] = {
-        "Resume", "Display", "Gameplay", "Controls", "Restart"
+        "Resume", "Map", "Display", "Gameplay", "Controls", "Restart"
     };
 
-    int label_w = 0;
-    for (int i = 0; i < PI_N; i++) {
-        int n = 0;
-        while (LABEL[i][n]) n++;
-        if (n > label_w) label_w = n;
-    }
-    const int PM_ROW_W = MENU_DIGIT_COLS + label_w;
+    int items[PI_N], nitems = 0, label_w = 0, row_w = 0, x0, y0, w, h;
+    // Remembered as an item ID rather than an index, because Hard drops a row
+    // and the same index then names a different entry than it did last visit.
+    static int last_item = PI_RESUME;
+    int sel = 0;
+    // A closure because Gameplay is on this menu and Gameplay is where the
+    // difficulty is set: built once, the Map row a player had just turned Hard
+    // on to be rid of would sit there, pickable, until the menu was reopened.
+    auto build = [&]() {
+        nitems = 0;
+        items[nitems++] = PI_RESUME;
+        if (g_difficulty != DIFF_HARD) items[nitems++] = PI_MAP;
+        items[nitems++] = PI_DISPLAY;
+        items[nitems++] = PI_GAMEPLAY;
+        items[nitems++] = PI_CONTROLS;
+        items[nitems++] = PI_RESTART;
 
-    int x0, y0, w, h;
-    menu_box_fit("PAUSED", 18, PI_N + 2, &x0, &y0, &w, &h);
+        label_w = 0;
+        for (int i = 0; i < nitems; i++) {
+            int n = 0;
+            while (LABEL[items[i]][n]) n++;
+            if (n > label_w) label_w = n;
+        }
+        row_w = MENU_DIGIT_COLS + label_w;
+        menu_box_fit("PAUSED", 18, nitems + 2, &x0, &y0, &w, &h);
 
-    static int last_sel = 0;   // held across visits; the five rows never change
-    int sel = last_sel;
+        sel = 0;
+        for (int i = 0; i < nitems; i++) if (items[i] == last_item) { sel = i; break; }
+    };
+    build();
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
-        if (g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + PI_N) % PI_N;
-        if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % PI_N;
+        if (g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + nitems) % nitems;
+        if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % nitems;
         bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
         bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
-        bool act = menu_digit_row(ke, PI_N, sel, left, right)
+        bool act = menu_digit_row(ke, nitems, sel, left, right)
                  || g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                  || ke.kind == SATURN_KEY_ENTER;
         bool back = g_pad->WasPressed(Button::B) || g_pad->WasPressed(Button::START)
                   || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE;
-        last_sel = sel;   // every frame, so no exit path has to remember to
+        int item = items[sel];
+        last_item = item;   // every frame, so no exit path has to remember to
         if (back) break;
         if (act) {
-            if (sel == PI_RESUME) break;   // exactly what backing out does
-            else if (sel == PI_DISPLAY)  { page_fade_out(g_menu_page_fade); display_options_page(); menu_clear(); need_fade_in = true; }
-            else if (sel == PI_GAMEPLAY) { page_fade_out(g_menu_page_fade); gameplay_page(); need_fade_in = true; }
-            else if (sel == PI_CONTROLS) { page_fade_out(g_menu_page_fade); controls_dispatch(); menu_clear(); need_fade_in = true; }
+            if (item == PI_RESUME) break;   // exactly what backing out does
+            else if (item == PI_MAP)      { page_fade_out(g_menu_page_fade); map_view_show(); menu_clear(); need_fade_in = true; }
+            else if (item == PI_DISPLAY)  { page_fade_out(g_menu_page_fade); display_options_page(); menu_clear(); need_fade_in = true; }
+            else if (item == PI_GAMEPLAY) { page_fade_out(g_menu_page_fade); gameplay_page(); build(); need_fade_in = true; }
+            else if (item == PI_CONTROLS) { page_fade_out(g_menu_page_fade); controls_dispatch(); menu_clear(); need_fade_in = true; }
             // Never returns if accepted: confirm_return_to_title longjmps to
             // main()'s dial loop, which resets the backing depth and the
             // menu service this page was opened under.
-            else if (sel == PI_RESTART)  { confirm_return_to_title("hang up and reboot back to the dial page?"); }
+            else if (item == PI_RESTART)  { confirm_return_to_title("hang up and reboot back to the dial page?"); }
         }
 
         menu_clear();
         menu_frame(x0, y0, w, h, "PAUSED");
         bool nums = !g_kbd_visible;
         int ay = y0 + 4;
-        for (int i = 0; i < PI_N; i++)
-            menu_rowf(x0, w, ay++, i == sel, PM_ROW_W, "%s%s",
-                      menu_num(nums, i), LABEL[i]);
+        for (int i = 0; i < nitems; i++)
+            menu_rowf(x0, w, ay++, i == sel, row_w, "%s%s",
+                      menu_num(nums, i), LABEL[items[i]]);
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }

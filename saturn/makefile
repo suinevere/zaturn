@@ -47,9 +47,14 @@ SOURCES += $(filter-out $(NETBIN_ONLY_SOURCES),$(patsubst ./%,%,$(shell find src
 # docs/superpowers/specs/2026-07-25-netbin-minimal-design.md.
 #
 # The list is explicit rather than a `find`: the whole point of this target is
-# that most of the CD build is absent -- 34 netbin objects against the CD's 54,
+# that most of the CD build is absent -- 37 netbin objects against the CD's 54,
 # 3 of which (main_netbin.cxx, netbin_pages.cxx, typeahead_solution_zork1.c)
 # are netbin-only and never reach the CD build at all.
+#
+# The three map objects are here because multizorkd names the current room
+# out of band and the embedded story image is release 88 serial 840726, so
+# the authored Zork I table binds off it -- everything the map needs was
+# already in this build except the map.
 # tests/test_netbin_sources.py gates it against the spec.
 #
 # LDFILE cannot be set here: shared.mk:10 assigns it with `=` and this file is
@@ -87,6 +92,9 @@ SOURCES = src/main_netbin.cxx \
           src/system/saturn_backup.cxx \
           src/system/netbin_nocd.c \
           src/engine/room_model.c \
+          src/engine/map_model.c \
+          src/engine/map_atlas.c \
+          src/video/map_view.cxx \
           src/input/command_panel.c \
           src/video/command_view.cxx \
           src/engine/app_state.cxx

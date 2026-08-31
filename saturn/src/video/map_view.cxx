@@ -477,11 +477,17 @@ static void draw_once(int sx, int sy) {
  |
  |   The wallpaper is hidden for the map's duration and restored by asking
  |   room_art for the room again, which is free when NBG0 still holds that
- |   frame. It used to be restored by re-showing title_bg_loaded_file() by name,
- |   which was wrong twice over: for a CGL frame that name is an area stem and
- |   no file, so the picture never came back, and on a game with no art at all
- |   the name was still the boot logo's -- so closing the map put the SUINEVERE
- |   logo up behind the game and left it there.
+ |   frame. None of that is compiled into the netbin, which has neither room art
+ |   nor a title background to put back -- the three symbols it would need
+ |   (title_bg_hide, room_art_available, room_art_reshow) are the only ones in
+ |   this file that build does not already link, which is why they are the only
+ |   thing guarded rather than the file being split.
+ |
+ |   The wallpaper used to be restored by re-showing title_bg_loaded_file() by
+ |   name, which was wrong twice over: for a CGL frame that name is an area stem
+ |   and no file, so the picture never came back, and on a game with no art at
+ |   all the name was still the boot logo's -- so closing the map put the
+ |   SUINEVERE logo up behind the game and left it there.
  | Author: suinevere
  | Dependencies: draw_once, extent, map_model.h (map_model_reveal_atlas,
  |   map_model_clear_reveal), dash_map.h, dash_view.h, menu.h, input.h,
@@ -495,10 +501,12 @@ extern "C" void map_view_show(void) {
     MenuBacking backing;
     int sx = 0, sy = 0;
     unsigned short tint = dash_tint_current();
+#ifndef NETBIN
     const bool had_art = (g_display.palette == DISP_PAL_DYNAMIC)
                          && room_art_available() != 0;
 
     title_bg_hide();
+#endif
     dash_tint(MAP_GROUND_555);
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
     else                           map_model_clear_reveal();
@@ -541,5 +549,7 @@ extern "C" void map_view_show(void) {
     text_clear_line(27);
     text_flush();
     dash_tint(tint);
+#ifndef NETBIN
     if (had_art) room_art_reshow();
+#endif
 }

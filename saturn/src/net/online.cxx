@@ -30,6 +30,8 @@
 #endif
 extern "C" {
 #include "room_model.h"
+#include "map_model.h"
+#include "map_atlas.h"
 }
 extern "C" {
 #include "console.h"
@@ -431,6 +433,19 @@ void online_mode(void) {
     term_request_room_id(tr);
     room_model_bind(netbin_story_data(), netbin_story_size());
     room_model_set_exits_only(1);
+    /* The same embedded image the rose decodes is release 88 serial 840726, so
+       the authored Zork I table binds off it and the map can place rooms where
+       Infocom drew them rather than where a graph walk guesses.
+
+       Reset per dial, deliberately. The model's state is file scope and would
+       otherwise outlive this function, carrying the last session's rooms into
+       the next one -- and multizorkd hands out a fresh instance as readily as it
+       reconnects you to your old one (see reconnect_player), so a map that
+       persisted across dials would sometimes be the right game's and sometimes
+       be another's, with nothing here able to tell which. A map that starts
+       empty every session is always honest about what it is showing. */
+    map_atlas_bind(netbin_story_data(), netbin_story_size());
+    map_model_reset();
 #endif
     for (;;) {
         term_service(&ts, tr, ZATURN_RX_BUDGET);
@@ -455,6 +470,11 @@ void online_mode(void) {
 #ifdef NETBIN
         if (ts.room_id_fresh) {
             room_model_refresh_room((unsigned short) ts.room_id);
+            /* The map is fed from the server's id rather than from the screen,
+               which is the whole reason it can exist in this build: no
+               interpreter runs here, but multizorkd names the room out of band
+               and the embedded story knows what that object connects to. */
+            if (room_model_has_room()) map_model_enter(room_model_get());
             ts.room_id_fresh = 0;
         }
 #endif

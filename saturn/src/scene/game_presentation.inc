@@ -1,11 +1,14 @@
 /*----------------------
  | game_presentation.inc
  | Description: GENERATED FILE -- do not edit by hand; produced by
- |   tools/gen_presentation.py. Zork I's per-room picture, CD-DA
- |   track and sound-effect bank indexed by object number, the
- |   frame offsets inside each archive, and the table that keys
- |   them by release and serial. image is 1-based so 0 means
+ |   tools/gen_presentation.py. Every game's per-room picture,
+ |   CD-DA track and sound-effect bank indexed by object number,
+ |   the frame offsets inside each archive, and the table that
+ |   keys them by release and serial. image is 1-based so 0 means
  |   unauthored; track 0 means silence, which ten rooms want.
+ |   Zork I's rows are measured off the original disc; every
+ |   other game's are assigned by hand and drawn from that same
+ |   supply of pictures and tracks.
  | Author: suinevere
  ----------------------*/
 typedef struct {

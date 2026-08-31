@@ -23,6 +23,11 @@
  ----------------------*/"""
 import json
 import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import scene_vocab as vocab
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STORE = ROOT / "tools" / "assets" / "presentation"
@@ -211,7 +216,36 @@ def undo(stem):
     return key
 
 
-def suggest(scene, defaults):
+def scene_of(obj, title, tags):
+    """/*----------------------
+     | scene_of
+     | Description: A room's scene tag: the one a human or a rule already gave
+     |     it, else whatever the title rules can read off its name now.
+     |
+     |     The fallback matters more than it looks. 906 of the 1,857 rooms
+     |     awaiting a verdict were never tagged -- the retired pipeline only
+     |     ever ran over the games someone sat down with -- and without it every
+     |     one of them would open on "no suggestion" and be hand-picked from 74
+     |     pictures. The rules are the same ordered first-match-wins patterns
+     |     that produced the stored tags, so a fallback tag and a stored tag mean
+     |     the same thing; the caller is told which it got so it can say so.
+     | Author: suinevere
+     | Dependencies: scene_vocab
+     | Globals: N/A
+     | Params: obj -- object number; title -- the room's short name; tags --
+     |     the game's stored obj-string -> scene map
+     | Returns: (scene or None, "stored" | "title" | "none")
+     ----------------------*/"""
+    stored = tags.get(str(obj))
+    if stored:
+        return stored, "stored"
+    guess = vocab.scene_for_title(title or "")
+    if guess:
+        return guess, "title"
+    return None, "none"
+
+
+def suggest(scene, defaults, origin="stored"):
     """/*----------------------
      | suggest
      | Description: What to offer for a room, from its scene tag alone.
@@ -219,25 +253,36 @@ def suggest(scene, defaults):
      |     separable in practice: FOREST is four rooms that all took the same
      |     picture and CAVE is thirteen rooms that took ten, and an app that
      |     showed both as "the suggestion" would be lying about one of them.
+     |
+     |     A tag read off the title now is never reported better than "weak",
+     |     however well the underlying scene is supported: two independent
+     |     inferences are stacked at that point -- that the title names the
+     |     scene, and that the scene implies the picture -- and only the second
+     |     one has evidence behind it.
      | Author: suinevere
      | Dependencies: N/A
      | Globals: N/A
      | Params: scene -- the room's scene tag, or None; defaults -- the
-     |     catalogue's scene_defaults
-     | Returns: {image, track, confidence, why} -- confidence is one of
+     |     catalogue's scene_defaults; origin -- "stored" or "title", from
+     |     scene_of
+     | Returns: {image, track, scene, confidence, why} -- confidence is one of
      |     "strong", "weak", "analogue", "none"
      ----------------------*/"""
     if not scene or scene not in defaults:
-        return {"image": 0, "track": 0, "confidence": "none",
-                "why": "no scene tag -- nothing to derive a suggestion from"}
+        return {"image": 0, "track": 0, "scene": None, "confidence": "none",
+                "why": "no scene tag and no title rule matched -- nothing to "
+                       "derive a suggestion from"}
     d = defaults[scene]
+    from_title = " (scene read off the title, not stored)" if origin == "title" else ""
     if d["source"] == "analogue":
-        return {"image": d["image"], "track": d["track"], "confidence": "analogue",
+        return {"image": d["image"], "track": d["track"], "scene": scene,
+                "confidence": "analogue",
                 "why": f"{scene} never appears in Zork I; this is a hand-picked "
-                       "visual stand-in, not evidence"}
+                       f"visual stand-in, not evidence{from_title}"}
     n, sup = d["n"], d["image_support"]
     pct = (100 * sup) // n if n else 0
-    conf = "strong" if pct >= 60 else "weak"
-    return {"image": d["image"], "track": d["track"], "confidence": conf,
+    conf = "strong" if pct >= 60 and origin == "stored" else "weak"
+    return {"image": d["image"], "track": d["track"], "scene": scene,
+            "confidence": conf,
             "why": f"{sup} of {n} Zork I {scene} rooms took this picture ({pct}%); "
-                   f"{d['track_support']} of {n} took track {d['track']}"}
+                   f"{d['track_support']} of {n} took track {d['track']}{from_title}"}

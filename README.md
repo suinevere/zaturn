@@ -323,6 +323,29 @@ Two pieces survive, as **inference inputs only**, never as runtime pickers:
 review app reads both to suggest a picture and a track for a room; a human
 decides.
 
+### The review app
+
+`start_review_server.bat` serves it on <http://127.0.0.1:8080>. One app, replacing
+the two this project used to run:
+
+- **`/`** &mdash; every game, how many of its rooms are decided, and how the rest
+  break down by how well-founded the waiting suggestion is.
+- **`/g/<GAME>`** &mdash; one game's rooms in object order, each with its verdict or
+  its suggestion. *Accept every strong suggestion* takes only the well-founded
+  ones; weak, analogue and unfounded ones are exactly what a human is there for.
+- **`/g/<GAME>/<obj>`** &mdash; one room, with all 74 pictures to choose from and
+  every track offered by name and length.
+- **`/reference`** &mdash; what Zork I actually did, per scene, which is the entire
+  evidential basis for every suggestion.
+
+Suggestions are always shown with their evidence. "4 of 4 Zork I FOREST rooms took
+this picture" and "2 of 13 CAVE rooms took this one" are both suggestions, and an
+interface that rendered them identically would be lying about one of them.
+
+Verdicts land in `tools/assets/presentation/<GAME>.json`, written through on every
+change and reversible with Undo. Run `python tools/gen_presentation.py` to fold
+them into `game_presentation.inc`, then rebuild.
+
 `tools/gen_title_art.py` is what is left of `make_tga.py`. It converts
 `tools/assets/png/TITLE/*.png` into the title screen's own wallpaper and writes
 `title_art.inc`. It is the only remaining TGA producer, and the boot splash

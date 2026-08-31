@@ -21,9 +21,19 @@
  |     exactly once, or a story whose release and serial are not 88 / 840726,
  |     raises instead of writing a zero, because a zero would show up only as
  |     a background that silently fails to change.
+ |     Zork I is the only game whose rows are measured. Every other game on
+ |     the disc draws from that same 74-picture, 31-track supply, but its rooms
+ |     are ASSIGNED by hand through the review app and read here out of
+ |     tools/assets/presentation/<STEM>.json. A game with no such file, or with
+ |     an empty one, emits no row at all rather than a table of zeros -- a
+ |     missing row means "this story has no authored presentation", which the
+ |     runtime already handles by holding whatever picture is showing and
+ |     drawing music from the neutral pool. A row of zeros would mean the same
+ |     thing far less legibly, and would cost 768 bytes each to say it.
  | Author: suinevere
  | Dependencies: csv, json, pathlib, re, sys
- | Globals: ROOT, CSV, ROOMS, ZIL, ALIASES, OUT, AREAS, SE_BANKS, RELEASE, SERIAL
+ | Globals: ROOT, CSV, ROOMS, ZIL, ALIASES, OUT, STORE, AREAS, SE_BANKS,
+ |     RELEASE, SERIAL
  ----------------------*/"""
 import csv
 import json
@@ -38,6 +48,8 @@ ZIL = (ROOT / "cd" / "Zork I - The Great Underground Empire (Japan)"
             / "zork1" / "1dungeon.zil")
 ALIASES = ROOT / "tools" / "assets" / "zork1_room_aliases.json"
 OUT = ROOT / "saturn" / "src" / "scene" / "game_presentation.inc"
+STORE = ROOT / "tools" / "assets" / "presentation"
+INVENTORY = ROOT / "tools" / "assets" / "rooms"
 
 AREAS = ["BBAR", "BCEL", "BDAM", "BDED", "BHUS", "BMAZ",
          "BMIN", "BMIR", "BRIV", "BTMP", "BWOD"]
@@ -229,18 +241,93 @@ def frame_table():
     return rows, seen
 
 
+def assigned_games():
+    """/*----------------------
+     | assigned_games
+     | Description: The hand-assigned per-room tables for every game other than
+     |     Zork I, as (stem, release, serial, rows) with rows a 256-entry list
+     |     of (image, track, se_bank).
+     |
+     |     Release and serial come from the room inventory rather than from a
+     |     table here, because the inventory is generated from the story file
+     |     itself and so cannot disagree with the bytes the runtime will read
+     |     out of the header. se_bank is always 0: the sound-effect banks are
+     |     Zork I's own, keyed to its areas, and nothing plays them for another
+     |     story.
+     |
+     |     Refuses a picture index outside the frame table or a track outside
+     |     the disc, rather than writing it -- both would fail silently at run
+     |     time, one as a wild read into an archive and the other as a seek past
+     |     the last track.
+     | Author: suinevere
+     | Dependencies: json, pathlib
+     | Globals: STORE, INVENTORY
+     | Params: n_frames -- how many pictures the frame table holds
+     | Returns: a list of (stem, release, serial, rows)
+     ----------------------*/"""
+
+
+def load_assigned(n_frames):
+    if not STORE.is_dir():
+        return []
+    out = []
+    for path in sorted(STORE.glob("*.json")):
+        stem = path.stem
+        if stem == "ZORK1":
+            raise SystemExit(
+                "gen_presentation: tools/assets/presentation/ZORK1.json exists, but "
+                "Zork I's table is measured from the original disc and must not be "
+                "hand-assigned -- delete it")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        rooms = data.get("rooms", {})
+        if not rooms:
+            continue
+
+        inv_path = INVENTORY / f"{stem}.json"
+        if not inv_path.is_file():
+            raise SystemExit(f"gen_presentation: {stem} has assignments but no "
+                             f"room inventory at {inv_path}")
+        inv = json.loads(inv_path.read_text(encoding="utf-8"))
+        release, serial = int(inv["release"]), str(inv["serial"])
+
+        rows = [(0, 0, 0)] * 256
+        n = 0
+        for obj_s, rec in rooms.items():
+            obj = int(obj_s)
+            if obj >= 256:
+                raise SystemExit(f"gen_presentation: {stem} object {obj} is outside "
+                                 "the 256-entry table")
+            image = int(rec.get("image", 0))
+            track = int(rec.get("track", 0))
+            if image and not (1 <= image <= n_frames):
+                raise SystemExit(f"gen_presentation: {stem} object {obj} names picture "
+                                 f"{image}, outside the {n_frames} the archives hold")
+            if track != 0 and not (2 <= track <= 32):
+                raise SystemExit(f"gen_presentation: {stem} object {obj} names track "
+                                 f"{track}, which is neither silence nor a disc track")
+            if image == 0 and track == 0:
+                continue          # an explicit "leave this room alone"
+            rows[obj] = (image, track, 0)
+            n += 1
+        if n:
+            out.append((stem, release, serial, rows))
+    return out
+
+
 def main(argv):
     """/*----------------------
      | main
-     | Description: Writes game_presentation.inc.
+     | Description: Writes game_presentation.inc -- Zork I's measured rows plus
+     |     one row per game that has hand-assigned ones.
      | Author: suinevere
      | Dependencies: pathlib
-     | Globals: OUT, AREAS, SE_BANKS, RELEASE, SERIAL
+     | Globals: OUT, AREAS, SE_BANKS, RELEASE, SERIAL, STORE
      | Params: argv -- command-line arguments (unused; accepted for test calls)
      | Returns: 0
      ----------------------*/"""
     join = build_join()
     frames, index_of = frame_table()
+    assigned = load_assigned(len(frames))
 
     pres = [(0, 0, 0)] * 256
     for obj, sat in join.items():
@@ -256,11 +343,14 @@ def main(argv):
     lines = ["/*----------------------",
              " | game_presentation.inc",
              " | Description: GENERATED FILE -- do not edit by hand; produced by",
-             " |   tools/gen_presentation.py. Zork I's per-room picture, CD-DA",
-             " |   track and sound-effect bank indexed by object number, the",
-             " |   frame offsets inside each archive, and the table that keys",
-             " |   them by release and serial. image is 1-based so 0 means",
+             " |   tools/gen_presentation.py. Every game's per-room picture,",
+             " |   CD-DA track and sound-effect bank indexed by object number,",
+             " |   the frame offsets inside each archive, and the table that",
+             " |   keys them by release and serial. image is 1-based so 0 means",
              " |   unauthored; track 0 means silence, which ten rooms want.",
+             " |   Zork I's rows are measured off the original disc; every",
+             " |   other game's are assigned by hand and drawn from that same",
+             " |   supply of pictures and tracks.",
              " | Author: suinevere",
              " ----------------------*/",
              "typedef struct {",
@@ -278,7 +368,7 @@ def main(argv):
              "    const char *serial;",
              "    const Presentation *rooms;",
              "} GamePresMap;",
-             "#define PRES_GAME_N 1",
+             f"#define PRES_GAME_N {1 + len(assigned)}",
              f"#define PRES_FRAME_N {len(frames)}",
              f"#define PRES_AREA_N {len(AREAS)}",
              "static const char *const PRES_AREA[PRES_AREA_N] = {"]
@@ -294,13 +384,25 @@ def main(argv):
         chunk = ", ".join(f"{{ {a}, {b}, {c} }}" for a, b, c in pres[i:i + 4])
         lines.append(f"    {chunk},")
     lines.append("};")
+    for stem, _release, _serial, rows in assigned:
+        lines.append(f"static const Presentation GAME_PRES_{stem}[256] = {{")
+        for i in range(0, 256, 4):
+            chunk = ", ".join(f"{{ {a}, {b}, {c} }}" for a, b, c in rows[i:i + 4])
+            lines.append(f"    {chunk},")
+        lines.append("};")
     lines.append("static const GamePresMap GAME_PRES_MAP[PRES_GAME_N] = {")
     lines.append(f'    {{ {RELEASE}, "{SERIAL}", GAME_PRES_ZORK1 }},')
+    for stem, release, serial, _rows in assigned:
+        lines.append(f'    {{ {release}, "{serial}", GAME_PRES_{stem} }},')
     lines.append("};")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with OUT.open("w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
+    print(f"Wrote {OUT.relative_to(ROOT)}: {1 + len(assigned)} games, "
+          f"{len(frames)} pictures")
+    for stem, _r, _s, rows in assigned:
+        print(f"  {stem}: {sum(1 for r in rows if r != (0, 0, 0))} rooms")
     return 0
 
 

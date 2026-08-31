@@ -1,4 +1,4 @@
-# Dependencies for the local review server (tools/art_server.py) only.
+# Dependencies for the local review server (tools/pres_server.py) only.
 # Deliberately NOT in requirements.txt: convert-backgrounds.sh installs that
 # into the build venv on every build, and the build has no use for a web server.
 #   pip install -r tools/requirements-review.txt

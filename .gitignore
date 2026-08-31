@@ -93,3 +93,9 @@ analysis/**/*.bin
 # than baking them into the base ISO.
 tools/assets/BG/
 tools/assets/cache/
+
+# Per-room picture/track assignments in progress. The COMMITTED record is
+# game_presentation.inc, generated from these by tools/gen_presentation.py --
+# but these are the source of record for the assignments themselves, so they
+# ARE tracked. Only the atomic-write temp file is not.
+tools/assets/presentation/*.json.tmp

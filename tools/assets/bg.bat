@@ -32,7 +32,7 @@
 :; AUDIO_URL=$(cfg AUDIO_URL || true)
 :;
 :; # Prefer the review venv when it exists, for the same reason
-:; # start_asset_servers.bat does -- it is the interpreter this project's Python
+:; # start_review_server.bat does -- it is the interpreter this project's Python
 :; # is known to run under. extract_bg.py itself needs only the standard library
 :; # and saturn_translate, so a bare python3 is a fine fallback.
 :; PY="../.venv/bin/python"
@@ -92,7 +92,7 @@ FOR /F "usebackq tokens=1,* delims==" %%A IN ("CONFIG.ME") DO (
     IF "%%A"=="AUDIO_URL" SET "AUDIO_URL=%%B"
 )
 
-REM Prefer the review venv when it exists, matching start_asset_servers.bat.
+REM Prefer the review venv when it exists, matching start_review_server.bat.
 SET "PY=%~dp0..\.venv\Scripts\python.exe"
 IF NOT EXIST "%PY%" SET "PY=python"
 

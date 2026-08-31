@@ -60,19 +60,6 @@ def test_shape_titles_refuse():
         assert v.scene_for_title(t) is None, t
 
 
-def test_every_scene_has_fetch_nouns():
-    for name in v.SCENES:
-        assert v.FETCH_NOUNS.get(name), name
-
-
-def test_fetch_nouns_carry_no_dead_adjectives():
-    dead = {"torchlit", "bustling", "creaking", "moored", "wooden",
-            "dimly lit", "eerie", "foreboding", "ominous"}
-    for name, nouns in v.FETCH_NOUNS.items():
-        for n in nouns:
-            assert n not in dead, f"{name}: {n} scored 0 in 589d6c5"
-
-
 def test_physical_bridges_refuse_rather_than_guess():
     for t in ("Stone Bridge", "Drawbridge", "Foot Bridge", "North of Bridge", "Bridge"):
         assert v.scene_for_title(t) is None, t

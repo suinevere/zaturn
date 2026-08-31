@@ -1,25 +1,32 @@
 #!/usr/bin/env python3
 """Scene vocabulary and title rules.
 
-Description: The 32 scenes a room can be tagged with, the ordered title rules
-    that decide the obvious ones, and the stock-photo nouns each scene is
-    fetched with. Single source of truth: the C enum in
-    saturn/src/scene/scene_map.h is generated against SCENES, and
-    tools/art_nouns.py derives its query vocabulary from FETCH_NOUNS.
+Description: The 32 scenes a room can be tagged with, and the ordered title
+    rules that decide the obvious ones.
 
-    SCENES order is a table index in three generated C tables. Appending is
-    safe; reordering silently repoints every row.
+    Nothing generates C from this any more and nothing fetches anything with
+    it. It survives as an INFERENCE INPUT for the presentation review app:
+    tools/pres_store.py reads a room's stored scene tag, falls back to
+    scene_for_title when the room was never tagged, and uses the result only to
+    suggest which Zork I picture and track a human might want. The scene never
+    reaches the Saturn.
+
+    SCENES was a table index in three generated C tables, all of which are gone
+    with the category art system, so reordering is no longer dangerous -- but
+    tools/assets/scenes/*.json stores scenes by NAME, so a rename still orphans
+    every room tagged with the old one.
 
     RULES is ordered and first-match-wins, so priority is expressed by position
     rather than by weights. "Shore Road" is a road, so `road` precedes `shore`.
+    A rule whose scene is None is an explicit refusal: a title naming a shape
+    ("Dead End", "Cube") cannot be resolved from the title, and refusing is
+    better than guessing.
 
-    Every noun in FETCH_NOUNS is a word a photographer types. 589d6c5 measured
-    that experience adjectives never return a keeper -- `torchlit` 0/14,
-    `bustling` 0/12, against `misty` 85% -- and a guard test carries the dead
-    list by name.
+    FETCH_NOUNS -- the stock-photo query words each scene was searched with --
+    went with the fetcher it fed.
 Author: suinevere
 Dependencies: N/A
-Globals: SCENES, SCENE_INDEX, RULES, FETCH_NOUNS
+Globals: SCENES, SCENE_INDEX, RULES
 """
 
 SCENES = (
@@ -96,41 +103,6 @@ RULES = (
     ("bridge", None),
     ("airlock", "SPACE"), ("orbit", "SPACE"), ("space", "SPACE"),
 )
-
-FETCH_NOUNS = {
-    "FOREST":    ("forest", "woodland", "pine grove", "birch woods", "clearing"),
-    "GARDEN":    ("garden", "orchard", "courtyard", "hedge"),
-    "DESERT":    ("desert", "sand dune", "oasis", "arid plain"),
-    "ROCKY":     ("canyon", "cliff", "rock ledge", "mountain"),
-    "SHORE":     ("beach", "rocky shore", "ocean", "lake"),
-    "RIVER":     ("river", "stream", "waterfall", "rapids"),
-    "ROAD":      ("dirt road", "country lane", "cobbled street", "footpath"),
-    "CAVE":      ("cave", "cavern", "rock tunnel", "grotto", "alcove"),
-    "MAZE":      ("stone maze", "hedge maze", "labyrinth"),
-    "MINE":      ("mine tunnel", "mine shaft", "quarry"),
-    "PIT":       ("chasm", "crevasse", "deep pit"),
-    "CRYPT":     ("crypt", "catacomb", "stone tomb", "vault"),
-    "HOUSE_EXT": ("cottage", "farmhouse", "clapboard house", "canvas tent"),
-    "VILLAGE":   ("village street", "old town square", "market square", "building"),
-    "CASTLE":    ("castle", "stone tower", "ruined fortress"),
-    "DOCK":      ("wharf", "wooden pier", "harbour", "quay"),
-    "PARLOR":    ("parlour", "sitting room", "dining room", "entrance hall", "ballroom"),
-    "KITCHEN":   ("kitchen", "pantry", "ship galley"),
-    "BEDROOM":   ("bedroom", "bunk room"),
-    "BATHROOM":  ("bathroom", "washroom"),
-    "LIBRARY":   ("library", "bookshelves", "study desk"),
-    "DARKROOM":  ("attic", "cellar", "cluttered closet"),
-    "CORRIDOR":  ("stone corridor", "narrow hallway", "wooden staircase"),
-    "OFFICE":    ("vintage office", "desk", "filing cabinet"),
-    "LAB":       ("laboratory", "control room", "instrument panel"),
-    "STORAGE":   ("storeroom", "warehouse", "crates", "shelving"),
-    "CELL":      ("prison cell", "dungeon", "iron bars"),
-    "THEATER":   ("theatre stage", "auditorium", "empty theatre"),
-    "TEMPLE":    ("temple", "stone altar", "chapel", "shrine"),
-    "SHIP_EXT":  ("ship deck", "sailing ship", "bow of ship", "boat"),
-    "SHIP_INT":  ("ship cabin", "engine room", "ship bridge"),
-    "SPACE":     ("airlock", "earth from orbit", "starfield"),
-}
 
 
 def scene_for_title(title):

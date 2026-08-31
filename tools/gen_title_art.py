@@ -219,21 +219,26 @@ def write_title_inc(n, path):
         f.write(text)
 
 
-def main():
+def main(argv):
     """/*----------------------
      | main
      | Description: Converts the title pictures and rewrites the count.
+     |     Takes the source PNG tree and the disc TGA tree as optional
+     |     positional arguments, defaulting to this repo's own, because the
+     |     build wrapper passes both and a hand run wants neither.
      | Author: suinevere
      | Dependencies: convert_title, write_title_inc
      | Globals: PNG_DIR, TGA_DIR, INC
-     | Params: N/A
+     | Params: argv -- argument list without the program name
      | Returns: 0
      ----------------------*/"""
-    n = convert_title(PNG_DIR, TGA_DIR)
+    src = pathlib.Path(argv[0]) if len(argv) > 0 else PNG_DIR
+    dst = pathlib.Path(argv[1]) if len(argv) > 1 else TGA_DIR
+    n = convert_title(src, dst)
     write_title_inc(n, INC)
     print(f"Wrote {INC.relative_to(ROOT)}: TITLE_ART_N {n}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

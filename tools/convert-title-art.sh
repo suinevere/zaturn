@@ -1,5 +1,12 @@
 #!/bin/sh
-# Convert the staged PNG backgrounds into 8bpp paletted TGAs for the Saturn disc.
+# Convert the staged title-screen PNGs into 8bpp paletted TGAs for the Saturn
+# disc, and provision the asset-tool virtualenv the build depends on.
+#
+# Room backgrounds do NOT come through here. They are Zork I's own compressed
+# CGL frames, injected into /BG by tools/assets/bg.bat after the build and
+# decoded on the Saturn -- they are never TGAs and never touch this script.
+# What is left is the title screen's own wallpaper, which has no game to key
+# off and so is addressed by literal filename.
 #
 # Invoked by saturn/pre.makefile on every build, and runnable by hand from any
 # directory. Provisions tools/.venv on first run and does no network access
@@ -19,7 +26,7 @@ DST="$REPO/saturn/cd/data/TGA"
 
 warn() {
     echo ""
-    echo "  *** background conversion skipped ***"
+    echo "  *** title-art conversion skipped ***"
     echo "  $1"
     echo "  The build continues using the TGAs already in saturn/cd/data/TGA/."
     echo ""
@@ -73,4 +80,4 @@ if ! "$PY" -c 'import PIL' 2>/dev/null; then
     }
 fi
 
-"$PY" "$REPO/tools/make_tga.py" "$SRC" "$DST"
+"$PY" "$REPO/tools/gen_title_art.py" "$SRC" "$DST"

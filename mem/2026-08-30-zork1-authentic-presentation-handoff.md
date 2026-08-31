@@ -5,6 +5,14 @@ metadata:
   type: project
 ---
 
+**PARTLY STALE as of 2026-08-31.** The branch this describes no longer exists as
+a series: all 27 of its commits were squashed onto `main` as `02ebc6c`, and three
+further fixes landed inside that squash. The task table and the branch tips below
+are history, not the tree. Everything else here -- the two alias rows, the twenty
+unproven room orderings, Task 9's rejection, the `.CGL` tracking decision, the
+four out-of-scope sub-projects -- still stands. See
+[[dynamic-palette-strip-shift-and-mix-removal-handoff]].
+
 Branch `zork1-authentic-presentation`, off `main` at `14fe384`. Spec
 `docs/superpowers/specs/2026-08-30-zork1-authentic-backgrounds-and-audio-design.md`,
 plan `docs/superpowers/plans/2026-08-30-zork1-authentic-backgrounds-and-audio.md`,

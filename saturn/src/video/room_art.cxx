@@ -44,6 +44,17 @@ static unsigned char  *g_pixels = nullptr;
 static unsigned short  g_clut[256];
 
 /*----------------------
+ | g_cur_image
+ | Description: The 1-based image index last successfully shown by this module,
+ |   or -1 for none. room_art_show compares its resolved image against this
+ |   before touching the CGL decode or NBG0 -- several rooms across the maze
+ |   share a frame, and re-decoding + re-uploading 76.8 KB for a picture that
+ |   is already on screen is wasted work on every step through them.
+ | Author: suinevere
+ ----------------------*/
+static int g_cur_image = -1;
+
+/*----------------------
  | ART_DIR
  | Description: The disc directory holding the area archives.
  | Author: suinevere
@@ -52,20 +63,21 @@ static unsigned short  g_clut[256];
 
 /*----------------------
  | frame_of
- | Description: Resolves one room to its frame: the area, and where the record
- |   lies inside that area's archive.
+ | Description: Resolves one room to its frame: the image index, the area, and
+ |   where the record lies inside that area's archive.
  | Author: suinevere
  | Dependencies: scene/presentation.h
  | Globals: g_have_game, g_release, g_serial
- | Params: obj -- the room's object number; area, offset, length -- filled on
- |   success
+ | Params: obj -- the room's object number; image, area, offset, length --
+ |   filled on success
  | Returns: true when the room is authored
  ----------------------*/
-static bool frame_of(unsigned int obj, int *area,
+static bool frame_of(unsigned int obj, int *image, int *area,
                      unsigned long *offset, unsigned long *length) {
     Presentation p;
     if (!g_have_game) return false;
     if (!pres_of_room(g_release, g_serial, obj, &p)) return false;
+    if (image != nullptr) *image = (int) p.image;
     return pres_frame((int) p.image, area, offset, length) == 1;
 }
 
@@ -169,18 +181,44 @@ int room_art_available(void) { return g_have_game ? 1 : 0; }
 /*----------------------
  | room_art_show
  | Description: See room_art.h.
+ |     Short-circuits when the resolved image is the one g_cur_image already
+ |   names AND title_bg_loaded_file() still names this area's archive -- the
+ |   second check is load-bearing, not redundant: title_bg_loaded_file is what
+ |   actually recorded what is on NBG0, so it catches an archive swap or
+ |   another caller (Display Options, the title screen) having taken NBG0 over
+ |   in between, a case g_cur_image alone cannot see since nothing outside this
+ |   file can update it.
  | Author: suinevere
  | Dependencies: SRL, cgl.h, title.h
  | Globals: g_have_game, g_release, g_serial, g_area, g_archive, g_archive_len,
- |   g_pixels, g_clut
+ |   g_pixels, g_clut, g_cur_image
  | Params: obj -- the room's object number
- | Returns: 1 when a new picture was applied
+ | Returns: 1 when the room's picture is on screen (freshly shown or already
+ |   there), 0 on failure, which holds whatever was showing before
  ----------------------*/
 int room_art_show(unsigned int obj) {
-    int area;
+    int image, area;
     unsigned long off, len;
 
-    if (!frame_of(obj, &area, &off, &len)) return 0;
+    if (!frame_of(obj, &image, &area, &off, &len)) return 0;
+
+    if (image == g_cur_image) {
+        const char *tag = pres_area_name(area);
+        bool same = tag != nullptr;
+        if (same) {
+            const char *loaded = title_bg_loaded_file();
+            int i = 0;
+            for (; tag[i] != '\0'; i++) {
+                if (loaded[i] != tag[i]) { same = false; break; }
+            }
+            if (same && loaded[i] != '\0') same = false;
+        }
+        if (same) {
+            SRL::VDP2::NBG0::ScrollEnable();
+            return 1;
+        }
+    }
+
     if (area != g_area && !load_area(area)) return 0;
     if (g_archive == nullptr || off + len > g_archive_len) return 0;
 
@@ -193,8 +231,10 @@ int room_art_show(unsigned int obj) {
     if (cgl_decode(g_archive + off, len, g_pixels, CGL_FRAME_BYTES)
         != (unsigned long) CGL_FRAME_BYTES) return 0;
 
-    return title_bg_show_raw(g_pixels, g_clut, CGL_WIDTH, CGL_HEIGHT,
-                             pres_area_name(area)) ? 1 : 0;
+    bool ok = title_bg_show_raw(g_pixels, g_clut, CGL_WIDTH, CGL_HEIGHT,
+                                pres_area_name(area));
+    if (ok) g_cur_image = image;
+    return ok ? 1 : 0;
 }
 
 /*----------------------
@@ -202,7 +242,7 @@ int room_art_show(unsigned int obj) {
  | Description: See room_art.h.
  | Author: suinevere
  | Dependencies: SRL
- | Globals: g_area, g_archive, g_archive_len, g_pixels, g_have_game
+ | Globals: g_area, g_archive, g_archive_len, g_pixels, g_have_game, g_cur_image
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -214,4 +254,5 @@ void room_art_release(void) {
     g_archive_len = 0;
     g_area = -1;
     g_have_game = false;
+    g_cur_image = -1;
 }

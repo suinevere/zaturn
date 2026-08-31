@@ -57,14 +57,21 @@ int room_art_available(void);
  |   and says nothing on screen. Art is decoration; a failed load must never be
  |   able to blank the screen or stop the game.
  |
+ |   Skips the decode and the NBG0 upload when the resolved picture is the one
+ |   already showing (several maze rooms share a frame), verified against what
+ |   is actually recorded on NBG0 rather than only this module's own memory of
+ |   what it last drew, so a picture taken over by another caller since is
+ |   never mistaken for still being resident.
+ |
  |   Restores the CD to the story directory before returning whenever it stepped
  |   out of it, which is the obligation every post-selection detour owes.
  | Author: suinevere
  | Dependencies: SRL, cgl.h, scene/presentation.h, title.h
  | Globals: g_have_game, g_release, g_serial, g_area, g_archive, g_archive_len,
- |   g_pixels, g_clut
+ |   g_pixels, g_clut, g_cur_image
  | Params: obj -- the room's object number
- | Returns: 1 when a new picture was applied, 0 when nothing changed
+ | Returns: 1 when the room's picture is on screen, whether freshly shown or
+ |   already there; 0 on failure, which holds whatever was showing before
  ----------------------*/
 int room_art_show(unsigned int obj);
 

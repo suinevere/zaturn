@@ -69,61 +69,12 @@ static short          g_dxs[MAP_VIS_MAX];
 static short          g_dys[MAP_VIS_MAX];
 
 /*----------------------
- | paint_link
- | Description: Paints the cells joining a room at (cx, cy) to another one or
- |   two grid steps away, with ddx and ddy already normalised so that room is
- |   the left-hand or upper end of the pair. A room is four cells from the next,
- |   so a colinear link fills every cell of the gap and reads as one groove
- |   running mark to mark rather than as a dash floating in it. A diagonal pair
- |   -- which Zork's forest is full of, and which the collision search also
- |   produces -- gets a single cell at the midpoint instead: the tile set has no
- |   diagonal glyph, and the netbin carries dash_tiles.c under a hard size gate,
- |   so adding one is not free.
- |
- |   Two steps is a case, not an edge case: UP and DOWN step two cells so a
- |   staircase cannot land on the cell north or south already wants, so every
- |   stair link in the map is this length. The caller is what guarantees a
- |   two-step run is colinear and that the cell it passes through is empty; a
- |   longer run through an occupied cell would read as joining whatever sits in
- |   it.
- | Author: suinevere
- | Dependencies: dash_map.h
- | Globals: N/A
- | Params: cx, cy -- the source room's cell; ddx -- 0, 1 or 2; ddy -- -2 to 2,
- |   never zero at the same time as ddx, and zero whenever ddx is 2; kind --
- |   MAP_LINK_FLAT or MAP_LINK_VERT
- | Returns: N/A
- ----------------------*/
-static void paint_link(int cx, int cy, int ddx, int ddy, int kind)
-{
-    int k;
-    if (ddy == 0) {
-        unsigned char t = (unsigned char)
-            (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_H);
-        for (k = 1; k < ddx * MAP_CELLS; k++) dash_map_paint(cx + k, cy, t);
-        return;
-    }
-    if (ddx == 0) {
-        unsigned char t = (unsigned char)
-            (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_V);
-        for (k = 1; k < ddy * MAP_CELLS; k++) dash_map_paint(cx, cy + k, t);
-        return;
-    }
-    dash_map_paint(cx + MAP_CELLS / 2, cy + ddy * (MAP_CELLS / 2),
-                   (unsigned char)
-                   (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_H));
-}
-
-/*----------------------
  | occupied
- | Description: Whether one of the gathered rooms sits at an offset from the
- |   player. Used to decide whether a two-step link may run through the cell
- |   between its ends.
- |
- |   Asking the gathered set rather than the model is complete for that
- |   question: gather() takes every placed room whose offset falls inside the
- |   viewport, and the midpoint of two cells that are both inside it is inside
- |   it too.
+ | Description: Whether one of the gathered rooms sits at a viewport offset.
+ |   Asking the gathered set rather than the model is complete for the question
+ |   a link needs to ask, because gather() takes every placed room whose offset
+ |   falls inside the viewport and a link between two of them runs entirely
+ |   inside it.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_dxs, g_dys
@@ -136,6 +87,89 @@ static int occupied(int n, int dx, int dy)
     for (i = 0; i < n; i++)
         if (g_dxs[i] == (short) dx && g_dys[i] == (short) dy) return 1;
     return 0;
+}
+
+/*----------------------
+ | cell_is_mark
+ | Description: Whether a text cell is the one a room's mark occupies. Only
+ |   cells on the four-cell grid can be, so the two divisions are guarded by the
+ |   remainders rather than performed on every cell of a link.
+ | Author: suinevere
+ | Dependencies: occupied
+ | Globals: N/A
+ | Params: cx, cy -- the cell; n -- how many rooms gather() returned
+ | Returns: 1 when a room mark holds the cell, 0 otherwise
+ ----------------------*/
+static int cell_is_mark(int cx, int cy, int n)
+{
+    int gy = cy - MAP_TOP;
+    if (cx % MAP_CELLS != 0 || gy % MAP_CELLS != 0) return 0;
+    return occupied(n, cx / MAP_CELLS - MAP_CX, gy / MAP_CELLS - MAP_CY);
+}
+
+/*----------------------
+ | paint_link
+ | Description: Draws the run of cells joining two room marks, whatever the
+ |   offset between them, painting nothing on a cell a room mark already holds.
+ |
+ |   This replaces a rule that only joined rooms one grid step apart, and the
+ |   replacement is not a refinement -- the old rule was wrong the moment the
+ |   authored table arrived. A graph walk puts every linked pair exactly one
+ |   step from each other, so a one-step rule lost nothing; the atlas places
+ |   rooms where Infocom drew them, which spreads a linked pair across as many
+ |   as six lanes. Measured against the shipped table, the old rule painted 26
+ |   of the 59 links Zork I has between placed rooms. The rest were simply not
+ |   there, which is exactly what the map looked like.
+ |
+ |   The route is a dogleg: half the horizontal distance, then all the vertical,
+ |   then the rest of the horizontal. Two bends, wherever the pair sits. The
+ |   obvious alternative -- stepping whichever axis keeps nearest the true line,
+ |   so the bend is spread evenly -- was drawn out and rejected: over the
+ |   thirteen rooms visible from West of House it laid 176 cells of ink with ten
+ |   crossings against the dogleg's 151 and two, and read as a dithered diagonal
+ |   rather than as a passage. Both are the same length, so the cost is only in
+ |   how it looks.
+ |
+ |   Every step moves in x or in y and never both, because the tile set has a
+ |   horizontal groove and a vertical one and no diagonal, and dash_tiles.c sits
+ |   on the netbin's size-gated source list so adding one is not free.
+ |
+ |   Neither endpoint is painted, and that needs no test of its own: paint_link
+ |   is only ever called for two gathered rooms, so cell_is_mark answers for both
+ |   ends as it does for anything else in the way. draw_once paints the marks
+ |   after the links regardless, so a mark wins even if that reasoning ever stops
+ |   holding.
+ | Author: suinevere
+ | Dependencies: dash_map.h, cell_is_mark
+ | Globals: N/A
+ | Params: ax, ay -- the source mark's cell; bx, by -- the destination mark's;
+ |   n -- how many rooms gather() returned; kind -- MAP_LINK_FLAT or
+ |   MAP_LINK_VERT
+ | Returns: N/A
+ ----------------------*/
+static void paint_link(int ax, int ay, int bx, int by, int n, int kind)
+{
+    int dx = bx - ax, dy = by - ay;
+    int sx = dx < 0 ? -1 : 1, sy = dy < 0 ? -1 : 1;
+    int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+    int half = adx / 2, k, x = ax, y = ay;
+    unsigned char h = (unsigned char)
+        (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_H);
+    unsigned char v = (unsigned char)
+        (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_V);
+
+    for (k = 0; k < half; k++) {
+        x += sx;
+        if (!cell_is_mark(x, y, n)) dash_map_paint(x, y, h);
+    }
+    for (k = 0; k < ady; k++) {
+        y += sy;
+        if (!cell_is_mark(x, y, n)) dash_map_paint(x, y, v);
+    }
+    for (k = half; k < adx; k++) {
+        x += sx;
+        if (!cell_is_mark(x, y, n)) dash_map_paint(x, y, h);
+    }
 }
 
 /*----------------------
@@ -152,12 +186,14 @@ static int occupied(int n, int dx, int dy)
  | Params: N/A
  | Returns: how many rooms were gathered
  ----------------------*/
-static int gather(void)
+static int gather(int sx, int sy)
 {
     int r, n = 0;
     for (r = 1; r < MAP_ROOM_MAX && n < MAP_VIS_MAX; r++) {
         int dx = 0, dy = 0;
         if (!map_model_offset((unsigned short) r, &dx, &dy)) continue;
+        dx -= sx;
+        dy -= sy;
         if (dx < -MAP_CX || dx >= MAP_ROOMS_W - MAP_CX) continue;
         if (dy < -MAP_CY || dy >= MAP_ROOMS_H - MAP_CY) continue;
         g_ids[n] = (unsigned short) r;
@@ -169,35 +205,61 @@ static int gather(void)
 }
 
 /*----------------------
- | draw_once
- | Description: Paints one frame of the map: the ground, every placed room
- |   within the viewport, the links between them, and the current room's name
- |   along the bottom. Clears the text layer first, because the caller is the
- |   Options menu, which redraws its title and every row each frame and would
- |   otherwise leave them lit over a map whose box border dash_map_begin has
- |   just blanked. Called exactly once, when map_view_show opens the screen;
- |   the walk is gather() and then a pairwise pass over what it returned, both
- |   bounded by the viewport rather than by the placed set. Pairs one grid step
- |   apart are joined in any of the eight directions; pairs two apart only when
- |   they are colinear and the cell between them holds no room, since there is
- |   no line renderer here and a mark laid across an occupied cell would read as
- |   joining whatever sits in it. Two steps is what a staircase now is, UP and
- |   DOWN having been given a step of two so they cannot land where north and
- |   south already want to be, so this is the ordinary case for a stair rather
- |   than a concession to the collision search. Anything further apart is still
- |   left unlinked. map_view_show keeps
- |   the NBG2 claim alive across the frames after this one with dash_map_hold,
- |   which re-touches the layer without repainting it; the text labels this
- |   writes need no such upkeep, since text_map has no per-frame expiry and
- |   what it prints persists until something overwrites it.
+ | extent
+ | Description: The bounding box of every placed room, as offsets from the
+ |   player. It is what the scroll is clamped to, so the view cannot be walked
+ |   off into empty ground and lost -- at either limit the centre of the
+ |   viewport sits on the outermost room rather than past it.
  | Author: suinevere
- | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, menu.h,
- |   gather, paint_link, occupied
- | Globals: g_ids, g_dxs, g_dys
- | Params: N/A
+ | Dependencies: map_model.h
+ | Globals: N/A
+ | Params: x0, x1, y0, y1 -- receive the box; all zero when nothing is placed
  | Returns: N/A
  ----------------------*/
-static void draw_once(void) {
+static void extent(int *x0, int *x1, int *y0, int *y1)
+{
+    int r, first = 1;
+    *x0 = *x1 = *y0 = *y1 = 0;
+    for (r = 1; r < MAP_ROOM_MAX; r++) {
+        int dx = 0, dy = 0;
+        if (!map_model_offset((unsigned short) r, &dx, &dy)) continue;
+        if (first) { *x0 = *x1 = dx; *y0 = *y1 = dy; first = 0; continue; }
+        if (dx < *x0) *x0 = dx;
+        if (dx > *x1) *x1 = dx;
+        if (dy < *y0) *y0 = dy;
+        if (dy > *y1) *y1 = dy;
+    }
+}
+
+/*----------------------
+ | draw_once
+ | Description: Paints one whole frame of the map at a scroll offset: the
+ |   ground, every placed room the viewport reaches, the links between them, and
+ |   the current room's name along the bottom. Clears the text layer first,
+ |   because the caller is the Options menu, which redraws its title and every
+ |   row each frame and would otherwise leave them lit over a map whose box
+ |   border dash_map_begin has just blanked.
+ |
+ |   Every pair of gathered rooms the story links is joined, at whatever
+ |   distance -- paint_link's header has why that is not the rule it used to be.
+ |   The walk is gather() and then a pairwise pass over what it returned, both
+ |   bounded by the viewport rather than by the placed set, which is what keeps
+ |   this inside one frame; it used to nest the scan inside the pairwise loop and
+ |   spent about a dozen frames between one menu_sync and the next, long enough
+ |   to starve the looping PCM hand-off.
+ |
+ |   Called on open and again on each scroll step, and on nothing else.
+ |   map_view_show holds the NBG2 claim between those with dash_map_hold, which
+ |   re-touches the layer without repainting it; the text this writes needs no
+ |   such upkeep, since text_map has no per-frame expiry.
+ | Author: suinevere
+ | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, menu.h,
+ |   gather, paint_link
+ | Globals: g_ids, g_dxs, g_dys
+ | Params: sx, sy -- the scroll offset in rooms, zero with the player centred
+ | Returns: N/A
+ ----------------------*/
+static void draw_once(int sx, int sy) {
     int n, i, j;
 
     menu_clear();
@@ -209,7 +271,19 @@ static void draw_once(void) {
             dash_map_paint(c, MAP_TOP + i, DT_GROUND);
     }
 
-    n = gather();
+    n = gather(sx, sy);
+
+    for (i = 0; i < n; i++) {
+        for (j = i + 1; j < n; j++) {
+            int kind = map_model_link(g_ids[i], g_ids[j]);
+            if (kind == MAP_LINK_NONE) continue;
+            paint_link((MAP_CX + g_dxs[i]) * MAP_CELLS,
+                       MAP_TOP + (MAP_CY + g_dys[i]) * MAP_CELLS,
+                       (MAP_CX + g_dxs[j]) * MAP_CELLS,
+                       MAP_TOP + (MAP_CY + g_dys[j]) * MAP_CELLS,
+                       n, kind);
+        }
+    }
 
     for (i = 0; i < n; i++) {
         int cx = (MAP_CX + g_dxs[i]) * MAP_CELLS;
@@ -218,36 +292,12 @@ static void draw_once(void) {
                        g_ids[i] == map_model_current() ? DT_ROOM_HERE : DT_ROOM);
     }
 
-    for (i = 0; i < n; i++) {
-        for (j = i + 1; j < n; j++) {
-            int ddx = g_dxs[j] - g_dxs[i];
-            int ddy = g_dys[j] - g_dys[i];
-            int src = i, ady, kind;
-            if (ddx < 0 || (ddx == 0 && ddy < 0)) {
-                src = j; ddx = -ddx; ddy = -ddy;
-            }
-            ady = ddy < 0 ? -ddy : ddy;
-            if (ddx == 0 && ady == 0) continue;
-            if (ddx > 2 || ady > 2) continue;
-            if (ddx > 1 && ady != 0) continue;
-            if (ady > 1 && ddx != 0) continue;
-            if ((ddx > 1 || ady > 1)
-                && occupied(n, g_dxs[src] + ddx / 2, g_dys[src] + ddy / 2))
-                continue;
-            kind = map_model_link(g_ids[i], g_ids[j]);
-            if (kind == MAP_LINK_NONE) continue;
-            paint_link((MAP_CX + g_dxs[src]) * MAP_CELLS,
-                       MAP_TOP + (MAP_CY + g_dys[src]) * MAP_CELLS,
-                       ddx, ddy, kind);
-        }
-    }
-
     {
         char nm[40];
         text_print_str(2, 1, "MAP");
         if (room_model_object_name(map_model_current(), nm, (int) sizeof nm))
             text_print_str(2, 26, nm);
-        text_print_str(2, 27, "Any button or key: back");
+        text_print_str(2, 27, "D-pad: scroll   A/B/C: back");
         text_flush();
     }
 }
@@ -255,18 +305,29 @@ static void draw_once(void) {
 /*----------------------
  | map_view_show
  | Description: See map_view.h. Holds itself the way every full-screen page in
- |   menu_pages.cxx does (credits_page is the closest analog): a loop that
- |   polls input, checks for an exit, and otherwise advances the frame -- not
- |   a single draw followed by menu_wait's generic block, which does not
- |   re-touch dash_map's NBG2 claim and so would lose it a frame after
- |   draw_once painted it. draw_once runs exactly once, before the loop;
- |   dash_map_hold keeps the claim alive on every frame after that without
- |   repeating draw_once's room/link walk. dash_tint rewrites the sixteen CRAM
- |   entries every NBG2 tile draws from, so the tan is captured on the way in
- |   and put back on the way out; without that the gamepad strip and every menu
- |   box wear it for the rest of the session.
+ |   menu_pages.cxx does (credits_page is the closest analog): a loop that polls
+ |   input, checks for an exit, and otherwise advances the frame -- not a single
+ |   draw followed by menu_wait's generic block, which does not re-touch
+ |   dash_map's NBG2 claim and so would lose it a frame after draw_once painted
+ |   it.
+ |
+ |   The D-pad scrolls the map a room at a time, through the same
+ |   pad_repeat_update/pad_fired pair every other page uses for held movement, so
+ |   the delay before it runs on matches the rest of the interface. The offset
+ |   starts at zero on every open and is never carried across one, so the player
+ |   is centred each time the screen appears however far it was scrolled when it
+ |   last closed -- there is no scroll position to restore because none is kept.
+ |   extent() clamps it to the rooms actually placed, so the view cannot be
+ |   walked off into empty ground.
+ |
+ |   draw_once runs on open and on each step that changes the offset, and not on
+ |   frames where nothing moved: dash_map_hold keeps the claim alive on those
+ |   without repeating the room and link walk. dash_tint rewrites the sixteen
+ |   CRAM entries every NBG2 tile draws from, so the tan is captured on the way
+ |   in and put back on the way out; without that the gamepad strip and every
+ |   menu box wear it for the rest of the session.
  | Author: suinevere
- | Dependencies: draw_once, dash_map.h, dash_view.h, menu.h, input.h,
+ | Dependencies: draw_once, extent, dash_map.h, dash_view.h, menu.h, input.h,
  |   saturn_keyboard.h, soft_reset.h, console_view.h, title.h
  | Globals: N/A
  | Params: N/A
@@ -275,7 +336,7 @@ static void draw_once(void) {
 extern "C" void map_view_show(void) {
     MenuBacking backing;
     char was[64];
-    int i = 0;
+    int i = 0, sx = 0, sy = 0;
     unsigned short tint = dash_tint_current();
     const char *cur = title_bg_loaded_file();
     while (cur[i] && i < (int) sizeof was - 1) { was[i] = cur[i]; i++; }
@@ -283,7 +344,7 @@ extern "C" void map_view_show(void) {
 
     title_bg_hide();
     dash_tint(MAP_GROUND_555);
-    draw_once();
+    draw_once(sx, sy);
     menu_sync();
     for (;;) {
         check_soft_reset();
@@ -293,6 +354,25 @@ extern "C" void map_view_show(void) {
                     g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START) ||
                     ke.kind != SATURN_KEY_NONE;
         if (back) break;
+
+        pad_repeat_update();
+        {
+            int nx = sx, ny = sy, x0, x1, y0, y1;
+            if (pad_fired(Button::Left))  nx--;
+            if (pad_fired(Button::Right)) nx++;
+            if (pad_fired(Button::Up))    ny--;
+            if (pad_fired(Button::Down))  ny++;
+            extent(&x0, &x1, &y0, &y1);
+            if (nx < x0) nx = x0;
+            if (nx > x1) nx = x1;
+            if (ny < y0) ny = y0;
+            if (ny > y1) ny = y1;
+            if (nx != sx || ny != sy) {
+                sx = nx;
+                sy = ny;
+                draw_once(sx, sy);
+            }
+        }
 
         dash_map_hold();
         menu_sync();

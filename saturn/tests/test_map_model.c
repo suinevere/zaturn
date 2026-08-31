@@ -44,6 +44,14 @@ static void link1(RoomModel *m, int dir, unsigned short dest) {
     m->dest[dir]  = dest;
 }
 
+/* Chebyshev distance, which is the metric the placement search works in: the
+   ring at radius r is every cell whose distance is exactly r. */
+static int chebyshev(int dx, int dy) {
+    if (dx < 0) dx = -dx;
+    if (dy < 0) dy = -dy;
+    return dx > dy ? dx : dy;
+}
+
 int main(void) {
     int x = 99, y = 99;
 
@@ -102,10 +110,10 @@ int main(void) {
     map_model_enter(&e1);
     assert(map_model_pos(3, &x, &y) && x == 1 && y == 0);
 
-    /* Now a genuine contest. Room 5 is UP from room 1, and UP steps the same
-       way north does, so it wants (0,-1) -- which room 2 already holds. The
-       spiral's first probe is north, so room 5 must land at (0,-2) and room 2
-       must not have moved. */
+    /* UP must not contest north. Room 5 is UP from room 1 and room 2 is north
+       of it; UP steps two, so room 5 takes (0,-2) outright and nothing is
+       displaced. This used to be the collision fixture, because UP stepped one
+       cell and so wanted the very cell north had already taken. */
     map_model_reset();
     RoomModel c1 = mk(1);
     link1(&c1, RM_N, 2);
@@ -124,6 +132,118 @@ int main(void) {
     map_model_enter(&c5);
     assert(map_model_pos(5, &x, &y) && x == 0 && y == -2);
     assert(map_model_pos(2, &x, &y) && x == 0 && y == -1);
+
+    /* DOWN, IN and OUT are on distinct axes from each other and from every
+       compass direction, so a room with all four plus north and east places
+       six neighbours without one contest. */
+    {
+        int dx, dy;
+        map_model_reset();
+        RoomModel hub = mk(1);
+        link1(&hub, RM_N, 2); link1(&hub, RM_E, 3);
+        link1(&hub, RM_UP, 4); link1(&hub, RM_DOWN, 5);
+        link1(&hub, RM_IN, 6); link1(&hub, RM_OUT, 7);
+        map_model_enter(&hub);
+        {
+            static const struct { unsigned short room; int x, y; } WANT[] = {
+                { 2, 0,-1 }, { 3, 1, 0 }, { 4, 0,-2 },
+                { 5, 0, 2 }, { 6, 2, 0 }, { 7,-2, 0 }
+            };
+            unsigned int k;
+            for (k = 0; k < sizeof WANT / sizeof WANT[0]; k++) {
+                RoomModel nb = mk(WANT[k].room);
+                map_model_enter(&hub);
+                map_model_enter(&nb);
+                assert(map_model_pos(WANT[k].room, &dx, &dy));
+                assert(dx == WANT[k].x && dy == WANT[k].y);
+            }
+        }
+        assert(map_model_count() == 7);
+    }
+
+    /* A genuine contest settles on the nearest ring, not on a ray. Room 5
+       arrives east out of room 4 and wants (0,-1), which room 2 holds; the
+       ring at radius one is otherwise free, so it must land one step from its
+       target -- and so still within the one grid step the view will draw a
+       link across. A room flung further than that is drawn floating. */
+    {
+        int ax, ay;
+        map_model_reset();
+        RoomModel h1 = mk(1); link1(&h1, RM_N, 2); link1(&h1, RM_W, 3);
+        RoomModel h2 = mk(2); link1(&h2, RM_S, 1);
+        RoomModel h3 = mk(3); link1(&h3, RM_E, 1); link1(&h3, RM_N, 4);
+        RoomModel h4 = mk(4); link1(&h4, RM_S, 3); link1(&h4, RM_E, 5);
+        RoomModel h5 = mk(5); link1(&h5, RM_W, 4);
+        map_model_enter(&h1);
+        map_model_enter(&h2);
+        map_model_enter(&h1);
+        map_model_enter(&h3);
+        map_model_enter(&h4);
+        map_model_enter(&h5);
+
+        assert(map_model_pos(2, &x, &y) && x == 0 && y == -1);
+        assert(map_model_pos(4, &x, &y) && x == -1 && y == -1);
+        assert(map_model_pos(5, &ax, &ay));
+        assert(!(ax == 0 && ay == -1));
+        assert(chebyshev(ax - 0, ay - (-1)) == 1);
+        assert(chebyshev(ax - (-1), ay - (-1)) <= 1);
+    }
+
+    /* With the target and its whole radius-one ring taken, the search steps out
+       to radius two and stops there. The hub holds (0,0) and rooms 2-9 hold all
+       eight cells around it; room 22 then walks south out of room 2 and so wants
+       (0,0) itself. Room 10 sits UP from the hub at (0,-2), which takes the
+       first cell of the radius-two ring as well, so the search must go on to
+       the second -- (1,-2), one step clockwise.
+
+       That cell is the whole point of the fix. A ray search probes only eight
+       of the sixteen cells at radius two, and (1,-2) is not among them: with
+       (0,-2) taken it would skip past to (2,0), twice as far from room 2 as it
+       needed to go. The exact coordinate is asserted rather than the radius,
+       because both answers sit at radius two and only the coordinate tells
+       rings from rays. */
+    {
+        static const int DIR8[8] = { RM_N, RM_E, RM_W, RM_S,
+                                     RM_NE, RM_NW, RM_SE, RM_SW };
+        int ax, ay, k;
+        map_model_reset();
+        RoomModel hub = mk(1);
+        for (k = 0; k < 8; k++) link1(&hub, DIR8[k], (unsigned short) (2 + k));
+        link1(&hub, RM_UP, 10);
+        map_model_enter(&hub);
+        for (k = 0; k < 8; k++) {
+            RoomModel nb = mk((unsigned short) (2 + k));
+            map_model_enter(&hub);
+            map_model_enter(&nb);
+        }
+        {
+            RoomModel above = mk(10);
+            map_model_enter(&hub);
+            map_model_enter(&above);
+        }
+        assert(map_model_count() == 10);
+        for (k = 0; k < 8; k++) {
+            assert(map_model_pos((unsigned short) (2 + k), &x, &y));
+            assert(chebyshev(x, y) == 1);
+        }
+        assert(map_model_pos(10, &x, &y) && x == 0 && y == -2);
+
+        map_model_enter(&hub);
+        {
+            RoomModel n2 = mk(2);
+            RoomModel deep = mk(22);
+            link1(&n2, RM_S, 22);
+            map_model_enter(&n2);
+            map_model_enter(&deep);
+            assert(map_model_pos(22, &ax, &ay));
+            assert(chebyshev(ax, ay) == 2);
+            assert(ax == 1 && ay == -2);
+        }
+
+        /* And nothing it displaced past moved to make room for it. */
+        assert(map_model_pos(1, &x, &y) && x == 0 && y == 0);
+        assert(map_model_pos(2, &x, &y) && x == 0 && y == -1);
+    }
 
     /* Whatever the arrangement, no two placed rooms may share a cell. */
     {
@@ -335,6 +455,64 @@ int main(void) {
            reports but were never in the blob. */
         assert(map_model_link(12, 7) == MAP_LINK_NONE);
         assert(map_model_link(9, 1) == MAP_LINK_NONE);
+    }
+
+    /* The first move after a restore has no previous snapshot to read the
+       direction forwards out of, so it is read backwards out of the room
+       arrived in. Room 1 is entered from room 9 going east and carries a west
+       exit back to it, so it must land east of room 9 -- not due south of it,
+       which is where an uninferred move used to put everything. */
+    {
+        unsigned char blob[MAP_BLOB_MAX];
+        unsigned int len;
+
+        map_model_reset();
+        RoomModel r12 = mk(12); link1(&r12, RM_S, 9);
+        RoomModel r9  = mk(9);  link1(&r9,  RM_E, 1);
+        map_model_enter(&r12);
+        map_model_enter(&r9);
+        assert(map_model_pos(9, &x, &y) && x == 0 && y == 1);
+
+        len = map_model_serialize(blob, sizeof blob);
+        assert(len > 0);
+        map_model_reset();
+        assert(map_model_deserialize(blob, len));
+        map_model_rebind_exits();
+        assert(map_model_current() == 9);
+
+        {
+            RoomModel r1 = mk(1);
+            link1(&r1, RM_W, 9);
+            map_model_enter(&r1);
+            assert(map_model_pos(1, &x, &y));
+            assert(x == 1 && y == 1);
+        }
+    }
+
+    /* Reading backwards only works when the arrival has a way back. A room
+       that does not is still placed due south, which is the one case the
+       original fault survives in, and it is asserted so a future change to the
+       fallback is a deliberate one. */
+    {
+        unsigned char blob[MAP_BLOB_MAX];
+        unsigned int len;
+
+        map_model_reset();
+        RoomModel r12 = mk(12); link1(&r12, RM_S, 9);
+        RoomModel r9  = mk(9);  link1(&r9,  RM_E, 1);
+        map_model_enter(&r12);
+        map_model_enter(&r9);
+        len = map_model_serialize(blob, sizeof blob);
+        map_model_reset();
+        assert(map_model_deserialize(blob, len));
+        map_model_rebind_exits();
+
+        {
+            RoomModel oneway = mk(30);
+            map_model_enter(&oneway);
+            assert(map_model_pos(30, &x, &y));
+            assert(x == 0 && y == 2);
+        }
     }
 
     printf("test_map_model: ok\n");

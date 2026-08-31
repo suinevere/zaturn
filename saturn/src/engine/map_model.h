@@ -215,11 +215,14 @@ unsigned int map_model_serialize(unsigned char *out, unsigned int max);
  |
  |   Two things it does not restore. Exits: call map_model_rebind_exits after
  |   a success or nothing will draw a link. And the previous prompt's snapshot,
- |   which the blob never carried: the first move after a restore therefore
- |   infers MAP_DIR_UNKNOWN and places the destination due south whatever
- |   direction was actually travelled. A placed room never moves, so that one
- |   cell is wrong permanently. Known, not fixed; the alternative is storing a
- |   snapshot the save format has no room for.
+ |   which the blob never carried, so the first move after a restore cannot be
+ |   read forwards out of the room departed from. It is instead read backwards
+ |   out of the room arrived in -- if that room has an exit leading to the room
+ |   the blob restored as current, the move was the opposite of it. Zork's
+ |   exits are reciprocal often enough that this recovers the direction in most
+ |   cases. Where the arrival has no way back, the destination is still placed
+ |   due south whatever direction was travelled, and since a placed room never
+ |   moves that cell is wrong permanently.
  | Author: suinevere
  | Dependencies: map_model_reset
  | Globals: g_vis, g_x, g_y, g_cur, g_have_cur, g_have_prev

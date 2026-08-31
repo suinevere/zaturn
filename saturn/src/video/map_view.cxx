@@ -70,20 +70,28 @@ static short          g_dys[MAP_VIS_MAX];
 
 /*----------------------
  | paint_link
- | Description: Paints the cells joining a room at (cx, cy) to a neighbour one
- |   grid step away, with ddx and ddy already normalised so that room is the
- |   left-hand or upper end of the pair. A room is four cells from the next, so
- |   an orthogonal link fills all three cells of the gap and reads as one
- |   groove running mark to mark rather than as a dash floating in it. A
- |   diagonal pair -- which Zork's forest is full of, and which the collision
- |   spiral also produces -- gets a single cell at the midpoint instead: the
- |   tile set has no diagonal glyph, and the netbin carries dash_tiles.c under
- |   a hard size gate, so adding one is not free.
+ | Description: Paints the cells joining a room at (cx, cy) to another one or
+ |   two grid steps away, with ddx and ddy already normalised so that room is
+ |   the left-hand or upper end of the pair. A room is four cells from the next,
+ |   so a colinear link fills every cell of the gap and reads as one groove
+ |   running mark to mark rather than as a dash floating in it. A diagonal pair
+ |   -- which Zork's forest is full of, and which the collision search also
+ |   produces -- gets a single cell at the midpoint instead: the tile set has no
+ |   diagonal glyph, and the netbin carries dash_tiles.c under a hard size gate,
+ |   so adding one is not free.
+ |
+ |   Two steps is a case, not an edge case: UP and DOWN step two cells so a
+ |   staircase cannot land on the cell north or south already wants, so every
+ |   stair link in the map is this length. The caller is what guarantees a
+ |   two-step run is colinear and that the cell it passes through is empty; a
+ |   longer run through an occupied cell would read as joining whatever sits in
+ |   it.
  | Author: suinevere
  | Dependencies: dash_map.h
  | Globals: N/A
- | Params: cx, cy -- the source room's cell; ddx -- 0 or 1; ddy -- -1, 0 or 1,
- |   never zero at the same time as ddx; kind -- MAP_LINK_FLAT or MAP_LINK_VERT
+ | Params: cx, cy -- the source room's cell; ddx -- 0, 1 or 2; ddy -- -2 to 2,
+ |   never zero at the same time as ddx, and zero whenever ddx is 2; kind --
+ |   MAP_LINK_FLAT or MAP_LINK_VERT
  | Returns: N/A
  ----------------------*/
 static void paint_link(int cx, int cy, int ddx, int ddy, int kind)
@@ -92,18 +100,42 @@ static void paint_link(int cx, int cy, int ddx, int ddy, int kind)
     if (ddy == 0) {
         unsigned char t = (unsigned char)
             (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_H);
-        for (k = 1; k < MAP_CELLS; k++) dash_map_paint(cx + k, cy, t);
+        for (k = 1; k < ddx * MAP_CELLS; k++) dash_map_paint(cx + k, cy, t);
         return;
     }
     if (ddx == 0) {
         unsigned char t = (unsigned char)
             (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_V);
-        for (k = 1; k < MAP_CELLS; k++) dash_map_paint(cx, cy + k, t);
+        for (k = 1; k < ddy * MAP_CELLS; k++) dash_map_paint(cx, cy + k, t);
         return;
     }
     dash_map_paint(cx + MAP_CELLS / 2, cy + ddy * (MAP_CELLS / 2),
                    (unsigned char)
                    (kind == MAP_LINK_VERT ? DT_LINK_STAIR : DT_LINK_H));
+}
+
+/*----------------------
+ | occupied
+ | Description: Whether one of the gathered rooms sits at an offset from the
+ |   player. Used to decide whether a two-step link may run through the cell
+ |   between its ends.
+ |
+ |   Asking the gathered set rather than the model is complete for that
+ |   question: gather() takes every placed room whose offset falls inside the
+ |   viewport, and the midpoint of two cells that are both inside it is inside
+ |   it too.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_dxs, g_dys
+ | Params: n -- how many rooms gather() returned; dx, dy -- the offset to test
+ | Returns: 1 when a room holds that cell, 0 otherwise
+ ----------------------*/
+static int occupied(int n, int dx, int dy)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (g_dxs[i] == (short) dx && g_dys[i] == (short) dy) return 1;
+    return 0;
 }
 
 /*----------------------
@@ -145,18 +177,22 @@ static int gather(void)
  |   otherwise leave them lit over a map whose box border dash_map_begin has
  |   just blanked. Called exactly once, when map_view_show opens the screen;
  |   the walk is gather() and then a pairwise pass over what it returned, both
- |   bounded by the viewport rather than by the placed set. Only pairs one grid
- |   step apart are joined: a pair the collision spiral pushed further than that
- |   is left unlinked, because there is no line renderer here and a mark laid
- |   between two rooms several cells apart would read as joining whatever else
- |   sits between them. map_view_show keeps
+ |   bounded by the viewport rather than by the placed set. Pairs one grid step
+ |   apart are joined in any of the eight directions; pairs two apart only when
+ |   they are colinear and the cell between them holds no room, since there is
+ |   no line renderer here and a mark laid across an occupied cell would read as
+ |   joining whatever sits in it. Two steps is what a staircase now is, UP and
+ |   DOWN having been given a step of two so they cannot land where north and
+ |   south already want to be, so this is the ordinary case for a stair rather
+ |   than a concession to the collision search. Anything further apart is still
+ |   left unlinked. map_view_show keeps
  |   the NBG2 claim alive across the frames after this one with dash_map_hold,
  |   which re-touches the layer without repainting it; the text labels this
  |   writes need no such upkeep, since text_map has no per-frame expiry and
  |   what it prints persists until something overwrites it.
  | Author: suinevere
  | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, menu.h,
- |   gather, paint_link
+ |   gather, paint_link, occupied
  | Globals: g_ids, g_dxs, g_dys
  | Params: N/A
  | Returns: N/A
@@ -186,12 +222,18 @@ static void draw_once(void) {
         for (j = i + 1; j < n; j++) {
             int ddx = g_dxs[j] - g_dxs[i];
             int ddy = g_dys[j] - g_dys[i];
-            int src = i, kind;
+            int src = i, ady, kind;
             if (ddx < 0 || (ddx == 0 && ddy < 0)) {
                 src = j; ddx = -ddx; ddy = -ddy;
             }
-            if (ddx > 1 || ddy > 1 || ddy < -1) continue;
-            if (ddx == 0 && ddy == 0) continue;
+            ady = ddy < 0 ? -ddy : ddy;
+            if (ddx == 0 && ady == 0) continue;
+            if (ddx > 2 || ady > 2) continue;
+            if (ddx > 1 && ady != 0) continue;
+            if (ady > 1 && ddx != 0) continue;
+            if ((ddx > 1 || ady > 1)
+                && occupied(n, g_dxs[src] + ddx / 2, g_dys[src] + ddy / 2))
+                continue;
             kind = map_model_link(g_ids[i], g_ids[j]);
             if (kind == MAP_LINK_NONE) continue;
             paint_link((MAP_CX + g_dxs[src]) * MAP_CELLS,

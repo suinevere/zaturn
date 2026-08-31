@@ -11,14 +11,38 @@
 
 /*----------------------
  | DX / DY
- | Description: The grid step for each RM_* direction, in room units. UP, DOWN,
- |   IN and OUT get a vertical step so a staircase reads as a level change
- |   rather than as a north exit; where that collides with a real neighbour the
- |   placement search resolves it.
+ | Description: The grid step for each RM_* direction, in room units. The eight
+ |   compass directions take the eight neighbouring cells. UP, DOWN, IN and OUT
+ |   take a step of two, on the vertical axis for UP/DOWN and the horizontal for
+ |   IN/OUT, so that none of the four can land on a cell a compass direction
+ |   also wants and no two of them can land on each other.
+ |
+ |   That is the correction, and it is worth naming what it replaces: these four
+ |   used to step one cell, which made UP identical to north and DOWN and IN both
+ |   identical to south. Climbing a staircase placed the room above you exactly
+ |   where walking north would have, and if the room also had a north exit the
+ |   two contested one cell and the placement search flung one of them away. The
+ |   header claimed a level change the table did not make.
+ |
+ |   The cost is that a stair link spans two grid steps rather than one, so the
+ |   view has to be willing to draw a link that long. map_view's draw_once is,
+ |   for colinear pairs whose intervening cell is empty.
  | Author: suinevere
  ----------------------*/
-static const signed char DX[RM_DIR_N] = { 0, 1,-1, 0, 1,-1, 1,-1, 0, 0, 0, 0 };
-static const signed char DY[RM_DIR_N] = {-1, 0, 0, 1,-1,-1, 1, 1,-1, 1, 1,-1 };
+static const signed char DX[RM_DIR_N] = { 0, 1,-1, 0, 1,-1, 1,-1, 0, 0, 2,-2 };
+static const signed char DY[RM_DIR_N] = {-1, 0, 0, 1,-1,-1, 1, 1,-2, 2, 0, 0 };
+
+/*----------------------
+ | OPP
+ | Description: The direction facing back down each RM_* exit, used to read a
+ |   move backwards out of the room arrived in when the room departed from is
+ |   not on hand to read it forwards.
+ | Author: suinevere
+ ----------------------*/
+static const signed char OPP[RM_DIR_N] = {
+    RM_S, RM_W, RM_E, RM_N, RM_SW, RM_SE, RM_NW, RM_NE,
+    RM_DOWN, RM_UP, RM_OUT, RM_IN
+};
 
 /*----------------------
  | g_vis / g_x / g_y / g_cur / g_have_cur / g_prev / g_have_prev
@@ -95,6 +119,34 @@ static int dir_from_prev(unsigned short room) {
 }
 
 /*----------------------
+ | dir_to_cur
+ | Description: Which direction the player must have travelled to arrive in the
+ |   room `m` describes, read backwards: if that room has an exit leading to the
+ |   room already current, the move that got here was the opposite of it. Takes
+ |   the first match, so it is stable when two exits lead back.
+ |
+ |   This is the fallback for the case dir_from_prev cannot serve. A restore
+ |   leaves no previous snapshot to read a move forwards out of, so the first
+ |   move after one used to infer nothing and place its destination due south
+ |   whatever way the player actually went -- and since a placed room never
+ |   moves, that error was permanent. Zork's exits are reciprocal often enough
+ |   that reading the arrival backwards recovers the real direction in most of
+ |   those cases. Where it does not, the due-south fallback still stands.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cur, g_have_cur
+ | Params: m -- the snapshot of the room just arrived in
+ | Returns: an RM_* index, or MAP_DIR_UNKNOWN
+ ----------------------*/
+static int dir_to_cur(const RoomModel *m) {
+    int d;
+    if (!g_have_cur) return MAP_DIR_UNKNOWN;
+    for (d = 0; d < RM_DIR_N; d++)
+        if (m->exits[d] != RM_EXIT_NONE && m->dest[d] == g_cur) return OPP[d];
+    return MAP_DIR_UNKNOWN;
+}
+
+/*----------------------
  | cell_taken
  | Description: Whether a placed room other than `self` already holds a cell.
  | Author: suinevere
@@ -111,22 +163,54 @@ static int cell_taken(int x, int y, unsigned short self) {
 }
 
 /*----------------------
- | SPX / SPY / MAP_SPIRAL_MAX
- | Description: The order a contested placement searches outward in, and how far
- |   it will go before giving up and stacking. Fixed here rather than left to
- |   the implementation so the host tests pin an order that was chosen, not one
- |   that happened.
- |
- |   Eight rays, not eight rings: at radius r the search probes only the eight
- |   cells (SPX[k]*r, SPY[k]*r), so at r=2 it looks at (0,-2) and (2,-2) and
- |   never at (1,-2). A contested room can therefore be flung eight cells out
- |   while a nearer cell off the rays sat free. Deterministic either way, which
- |   is what the tests pin; the geometry is the cost of keeping it that cheap.
+ | MAP_SPIRAL_MAX
+ | Description: How far out a contested placement will search before giving up
+ |   and stacking. The ring at radius r holds 8r cells, so radius 8 sweeps a
+ |   17x17 block -- 289 cells against at most MAP_ROOM_MAX-1 = 255 rooms that
+ |   could be occupying them. The search therefore cannot fail, which is the
+ |   reason for this number rather than a smaller one.
  | Author: suinevere
  ----------------------*/
-static const signed char SPX[8] = { 0, 1, 0,-1, 1, 1,-1,-1 };
-static const signed char SPY[8] = {-1, 0, 1, 0,-1, 1, 1,-1 };
 #define MAP_SPIRAL_MAX 8
+
+/*----------------------
+ | ring_cell
+ | Description: The `i`th cell of the square ring at Chebyshev radius `r` about
+ |   the origin, walking clockwise from due north. 8r cells to a ring, each
+ |   visited once, so a caller stepping i from 0 to 8r-1 sees the whole ring in
+ |   a fixed order and never the same cell twice.
+ |
+ |   Rings, not rays. This used to probe only the eight cells (SPX[k]*r,
+ |   SPY[k]*r), which at r=2 looked at (0,-2) and (2,-2) and never at (1,-2):
+ |   a contested room could be flung eight cells clear while a free cell sat one
+ |   step away off the rays, and a room that far out is past anything the view
+ |   will draw a link to. A full ring finds the genuinely nearest free cell, so
+ |   the overwhelming majority of contests now settle at radius one, where the
+ |   link survives.
+ |
+ |   The rotation by r is what puts due north at index 0. The four sides are
+ |   walked from the top-left corner, and (0,-r) sits r cells along the first of
+ |   them, so subtracting that offset makes index 0 land on it. Radius one then
+ |   probes N, NE, E, SE, S, SW, W, NW in that order, which keeps the northward
+ |   bias the previous order had and the tests pin.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: r -- radius, at least 1; i -- position in [0, 8r); x, y -- receive
+ |   the cell, relative to the ring's centre
+ | Returns: N/A
+ ----------------------*/
+static void ring_cell(int r, int i, int *x, int *y) {
+    int side = 2 * r, t;
+    i = (i + r) % (8 * r);
+    t = i % side;
+    switch (i / side) {
+    case 0:  *x = t - r; *y = -r;    break;
+    case 1:  *x = r;     *y = t - r; break;
+    case 2:  *x = r - t; *y = r;     break;
+    default: *x = -r;    *y = r - t; break;
+    }
+}
 
 /*----------------------
  | place
@@ -134,18 +218,21 @@ static const signed char SPY[8] = {-1, 0, 1, 0,-1, 1, 1,-1 };
  |   the fixed search order when the target is taken, and marks it placed. The
  |   first room to hold a cell keeps it.
  | Author: suinevere
- | Dependencies: cell_taken
+ | Dependencies: cell_taken, ring_cell
  | Globals: g_vis, g_x, g_y
  | Params: room -- object number; tx, ty -- the wanted cell
  | Returns: N/A
  ----------------------*/
 static void place(unsigned short room, int tx, int ty) {
-    int r, k, x = tx, y = ty;
+    int r, i, x = tx, y = ty;
     if (cell_taken(tx, ty, room)) {
         int done = 0;
         for (r = 1; r <= MAP_SPIRAL_MAX && !done; r++) {
-            for (k = 0; k < 8 && !done; k++) {
-                int cx = tx + SPX[k] * r, cy = ty + SPY[k] * r;
+            for (i = 0; i < 8 * r && !done; i++) {
+                int cx, cy;
+                ring_cell(r, i, &cx, &cy);
+                cx += tx;
+                cy += ty;
                 if (!cell_taken(cx, cy, room)) { x = cx; y = cy; done = 1; }
             }
         }
@@ -181,7 +268,7 @@ static void record_exits(unsigned short room, const RoomModel *m) {
  | map_model_enter
  | Description: See map_model.h.
  | Author: suinevere
- | Dependencies: dir_from_prev, place, record_exits
+ | Dependencies: dir_from_prev, dir_to_cur, place, record_exits
  | Globals: g_vis, g_cur, g_have_cur, g_prev, g_have_prev
  | Params: m -- the snapshot, never null
  | Returns: N/A
@@ -193,6 +280,7 @@ void map_model_enter(const RoomModel *m) {
     if (!g_vis[room]) {
         int d = dir_from_prev(room);
         int tx = 0, ty = 0;
+        if (d == MAP_DIR_UNKNOWN) d = dir_to_cur(m);
         if (g_have_cur && g_vis[g_cur]) {
             tx = g_x[g_cur];
             ty = g_y[g_cur];

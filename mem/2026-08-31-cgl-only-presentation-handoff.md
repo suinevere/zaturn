@@ -43,6 +43,7 @@ that were already local (see the previous handoff) plus these 4:
 | `ade1818` | The category art system removed, engine and tools |
 | `e1329d8` | Presentation table extended to 31 games; `tools/pres_server.py` review app |
 | `ea3aae5` | Build fix: `pre_build` repointed off the deleted `make_tga.py` |
+| `4bef44d` | CI fix: `bg.bat` now runs in the full-image workflow, gated by a disc-level check |
 
 The `.CGL` tracking question the two earlier handoffs both flagged is **settled
 and reversed**: `saturn/cd/data/BG/` is gone, `tools/assets/BG/` is gitignored,
@@ -138,8 +139,31 @@ backgrounds do not pass through it at all any more), and `pre.makefile` says
 from `saturn/` exactly as `make` does, and by running `make all DEBUG=1` far
 enough to see `pre_build` succeed and compilation begin.
 
-**The lesson for the next wide deletion:** grep the build system, not just the
-scripts. `saturn/makefile`, `pre.makefile`, `post.makefile`, `compile*.bat`,
+### And the CI never ran the new script either
+
+Wiring `bg.bat` into `update.bat` was not enough: `full-image.yml` calls
+`games.bat` and `music.bat` **directly**, never `update.bat`. So `bg.bat` never
+ran there and the workflow's disc would have carried no `/BG` at all -- booting
+fine and showing no room picture anywhere, with nothing failing.
+
+Fixed in `4bef44d`, with a guard rather than a hope: a step after injection
+reads all eleven archives back out of the **finished image** and compares size
+and SHA-256. Proven both ways -- two discs were built locally, one with the
+staging and one without, and the check passes on the first and names the missing
+archives on the second.
+
+Same commit shares one cached copy of the Zork I disc between `bg.bat` and
+`music.bat`. They need the same several-hundred-megabyte download, and were
+fetching it twice per build.
+
+`release.yml` needed no such fix: it packages the asset kit for end users rather
+than building a disc, and `bg.bat` ships inside it. It now strips `BG/` and
+`cache/` from the staged kit, which matters only for a packaging run on a
+working tree that has already built.
+
+**The lesson for the next wide deletion:** grep the build system and the CI, not
+just the scripts. Wiring a new script into the developer entry point does not
+wire it into the pipeline that never used that entry point. `saturn/makefile`, `pre.makefile`, `post.makefile`, `compile*.bat`,
 `CMakeLists.txt` and `.github/` were all swept clean afterwards and are.
 
 ## Two real defects found by tests, both fixed

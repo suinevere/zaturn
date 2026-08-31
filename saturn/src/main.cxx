@@ -193,9 +193,15 @@ static void on_text_rotate(int cat) {
  |   archive is already resident, so the change costs a decompress and touches
  |   no CD.
  |
- |   An area change does read the disc. room_art_show performs the read itself
- |   and the fade around it is the music's own, since an area change is also a
- |   track change.
+ |   An area change does read the disc, and not under a fade: music_on_turn
+ |   (music.c) calls g_room_fn -- this function -- inside its room_changed
+ |   block, before it arms the debounced pending switch that later drives the
+ |   fade, so room_art_show's read (up to 408.5 KB) happens immediately at full
+ |   volume and the fade only starts once music_tick counts that switch down.
+ |   Whether the read is audible against the CD-DA has not been measured. It is
+ |   not a first-room cost either -- every area change that happens with music
+ |   already playing is also a track change, since only track 0 spans more than
+ |   one area.
  | Author: suinevere
  | Dependencies: room_art.h, options.h
  | Globals: g_display
@@ -688,7 +694,7 @@ int main(void) {
     if (g_intro_reveal) { g_intro_reveal = 0; menu_fade_clear(); }
 
     render_console();
-    text_print(1, 27, "(press any key/button for the title screen)");
+    text_print(1, console_screen_rows() - 1, "(press any key/button for the title screen)");
     menu_wait();
     soft_reset_to_title();
     return 0;

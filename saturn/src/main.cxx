@@ -660,6 +660,10 @@ int main(void) {
         music_set_level(g_music_level);
         music_set_game(game_release, game_serial);
         room_art_set_game(game_release, game_serial);
+        // After display_set_game above, which clears the flag: authored art lives
+        // outside GAME_SCENE, so without this the Dynamic palette entry is skipped
+        // and the room-art path, which only runs under Dynamic, never draws.
+        display_set_authored(room_art_available());
         if (room_art_available()) title_bg_cache_release();
         music_seed((unsigned int) seed);
         music_reset();

@@ -257,6 +257,32 @@ void display_shuffle_scene(int scene, unsigned int r);
 void display_set_game(int game_index);
 
 /*----------------------
+ | display_set_authored
+ | Description: Tells the display layer that the running game carries authored
+ |   per-room art, which lives outside GAME_SCENE entirely -- room_art.cxx
+ |   decompresses it from the original disc's own archives and puts it on NBG0
+ |   itself. Without this the Dynamic palette entry is skipped for such a game,
+ |   because display_image_count() counts only scene pictures and correctly
+ |   reports none; Dynamic then cannot be selected, and the room-art path,
+ |   which only runs under Dynamic, never draws at all.
+ |
+ |   Cleared by display_set_game, so returning to the title or selecting a game
+ |   without authored art needs no second call.
+ | Author: suinevere
+ ----------------------*/
+void display_set_authored(int has_authored);
+
+/*----------------------
+ | display_has_art
+ | Description: Whether the running game can show pictures at all, by either
+ |   route -- scene pools counted in GAME_SCENE, or authored per-room art. The
+ |   one question every Dynamic gate asks; asking display_image_count() instead
+ |   sees only half the answer.
+ | Author: suinevere
+ ----------------------*/
+int display_has_art(void);
+
+/*----------------------
  | display_next_in_band
  | Description: The next absolute 0-based index inside a range, wrapping --
  |   the arithmetic display_rotate_scene walks with. If cur falls outside

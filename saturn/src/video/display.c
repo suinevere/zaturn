@@ -249,6 +249,16 @@ static int g_game = -1;
 static unsigned char g_scene_rot[SCENE_N];
 
 /*----------------------
+ | g_authored_art
+ | Description: Whether the running game carries authored per-room art. Held as
+ |   a plain flag rather than derived, because the table that answers it lives
+ |   behind scene/presentation.h while this file is in the netbin build, which
+ |   has no disc and no room art to describe.
+ | Author: suinevere
+ ----------------------*/
+static int g_authored_art = 0;
+
+/*----------------------
  | display_set_game
  | Description: See display.h. Re-seats every scene's rotor to its range's
  |   start on an actual change, because a rotor left over from a different
@@ -268,9 +278,36 @@ static unsigned char g_scene_rot[SCENE_N];
 void display_set_game(int game_index) {
     int scene;
     if (game_index < 0 || game_index >= GAME_N) game_index = -1;
+    g_authored_art = 0;
     if (game_index == g_game) return;
     g_game = game_index;
     for (scene = 0; scene < SCENE_N; scene++) g_scene_rot[scene] = 0;
+}
+
+/*----------------------
+ | display_set_authored
+ | Description: See display.h. Set after display_set_game, which clears it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_authored_art
+ | Params: has_authored -- non-zero when the game has authored per-room art
+ | Returns: N/A
+ ----------------------*/
+void display_set_authored(int has_authored) {
+    g_authored_art = has_authored ? 1 : 0;
+}
+
+/*----------------------
+ | display_has_art
+ | Description: See display.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_authored_art
+ | Params: N/A
+ | Returns: non-zero when the running game can show a picture by either route
+ ----------------------*/
+int display_has_art(void) {
+    return g_authored_art || display_image_count() > 0;
 }
 
 /*----------------------
@@ -656,7 +693,7 @@ const char *display_palette_name(const DisplayState *d) {
  | Returns: N/A
  ----------------------*/
 void display_defaults(DisplayState *d) {
-    if (display_image_count() > 0) {
+    if (display_has_art()) {
         /* Dynamic: the picture follows the room's mood. The shipped default. */
         d->palette = DISP_PAL_DYNAMIC;
         d->bg      = DISP_BG_BLACK;
@@ -789,7 +826,7 @@ void display_cycle_palette(DisplayState *d, int dir) {
        accessors above can stay single unconditional expressions. The cost is one
        unreachable entry to step past here, which is cheaper than the row changing
        shape -- that would put the arithmetic behind display_image_count() everywhere. */
-    if (next == DISP_PAL_DYNAMIC && display_image_count() == 0)
+    if (next == DISP_PAL_DYNAMIC && !display_has_art())
         next = step(next, dir, count);
     d->palette = next;
     d->bg      = display_preset_bg(next);
@@ -964,9 +1001,9 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         slot = image_slot_of(name);
 
         if (buf[1] == DISP_BLOB_DYNAMIC) {
-            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
+            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
         } else if (buf[1] == DISP_BLOB_IMAGE) {
-            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;
+            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;
             ok = 0;
         } else if (buf[1] <= DISP_PRESET_N) {
             /* Post-Dynamic indices run DISP_PAL_PRESET0 (1) through DISP_PRESET_N
@@ -1006,14 +1043,14 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         if (buf[1] == DISP_BLOB_DYNAMIC) {
             /* Only sentinel 4 writes this, and only from a disc that had art.
                Reloaded onto one that has none, Dynamic has nothing to show. */
-            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
+            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;  else ok = 0;
         } else if (buf[1] == DISP_BLOB_IMAGE) {
             /* A blob from when the row let one picture be pinned. It cannot be
                honoured -- there is no palette index for a single picture any more
                -- so it lands on Dynamic, the one entry that still shows art at
                all. Reported as not-verbatim either way: the player is getting
                something other than what they saved. */
-            if (display_image_count() > 0) d->palette = DISP_PAL_DYNAMIC;
+            if (display_has_art()) d->palette = DISP_PAL_DYNAMIC;
             ok = 0;
         } else if (buf[0] == 4
                        ? (buf[1] >= DISP_PAL_PRESET0 && buf[1] <= DISP_PRESET_N)

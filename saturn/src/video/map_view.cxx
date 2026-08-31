@@ -44,16 +44,6 @@
 #define MAP_TOP      0
 
 /*----------------------
- | MAP_REVEAL_ALL
- | Description: Set to draw every room the authored table covers rather than
- |   only the rooms the player has walked into. A development aid for checking
- |   the placements against Infocom's drawing without playing to each room, and
- |   the one switch to clear to get the explored-only map back.
- | Author: suinevere
- ----------------------*/
-#define MAP_REVEAL_ALL 1
-
-/*----------------------
  | MAP_VIS_MAX
  | Description: The most rooms the viewport can show at once -- one per grid
  |   cell -- and so the size of the hoisted walk's arrays.
@@ -470,6 +460,21 @@ static void draw_once(int sx, int sy) {
  |   in and put back on the way out; without that the gamepad strip and every
  |   menu box wear it for the rest of the session.
  |
+ |   Difficulty decides how much of the map there is. Easy reveals the whole
+ |   authored table on open, which is the reveal the development switch used to
+ |   force; Medium takes it back and draws only what the player has walked into,
+ |   still placed where the atlas says. Both consult the same table, so Easy on a
+ |   story nobody drew is Medium by falling through map_model_reveal_atlas rather
+ |   than by testing for the table here. Hard never reaches this function at all
+ |   -- options_menu drops the Map row -- and this deliberately does not check for
+ |   it a second time: a page that silently closed itself would read as a broken
+ |   menu rather than as a disabled feature.
+ |
+ |   The clear on Medium is not tidiness. A placed room never moves and the model
+ |   has no other memory of how it came to be placed, so without it one open on
+ |   Easy would leave the whole drawing on the map for the rest of the session,
+ |   through every later difficulty change.
+ |
  |   The wallpaper is hidden for the map's duration and restored by asking
  |   room_art for the room again, which is free when NBG0 still holds that
  |   frame. It used to be restored by re-showing title_bg_loaded_file() by name,
@@ -478,10 +483,11 @@ static void draw_once(int sx, int sy) {
  |   the name was still the boot logo's -- so closing the map put the SUINEVERE
  |   logo up behind the game and left it there.
  | Author: suinevere
- | Dependencies: draw_once, extent, dash_map.h, dash_view.h, menu.h, input.h,
+ | Dependencies: draw_once, extent, map_model.h (map_model_reveal_atlas,
+ |   map_model_clear_reveal), dash_map.h, dash_view.h, menu.h, input.h,
  |   saturn_keyboard.h, soft_reset.h, console_view.h, title.h, room_art.h,
  |   display.h, app_state.h
- | Globals: N/A
+ | Globals: g_difficulty
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -494,9 +500,8 @@ extern "C" void map_view_show(void) {
 
     title_bg_hide();
     dash_tint(MAP_GROUND_555);
-#if MAP_REVEAL_ALL
-    map_model_reveal_atlas();
-#endif
+    if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
+    else                           map_model_clear_reveal();
     draw_once(sx, sy);
     menu_sync();
     for (;;) {

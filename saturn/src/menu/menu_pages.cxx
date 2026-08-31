@@ -1207,10 +1207,13 @@ void credits_page(void) {
  | Description: Gameplay Options (full-screen box, Ok/Cancel): the Difficulty
  |   slider (Easy/Medium/Hard) and the Room text slider (Superbrief/Brief/
  |   Verbose), each with a description line, moved out of the top-level Options
- |   box so that list can stay plain dispatch rows. Left/Right adjust local
- |   copies; Ok and Start/Esc commit them to g_difficulty/g_verbosity and call
- |   options_save() only if something actually changed; Cancel (or B/Backspace)
- |   discards the copies, leaving every global untouched.
+ |   box so that list can stay plain dispatch rows. Difficulty governs two
+ |   unrelated things -- the typeahead and how much of the map there is -- and
+ |   its description line names both, since nothing else on screen says the Map
+ |   row disappears on Hard. Left/Right adjust local copies; Ok and Start/Esc
+ |   commit them to g_difficulty/g_verbosity and call options_save() only if
+ |   something actually changed; Cancel (or B/Backspace) discards the copies,
+ |   leaving every global untouched.
  |
  |   The Interface slider used to sit under these two and now heads the Controls
  |   page instead, where the rows below it are the bindings for whichever
@@ -1237,9 +1240,12 @@ static void gameplay_page(void) {
     const int GP_ROW_W   = 29;
     const int GP_VALUE_W = 10;
     static const char *const NAMES[] = { "Easy", "Medium", "Hard" };
-    static const char *const DESC[]  = { "Typeahead by Walkthrough",
-                                         "Typeahead by Valid Words",
-                                         "Typeahead Off" };
+    // Both things the difficulty governs, because the map is only reachable
+    // from the menu this page is a room off and a player turning Hard on has no
+    // other warning that the Map row is about to go.
+    static const char *const DESC[]  = { "Full map; typeahead: walkthrough",
+                                         "Explored map; typeahead: words",
+                                         "No map; typeahead off" };
     static const char *const VNAMES[] = { "Superbrief", "Brief", "Verbose" };
     static const char *const VDESC[]  = { "Room names only",
                                           "Full text on first visit",
@@ -1371,10 +1377,14 @@ static void controls_dispatch(void) {
  |   pad kept the digit columns even when the digits were hidden. Between them
  |   those two put this list further right than every other menu on screen.
  |   The box is sized via menu_box_fit from the actual item count (4..8 rows,
- |   depending on g_in_game and sound_available), not a fixed constant -- items[]
- |   is built first so nitems is known before the box is measured, keeping the
- |   title/blank/items/blank rhythm every other page uses instead of a
- |   gap that grows or shrinks with the fewest/most rows a given run shows.
+ |   depending on g_in_game, sound_available and g_difficulty), not a fixed
+ |   constant -- items[] is built first so nitems is known before the box is
+ |   measured, keeping the title/blank/items/blank rhythm every other page uses
+ |   instead of a gap that grows or shrinks with the fewest/most rows a given run
+ |   shows. That build is a closure and runs again when Gameplay returns, because
+ |   Hard removes the Map row and Gameplay is where the difficulty is set: built
+ |   once, the row a player had just switched Hard on to be rid of would still be
+ |   sitting there, and pickable, until the menu was closed and reopened.
  |   On exit (Resume, Save Game,
  |   Load Game, or B/Esc), blocks on menu_sync() until B/A/C/Start are all
  |   released, so the button that closed this menu cannot leak into whatever
@@ -1386,7 +1396,7 @@ static void controls_dispatch(void) {
  |   console_view.c (note_input_device/hint/g_kbd_visible), menu_pages.cxx
  |   (gameplay_page/network_page/controls_dispatch/display_options_page/
  |   sound_options_page), map_view.h (map_view_show)
- | Globals: g_in_game
+ | Globals: g_in_game, g_difficulty
  | Params: N/A
  | Returns: OM_NONE, OM_SAVE, or OM_RESTORE
  ----------------------*/
@@ -1401,41 +1411,53 @@ int options_menu(void) {
         "Controls", "Network", "Title Screen"
     };
     bool sound_available = (music_cdda_has_audio() != 0) || (sound_has_audio() != 0);
-    int items[OI_N], nitems = 0;
-    // In-game only, and first: the menu is over a paused game there, so the way
-    // back to it is the one thing worth naming. The main menu is not over
-    // anything -- a Resume row would have to read as "close this box".
-    if (g_in_game) items[nitems++] = OI_RESUME;
-    if (g_in_game) items[nitems++] = OI_MAP;
-    if (g_in_game) { items[nitems++] = OI_SAVE; items[nitems++] = OI_LOAD; }
-    items[nitems++] = OI_GAMEPLAY;
-    items[nitems++] = OI_DISPLAY;
-    if (sound_available) items[nitems++] = OI_SOUND;
-    items[nitems++] = OI_CONTROLS;
-    if (!g_in_game) items[nitems++] = OI_NETWORK;
-    if (g_in_game) items[nitems++] = OI_RETURN;
-
-    int label_w = 0;
-    for (int i = 0; i < nitems; i++) {
-        int n = 0; const char *s = OI_LABEL[items[i]];
-        while (s[n]) n++;
-        if (n > label_w) label_w = n;
-    }
-    // The box is sized from the rows it will actually hold, exactly as
-    // menu_select does it -- the digit columns included unconditionally so the
-    // box does not resize when the player switches pad<->keyboard mid-menu.
-    // This used to be a hardcoded 18, left over from a wider label set, which
-    // drew a 22-column box around an 11-column list: three or four columns of
-    // dead air on each side, where every other menu's box hugs its rows.
-    int x0, y0, w, h;
-    menu_box_fit("OPTIONS", label_w + MENU_DIGIT_COLS, nitems + 2, &x0, &y0, &w, &h);
-
+    int items[OI_N], nitems = 0, label_w = 0, x0, y0, w, h;
     // Remembered as an item ID, not an index: Resume/Save/Load only appear
     // in-game and Sound only with audio present, so the same index names a
     // different row from the title screen than it does from a paused game.
     static int last_item = -1;
     int sel = 0;
-    for (int i = 0; i < nitems; i++) if (items[i] == last_item) { sel = i; break; }
+    // A closure rather than straight-line setup because the Gameplay page can
+    // change the difficulty from inside this menu, and Hard has no map -- so
+    // the row set has to be able to be built a second time without the return
+    // from that page having to know what else depends on it.
+    auto build = [&]() {
+        nitems = 0;
+        // In-game only, and first: the menu is over a paused game there, so the
+        // way back to it is the one thing worth naming. The main menu is not
+        // over anything -- a Resume row would have to read as "close this box".
+        if (g_in_game) items[nitems++] = OI_RESUME;
+        // Hard turns the map off outright, and the row goes with it rather than
+        // staying to be greyed: an absent row cannot be picked, and there is no
+        // half-map to describe to a player who chose to do without one.
+        if (g_in_game && g_difficulty != DIFF_HARD) items[nitems++] = OI_MAP;
+        if (g_in_game) { items[nitems++] = OI_SAVE; items[nitems++] = OI_LOAD; }
+        items[nitems++] = OI_GAMEPLAY;
+        items[nitems++] = OI_DISPLAY;
+        if (sound_available) items[nitems++] = OI_SOUND;
+        items[nitems++] = OI_CONTROLS;
+        if (!g_in_game) items[nitems++] = OI_NETWORK;
+        if (g_in_game) items[nitems++] = OI_RETURN;
+
+        label_w = 0;
+        for (int i = 0; i < nitems; i++) {
+            int n = 0; const char *s = OI_LABEL[items[i]];
+            while (s[n]) n++;
+            if (n > label_w) label_w = n;
+        }
+        // The box is sized from the rows it will actually hold, exactly as
+        // menu_select does it -- the digit columns included unconditionally so
+        // the box does not resize when the player switches pad<->keyboard
+        // mid-menu. This used to be a hardcoded 18, left over from a wider label
+        // set, which drew a 22-column box around an 11-column list: three or
+        // four columns of dead air on each side, where every other menu's box
+        // hugs its rows.
+        menu_box_fit("OPTIONS", label_w + MENU_DIGIT_COLS, nitems + 2, &x0, &y0, &w, &h);
+
+        sel = 0;
+        for (int i = 0; i < nitems; i++) if (items[i] == last_item) { sel = i; break; }
+    };
+    build();
     int result = OM_NONE;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
@@ -1461,7 +1483,7 @@ int options_menu(void) {
             else if (item == OI_MAP) { page_fade_out(g_menu_page_fade); map_view_show(); need_fade_in = true; }
             else if (item == OI_SAVE) { result = OM_SAVE; break; }
             else if (item == OI_LOAD) { result = OM_RESTORE; break; }
-            else if (item == OI_GAMEPLAY) { page_fade_out(g_menu_page_fade); gameplay_page(); need_fade_in = true; }
+            else if (item == OI_GAMEPLAY) { page_fade_out(g_menu_page_fade); gameplay_page(); build(); need_fade_in = true; }
             else if (item == OI_NETWORK) { page_fade_out(g_menu_page_fade); network_page(); need_fade_in = true; }
             else if (item == OI_CONTROLS) {
                 page_fade_out(g_menu_page_fade);

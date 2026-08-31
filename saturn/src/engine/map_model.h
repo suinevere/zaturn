@@ -203,20 +203,47 @@ void map_model_rebind_exits(void);
  |   room the player is standing in, which is what keeps the reveal registered
  |   with the walked half of the map.
  |
- |   This is a development aid: it shows the map as drawn rather than as
- |   explored, which is how the placements get checked against Infocom's own
- |   drawing without playing the game to each room. It is not the shipping
- |   behaviour and the caller is expected to gate it.
+ |   This is Easy difficulty's whole map. Every room it places is flagged as
+ |   revealed rather than walked, which is what lets map_model_clear_reveal take
+ |   them back when the difficulty stops asking for them and what keeps them out
+ |   of the save blob. Walking into a revealed room afterwards makes it a walked
+ |   one, so exploration done under a reveal survives its removal.
  |
- |   Does nothing at all when no table is bound, which is every story but the one
- |   somebody drew.
+ |   Does nothing at all when no table is bound, which is every story nobody
+ |   drew -- so Easy on those stories is the explored-only map by falling
+ |   through rather than by a second code path.
  | Author: suinevere
  | Dependencies: map_atlas.h, room_model.h
- | Globals: g_vis, g_x, g_y
+ | Globals: g_vis, g_revealed, g_x, g_y
  | Params: N/A
  | Returns: how many rooms it placed that were not placed before
  ----------------------*/
 int map_model_reveal_atlas(void);
+
+/*----------------------
+ | map_model_clear_reveal
+ | Description: Un-places every room map_model_reveal_atlas placed and the
+ |   player has not since walked into, leaving the explored map exactly as it
+ |   would have been had the reveal never run.
+ |
+ |   Without this a reveal would be permanent: a placed room never moves and
+ |   g_vis has no memory of how it came to be set, so one open of the map on
+ |   Easy would leave the whole drawing on the Medium map for the rest of the
+ |   session and in every save taken after it.
+ |
+ |   What it cannot undo is a cell a reveal cost somebody else. An unauthored
+ |   room walked into while the reveal was up contests its cells like any other,
+ |   and having been flung to the nearest free one it stays there after the
+ |   reveal is gone, since a placed room never moves. That is a room or two off
+ |   in a map that had no authored position for them anyway, and undoing it would
+ |   mean re-running every placement in walk order.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_vis, g_revealed
+ | Params: N/A
+ | Returns: how many rooms it took back
+ ----------------------*/
+int map_model_clear_reveal(void);
 
 /*----------------------
  | MAP_BLOB_MAGIC / MAP_BLOB_MAX
@@ -230,10 +257,15 @@ int map_model_reveal_atlas(void);
 
 /*----------------------
  | map_model_serialize
- | Description: Writes the placed set and the current room into out.
+ | Description: Writes the walked set and the current room into out. Rooms that
+ |   are on the map only because Easy revealed them are left out: a save is a
+ |   record of where the player has been, and writing a reveal into one would
+ |   make it permanent -- restoring it on any difficulty would hand back a map
+ |   the player never explored, which no later clear_reveal could tell from
+ |   honest exploration.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_vis, g_x, g_y, g_cur
+ | Globals: g_vis, g_revealed, g_x, g_y, g_cur
  | Params: out -- receives the blob; max -- its capacity
  | Returns: the number of bytes written, or 0 when max is too small
  ----------------------*/

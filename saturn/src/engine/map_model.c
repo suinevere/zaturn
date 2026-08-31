@@ -61,6 +61,21 @@ static RoomModel      g_prev;
 static int            g_have_prev;
 
 /*----------------------
+ | g_revealed
+ | Description: Which of the placed rooms were placed by the reveal rather than
+ |   walked into. g_vis alone cannot say -- it is one bit meaning "on the map" --
+ |   and the difference is what decides whether a room survives leaving Easy and
+ |   whether it goes into a save.
+ |
+ |   Kept alongside g_vis rather than as a second value inside it so that every
+ |   existing test of g_vis stays a plain truth test. A revealed room is placed
+ |   in every way that matters to the view; the flag is only ever consulted when
+ |   the reveal is taken back or the map is written out.
+ | Author: suinevere
+ ----------------------*/
+static unsigned char  g_revealed[MAP_ROOM_MAX];
+
+/*----------------------
  | g_frame_set / g_frame_x / g_frame_y
  | Description: The translation from the atlas's coordinates into this session's,
  |   and whether it has been established yet.
@@ -96,13 +111,13 @@ static unsigned char  g_kind[MAP_ROOM_MAX][RM_DIR_N];
  | Description: See map_model.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_vis, g_cur, g_have_cur, g_have_prev
+ | Globals: g_vis, g_revealed, g_cur, g_have_cur, g_have_prev
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void map_model_reset(void) {
     int i;
-    for (i = 0; i < MAP_ROOM_MAX; i++) { g_vis[i] = 0; g_x[i] = 0; g_y[i] = 0; { int d; for (d = 0; d < RM_DIR_N; d++) { g_dest[i][d] = 0; g_kind[i][d] = 0; } } }
+    for (i = 0; i < MAP_ROOM_MAX; i++) { g_vis[i] = 0; g_revealed[i] = 0; g_x[i] = 0; g_y[i] = 0; { int d; for (d = 0; d < RM_DIR_N; d++) { g_dest[i][d] = 0; g_kind[i][d] = 0; } } }
     g_cur = 0;
     g_have_cur = 0;
     g_have_prev = 0;
@@ -321,7 +336,7 @@ static void record_exits(unsigned short room, const RoomModel *m) {
  | Description: See map_model.h.
  | Author: suinevere
  | Dependencies: dir_from_prev, dir_to_cur, atlas_target, place, record_exits
- | Globals: g_vis, g_cur, g_have_cur, g_prev, g_have_prev
+ | Globals: g_vis, g_revealed, g_cur, g_have_cur, g_prev, g_have_prev
  | Params: m -- the snapshot, never null
  | Returns: N/A
  ----------------------*/
@@ -344,6 +359,7 @@ void map_model_enter(const RoomModel *m) {
         place(room, tx, ty);
     }
 
+    g_revealed[room] = 0;
     record_exits(room, m);
 
     g_cur = room;
@@ -498,7 +514,7 @@ void map_model_rebind_exits(void) {
  | Description: See map_model.h.
  | Author: suinevere
  | Dependencies: map_atlas.h, atlas_target, place, map_model_rebind_exits
- | Globals: g_vis, g_x, g_y
+ | Globals: g_vis, g_revealed, g_x, g_y
  | Params: N/A
  | Returns: how many rooms it placed that were not placed before
  ----------------------*/
@@ -511,6 +527,7 @@ int map_model_reveal_atlas(void) {
         if (!in_range(r) || g_vis[r]) continue;
         if (!atlas_target(r, 0, 0, 0, &tx, &ty)) continue;
         place(r, tx, ty);
+        g_revealed[r] = 1;
         added++;
     }
     if (added) map_model_rebind_exits();
@@ -518,24 +535,62 @@ int map_model_reveal_atlas(void) {
 }
 
 /*----------------------
+ | map_model_clear_reveal
+ | Description: See map_model.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_vis, g_revealed
+ | Params: N/A
+ | Returns: how many rooms it took back
+ ----------------------*/
+int map_model_clear_reveal(void) {
+    int i, dropped = 0;
+    for (i = 0; i < MAP_ROOM_MAX; i++) {
+        if (!g_revealed[i]) continue;
+        g_revealed[i] = 0;
+        g_vis[i] = 0;
+        dropped++;
+    }
+    return dropped;
+}
+
+/*----------------------
+ | walked_count
+ | Description: How many placed rooms the player actually walked into. The
+ |   header count and the row loop below must agree about which rooms go in the
+ |   blob or the reader takes the wrong number of bytes, so both ask this
+ |   question the same way rather than one of them asking map_model_count.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_vis, g_revealed
+ | Params: N/A
+ | Returns: the count, 0 or more
+ ----------------------*/
+static int walked_count(void) {
+    int i, n = 0;
+    for (i = 0; i < MAP_ROOM_MAX; i++) if (g_vis[i] && !g_revealed[i]) n++;
+    return n;
+}
+
+/*----------------------
  | map_model_serialize
  | Description: See map_model.h.
  | Author: suinevere
- | Dependencies: map_model_count
- | Globals: g_vis, g_x, g_y, g_cur
+ | Dependencies: walked_count
+ | Globals: g_vis, g_revealed, g_x, g_y, g_cur
  | Params: out -- receives the blob; max -- its capacity
  | Returns: bytes written, or 0
  ----------------------*/
 unsigned int map_model_serialize(unsigned char *out, unsigned int max) {
     unsigned int n = 0;
-    int i, cnt = map_model_count();
+    int i, cnt = walked_count();
     if (max < 4u + 6u * (unsigned int) cnt) return 0;
     out[n++] = (unsigned char) MAP_BLOB_MAGIC;
     out[n++] = (unsigned char) cnt;
     out[n++] = (unsigned char) (g_cur >> 8);
     out[n++] = (unsigned char) (g_cur & 0xFF);
     for (i = 0; i < MAP_ROOM_MAX; i++) {
-        if (!g_vis[i]) continue;
+        if (!g_vis[i] || g_revealed[i]) continue;
         out[n++] = (unsigned char) (i >> 8);
         out[n++] = (unsigned char) (i & 0xFF);
         out[n++] = (unsigned char) ((unsigned short) g_x[i] >> 8);

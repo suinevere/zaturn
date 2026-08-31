@@ -22,9 +22,12 @@ extern "C" {
  |   room at a time, clamped to the rooms actually placed so it cannot be walked
  |   off into empty ground.
  |
- |   With MAP_REVEAL_ALL set in map_view.cxx the whole authored table is placed
- |   before the first draw, so the screen shows the map as drawn rather than as
- |   explored. That is a development aid, not the shipping behaviour.
+ |   How much of the map there is comes from g_difficulty. Easy places the whole
+ |   authored table before the first draw, so the screen shows the map as drawn
+ |   rather than as explored, and falls back to the explored map on a story with
+ |   no table. Medium draws only what the player has walked into, and takes back
+ |   any reveal a previous Easy open left behind. Hard has no map at all and
+ |   options_menu does not offer the row that reaches this.
  |
  |   The scroll always starts with the player centred. It is a local of this
  |   call rather than anything kept between calls, so reopening the map after
@@ -38,8 +41,9 @@ extern "C" {
  |   stall for as long as the map is up.
  | Author: suinevere
  | Dependencies: map_model.h, dash_map.h, dash_view.h, room_model.h, text_map.h,
- |   menu.h, title.h, input.h, saturn_keyboard.h, soft_reset.h, console_view.h
- | Globals: N/A
+ |   menu.h, title.h, input.h, saturn_keyboard.h, soft_reset.h, console_view.h,
+ |   app_state.h
+ | Globals: g_difficulty
  | Params: N/A
  | Returns: N/A
  ----------------------*/

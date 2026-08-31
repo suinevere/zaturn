@@ -610,6 +610,55 @@ int main(void) {
         assert(map_model_pos(81, &ax, &ay) && ax == 0 && ay == -1);
     }
 
+    /* Easy's reveal is a loan, not a gift. Every room it places is taken back by
+       clear_reveal, and only the walked rooms were ever in the save -- otherwise
+       one open of the map on Easy would put the whole drawing on the Medium map
+       for the rest of the session and into every save after it. A room walked
+       into while revealed stops being a loan and keeps its cell. */
+    {
+        unsigned char hdr[0x18];
+        unsigned char blob[MAP_BLOB_MAX];
+        unsigned int len;
+        int revealed, kx, ky;
+        memset(hdr, 0, sizeof hdr);
+        hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
+        memcpy(hdr + 0x12, "840726", 6);
+        assert(map_atlas_bind(hdr, sizeof hdr) > 0);
+
+        map_model_reset();
+        {
+            RoomModel woh = mk(180); link1(&woh, RM_N, 81);
+            map_model_enter(&woh);
+        }
+        assert(map_model_count() == 1);
+        assert(!map_model_visited(81));
+
+        revealed = map_model_reveal_atlas();
+        assert(revealed > 0);
+        assert(map_model_count() == revealed + 1);
+        assert(map_model_visited(81));
+
+        /* Four header bytes and six per room, for the one room walked into --
+           not for the revealed ones sharing the map with it. */
+        len = map_model_serialize(blob, sizeof blob);
+        assert(len == 4u + 6u);
+
+        {
+            RoomModel noh = mk(81); link1(&noh, RM_S, 180);
+            map_model_enter(&noh);
+        }
+        assert(map_model_pos(81, &kx, &ky));
+
+        assert(map_model_clear_reveal() == revealed - 1);
+        assert(map_model_count() == 2);
+        assert(map_model_visited(180) && map_model_visited(81));
+        assert(map_model_pos(81, &x, &y) && x == kx && y == ky);
+        assert(map_model_clear_reveal() == 0);
+
+        len = map_model_serialize(blob, sizeof blob);
+        assert(len == 4u + 12u);
+    }
+
     printf("test_map_model: ok\n");
     return 0;
 }

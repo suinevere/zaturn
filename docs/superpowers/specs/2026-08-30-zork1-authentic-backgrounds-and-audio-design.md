@@ -83,7 +83,14 @@ New `tools/gen_presentation.py` joins three sources:
    `gen_room_inventory.py`.
 3. `cd/Zork I - The Great Underground Empire (Japan)/zork1/1dungeon.zil` — the
    110 `<ROOM>` declarations, giving canonical identity (`MAZE-1`…`MAZE-15`,
-   `DEAD-END-1`…`DEAD-END-5`, `RIVER-1`…`RIVER-5`) and full exits.
+   `DEAD-END-1`…`DEAD-END-5`, `RIVER-1`…`RIVER-5`) and full exits. This source
+   compiles to Zork I release 119, serial `880429`, not the release 88, serial
+   `840726` the disc actually boots — its `<CONSTANT SERIAL 0>` is a build-time
+   placeholder, discoverable only by compiling it. It is therefore a sound
+   witness for room count and map geography, both stable across Zork I
+   releases and both re-verified here (110 rooms on all three sides, the two
+   contested exits unchanged), but it is not authoritative for anything
+   release-specific, such as attribute numbers or object numbering.
 
 96 rooms join on title. The other 14, across 13 distinct titles, are the same room
 renamed between the Japanese release and the story file, resolved by a checked-in
@@ -270,6 +277,17 @@ a walkthrough that goes below ground without the lamp. If it cannot be
 determined reliably, the picture shows and this detail waits for its own cycle.
 A darkness signal that is wrong in the false-positive direction blanks the
 screen during normal play, which is far worse than the fidelity it buys.
+
+**The investigation ran, and the signal is not reachable.** Two reasons,
+either sufficient on its own. First, the ZIL release mismatch above: no
+symbolic `ONBIT` number taken from that source can be trusted against the
+binary the disc actually boots. Second, and stronger because it does not
+depend on which release compiled: Zork's own `LIT?` routine scope-scans a
+room's contents and its open containers, while `room_model.c` walks immediate
+children only, so a carried lit lamp — the ordinary case underground — is
+exactly what a room-attribute-only check would miss. Dark rooms therefore
+keep showing their picture, the fallback already named above. What would
+unblock this is giving `room_model` a scope-aware traversal.
 
 ## Fallbacks
 

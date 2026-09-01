@@ -16,7 +16,9 @@
  |   where that arithmetic is held.
  |
  |   Zork I only. items_available is what gates it, and a story without a
- |   table never opens the archive at all.
+ |   table never opens the archive at all. A story that has a table but whose
+ |   archive is not on the disc is gated the same way, one step later: see
+ |   item_art_available.
  | Author: suinevere
  | Dependencies: N/A
  ----------------------*/
@@ -57,8 +59,10 @@ extern "C" {
  |
  |   Reads the archive here too, for a story that has one -- this is the one
  |   moment in the session where a 40 KB disc read is free, with the loading
- |   screen up and the music not yet started. A refusal is not an error: the
- |   overlay's first open retries it.
+ |   screen up and the music not yet started. It is also the only attempt: a
+ |   refusal is not an error, it just leaves item_art_available false, and the
+ |   inventory shows the plain list for the rest of the session rather than
+ |   going back to the drive at every open to ask again.
  | Author: suinevere
  | Dependencies: scene/items.h, item_art_open
  | Globals: g_release, g_serial, g_have_game
@@ -69,14 +73,22 @@ void item_art_set_game(unsigned int release, const char *serial);
 
 /*----------------------
  | item_art_available
- | Description: Whether the story set by item_art_set_game has item pictures.
- |   The one call that decides whether the inventory overlay takes its tall
- |   geometry with a pane or its plain one.
+ | Description: Whether a picture can actually be put on screen: the story has
+ |   an authored table AND the archive those pictures live in is resident. The
+ |   one call that decides whether the inventory overlay takes its tall geometry
+ |   with a picture module or its plain list-only one.
+ |
+ |   Both halves are load-bearing. A story with a table but no OITEM.CZ on the
+ |   disc -- a build whose staging step did not run, or a disc somebody made
+ |   themselves -- would otherwise get the split module and a frame that is
+ |   black for every item in the game, which reads as a broken feature rather
+ |   than an absent one. Asked after item_art_set_game has already tried the
+ |   read, so this is settled for the session by the time any overlay opens.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_have_game
+ | Globals: g_have_game, g_archive
  | Params: N/A
- | Returns: 1 when the story has a table, 0 otherwise
+ | Returns: 1 when a picture could be shown, 0 otherwise
  ----------------------*/
 int item_art_available(void);
 
@@ -86,8 +98,9 @@ int item_art_available(void);
  |   item_art_set_game, so the read lands in the game load where the drive is
  |   already busy and the music has not started; close is called on the way back
  |   to the title, and also blanks the pane, since nothing should be left on a
- |   layer whose owner has gone. Both are idempotent, and open stays public as
- |   the lazy fallback item_art_show takes if the load-time read was refused.
+ |   layer whose owner has gone. Both are idempotent. Nothing else calls open:
+ |   the load-time read is the only one, and item_art_available reports whether
+ |   it took.
  |
  |   open restores the CD to the story directory before returning whenever it
  |   stepped out of it, which is the obligation every post-selection detour

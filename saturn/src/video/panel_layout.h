@@ -76,6 +76,22 @@
 #define CV_OVERLAY_PANE_W  (CV_OVERLAY_W - 1 - CV_OVERLAY_PANE_X)
 
 /*----------------------
+ | CV_OVERLAY_NUM_COLS
+ | Description: The columns each item row spends on its position in the
+ |   inventory -- two digits, a bracket and a space, so "16) " and " 1) " put
+ |   their names in the same column and the list reads as a column of names
+ |   rather than a ragged one. Two digits is enough for good: RM_CARRIED_MAX
+ |   bounds the list at sixteen.
+ |     The menus reserve MENU_DIGIT_COLS for the same job, but three columns and
+ |   only up to nine, because there the digit is a key the player presses and
+ |   the keyboard has no way to send a tenth. Nothing is pressed here -- the
+ |   pad walks the list -- so the number is free to say where in the inventory
+ |   the row actually is, including on the second page.
+ | Author: suinevere
+ ----------------------*/
+#define CV_OVERLAY_NUM_COLS 4
+
+/*----------------------
  | CV_OVERLAY_PIC_X / CV_OVERLAY_PIC_W / CV_OVERLAY_PIC_ROWS
  | Description: The item picture itself, one cell in from the picture module on
  |   every side. That one-cell border is a second frame -- the same bead as the

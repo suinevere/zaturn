@@ -309,11 +309,11 @@ void item_art_set_game(unsigned int release, const char *serial) {
  | Description: See item_art.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_have_game
+ | Globals: g_have_game, g_archive
  | Params: N/A
- | Returns: 1 when the story has a table
+ | Returns: 1 when the story has a table and its archive is resident
  ----------------------*/
-int item_art_available(void) { return g_have_game ? 1 : 0; }
+int item_art_available(void) { return (g_have_game && g_archive != nullptr) ? 1 : 0; }
 
 /*----------------------
  | item_art_open
@@ -392,9 +392,14 @@ void item_art_close(void) {
 
 /*----------------------
  | item_art_show
- | Description: See item_art.h. Also refuses, holding whatever the pane
- |   already shows, when layer_ensure cannot confirm NBG1 actually claimed a
- |   VRAM bank -- SRL's LoadBitmap can fail its allocation or its palette-bank
+ | Description: See item_art.h. Refuses outright without an archive rather
+ |   than reading one: item_art_available is false in that case, so the overlay
+ |   never took the shape that has a picture module to fill, and a read here
+ |   would put back the mid-session disc seek that holding the archive for the
+ |   session exists to avoid.
+ |
+ |   Also refuses, holding whatever the pane already shows, when layer_ensure
+ |   cannot confirm NBG1 actually claimed a VRAM bank -- SRL's LoadBitmap can fail its allocation or its palette-bank
  |   lookup without telling this module directly, and writing through
  |   NBG1::CellAddress on that failure would land one byte below VRAM bank A0,
  |   into NBG0's wallpaper, rather than merely leaving the pane blank.
@@ -408,13 +413,11 @@ void item_art_close(void) {
 int item_art_show(unsigned int obj) {
     int pic;
 
-    if (!g_have_game) return 0;
+    if (!g_have_game || g_archive == nullptr) return 0;
 
     pic = items_picture_of(g_release, g_serial, obj);
     if (pic < 0) { item_art_blank(); return 0; }
     if (pic == g_cur_picture) return 1;
-
-    if (g_archive == nullptr && !item_art_open()) return 0;
 
     if (g_pixels == nullptr) {
         g_pixels = (unsigned char *) SRL::Memory::LowWorkRam::Malloc(OITEM_PIC_BYTES);

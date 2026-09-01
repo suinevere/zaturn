@@ -779,17 +779,23 @@ static void cv_overlay_border(char *out, int tall) {
 
 /*----------------------
  | cv_overlay_row_text
- | Description: Builds one row of the overlay's item list: a leading space and
+ | Description: Builds one row of the overlay's item list: a leading space, the
+ |   row's position in the inventory right-aligned in CV_OVERLAY_NUM_COLS, and
  |   then the carried item at `idx`'s parser word -- recovered to its full
  |   spelling from the object's own short name where a longer one exists --
  |   padded out to `field_w` characters. The row is the list module's interior
  |   and nothing else, with no frame characters in it, because the frame is the
  |   strip's own. The caller picks field_w: the whole interior for the plain
- |   box, or as far as the divider for the tall one. Blank once idx runs past
- |   the carried count, and a recovered spelling longer than the field
- |   truncates cleanly. The field is padded to its full width rather than
- |   stopped at the word so that a short name cannot leave a longer one's tail
- |   standing beside it, whatever order the rows are drawn in.
+ |   box, or as far as the divider for the tall one. Blank -- number and all --
+ |   once idx runs past the carried count, and a recovered spelling longer than
+ |   the field truncates cleanly. The field is padded to its full width rather
+ |   than stopped at the word so that a short name cannot leave a longer one's
+ |   tail standing beside it, whatever order the rows are drawn in.
+ |
+ |   The number counts the whole inventory rather than the visible page, so the
+ |   second page of a long list carries on from where the first stopped instead
+ |   of starting at one again. Nothing selects by it; it is there to say how
+ |   much is in hand and where in that the cursor is.
  | Author: suinevere
  | Dependencies: room_model.h
  | Globals: N/A
@@ -801,13 +807,22 @@ static void cv_overlay_border(char *out, int tall) {
 static void cv_overlay_row_text(const RoomModel &m, int idx, int field_w, char *out) {
     char word[8] = {0};
     char full[16] = {0};
+    int text_x = 1 + CV_OVERLAY_NUM_COLS;
+    int have = (idx >= 0 && idx < m.ncarried);
     int i, wl;
-    if (idx >= 0 && idx < m.ncarried && room_model_object_word(m.carried[idx], word, sizeof word))
+    if (have && room_model_object_word(m.carried[idx], word, sizeof word))
         room_model_full_word(m.carried[idx], word, full, sizeof full);
     wl = 0;
     while (wl < (int) sizeof(full) - 1 && full[wl] != '\0') wl++;
     out[0] = ' ';
-    for (i = 1; i < field_w; i++) out[i] = (i - 1 < wl) ? full[i - 1] : ' ';
+    for (i = 1; i < field_w; i++)
+        out[i] = (i >= text_x && i - text_x < wl) ? full[i - text_x] : ' ';
+    if (have) {
+        int n = idx + 1;
+        out[1] = (n >= 10) ? (char) ('0' + (n / 10) % 10) : ' ';
+        out[2] = (char) ('0' + n % 10);
+        out[3] = ')';
+    }
     out[field_w] = '\0';
 }
 
@@ -874,7 +889,9 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
  |   CV_OVERLAY_DIV_X to hold the picture module. That split is the border
  |   between the list and the picture, and it is cut in the same stone as every
  |   other seam on the strip.
- |     The tall shape is what a story with item art gets. The input line climbs
+ |     The tall shape is what a story with item art gets -- and only when its
+ |   archive actually loaded, so a disc missing OITEM.CZ falls back to the plain
+ |   list rather than showing a module whose frame is black for every item. The input line climbs
  |   with it by CV_OVERLAY_RISE rows, so the strip's own bottom border stays on
  |   the row it always sat on -- only the transcript above the panel loses rows,
  |   never the box's floor. The selected carried item's picture goes in the

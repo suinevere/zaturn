@@ -19,6 +19,18 @@
 #define PIC_H 80
 
 /*----------------------
+ | NAME_MAX
+ | Description: The longest item name a row can be asked to hold --
+ |   cv_overlay_row_text decodes into a char[16], so fifteen characters and a
+ |   NUL. The number columns eat into the same field, and the narrow shape is
+ |   the one that can run out: a name that no longer fits is truncated
+ |   silently, which on screen is a word with its tail missing rather than
+ |   anything that looks like a bug.
+ | Author: suinevere
+ ----------------------*/
+#define NAME_MAX 15
+
+/*----------------------
  | SCREEN_ROWS / OVERLAY_TOP_ROW
  | Description: The display's height in cells, and the row the tall overlay's
  |   first content row lands on: the input line, the two frame rows and the
@@ -56,6 +68,13 @@ int main(void) {
     check(paneN == right - 1, "the picture module ends against the right frame");
     check(CV_OVERLAY_LIST_W + 2 + CV_OVERLAY_PANE_W == CV_OVERLAY_W - 2,
           "list, seam and picture module fill the interior exactly");
+
+    /* The number columns come out of the same field the name is written in. */
+    check(CV_OVERLAY_NUM_COLS == 4, "two digits, a bracket and a space");
+    check(CV_OVERLAY_LIST_W - 1 - CV_OVERLAY_NUM_COLS >= NAME_MAX,
+          "the tall list still holds the longest name beside its number");
+    check(CV_OVERLAY_W - 2 - 1 - CV_OVERLAY_NUM_COLS >= NAME_MAX,
+          "so does the plain list");
 
     /* Every content row is a list row, because the frame rows are the strip's. */
     check(CV_OVERLAY_ROWS == CV_OVERLAY_TALL_ROWS, "the tall box lists every content row");

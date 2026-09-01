@@ -252,6 +252,33 @@ int map_model_clear_reveal(void);
  |   table produces: four header bytes and six per placed room.
  | Author: suinevere
  ----------------------*/
+/*----------------------
+ | map_model_pages / map_model_page
+ | Description: How many floors the map has, and which one a room is on. A
+ |   floor is a page of the authored drawing -- the publisher split the map
+ |   where the geography did -- so a story with no authored table has exactly
+ |   one floor and every room is on it.
+ |
+ |   A room the table does not cover still gets an answer, and it is not
+ |   page 0. Zork I's fifteen Maze rooms are the case: deliberately absent from
+ |   the atlas, placed by the walk, and reached only from the dungeon, so
+ |   answering "the floor nearest where the walk put it" puts them underground
+ |   where the player found them, while a bare 0 would strand them on the
+ |   surface among the forests. Nearest is measured on the Chebyshev distance to
+ |   each floor's bounding box, which is zero for every room inside one.
+ |
+ |   Nothing is stored per room: the answer is derived from the position the
+ |   model already holds, so a restored map answers the same as a walked one and
+ |   the save blob does not grow a field.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_frame_x, g_frame_y
+ | Params: page takes an object number
+ | Returns: pages returns 1 or more; page returns 0 to pages-1
+ ----------------------*/
+int map_model_pages(void);
+int map_model_page(unsigned short room);
+
 #define MAP_BLOB_MAGIC 0x4Du
 #define MAP_BLOB_MAX   (4u + 6u * MAP_ROOM_MAX)
 

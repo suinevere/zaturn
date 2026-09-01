@@ -27,6 +27,7 @@ EXPECTED = {
     "src/net/online.cxx",
     "src/net/net_connect.c",
     "src/net/term.c",
+    "src/net/party.c",
     "src/net/transport_uart.c",
     "src/video/console_view.cxx",
     "src/video/console.c",

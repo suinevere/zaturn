@@ -118,29 +118,77 @@ int main(void) {
         };
         unsigned int b;
         for (b = 0; b < sizeof BUILDS / sizeof BUILDS[0]; b++) {
-            int i, n, prev = -1, seen = 0;
+            int i, n, prev = -1, seen = 0, pages;
             unsigned short room = 0;
             header(h, BUILDS[b].rel, BUILDS[b].ser);
             n = map_atlas_bind(h, sizeof h);
             assert(n > 0);
+            pages = map_atlas_pages();
+            assert(pages >= 1 && pages <= MAP_ATLAS_PAGE_MAX);
             for (i = 0; i < n; i++) {
+                int page = -1;
                 assert(map_atlas_room_at(i, &room));
                 assert((int) room > prev);
                 prev = (int) room;
                 assert(map_atlas_pos(room, &x, &y));
+                /* Every room names a floor the table declares, and its cell is
+                   inside that floor's box. The second half is what makes the
+                   first mean something: a page field that was right about its
+                   own count and wrong about which rooms belonged to it would
+                   pass the count check on its own. */
+                assert(map_atlas_page(room, &page));
+                assert(page >= 0 && page < pages);
+                {
+                    int x0, y0, x1, y1;
+                    assert(map_atlas_page_box(page, &x0, &y0, &x1, &y1));
+                    assert(x >= x0 && x <= x1 && y >= y0 && y <= y1);
+                }
                 seen++;
             }
             assert(seen == n);
             assert(!map_atlas_room_at(n, &room));
+            /* Every declared floor holds at least one room, so paging never
+               offers an empty screen -- the generator renumbers densely and
+               this is what holds it to that. */
+            for (i = 0; i < pages; i++) {
+                int x0, y0, x1, y1;
+                assert(map_atlas_page_box(i, &x0, &y0, &x1, &y1));
+                assert(x1 >= x0 && y1 >= y0);
+            }
+            assert(!map_atlas_page_box(pages, &x, &y, &x, &y));
+            assert(!map_atlas_page_box(-1, &x, &y, &x, &y));
+            /* No two floors share ground. The generator gives each drawn page
+               its own band of rows below the last, so this holds today; it is
+               asserted because a table that stopped being true of it would put
+               two floors' rooms in the same cells and the renderer would have
+               to choose between them silently. */
+            assert(!map_atlas_pages_overlap());
         }
     }
 
+    /* Zork I is drawn on three sheets -- above ground, the dungeon, and the
+       coal mine -- so a table that lost its page column would report one floor
+       here and still pass every check above. */
+    {
+        int page = -1;
+        header(h, 88, "840726");
+        assert(map_atlas_bind(h, sizeof h) > 0);
+        assert(map_atlas_pages() == 3);
+        /* West of House is object 180 and stands on the first sheet. */
+        assert(map_atlas_page(180, &page));
+        assert(page == 0);
+        assert(!map_atlas_page(1, &page));
+    }
+
     /* No table is bound for a story nobody drew, and the previously bound one is
-       forgotten rather than left to answer for it. */
+       forgotten rather than left to answer for it -- including its floors, which
+       would otherwise let a caller page a map that has none. */
     header(h, 88, "999999");
     assert(map_atlas_bind(h, sizeof h) == 0);
     assert(map_atlas_count() == 0);
+    assert(map_atlas_pages() == 0);
     assert(!map_atlas_pos(180, &x, &y));
+    assert(!map_atlas_page_box(0, &x, &y, &x, &y));
 
     /* Object numbers are assigned by the compiler, so a different release of the
        same game must not match: its rooms are numbered differently and the table

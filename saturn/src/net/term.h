@@ -26,12 +26,18 @@
  |   longest payload the parser will buffer before giving up on a frame. Must
  |   match multizorkd.c's constants of the same names -- there is no shared
  |   header between the Saturn build and the server.
+ |
+ |   Twenty-four rather than the eight a room frame needs, because the roster
+ |   frame carries a username: one type byte, one seat digit, four hex digits
+ |   and up to fifteen characters of name is twenty-one. A frame longer than
+ |   this is discarded to its terminator, so the cap is what a payload may be
+ |   and not what the parser survives.
  | Author: suinevere
  ----------------------*/
 #define ZATURN_TELOPT   178
 #define TERM_OOB_START  0x01
 #define TERM_OOB_END    0x02
-#define TERM_OOB_MAX    8
+#define TERM_OOB_MAX    24
 
 /*----------------------
  | TERM_OOB_DRAIN_MAX
@@ -39,10 +45,11 @@
  |   the terminator before deciding this was never a frame. Without a bound a
  |   single corrupted byte that happened to be 0x01 would swallow the rest of the
  |   session in silence, which is far worse than printing a few stray characters.
- |   Generous against the seven-byte frame it is guarding.
+ |   Generous against the longest frame it is guarding, which is a roster seat
+ |   at twenty-three bytes including both markers.
  | Author: suinevere
  ----------------------*/
-#define TERM_OOB_DRAIN_MAX 32
+#define TERM_OOB_DRAIN_MAX 64
 
 #ifdef __cplusplus
 extern "C" {

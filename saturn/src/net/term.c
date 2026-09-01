@@ -10,10 +10,18 @@
  |   what they carried. This file owns the byte stream and therefore the framing;
  |   it deliberately does not know what a room id means. It parks a number in
  |   TermState and whoever cares decides -- see online.cxx.
+ |
+ |   The roster is the one thing it publishes rather than parks, and only
+ |   because there is nothing to decide: a seat's number, room and username are
+ |   already the whole meaning, and routing them through TermState would need a
+ |   fresh flag per seat and a reader that drained them before the next frame
+ |   arrived. The room id keeps its flag because acting on it costs a model
+ |   update that must happen once per move and not once per frame.
  | Author: suinevere
- | Dependencies: term.h, console.h (console_write), string.h
+ | Dependencies: term.h, party.h, console.h (console_write), string.h
  ----------------------*/
 #include "term.h"
+#include "party.h"
 #include "console.h"
 #include <string.h>
 
@@ -75,12 +83,24 @@ static int hexval(char c) {
 
 /*----------------------
  | oob_finish
- | Description: Decodes a completed out-of-band frame. Only one form exists --
- |   'R' followed by four hex digits, a room object id -- and anything else is
- |   dropped without comment, so a future server that adds a frame type does not
- |   make an older client print garbage.
+ | Description: Decodes a completed out-of-band frame. Three forms exist and
+ |   anything else is dropped without comment, so a future server that adds a
+ |   frame type does not make an older client print garbage:
+ |
+ |     R HHHH             the local player's room object id
+ |     S d                which seat of the instance the local player holds
+ |     P d HHHH name      one seat's room and username, name possibly empty
+ |
+ |   A seat frame with an empty name is a seat nobody is in. The server reports
+ |   the seat's new state rather than that somebody left, so a client that missed
+ |   the join still ends up agreeing with it.
+ |
+ |   R is kept beside P rather than folded into it although the local player has
+ |   a seat of their own: R is what the map model is driven from and it must
+ |   arrive whether or not the server is one that knows about seats, which every
+ |   build before this one was.
  | Author: suinevere
- | Dependencies: N/A
+ | Dependencies: party.h
  | Globals: N/A
  | Params: t -- terminal state holding the captured payload
  | Returns: N/A
@@ -88,6 +108,7 @@ static int hexval(char c) {
 static void oob_finish(TermState *t) {
     unsigned int v = 0;
     int i;
+
     if (t->oob_len == 5 && t->oob[0] == 'R') {
         for (i = 1; i <= 4; i++) {
             int d = hexval(t->oob[i]);
@@ -96,6 +117,28 @@ static void oob_finish(TermState *t) {
         }
         t->room_id = v;
         t->room_id_fresh = 1;
+        return;
+    }
+
+    if (t->oob_len == 2 && t->oob[0] == 'S') {
+        if (t->oob[1] < '0' || t->oob[1] >= '0' + PARTY_SEATS) return;
+        party_set_self(t->oob[1] - '0');
+        return;
+    }
+
+    if (t->oob_len >= 6 && t->oob[0] == 'P') {
+        char name[PARTY_NAME_MAX];
+        int n = t->oob_len - 6;
+        if (t->oob[1] < '0' || t->oob[1] >= '0' + PARTY_SEATS) return;
+        for (i = 2; i <= 5; i++) {
+            int d = hexval(t->oob[i]);
+            if (d < 0) return;
+            v = (v << 4) | (unsigned int) d;
+        }
+        if (n > PARTY_NAME_MAX - 1) n = PARTY_NAME_MAX - 1;
+        for (i = 0; i < n; i++) name[i] = t->oob[6 + i];
+        name[n] = '\0';
+        party_set(t->oob[1] - '0', (unsigned short) v, name);
     }
 }
 

@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 103 8x8 4bpp tiles
-and its 16-entry RGB555 palette. Deterministic -- the marble is seeded noise, so
-re-running reproduces the same file byte for byte.
+"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 115 8x8 4bpp tiles
+and its 16-entry RGB555 palette. Deterministic -- the marble is seeded noise and
+the one imported bitmap is a file in the tree, so re-running reproduces the same
+file byte for byte.
+
+Needs Pillow, and only for the knight: KNIGHT_PNG is read rather than transcribed
+into a literal here so the drawing and the tiles cannot drift apart.
 
 Usage: python3 tools/gen_dash_tiles.py > saturn/src/video/dash_tiles.c
 """
 import random
 
-N = 103
+from PIL import Image
+
+N = 115
 SEED = 20260828
 
 # Palette index by role. The blue channel runs two steps above red and green
@@ -84,6 +90,33 @@ MARK_DARK = 1
 MARK_RING = 13
 MARK_HERE_RING = 15
 MARK_HERE_CORE = 12
+
+# The map now has four kinds of mark to tell apart on one greyscale ramp bent to
+# a single tan, which is one more than lightness alone carries, so the two new
+# ones differ in shape as well as in value: the crosshair's pick inverts the
+# ordinary mark -- dark ring, brightest core -- and another player's room keeps
+# the here-mark's bright ring but takes a dark pupil out of its core. Both stay
+# clear of entries 4 and 9 for the reason above.
+MARK_SEL_RING = 2
+MARK_SEL_CORE = 15
+MARK_PEER_PUPIL = 1
+
+# The crosshair is four corner brackets in the cells diagonally around the mark,
+# so the picked room sits inside a reticle rather than wearing a colour a reader
+# would have to have been told about. XHAIR_ARM is how many pixels each arm runs
+# from the corner it turns at.
+MARK_XHAIR = 15
+XHAIR_ARM = 5
+
+# The figure standing beside the player. 16x24 is exactly two tiles by three,
+# which is why the drawing is that size: a sprite whose bounds did not divide
+# would need a clipping rule of its own in a renderer that can only place cells.
+KNIGHT_PNG = "tools/assets/png/KNIGHT.PNG"
+KNIGHT_W = 2
+KNIGHT_H = 3
+# Drawn in the ink the grooves and room cores already use, so the figure reads as
+# part of the drawing rather than as something pasted over it.
+KNIGHT_INK = MARK_DARK
 
 
 def rgb555(c):
@@ -264,6 +297,40 @@ def build():
     tiles.append(framed(PIC_TOP_RP, PIC_RIGHT_CP, left=0, bottom=7))     # TR
     tiles.append(framed(PIC_BOTTOM_RP, PIC_LEFT_CP, right=7, top=0))     # BL
     tiles.append(framed(PIC_BOTTOM_RP, PIC_RIGHT_CP, left=0, top=0))     # BR
+
+    sel = solid(MARK_SEL_RING, 1, 1, 6, 6, base=ground)
+    sel = solid(MARK_SEL_CORE, 2, 2, 5, 5, base=sel)
+    tiles.append(sel)                                           # DT_ROOM_SEL
+
+    tiles.append(solid(MARK_PEER_PUPIL, 3, 3, 4, 4, base=here)) # DT_ROOM_PEER
+
+    # The four reticle corners, each an L turning at the corner of its own cell
+    # nearest the mark, so the four together read as one box drawn around it.
+    # The cells they land in are diagonal from the mark and can hold a link; the
+    # bracket overwrites it, because a cursor showing the map through itself is
+    # harder to find than the room it is pointing at.
+    for hx0, hy, vx, vy0 in ((1, 1, 1, 1),
+                             (7 - XHAIR_ARM, 1, 6, 1),
+                             (1, 6, 1, 7 - XHAIR_ARM),
+                             (7 - XHAIR_ARM, 6, 6, 7 - XHAIR_ARM)):
+        t = solid(MARK_XHAIR, hx0, hy, hx0 + XHAIR_ARM - 1, hy, base=ground)
+        t = solid(MARK_XHAIR, vx, vy0, vx, vy0 + XHAIR_ARM - 1, base=t)
+        tiles.append(t)                  # DT_XHAIR_TL, TR, BL, BR
+
+    # The knight, cut into cells row-major. Composited onto the ground rather
+    # than left transparent where the drawing is: NBG2 is one layer, so a
+    # transparent pixel is a hole through the map to the wallpaper, not the tan
+    # underneath.
+    knight = Image.open(KNIGHT_PNG).convert("RGBA")
+    assert knight.size == (KNIGHT_W * 8, KNIGHT_H * 8), knight.size
+    for ty in range(KNIGHT_H):
+        for tx in range(KNIGHT_W):
+            t = [[ground[y][x] for x in range(8)] for y in range(8)]
+            for y in range(8):
+                for x in range(8):
+                    if knight.getpixel((tx * 8 + x, ty * 8 + y))[3] > 128:
+                        t[y][x] = KNIGHT_INK
+            tiles.append(t)                                     # DT_KNIGHT0+i
 
     assert len(tiles) == N, len(tiles)
     return tiles

@@ -535,6 +535,56 @@ int map_model_reveal_atlas(void) {
 }
 
 /*----------------------
+ | map_model_pages
+ | Description: See map_model.h.
+ | Author: suinevere
+ | Dependencies: map_atlas.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the floor count, at least 1
+ ----------------------*/
+int map_model_pages(void) {
+    int n = map_atlas_pages();
+    return (n > 0) ? n : 1;
+}
+
+/*----------------------
+ | map_model_page
+ | Description: See map_model.h. The boxes are in the table's coordinates and
+ |   the room's position is in the model's, so the frame offset atlas_target
+ |   established is added to the box rather than subtracted from the room --
+ |   same arithmetic, but it keeps the room's own coordinates untouched for the
+ |   comparison a reader is checking.
+ | Author: suinevere
+ | Dependencies: map_atlas.h, map_model_pos
+ | Globals: g_frame_set, g_frame_x, g_frame_y
+ | Params: room -- object number
+ | Returns: 0 to map_model_pages() - 1
+ ----------------------*/
+int map_model_page(unsigned short room) {
+    int p = 0, x = 0, y = 0, i, n, best = 0, bestd = -1;
+
+    if (map_atlas_page(room, &p)) return p;
+    if (!g_frame_set) return 0;
+    if (!map_model_pos(room, &x, &y)) return 0;
+
+    n = map_atlas_pages();
+    for (i = 0; i < n; i++) {
+        int x0, y0, x1, y1, dx = 0, dy = 0, d;
+        if (!map_atlas_page_box(i, &x0, &y0, &x1, &y1)) continue;
+        x0 += g_frame_x; x1 += g_frame_x;
+        y0 += g_frame_y; y1 += g_frame_y;
+        if      (x < x0) dx = x0 - x;
+        else if (x > x1) dx = x - x1;
+        if      (y < y0) dy = y0 - y;
+        else if (y > y1) dy = y - y1;
+        d = (dx > dy) ? dx : dy;
+        if (bestd < 0 || d < bestd) { bestd = d; best = i; }
+    }
+    return best;
+}
+
+/*----------------------
  | map_model_clear_reveal
  | Description: See map_model.h.
  | Author: suinevere

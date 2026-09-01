@@ -659,6 +659,64 @@ int main(void) {
         assert(len == 4u + 12u);
     }
 
+    /* Floors. Zork I is drawn on three sheets and the map shows one at a time,
+       so every room has to name one -- including the rooms the atlas does not
+       cover, which are the fifteen Maze rooms and are reached only from the
+       dungeon. A bare zero for those would strand them on the surface among the
+       forests, so the model answers with the floor whose box they were placed
+       nearest, which is the one the player walked in from.
+
+       Object numbers here are Zork I release 88's own: 180 West of House and
+       193 Living Room are drawn on the first sheet, 72 Cellar on the second,
+       and 73 is not in the table at all -- it stands in for a Maze room. */
+    {
+        unsigned char hdr[0x18];
+        memset(hdr, 0, sizeof hdr);
+        hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
+        memcpy(hdr + 0x12, "840726", 6);
+        assert(map_atlas_bind(hdr, sizeof hdr) > 0);
+        assert(map_model_pages() == 3);
+
+        map_model_reset();
+        {
+            RoomModel lr = mk(193); link1(&lr, RM_DOWN, 72);
+            RoomModel ce = mk(72);  link1(&ce, RM_UP, 193); link1(&ce, RM_S, 73);
+            RoomModel mz = mk(73);  link1(&mz, RM_N, 72);
+            map_model_enter(&lr);
+            map_model_enter(&ce);
+            map_model_enter(&mz);
+        }
+
+        /* The two authored rooms take the floor they were drawn on, and they
+           are not the same floor -- a stairway down is a floor change, which is
+           the whole reason paging exists. */
+        assert(map_model_page(193) == 0);
+        assert(map_model_page(72) == 1);
+        assert(map_model_page(193) != map_model_page(72));
+
+        /* And the unmapped room follows the room it was entered from rather
+           than falling to zero. */
+        assert(map_model_page(73) == 1);
+
+        /* An object nobody placed and nobody drew has no floor to be on and
+           answers with the first, which is what the caller filters by: it is
+           never asked about a room it has not been given. */
+        assert(map_model_page(250) == 0);
+    }
+
+    /* With no table bound there is exactly one floor and everything is on it,
+       so a story nobody drew never offers a page the player cannot reach. */
+    {
+        assert(map_atlas_bind(0, 0) == 0);
+        assert(map_model_pages() == 1);
+        map_model_reset();
+        {
+            RoomModel only = mk(12);
+            map_model_enter(&only);
+        }
+        assert(map_model_page(12) == 0);
+    }
+
     printf("test_map_model: ok\n");
     return 0;
 }

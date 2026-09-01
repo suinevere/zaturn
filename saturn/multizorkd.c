@@ -36,7 +36,19 @@
 /*----------------------
  | ZATURN_TELOPT / ZATURN_OOB_START / ZATURN_OOB_END
  | Description: The private telnet option a Zaturn netbin negotiates to ask for
- |   out-of-band room ids, and the bytes that frame one. 178 is picked out of the
+ |   out-of-band game state, and the bytes that frame one. Three frames exist:
+ |
+ |     R HHHH             the receiving player's own room object id
+ |     S d                which seat of this instance the receiver holds
+ |     P d HHHH name      one seat's room and username, both empty when nobody
+ |                        is in it
+ |
+ |   R is still sent although P now carries the same number for the receiver's
+ |   own seat, because R is what drives the client's map and it has to keep
+ |   arriving for a client built before P existed. A client that does not
+ |   understand S and P drops them: its parser buffers a payload up to its own
+ |   cap and then discards the rest of the frame to the terminator, so an
+ |   unknown frame costs it nothing and prints nothing. 178 is picked out of the
  |   unassigned option space, avoiding both the IANA-registered low numbers and
  |   the de-facto MUD options (69/70 MSDP/MSSP, 85/86 MCCP, 90/91 MSP/MXP,
  |   93 ZMP, 200/201 ATCP/GMCP) that a real client might send -- this channel
@@ -199,6 +211,9 @@ struct Connection
     int wants_room_id;         // client negotiated ZATURN_TELOPT; send it room ids out of band.
     int room_id_sent;          // whether last_room_id_sent holds a value yet.
     uint16 last_room_id_sent;  // suppress the frame when the player has not moved.
+    int seat_sent;             // the seat this client was told it holds, plus one; 0 for never.
+    uint16 last_seat_room[MULTIZORK_SEATS_PER_GAME];   // last roster sent, to suppress the resend.
+    char last_seat_name[MULTIZORK_SEATS_PER_GAME][16];
 };
 
 static Connection **connections = NULL;
@@ -1105,6 +1120,89 @@ static void write_room_id(Player *player, const uint16 room)
 
     conn->last_room_id_sent = room;
     conn->room_id_sent = 1;
+}
+
+/*----------------------
+ | player_room_objid
+ | Description: A player's room as an object id, undoing the byte order the
+ |   rest of this file keeps it in. gvar_location is loaded and stored through a
+ |   uint16* cast over the story image (:1623, :1721), so on a little-endian host
+ |   it holds the swap of the real id -- self-consistent for swapping the global
+ |   back in, and wrong for anything that means to name an object. Reading its
+ |   own bytes big-endian recovers the id on any host, which is the same rule
+ |   the R frame already follows at its one call site.
+ | Author: suinevere
+ | Dependencies: string.h (memcpy)
+ | Globals: N/A
+ | Params: player -- the player to read
+ | Returns: the room's object id
+ ----------------------*/
+static uint16 player_room_objid(const Player *player)
+{
+    uint8 b[2];
+    memcpy(b, &player->gvar_location, sizeof (b));
+    return (uint16) ((((uint16) b[0]) << 8) | ((uint16) b[1]));
+}
+
+/*----------------------
+ | write_party_to
+ | Description: Brings one client's copy of the roster up to date: which seat it
+ |   holds, and for every seat who is in it and where they are standing. Silent
+ |   for a connection that did not negotiate ZATURN_TELOPT, for one not in a
+ |   game, and for any seat whose room and name have not changed since the last
+ |   frame -- so a table of four people examining things costs nothing on the
+ |   wire and a single step costs one frame to each of them.
+ |
+ |   An empty seat is reported as room 0 with no name rather than not reported,
+ |   which is how a client learns somebody left: the frame says what the seat is
+ |   now, so a client that missed the join still ends up agreeing about it.
+ |
+ |   Called from the service loop rather than from the seven places a connection
+ |   can enter a game. The diff is what makes that cheap, and it is also what
+ |   makes it right: there is no path into or out of a seat that can forget to
+ |   announce itself, because nothing announces anything -- the loop notices.
+ | Author: suinevere
+ | Dependencies: write_to_connection, player_room_objid
+ | Globals: N/A
+ | Params: conn -- the client to update
+ | Returns: N/A
+ ----------------------*/
+static void write_party_to(Connection *conn)
+{
+    Instance *inst = conn->instance;
+    char frame[32];
+    int i, seat = -1;
+
+    if (!conn->wants_room_id) return;
+    if (inst == NULL) return;
+    if (conn->state != CONNSTATE_READY) return;
+
+    for (i = 0; i < MULTIZORK_SEATS_PER_GAME; i++) {
+        if (inst->players[i].connection == conn) { seat = i; break; }
+    }
+    if ((seat >= 0) && (conn->seat_sent != (seat + 1))) {
+        snprintf(frame, sizeof (frame), "%cS%d%c",
+                 (int) ZATURN_OOB_START, seat, (int) ZATURN_OOB_END);
+        write_to_connection(conn, frame);
+        conn->seat_sent = seat + 1;
+    }
+
+    for (i = 0; i < MULTIZORK_SEATS_PER_GAME; i++) {
+        const Player *player = &inst->players[i];
+        const char *name = player->claimed ? player->username : "";
+        const uint16 room = player->claimed ? player_room_objid(player) : 0;
+        if ((conn->last_seat_room[i] == room) &&
+            (strcmp(conn->last_seat_name[i], name) == 0)) {
+            continue;
+        }
+        snprintf(frame, sizeof (frame), "%cP%d%04X%s%c",
+                 (int) ZATURN_OOB_START, i, (unsigned int) room, name,
+                 (int) ZATURN_OOB_END);
+        write_to_connection(conn, frame);
+        conn->last_seat_room[i] = room;
+        snprintf(conn->last_seat_name[i], sizeof (conn->last_seat_name[i]),
+                 "%s", name);
+    }
 }
 
 static void free_instance(Instance *inst);
@@ -3589,6 +3687,12 @@ int main(int argc, char **argv)
                     send_to_connection(conn);
                 }
             }
+        }
+
+        // Bring every netbin's roster up to date. Cheap: it is a comparison per
+        // seat and writes nothing at all unless somebody moved, joined or left.
+        for (size_t i = 0; i < num_connections; i++) {
+            write_party_to(connections[i]);
         }
 
         // cleanup any done sockets.

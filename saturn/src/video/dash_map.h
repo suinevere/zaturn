@@ -50,6 +50,16 @@ extern "C" {
  |   over the same marble as the module frames, but facing inward, so it closes
  |   hard against the item picture rather than around the module. It goes last
  |   for the same numbering reason the DT_BOX_* set stays.
+ |
+ |   After it come the map's cursor and its figure. DT_ROOM_SEL is the room the
+ |   crosshair is over and DT_ROOM_PEER another player's room, both differing
+ |   from the two older marks in shape as well as value because four marks is
+ |   one more than a single tinted ramp can separate by lightness alone.
+ |   DT_XHAIR_* are the reticle's four corners, which go in the cells diagonally
+ |   around the picked mark. DT_KNIGHT0 opens six tiles holding one 16x24
+ |   drawing, row-major two wide by three tall, painted beside the player's own
+ |   room; they are on the ground field rather than on transparency, since NBG2
+ |   is one layer and a transparent pixel is a hole through the map.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -76,8 +86,21 @@ enum {
     DT_PIC_LEFT0, DT_PIC_LEFT1, DT_PIC_LEFT2, DT_PIC_LEFT3,
     DT_PIC_RIGHT0, DT_PIC_RIGHT1, DT_PIC_RIGHT2, DT_PIC_RIGHT3,
     DT_PIC_TL, DT_PIC_TR, DT_PIC_BL, DT_PIC_BR,
-    DT_N
+    DT_ROOM_SEL, DT_ROOM_PEER,
+    DT_XHAIR_TL, DT_XHAIR_TR, DT_XHAIR_BL, DT_XHAIR_BR,
+    DT_KNIGHT0,
+    DT_N = DT_KNIGHT0 + 6
 };
+
+/*----------------------
+ | DT_KNIGHT_W / DT_KNIGHT_H
+ | Description: The knight's size in cells. Named here rather than left as
+ |   literals at the one call site because the tile generator asserts the source
+ |   drawing is exactly this many cells, and the two have to agree.
+ | Author: suinevere
+ ----------------------*/
+#define DT_KNIGHT_W 2
+#define DT_KNIGHT_H 3
 
 /*----------------------
  | DT_EDGE_N .. DT_EDGE_W / DT_LINK_H / DT_LINK_V

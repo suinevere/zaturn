@@ -38,6 +38,7 @@ extern "C" {
 #include "keyboard.h"
 #include "saturn_keyboard.h"
 #include "term.h"
+#include "party.h"
 #include "net/net_connect.h"
 #include "typeahead.h"
 #include "typeahead_extract.h"
@@ -446,6 +447,9 @@ void online_mode(void) {
        empty every session is always honest about what it is showing. */
     map_atlas_bind(netbin_story_data(), netbin_story_size());
     map_model_reset();
+    /* And the roster with it, for the same reason: the seats belong to one
+       instance, and the next dial may be a different one. */
+    party_reset();
 #endif
     for (;;) {
         term_service(&ts, tr, ZATURN_RX_BUDGET);

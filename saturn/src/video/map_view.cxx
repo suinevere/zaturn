@@ -2,9 +2,9 @@
  | map_view.cxx
  | Description: Implements map_view.h.
  | Author: suinevere
- | Dependencies: map_model.h, dash_map.h, room_model.h, text_map.h, dash_view.h,
- |   title.h, room_art.h, display.h, app_state.h, input.h, saturn_keyboard.h,
- |   soft_reset.h, console_view.h, menu.h
+ | Dependencies: map_model.h, map_atlas.h, map_layout.h, dash_map.h, room_model.h,
+ |   text_map.h, dash_view.h, title.h, room_art.h, display.h, app_state.h,
+ |   input.h, saturn_keyboard.h, soft_reset.h, console_view.h, party.h, menu.h
  ----------------------*/
 #include <srl.hpp>
 #include "map_model.h"
@@ -22,26 +22,9 @@
 #include "soft_reset.h"
 #include "console_view.h"
 #include "menu.h"
+#include "party.h"
+#include "map_layout.h"
 #include "map_view.h"
-
-/*----------------------
- | MAP_CELLS / MAP_ROOMS_W / MAP_ROOMS_H / MAP_CX / MAP_CY / MAP_TOP
- | Description: One room is four text cells -- the original's 32-pixel step
- |   over an 8x8 font -- so a 320x224 screen shows ten rooms by seven, and the
- |   player sits at the middle one. Seven rooms of four rows is exactly the 28
- |   rows the screen has, so MAP_TOP is zero and the map fills it; it exists as
- |   a name rather than a bare 0 because the ground and the marks must agree on
- |   it, and they did not in an earlier draft. Named MAP_ROOMS_W/H rather than
- |   MAP_VIEW_W/H because the latter collides with this file's own header
- |   guard (map_view.h defines MAP_VIEW_H as its include guard).
- | Author: suinevere
- ----------------------*/
-#define MAP_CELLS    4
-#define MAP_ROOMS_W  10
-#define MAP_ROOMS_H  7
-#define MAP_CX       5
-#define MAP_CY       3
-#define MAP_TOP      0
 
 /*----------------------
  | MAP_VIS_MAX
@@ -62,6 +45,40 @@
 #define MAP_GROUND_555 0x2B5Eu
 
 /*----------------------
+ | MAP_ROW_PLAYERS / MAP_ROW_STATUS / MAP_ROW_HELP / MAP_TEXT_COLS
+ | Description: The text rows written over the map and how wide they may run.
+ |   The roster opens at MAP_ROW_PLAYERS and takes one row per occupied seat, so
+ |   it can reach four; the status row carries the room under the crosshair on
+ |   the left and the floor number on the right. MAP_TEXT_COLS is the 40 columns
+ |   a 320-pixel screen shows, which is narrower than text_map's own 64-cell
+ |   pitch -- printing past it writes cells nobody can see.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_ROW_PLAYERS 1
+#define MAP_ROW_STATUS  26
+#define MAP_ROW_HELP    27
+#define MAP_TEXT_COLS   40
+
+/*----------------------
+ | MAP_FLASH_SHIFT
+ | Description: How long each half of a player mark's pulse lasts, as a power of
+ |   two frames -- sixteen, so a little over a quarter second each way at 60Hz.
+ |   The pulse is why this screen repaints anything per frame at all: everything
+ |   else it draws is settled by draw_once and held by dash_map_hold.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_FLASH_SHIFT 4
+
+/*----------------------
+ | MAP_FLASH_MAX
+ | Description: The most marks that can be pulsing at once -- one per seat, and
+ |   one more for the local player, who has a mark whether or not the server has
+ |   given them a seat.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_FLASH_MAX (PARTY_SEATS + 1)
+
+/*----------------------
  | g_ids / g_dxs / g_dys
  | Description: The rooms inside the viewport and their offsets from the
  |   player, gathered once so the pairwise link walk that follows scans
@@ -72,6 +89,23 @@
 static unsigned short g_ids[MAP_VIS_MAX];
 static short          g_dxs[MAP_VIS_MAX];
 static short          g_dys[MAP_VIS_MAX];
+
+/*----------------------
+ | g_flash_x / g_flash_y / g_flash_tile / g_flash_n
+ | Description: The cells holding a player's mark, gathered by draw_once so the
+ |   frame loop can pulse them without repeating the room and link walk. Each
+ |   alternates between its own tile and DT_ROOM, so a pulsing mark reads as a
+ |   room that is being pointed at rather than as one blinking out of existence.
+ |
+ |   A mark the crosshair is over is left out of this list: the pick has to win
+ |   its own cell, and a mark that pulsed under the cursor would spend half its
+ |   time denying it had been picked.
+ | Author: suinevere
+ ----------------------*/
+static short         g_flash_x[MAP_FLASH_MAX];
+static short         g_flash_y[MAP_FLASH_MAX];
+static unsigned char g_flash_tile[MAP_FLASH_MAX];
+static int           g_flash_n;
 
 /*----------------------
  | occupied
@@ -290,22 +324,27 @@ static void paint_link(int ax, int ay, int bx, int by, int n, int kind)
  |   call -- which mattered, because draw_once used to nest that scan inside a
  |   pairwise loop and so spent about a dozen frames between one menu_sync and
  |   the next, long enough to starve the looping PCM hand-off.
+ |
+ |   Rooms on another floor are skipped here rather than at paint time, which is
+ |   what keeps the links honest: a link is only drawn between two gathered
+ |   rooms, so a staircase leaving this floor simply has no far end to draw to
+ |   and no line is invented for it.
  | Author: suinevere
  | Dependencies: map_model.h
  | Globals: g_ids, g_dxs, g_dys
- | Params: N/A
+ | Params: sx, sy -- the scroll offset in rooms; page -- the floor being shown
  | Returns: how many rooms were gathered
  ----------------------*/
-static int gather(int sx, int sy)
+static int gather(int sx, int sy, int page)
 {
     int r, n = 0;
     for (r = 1; r < MAP_ROOM_MAX && n < MAP_VIS_MAX; r++) {
         int dx = 0, dy = 0;
         if (!map_model_offset((unsigned short) r, &dx, &dy)) continue;
+        if (map_model_page((unsigned short) r) != page) continue;
         dx -= sx;
         dy -= sy;
-        if (dx < -MAP_CX || dx >= MAP_ROOMS_W - MAP_CX) continue;
-        if (dy < -MAP_CY || dy >= MAP_ROOMS_H - MAP_CY) continue;
+        if (!map_layout_visible(dx, dy)) continue;
         g_ids[n] = (unsigned short) r;
         g_dxs[n] = (short) dx;
         g_dys[n] = (short) dy;
@@ -316,23 +355,25 @@ static int gather(int sx, int sy)
 
 /*----------------------
  | extent
- | Description: The bounding box of every placed room, as offsets from the
- |   player. It is what the scroll is clamped to, so the view cannot be walked
- |   off into empty ground and lost -- at either limit the centre of the
- |   viewport sits on the outermost room rather than past it.
+ | Description: The bounding box of every placed room on one floor, as offsets
+ |   from the player. It is what the crosshair is clamped to, so the cursor
+ |   cannot be walked off into empty ground and lost -- at either limit it sits
+ |   on the outermost room of that floor rather than past it.
  | Author: suinevere
  | Dependencies: map_model.h
  | Globals: N/A
- | Params: x0, x1, y0, y1 -- receive the box; all zero when nothing is placed
+ | Params: page -- the floor to measure; x0, x1, y0, y1 -- receive the box; all
+ |   zero when the floor holds nothing placed
  | Returns: N/A
  ----------------------*/
-static void extent(int *x0, int *x1, int *y0, int *y1)
+static void extent(int page, int *x0, int *x1, int *y0, int *y1)
 {
     int r, first = 1;
     *x0 = *x1 = *y0 = *y1 = 0;
     for (r = 1; r < MAP_ROOM_MAX; r++) {
         int dx = 0, dy = 0;
         if (!map_model_offset((unsigned short) r, &dx, &dy)) continue;
+        if (map_model_page((unsigned short) r) != page) continue;
         if (first) { *x0 = *x1 = dx; *y0 = *y1 = dy; first = 0; continue; }
         if (dx < *x0) *x0 = dx;
         if (dx > *x1) *x1 = dx;
@@ -342,10 +383,136 @@ static void extent(int *x0, int *x1, int *y0, int *y1)
 }
 
 /*----------------------
+ | put_uint
+ | Description: One small unsigned decimal into a buffer, answering where it
+ |   stopped. This screen shows two numbers -- a floor and a floor count -- and
+ |   nothing else in it formats anything, so a digit loop is the whole
+ |   requirement and pulling in a printf for it would not be.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: out -- the buffer; at -- where to start; v -- the value
+ | Returns: the index one past the last digit written
+ ----------------------*/
+static int put_uint(char *out, int at, unsigned int v)
+{
+    char tmp[6];
+    int n = 0;
+    do { tmp[n++] = (char) ('0' + (v % 10u)); v /= 10u; }
+    while (v != 0u && n < (int) sizeof tmp);
+    while (n > 0) out[at++] = tmp[--n];
+    return at;
+}
+
+/*----------------------
+ | peer_seat
+ | Description: Which other player is standing in a room, if any. The local
+ |   player is skipped even when the server has not said which seat is theirs:
+ |   map_model_current answers for them first at the one call site, so a seat
+ |   matching it would only ever repaint the mark that already won.
+ | Author: suinevere
+ | Dependencies: party.h
+ | Globals: N/A
+ | Params: room -- object number
+ | Returns: the seat, or -1 when nobody else is there
+ ----------------------*/
+static int peer_seat(unsigned short room)
+{
+    int i;
+    if (room == 0) return -1;
+    for (i = 0; i < PARTY_SEATS; i++) {
+        unsigned short rm = 0;
+        if (i == party_self()) continue;
+        if (!party_seat(i, &rm, 0)) continue;
+        if (rm == room) return i;
+    }
+    return -1;
+}
+
+/*----------------------
+ | paint_knight
+ | Description: Stands the figure beside the local player's own mark, two cells
+ |   wide by three tall with one cell of clearance so a link leaving west still
+ |   shows where it goes. It goes to the right of the mark instead when the left
+ |   would run off the viewport: dash_map_paint drops cells it cannot place, so
+ |   the alternative is not a knight that hangs over the edge but half a knight,
+ |   which reads as a drawing fault rather than as a figure.
+ |
+ |   It is painted after the links and before the crosshair, so it covers a
+ |   groove running under it and the cursor covers it. A figure that a link was
+ |   drawn through would look like part of the map.
+ | Author: suinevere
+ | Dependencies: dash_map.h, map_layout.h
+ | Globals: N/A
+ | Params: mx, my -- the cell holding the player's mark
+ | Returns: N/A
+ ----------------------*/
+static void paint_knight(int mx, int my)
+{
+    int kx, ky, tx, ty;
+    map_layout_knight(mx, my, DT_KNIGHT_W, &kx, &ky);
+    for (ty = 0; ty < DT_KNIGHT_H; ty++)
+        for (tx = 0; tx < DT_KNIGHT_W; tx++)
+            dash_map_paint(kx + tx, ky + ty,
+                           (unsigned char) (DT_KNIGHT0 + ty * DT_KNIGHT_W + tx));
+}
+
+/*----------------------
+ | draw_players
+ | Description: Writes the roster into the top-left corner: one row per seat
+ |   the server has told us about, naming who is in the game and the room they
+ |   are standing in.
+ |
+ |   An empty roster is not an error and is the ordinary state on a disc, which
+ |   has no server to hear from. It falls back to the one line the local player
+ |   deserves either way, labelled rather than named because offline there is
+ |   nobody to have a name.
+ |
+ |   Every room name comes from the story image the client already holds, so
+ |   naming where somebody else is standing costs no traffic and works for a
+ |   room this map has never drawn -- which on a difficulty that shows only what
+ |   has been walked into is most of them.
+ | Author: suinevere
+ | Dependencies: party.h, room_model.h, text_map.h, map_model.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void draw_players(void)
+{
+    char line[MAP_TEXT_COLS - 2];
+    int i, row = MAP_ROW_PLAYERS;
+
+    if (party_count() == 0) {
+        static const char lbl[] = "Player: ";
+        int k = 0;
+        while (lbl[k] != '\0') { line[k] = lbl[k]; k++; }
+        room_model_object_name(map_model_current(), line + k,
+                               (int) sizeof line - k);
+        text_print_str(2, row, line);
+        return;
+    }
+
+    for (i = 0; i < PARTY_SEATS; i++) {
+        unsigned short rm = 0;
+        const char *nm = 0;
+        int k = 0;
+        if (!party_seat(i, &rm, &nm)) continue;
+        while (nm[k] != '\0' && k < PARTY_NAME_MAX - 1) { line[k] = nm[k]; k++; }
+        line[k++] = ':';
+        line[k++] = ' ';
+        room_model_object_name(rm, line + k, (int) sizeof line - k);
+        text_print_str(2, row++, line);
+    }
+}
+
+/*----------------------
  | draw_once
- | Description: Paints one whole frame of the map at a scroll offset: the
- |   ground, every placed room the viewport reaches, the links between them, and
- |   the current room's name along the bottom. Clears the text layer first,
+ | Description: Paints one whole frame of the map: the ground, every room of one
+ |   floor the viewport reaches, the links between them, the figure beside the
+ |   local player, the crosshair, and the four rows of text around them -- the
+ |   roster at the top, the picked room and the floor number along the bottom.
+ |   Clears the text layer first,
  |   because the caller is the Options menu, which redraws its title and every
  |   row each frame and would otherwise leave them lit over a map whose box
  |   border dash_map_begin has just blanked.
@@ -363,22 +530,45 @@ static void extent(int *x0, int *x1, int *y0, int *y1)
  |   spent about a dozen frames between one menu_sync and the next, long enough
  |   to starve the looping PCM hand-off.
  |
- |   Called on open and again on each scroll step, and on nothing else.
- |   map_view_show holds the NBG2 claim between those with dash_map_hold, which
- |   re-touches the layer without repainting it; the text this writes needs no
- |   such upkeep, since text_map has no per-frame expiry.
+ |   Only one floor is drawn. The floors of an authored table are separate
+ |   drawings the publisher split because the geography did, and the table
+ |   stacks them into one coordinate space only because it has nowhere else to
+ |   put them; showing them all at once shows a tall strip with empty ground
+ |   between the parts. A story with no authored table has exactly one floor,
+ |   so nothing is hidden from one.
+ |
+ |   Paint order is links, then marks, then the figure, then the crosshair, and
+ |   each step is allowed to cover the one before it. That ordering is the whole
+ |   priority rule: a mark wins its own cell over a groove crossing it, the
+ |   figure wins over a groove running under it -- a link drawn through it would
+ |   read as part of the map -- and the cursor wins over everything, because a
+ |   cursor showing the map through itself is harder to find than the room it is
+ |   pointing at.
+ |
+ |   Called on open, on each cursor step that moves the view, and on each floor
+ |   change; not per frame. map_view_show holds the NBG2 claim between those with
+ |   dash_map_hold and repaints only the pulsing marks, whose cells this leaves
+ |   in g_flash_*; the text this writes needs no such upkeep, since text_map has
+ |   no per-frame expiry.
  | Author: suinevere
- | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, menu.h,
- |   gather, paint_link
- | Globals: g_ids, g_dxs, g_dys
- | Params: sx, sy -- the scroll offset in rooms, zero with the player centred
+ | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, party.h,
+ |   menu.h, gather, paint_link, paint_knight, draw_players, peer_seat, put_uint
+ | Globals: g_ids, g_dxs, g_dys, g_flash_x, g_flash_y, g_flash_tile, g_flash_n
+ | Params: sx, sy -- the scroll offset in rooms, zero with the player centred;
+ |   page -- the floor to draw; hx, hy -- the crosshair, in the same offsets
+ |   from the player that map_model_offset answers in
  | Returns: N/A
  ----------------------*/
-static void draw_once(int sx, int sy) {
+static void draw_once(int sx, int sy, int page, int hx, int hy) {
     int n, i, j;
+    int hvx = hx - sx, hvy = hy - sy;
+    int hcx = map_layout_cell(hx, sx, MAP_CX, 0);
+    int hcy = map_layout_cell(hy, sy, MAP_CY, MAP_TOP);
+    unsigned short hover = 0;
 
     menu_clear();
     dash_map_begin();
+    g_flash_n = 0;
 
     for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
         int c;
@@ -386,7 +576,7 @@ static void draw_once(int sx, int sy) {
             dash_map_paint(c, MAP_TOP + i, DT_GROUND);
     }
 
-    n = gather(sx, sy);
+    n = gather(sx, sy, page);
 
     for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
         int c;
@@ -397,10 +587,10 @@ static void draw_once(int sx, int sy) {
         for (j = i + 1; j < n; j++) {
             int kind = map_model_link(g_ids[i], g_ids[j]);
             if (kind == MAP_LINK_NONE) continue;
-            paint_link((MAP_CX + g_dxs[i]) * MAP_CELLS,
-                       MAP_TOP + (MAP_CY + g_dys[i]) * MAP_CELLS,
-                       (MAP_CX + g_dxs[j]) * MAP_CELLS,
-                       MAP_TOP + (MAP_CY + g_dys[j]) * MAP_CELLS,
+            paint_link(map_layout_cell(g_dxs[i], 0, MAP_CX, 0),
+                       map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP),
+                       map_layout_cell(g_dxs[j], 0, MAP_CX, 0),
+                       map_layout_cell(g_dys[j], 0, MAP_CY, MAP_TOP),
                        n, kind);
         }
     }
@@ -419,18 +609,60 @@ static void draw_once(int sx, int sy) {
     }
 
     for (i = 0; i < n; i++) {
-        int cx = (MAP_CX + g_dxs[i]) * MAP_CELLS;
-        int cy = MAP_TOP + (MAP_CY + g_dys[i]) * MAP_CELLS;
-        dash_map_paint(cx, cy,
-                       g_ids[i] == map_model_current() ? DT_ROOM_HERE : DT_ROOM);
+        int cx = map_layout_cell(g_dxs[i], 0, MAP_CX, 0);
+        int cy = map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP);
+        int picked = (g_dxs[i] == (short) hvx && g_dys[i] == (short) hvy);
+        unsigned char tile = DT_ROOM;
+        int flash = 0;
+
+        if (g_ids[i] == map_model_current())  { tile = DT_ROOM_HERE; flash = 1; }
+        else if (peer_seat(g_ids[i]) >= 0)    { tile = DT_ROOM_PEER; flash = 1; }
+        /* The pick recolours an ordinary room and leaves a player's mark alone.
+           The crosshair opens sitting on the local player, so a pick that
+           overrode every mark would hide the one thing the screen is for and
+           stop its pulse before the player had touched anything -- the four
+           brackets say what is picked in either case, and they are drawn last
+           so they say it over whatever the mark turned out to be. */
+        if (picked) {
+            hover = g_ids[i];
+            if (tile == DT_ROOM) tile = DT_ROOM_SEL;
+        }
+
+        dash_map_paint(cx, cy, tile);
+        if (flash && g_flash_n < MAP_FLASH_MAX) {
+            g_flash_x[g_flash_n] = (short) cx;
+            g_flash_y[g_flash_n] = (short) cy;
+            g_flash_tile[g_flash_n] = tile;
+            g_flash_n++;
+        }
+        if (g_ids[i] == map_model_current()) paint_knight(cx, cy);
     }
 
+    dash_map_paint(hcx - 1, hcy - 1, DT_XHAIR_TL);
+    dash_map_paint(hcx + 1, hcy - 1, DT_XHAIR_TR);
+    dash_map_paint(hcx - 1, hcy + 1, DT_XHAIR_BL);
+    dash_map_paint(hcx + 1, hcy + 1, DT_XHAIR_BR);
+
     {
-        char nm[40];
-        text_print_str(2, 1, "MAP");
-        if (room_model_object_name(map_model_current(), nm, (int) sizeof nm))
-            text_print_str(2, 26, nm);
-        text_print_str(2, 27, "D-pad: scroll   A/B/C: back");
+        char nm[MAP_TEXT_COLS - 2];
+        char pg[8];
+        int pages = map_model_pages();
+        int k;
+
+        draw_players();
+
+        if (hover != 0 && room_model_object_name(hover, nm, (int) sizeof nm))
+            text_print_str(2, MAP_ROW_STATUS, nm);
+
+        k = put_uint(pg, 0, (unsigned int) (page + 1));
+        pg[k++] = '/';
+        k = put_uint(pg, k, (unsigned int) pages);
+        pg[k] = '\0';
+        text_print_str(MAP_TEXT_COLS - 1 - k, MAP_ROW_STATUS, pg);
+
+        text_print_str(2, MAP_ROW_HELP,
+                       (pages > 1) ? "D-pad: pick  L/R: floor  A/B/C: back"
+                                   : "D-pad: pick     A/B/C: back");
         text_flush();
     }
 }
@@ -444,21 +676,41 @@ static void draw_once(int sx, int sy) {
  |   dash_map's NBG2 claim and so would lose it a frame after draw_once painted
  |   it.
  |
- |   The D-pad scrolls the map a room at a time, through the same
+ |   The D-pad moves a crosshair rather than the map. It is the same
  |   pad_repeat_update/pad_fired pair every other page uses for held movement, so
- |   the delay before it runs on matches the rest of the interface. The offset
- |   starts at zero on every open and is never carried across one, so the player
- |   is centred each time the screen appears however far it was scrolled when it
- |   last closed -- there is no scroll position to restore because none is kept.
- |   extent() clamps it to the rooms actually placed, so the view cannot be
- |   walked off into empty ground.
+ |   the delay before it runs on matches the rest of the interface, and the room
+ |   under it is named along the bottom. The view follows the cursor instead of
+ |   being steered: it only moves when the cursor would otherwise leave the
+ |   viewport, and then by exactly enough to keep it inside. That is what lets
+ |   one control do both jobs -- a map that scrolled under a fixed cursor would
+ |   need a second binding to reach a room the scroll clamp had stopped short of.
  |
- |   draw_once runs on open and on each step that changes the offset, and not on
- |   frames where nothing moved: dash_map_hold keeps the claim alive on those
- |   without repeating the room and link walk. dash_tint rewrites the sixteen
- |   CRAM entries every NBG2 tile draws from, so the tan is captured on the way
- |   in and put back on the way out; without that the gamepad strip and every
- |   menu box wear it for the rest of the session.
+ |   extent() clamps the cursor to the rooms placed on the floor being shown, so
+ |   it cannot be walked off into empty ground and lost, and the view is clamped
+ |   only by following it.
+ |
+ |   L and R change floor. They are free here -- A, B, C and Start are all back,
+ |   and the D-pad is the cursor -- and they wrap, since a two-floor game would
+ |   otherwise need the player to remember which way they had come. A floor
+ |   change recentres both cursor and view on that floor's own extent, because
+ |   the offsets that put the player in the middle of one floor point at nothing
+ |   on another.
+ |
+ |   Neither the cursor nor the floor is carried across an open. The player is
+ |   centred and the floor is theirs each time the screen appears, however far
+ |   it was scrolled when it last closed -- there is no position to restore
+ |   because none is kept.
+ |
+ |   draw_once runs on open and on each step that changes something, and not on
+ |   frames where nothing moved. What does run every frame is the pulse: the
+ |   marks draw_once left in g_flash_* alternate with DT_ROOM every sixteen
+ |   frames, so a player's own room and everybody else's beat against a map that
+ |   is otherwise still. It is done by repainting those few cells rather than by
+ |   redrawing, because redrawing is the room and link walk and that is not free.
+ |
+ |   dash_tint rewrites the sixteen CRAM entries every NBG2 tile draws from, so
+ |   the tan is captured on the way in and put back on the way out; without that
+ |   the gamepad strip and every menu box wear it for the rest of the session.
  |
  |   Difficulty decides how much of the map there is. Easy reveals the whole
  |   authored table on open, which is the reveal the development switch used to
@@ -490,16 +742,17 @@ static void draw_once(int sx, int sy) {
  |   SUINEVERE logo up behind the game and left it there.
  | Author: suinevere
  | Dependencies: draw_once, extent, map_model.h (map_model_reveal_atlas,
- |   map_model_clear_reveal), dash_map.h, dash_view.h, menu.h, input.h,
- |   saturn_keyboard.h, soft_reset.h, console_view.h, title.h, room_art.h,
- |   display.h, app_state.h
- | Globals: g_difficulty
+ |   map_model_clear_reveal, map_model_page, map_model_pages), dash_map.h,
+ |   dash_view.h, menu.h, input.h, saturn_keyboard.h, soft_reset.h,
+ |   console_view.h, title.h, room_art.h, display.h, app_state.h
+ | Globals: g_difficulty, g_flash_x, g_flash_y, g_flash_tile, g_flash_n
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 extern "C" void map_view_show(void) {
     MenuBacking backing;
-    int sx = 0, sy = 0;
+    int sx = 0, sy = 0, hx = 0, hy = 0;
+    int pages, page, frame = 0, phase = -1;
     unsigned short tint = dash_tint_current();
 #ifndef NETBIN
     const bool had_art = (g_display.palette == DISP_PAL_DYNAMIC)
@@ -510,7 +763,13 @@ extern "C" void map_view_show(void) {
     dash_tint(MAP_GROUND_555);
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
     else                           map_model_clear_reveal();
-    draw_once(sx, sy);
+
+    pages = map_model_pages();
+    page = map_model_page(map_model_current());
+    if (page >= pages) page = pages - 1;
+    if (page < 0)      page = 0;
+
+    draw_once(sx, sy, page, hx, hy);
     menu_sync();
     // The Options row that opens this fades to black first, the same as it does
     // for every other page it can reach, so the map has to bring the screen back
@@ -530,31 +789,63 @@ extern "C" void map_view_show(void) {
 
         pad_repeat_update();
         {
-            int nx = sx, ny = sy, x0, x1, y0, y1;
+            int nx = hx, ny = hy, np = page, x0, x1, y0, y1;
             if (pad_fired(Button::Left))  nx--;
             if (pad_fired(Button::Right)) nx++;
             if (pad_fired(Button::Up))    ny--;
             if (pad_fired(Button::Down))  ny++;
-            extent(&x0, &x1, &y0, &y1);
-            if (nx < x0) nx = x0;
-            if (nx > x1) nx = x1;
-            if (ny < y0) ny = y0;
-            if (ny > y1) ny = y1;
-            if (nx != sx || ny != sy) {
-                sx = nx;
-                sy = ny;
-                draw_once(sx, sy);
+            if (pad_fired(Button::L))     np--;
+            if (pad_fired(Button::R))     np++;
+            if (np < 0)       np = pages - 1;
+            if (np >= pages)  np = 0;
+
+            if (np != page) {
+                page = np;
+                extent(page, &x0, &x1, &y0, &y1);
+                hx = (x0 + x1) / 2;
+                hy = (y0 + y1) / 2;
+                sx = hx;
+                sy = hy;
+                draw_once(sx, sy, page, hx, hy);
+                phase = -1;
+            } else if (nx != hx || ny != hy) {
+                extent(page, &x0, &x1, &y0, &y1);
+                if (nx < x0) nx = x0;
+                if (nx > x1) nx = x1;
+                if (ny < y0) ny = y0;
+                if (ny > y1) ny = y1;
+                if (nx != hx || ny != hy) {
+                    hx = nx;
+                    hy = ny;
+                    map_layout_follow(hx, hy, &sx, &sy);
+                    draw_once(sx, sy, page, hx, hy);
+                    phase = -1;
+                }
             }
         }
 
         dash_map_hold();
+        {
+            int ph = (frame >> MAP_FLASH_SHIFT) & 1, i;
+            if (ph != phase) {
+                phase = ph;
+                for (i = 0; i < g_flash_n; i++)
+                    dash_map_paint(g_flash_x[i], g_flash_y[i],
+                                   ph ? g_flash_tile[i] : DT_ROOM);
+            }
+        }
+        frame++;
         menu_sync();
     }
 
     if (g_menu_page_fade > 0) menu_fade_out(g_menu_page_fade);
-    text_clear_line(1);
-    text_clear_line(26);
-    text_clear_line(27);
+    {
+        int r;
+        for (r = MAP_ROW_PLAYERS; r < MAP_ROW_PLAYERS + PARTY_SEATS; r++)
+            text_clear_line(r);
+    }
+    text_clear_line(MAP_ROW_STATUS);
+    text_clear_line(MAP_ROW_HELP);
     text_flush();
     dash_tint(tint);
 #ifndef NETBIN

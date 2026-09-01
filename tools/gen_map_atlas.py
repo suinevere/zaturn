@@ -47,7 +47,10 @@ Five stages.
    aligned centres on Zork I's page 3 sit 147, 148 then 186 apart. Lanes preserve
    every left-of and above-of relation, which is all a compass direction is.
    Separate pages are separate drawings at different scales, so each is given its
-   own band of rows below the last: above ground stays above underground.
+   own band of rows below the last: above ground stays above underground. Each
+   room also records which page it came off, because a page is a floor -- the
+   publisher split the map where the geography did -- and the runtime shows one
+   floor at a time rather than the whole stacked strip.
 
 5. Validation. For every open compass exit whose both ends are placed, the drawn
    offset must lie in that direction's half-plane. A game below PASS_RATE is
@@ -595,6 +598,13 @@ def build_game(story, pdf, verbose=False):
     if not pos:
         return None, release, serial, {"reason": "no box matched a room"}
 
+    # Which drawn page each room came off. A page is a floor: the publisher
+    # split the map because the geography did, so above ground, the dungeon and
+    # the coal mine are separate drawings and separate coordinate spaces stacked
+    # into one only because the table has nowhere else to put them. The runtime
+    # shows one at a time, so it needs to know which.
+    page = {o: k[0] for k, o in chosen.items()}
+
     cs = [c for c, _ in pos.values()]
     rs = [r for _, r in pos.values()]
     ox, oy = (min(cs) + max(cs)) // 2, (min(rs) + max(rs)) // 2
@@ -609,6 +619,14 @@ def build_game(story, pdf, verbose=False):
     pos = uniq
     pos = {k: v for k, v in pos.items()
            if -128 <= v[0] <= 127 and -128 <= v[1] <= 127}
+    page = {k: v for k, v in page.items() if k in pos}
+
+    # Renumber densely from zero. A page whose every room lost the coordinate
+    # clamp or a duplicate-cell tie leaves a hole otherwise, and the runtime
+    # counts pages by the largest index it sees -- a hole would offer the player
+    # an empty floor to page onto.
+    order = {p: i for i, p in enumerate(sorted(set(page.values())))}
+    page = {k: order[v] for k, v in page.items()}
 
     # A plan is often drawn square to the building rather than to the compass.
     # The Witness is: as printed, all eight of its testable exits disagree, and
@@ -636,7 +654,7 @@ def build_game(story, pdf, verbose=False):
     rate = (agreed / tested) if tested else 0.0
     stats = {"rooms": len(pos), "agreed": agreed, "tested": tested,
              "rate": rate, "bad": bad, "pages": used_pages, "dropped": dropped,
-             "orient": orient,
+             "orient": orient, "page": page, "npages": len(order),
              "names": {k: graph[k]["name"] for k in pos}}
     if tested == 0 or rate < PASS_RATE:
         stats["reason"] = f"only {agreed}/{tested} exits agree ({rate:.0%})"
@@ -659,9 +677,9 @@ def emit(tables, out):
         w("\n/*----------------------\n")
         w(f" | MAP_ATLAS_{t['story']}\n")
         w(f" | Description: {t['story']}, release {t['release']} serial {t['serial']}.\n")
-        w(f" |   {st['rooms']} rooms, ascending by object number so map_atlas_pos can\n")
-        w(f" |   bisect. {st['agreed']} of {st['tested']} compass exits between two placed\n")
-        w(f" |   rooms leave in the direction drawn ({st['rate']:.0%}).\n")
+        w(f" |   {st['rooms']} rooms on {st['npages']} floor(s), ascending by object\n")
+        w(f" |   number so map_atlas_pos can bisect. {st['agreed']} of {st['tested']} compass exits\n")
+        w(f" |   between two placed rooms leave in the direction drawn ({st['rate']:.0%}).\n")
         if st["bad"]:
             w(" |\n |   The exceptions, which are rooms whose exits contradict any planar\n")
             w(" |   layout rather than misplacements:\n")
@@ -675,21 +693,25 @@ def emit(tables, out):
         for room in sorted(t["pos"]):
             x, y = t["pos"][room]
             nm = st["names"].get(room, "")
-            w(f"    {{ {room:3d}, {x:4d}, {y:4d} }},   /* {nm} */\n")
+            w(f"    {{ {room:3d}, {st['page'][room]:2d}, {x:4d}, {y:4d} }},"
+              f"   /* {nm} */\n")
         w("};\n")
     w("\n/*----------------------\n")
     w(" | MAP_ATLAS_STORIES / MAP_ATLAS_STORY_N\n")
     w(" | Description: Every story with an authored table, keyed by the release and\n")
     w(" |   serial in its Z-machine header. Object numbers are assigned by the\n")
     w(" |   compiler, so a table is only valid for the exact build it was derived\n")
-    w(" |   from and both fields must match before it is used.\n")
+    w(" |   from and both fields must match before it is used. The trailing count\n")
+    w(" |   is how many floors the table spans, so a caller can offer the last\n")
+    w(" |   floor without walking the cells.\n")
     w(" | Author: suinevere\n")
     w(" ----------------------*/\n")
     w("static const MapAtlasStory MAP_ATLAS_STORIES[] = {\n")
     for t in tables:
         w(f'    {{ {t["release"]}u, "{t["serial"]}", MAP_ATLAS_{t["story"]},\n')
         w(f'      (unsigned short) (sizeof MAP_ATLAS_{t["story"]} /\n')
-        w(f'                        sizeof MAP_ATLAS_{t["story"]}[0]) }},\n')
+        w(f'                        sizeof MAP_ATLAS_{t["story"]}[0]),\n')
+        w(f'      {t["stats"]["npages"]} }},\n')
     w("};\n\n")
     w("#define MAP_ATLAS_STORY_N \\\n")
     w("    ((int) (sizeof MAP_ATLAS_STORIES / sizeof MAP_ATLAS_STORIES[0]))\n")

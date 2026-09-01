@@ -1,14 +1,23 @@
 ---
 name: map-floors-crosshair-and-party-handoff
-description: The map became a per-floor screen with a crosshair, a roster and a figure -- atlas pages, a cursor that pushes the view, pulsing player marks, a knight, and a multizorkd protocol extension that reports every seat; both targets link, the netbin grew 3.5 KB against a 400 KB limit, and none of it has been seen on a screen.
+description: The map became a per-floor screen with a crosshair, a roster, a figure and a parchment to stand them on -- atlas pages, a cursor that pushes the view, pulsing marks, and a multizorkd protocol extension that reports every seat; it has now been on a screen once, which found two faults that every host gate had passed, and two commits sit unpushed on top of the owner's own 7149ca1.
 metadata:
   type: project
 ---
 
-Working tree on `main`, uncommitted at the time of writing. Continues
-[[multigame-atlas-handoff]] and [[map-atlas-handoff]]; see "What those handoffs now
-get wrong" at the end. The commit messages carry the what. This carries what they
-cannot.
+Branch `main`, **two commits unpushed**: `6964911` (the parchment) and `c9e7e52` (the
+two faults the first screenshot found). `origin/main` is the owner's own `7149ca1`,
+which already carries the floors, crosshair, roster and figure -- that work went up as
+`cc429cd` and the owner built `7149ca1` on top of it, which is where TITLE.TGA came
+from and where `gen_logo_tga.py` was deleted.
+
+Only the working tree's `saturn/boxart/RAW_ZORK.xcf` is uncommitted, and it is the
+owner's, not this work's. Leave it alone -- a rebase will refuse while it is dirty; see
+the git note under "Reconnaissance".
+
+Continues [[multigame-atlas-handoff]] and [[map-atlas-handoff]]; see "What those
+handoffs now get wrong" at the end. The commit messages carry the what. This carries
+what they cannot.
 
 ## The story-file trap this walked into
 
@@ -52,6 +61,8 @@ Six things, all of them in the map screen:
 5. **A knight**, two cells by three, standing left of the local player's mark.
 6. **A protocol extension** so the netbin can know any of that: multizorkd now sends
    `S<seat>` and `P<seat><room><name>` frames beside the existing `R<room>`.
+7. **A parchment behind it all.** MAP.TGA goes on NBG0, read once and held for the
+   session, so opening the map never touches the drive and never stops the track.
 
 ## Judgement calls the owner made, so do not re-open them
 
@@ -72,6 +83,79 @@ Put to the owner and answered before any code was written:
 * **The knight covers a link running west out of the player's room.** Unavoidable with a
   figure on a tile layer, and it is why there is a cell of clearance rather than none,
   but it is a visible choice nobody has looked at.
+
+## Why the parchment is on NBG0 and not anywhere else
+
+All four VDP2 scroll layers are claimed -- NBG0 the wallpaper bitmap, NBG1 the
+inventory overlay's item picture, NBG2 the dashboard tiles, NBG3 the text -- so the
+question was which to borrow. Three were considered and two were wrong:
+
+* **NBG2, as tiles.** Impossible: it has one plane, so a mark painted into a cell
+  replaces the ground there rather than sitting over it. That is also why the map's
+  ink had to be redrawn on transparency.
+* **NBG1, which the overlay owns.** Tempting, because item_art already claims a
+  512x256 8bpp one-bank container and uses only a 64x80 window of it -- the rest sits
+  at index 0. The parchment would have fitted in the unused part and stayed resident
+  in VRAM for nothing. It does not work: the item window is at ITEM_ART_X 240,
+  ITEM_ART_Y 144, which is *inside* a 320x240 parchment, so any inventory visit would
+  punch a 64x80 hole in the map. It would also have needed the two modules to agree
+  about the layer's priority, and item_art sets its own inside an idempotent
+  bring-up that would never have set it back.
+* **NBG0.** Already priority 1 against NBG2's 2, so it needs no reordering at all;
+  `title_bg_show_raw` and `room_art_reshow` already do the upload and the restore,
+  and room_art re-uploads rather than trusting the layer, so the room comes back by
+  itself. Nothing in item_art or room_art changed.
+
+The cost is one 320x240 plane held in **High Work RAM** -- 78 KB including the
+palette -- which is where every TGA has lived since the cache went, and deliberately
+not the Low Work RAM megabyte the jingle, the archives and the trie share: that has
+under 90 KB spare at its tightest pairing. `tga_decode` refuses when High Work RAM is
+short, so a failure is a map with no parchment rather than a crash.
+
+## What the first screenshot showed
+
+`SaturnRingLib/emulators/mednafen/snaps/Zaturn (USA) (Netlink Edition)-0002.png` is the
+first time any of this has been on a screen, across four sessions of work. It found two
+faults that every host gate had passed, and both are fixed in `c9e7e52`.
+
+**A nineteen-by-fifteen cell rectangle of black in the middle of the parchment.** It is
+the VDP2 window that suppresses NBG0 inside a box -- `console_view.cxx`'s
+`image_window_on`. `MenuBacking`'s constructor switches it on and every `menu_frame`
+aims it at the box being drawn, so a full-screen page that draws no box silently
+inherits whatever rectangle the menu that opened it last used. Nineteen by fifteen at
+cell (10,7) is the Options box.
+
+The part worth carrying: **it was not a new fault.** It had been true for as long as
+the map existed and was invisible only because the map paved itself with opaque ground.
+Taking the ground away exposed it. Expect more of that shape -- anything else that was
+hidden behind those tiles is now on screen.
+
+**The back colour came out black instead of tan.** `MAP_GROUND_555` is a *tint target*:
+`dash_view.cxx`'s `write_palette` takes it apart into channels and ORs the opaque bit
+back itself, so the constant carries no bit 15. Every SRL `HighColor` does --
+`HighColor::Colors::Black` is `0x8000`, not `0` -- so handing that word straight to
+`SetBackColor` produced black. It is now set with the bit **and only where there is no
+parchment**, because black behind the sheet's torn edges is what the picture is drawn
+for and tan there would flatten the shape it is cut to.
+
+Two things looked wrong and were not, both confirmed before touching anything:
+
+* **The room name at bottom left was missing.** The crosshair was at cell (36,8), which
+  is empty parchment -- nothing to name. The view had followed it to `sx = 4`, which is
+  also why the figure and the player's own room sit at the far left rather than centred.
+* **The reticle looked absent.** It renders at `(208,192,144)` against parchment
+  `(208,152,96)`: present, and subtle. That is the "does the ink read on paper" question
+  with a number on it at last. `MARK_XHAIR` in `gen_dash_tiles.py` is the one constant
+  to move if it is too faint in play.
+
+**How to read the next screenshot, because eyeballing it wasted several passes.** The
+screenshot is 330x240 and the picture sits at `+5, +0` inside it. Diff it against
+`saturn/cd/data/TGA/MAP.TGA` per 8x8 cell and print one character each for "painted
+black", "ink drawn" and "parchment untouched": that renders the whole 40x28 layer as
+text and shows exactly which cells NBG2 claimed. It found the window's rectangle to the
+cell in one pass, after guessing had failed. Use a *low* difference threshold, around
+25 of 765 -- the reticle is 40 counts away from the paper and a threshold tuned to the
+dark ink misses it entirely, which is what made it look like it was not being drawn.
 
 ## Reconnaissance worth not repeating
 
@@ -97,6 +181,23 @@ disagreed about `TERM_OOB_MAX` and therefore about `TermState`'s layout, and the
 landed on `room_id` -- a field the old parser handles perfectly. It looked like a real
 defect and was an ABI mismatch.
 
+**An image editor's default TGA export passes none of tga_decode's gates.** MAP.TGA
+arrived as 32bpp RLE (imgtype 10, no colormap), which the decoder rejects -- and every
+caller reads a rejection as "show nothing", so the failure would have been a blank
+screen on hardware and nothing anywhere else. `tools/gen_tga.py` is the encoder that
+produces what it wants, recovered from `7149ca1~1` where it had been deleted as
+`gen_logo_tga.py` once the boot logo was the only TGA left, and generalised from that
+one picture to any. `saturn/tests/test_tga_assets.py` now gates every shipped TGA
+against the same six checks the decoder makes, plus the 512x256 one-bank ceiling the
+decoder cannot see.
+
+**Index 0 is transparent, and for the parchment that is a feature.** tga_decode builds
+its CLUT with `Opaque = 0` for entry 0 alone. The logo's encoder reserved index 0 and
+left it unused; the parchment's torn edges *want* it, so gen_tga.py maps a source
+alpha below 128 to index 0 and paints those pixels over with the commonest opaque
+colour before quantizing, so a transparent region cannot spend palette slots on a
+colour nothing draws.
+
 **A heredoc in this environment eats one level of backslash.** `python - <<'PY'` with
 `"a\\nb"` in the body arrives as `"a\nb"`, so a patch script matching C source with
 `\0` or `\n` in it silently fails to match, or worse, matches something else. Write the
@@ -105,22 +206,36 @@ of the quirk already recorded for stdin.
 
 ## What no gate could prove
 
-Both targets **compile and link**, which is further than the last three map sessions
-got: `.\compile-netbin.bat` then `.\compile-cd.bat` from PowerShell in `saturn/`.
-Under git-bash the netbin needs `PATH` set by hand -- the `:;` bash line in those `.bat`
-files only handles Darwin and Linux -- and the ISO step then fails on a missing
-`xorrisofs`, which does not stop `cd/data/0.bin` being produced.
+Both targets **compile and link**: `.\compile-netbin.bat` then `.\compile-cd.bat` from
+PowerShell in `saturn/`. Under git-bash the netbin needs `PATH` set by hand -- the `:;`
+bash line in those `.bat` files only handles Darwin and Linux -- and the ISO step then
+fails on a missing `xorrisofs`, which does not stop `cd/data/0.bin` being produced.
 
-**Nothing has been run.** Specifically unseen:
+**One frame has been seen, and the fixes it prompted have not.** `c9e7e52` was built
+and gated but never displayed, so the first thing to do is open the map again and check
+the rectangle is gone and the sheet is whole.
 
-* Whether four marks -- room, here, peer, picked -- are actually distinguishable on a
-  CRT. They are one greyscale ramp bent to a single tan, which is why two of them
-  differ in shape as well as value, but that reasoning has never met a television.
-* Whether a 1-pixel line-art figure at 16x24 reads at all in the map's dark ink.
+Confirmed working from that one frame: the parchment, the figure, the roster line, the
+floor indicator, the marks (dark on tan, light on black), the links, the reticle, the
+crosshair clamping and the view following it.
+
+Still unseen:
+
+* Whether the ink reads on the parchment **in motion and on a CRT**. The one frame says
+  it reads in an emulator screenshot, which is a weaker claim than it sounds: composite
+  blur and a real tube are what the near-white ring has to survive.
+* Whether four marks -- room, here, peer, picked -- are distinguishable from each other,
+  as opposed to merely visible. Only the ordinary mark and the player's were on screen.
 * Whether the pulse at sixteen frames a half reads as a beat or as a flicker.
-* Whether paging feels like floors or like the map losing half of itself.
+* Whether paging feels like floors or like the map losing half of itself. Nothing has
+  pressed L or R yet.
+* Anything on the netbin at all: no drive, so it always takes the no-parchment path and
+  its map is flat tan rather than marble. The whole roster, which is the only reason the
+  protocol work exists, has never had a second player in front of it.
+* Whether anything *else* was hiding behind the old opaque ground. The window was one;
+  there is no reason to assume it was the only one.
 
-**The netbin grew about 3.5 KB**, 191,552 to 195,024, measured by building `HEAD` and
+**The netbin grew about 4 KB**, 191,552 to 195,632, measured by building `HEAD` and
 the working tree and comparing the packaged `zaturn.netbin`. The tile set's twelve new
 tiles are 384 of that; the rest is code. There *is* a size gate, contrary to what the
 earlier handoffs implied was unmeasurable: `post.makefile` prints and enforces
@@ -171,6 +286,14 @@ cd saturn && sh syntax-check.sh <files>          # CD build
 cd saturn && NETBIN=1 sh syntax-check.sh <files> # netbin build
 ```
 
+```
+python tools/gen_tga.py <source image> saturn/cd/data/TGA/<NAME>.TGA
+python saturn/tests/test_tga_assets.py
+```
+
+`gen_tga.py` needs Pillow and is run by hand only -- the disc's three TGAs are all
+committed and the build converts nothing.
+
 `gen_map_atlas.py` needs pymupdf, opencv-python, numpy and rapidocr-onnxruntime, fetches
 its PDFs with `curl`, and takes about forty seconds a game -- fifteen minutes for all
 twenty-two. `gen_dash_tiles.py` now needs Pillow, and only for the knight: it reads
@@ -205,9 +328,17 @@ and the two open ship-or-wait calls all stand. These do not:
 
 ## Suggested skills
 
-- **superpowers:verification-before-completion** -- unchanged and still governing. Both
-  targets link and every host gate is green, and not one pixel of this has been seen.
-- **superpowers:systematic-debugging** -- the four open questions are all "does this look
-  right", which arrives as an observation and not a stack trace.
-- **code-review** -- before pushing. This touches the atlas format, the tile set, the
-  wire protocol and the server in one change.
+- **superpowers:systematic-debugging** -- now the governing one, and it has just been
+  earned. The two faults arrived as "black screen over image" and were found by
+  measuring the screenshot rather than by reading code; every remaining open question is
+  the same shape. Measure before hypothesising -- three plausible causes were wrong
+  before the per-cell diff named the real one.
+- **superpowers:verification-before-completion** -- still true, with the emphasis moved.
+  Host gates passed a build with a black rectangle through the middle of it, so "the
+  tests are green" says nothing about this screen. `c9e7e52` itself has not been seen.
+- **code-review** -- before pushing the two commits. They touch the tile set, a new
+  session-held resource in `title.cxx`, and a VDP2 window two other modules share.
+- **superpowers:test-driven-development** -- specifically its discipline of watching a
+  test fail first. Every new assertion this session was run against the old code and
+  required to fail; `test_dash_tiles` caught the transparency change on its own, and the
+  page-derivation rule was thrown away *because* it was checked and found wrong.

@@ -79,11 +79,19 @@ PIC_BOTTOM_RP = 28 & 3
 PIC_LEFT_CP = 29 & 3
 PIC_RIGHT_CP = 38 & 3
 
-# The map marks sit on the ground tile -- the marble field at EDGE_RP/0, which
-# carries entries 5 to 8 and nothing else. dash_view's half-tint compresses the
-# ramp until neighbouring entries are about a thirty-first of a channel apart,
-# so a mark painted at 4 or 9 differs from the ground byte for byte and is
-# invisible on hardware; every entry below is at least four steps outside 5-8.
+# The map's marks and grooves are drawn on transparency, not on the marble
+# field, because the ground they sit on is not on this layer any more: the map
+# screen puts a parchment picture on NBG0 and paints NBG2 with DT_BLANK, so a
+# mark carrying its own opaque field would be an 8x8 patch of marble on a sheet
+# of paper. Only the ink is opaque; everything around it is index 0, which VDP2
+# reads as transparent and shows the parchment through.
+#
+# The values are unchanged from when they were drawn on marble. dash_view's
+# half-tint compresses the ramp until neighbouring entries are about a
+# thirty-first of a channel apart, so a mark painted at 4 or 9 would have been
+# indistinguishable from the old ground; every entry here is at least four steps
+# outside 5-8, and they still have to be, because DT_GROUND remains in the set
+# for the fallback and nothing guarantees which one a given screen is over.
 # The dark entry doubles as the link colour, so a trail reads as one groove
 # running from room core to room core.
 MARK_DARK = 1
@@ -247,14 +255,19 @@ def build():
                {'left': 0, 'bottom': 7}, {'right': 7, 'bottom': 7}):
         tiles.append(framed(0, 0, base=blank(), **kw))           # 55-62
 
+    # DT_GROUND is the opaque tan field the map used to be paved with. Nothing
+    # paints it now -- the parchment behind NBG2 is the ground, and where there
+    # is no parchment the VDP2 back colour is -- but it stays in the set for the
+    # same reason the DT_BOX_* tiles did: every index after it is a literal in
+    # dash_tiles.c and removing one would renumber the rest for 32 bytes.
     ground = field(EDGE_RP, 0)                                  # DT_GROUND
     tiles.append(ground)
 
-    room = solid(MARK_RING, 1, 1, 6, 6, base=ground)
+    room = solid(MARK_RING, 1, 1, 6, 6)
     room = solid(MARK_DARK, 2, 2, 5, 5, base=room)
     tiles.append(room)                                          # DT_ROOM
 
-    here = solid(MARK_HERE_RING, 1, 1, 6, 6, base=ground)
+    here = solid(MARK_HERE_RING, 1, 1, 6, 6)
     here = solid(MARK_HERE_CORE, 2, 2, 5, 5, base=here)
     tiles.append(here)                                          # DT_ROOM_HERE
 
@@ -266,14 +279,14 @@ def build():
     # cell wants. Mask 0 is blank ground and is never painted; it exists so the
     # mask can index the set directly.
     for mask in range(16):
-        t = ground
+        t = blank()
         if mask & 1: t = solid(MARK_DARK, 3, 0, 4, 4, base=t)   # north arm
         if mask & 2: t = solid(MARK_DARK, 3, 3, 7, 4, base=t)   # east arm
         if mask & 4: t = solid(MARK_DARK, 3, 3, 4, 7, base=t)   # south arm
         if mask & 8: t = solid(MARK_DARK, 0, 3, 4, 4, base=t)   # west arm
         tiles.append(t)                                         # DT_LINK0+mask
 
-    stair = solid(MARK_DARK, 3, 0, 4, 1, base=ground)
+    stair = solid(MARK_DARK, 3, 0, 4, 1)
     stair = solid(MARK_DARK, 3, 3, 4, 4, base=stair)
     stair = solid(MARK_DARK, 3, 6, 4, 7, base=stair)
     tiles.append(stair)                                         # DT_LINK_STAIR
@@ -298,7 +311,7 @@ def build():
     tiles.append(framed(PIC_BOTTOM_RP, PIC_LEFT_CP, right=7, top=0))     # BL
     tiles.append(framed(PIC_BOTTOM_RP, PIC_RIGHT_CP, left=0, top=0))     # BR
 
-    sel = solid(MARK_SEL_RING, 1, 1, 6, 6, base=ground)
+    sel = solid(MARK_SEL_RING, 1, 1, 6, 6)
     sel = solid(MARK_SEL_CORE, 2, 2, 5, 5, base=sel)
     tiles.append(sel)                                           # DT_ROOM_SEL
 
@@ -313,19 +326,19 @@ def build():
                              (7 - XHAIR_ARM, 1, 6, 1),
                              (1, 6, 1, 7 - XHAIR_ARM),
                              (7 - XHAIR_ARM, 6, 6, 7 - XHAIR_ARM)):
-        t = solid(MARK_XHAIR, hx0, hy, hx0 + XHAIR_ARM - 1, hy, base=ground)
+        t = solid(MARK_XHAIR, hx0, hy, hx0 + XHAIR_ARM - 1, hy)
         t = solid(MARK_XHAIR, vx, vy0, vx, vy0 + XHAIR_ARM - 1, base=t)
         tiles.append(t)                  # DT_XHAIR_TL, TR, BL, BR
 
-    # The knight, cut into cells row-major. Composited onto the ground rather
-    # than left transparent where the drawing is: NBG2 is one layer, so a
-    # transparent pixel is a hole through the map to the wallpaper, not the tan
-    # underneath.
+    # The knight, cut into cells row-major. Transparent where the drawing is
+    # not: the hole it leaves is a hole through to the parchment, which is the
+    # ground, so the figure stands on the paper rather than in a box cut out of
+    # it.
     knight = Image.open(KNIGHT_PNG).convert("RGBA")
     assert knight.size == (KNIGHT_W * 8, KNIGHT_H * 8), knight.size
     for ty in range(KNIGHT_H):
         for tx in range(KNIGHT_W):
-            t = [[ground[y][x] for x in range(8)] for y in range(8)]
+            t = blank()
             for y in range(8):
                 for x in range(8):
                     if knight.getpixel((tx * 8 + x, ty * 8 + y))[3] > 128:

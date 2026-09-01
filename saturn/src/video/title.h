@@ -66,6 +66,44 @@ bool title_bg_show_raw(const unsigned char *pixels, const unsigned short *clut,
                        int w, int h, const char *tag);
 
 /*----------------------
+ | title_bg_hold / title_bg_held / title_bg_show_held / title_bg_drop_held
+ | Description: Reads one TGA off the disc once and keeps it decoded for the
+ |   rest of the session, so a screen that wants the same wallpaper every time
+ |   it opens can put it up without touching the drive.
+ |
+ |   The map's parchment is what this exists for. The map is opened and closed
+ |   repeatedly with a CD-DA track playing, and tga_decode is the one function
+ |   here that touches the disc -- a read per open would stop the music every
+ |   time, which is exactly why the room pictures stopped being TGAs.
+ |
+ |   hold is idempotent and answers true for an already-held picture without
+ |   re-reading, so the caller may simply call it on every open and let the
+ |   first one pay. It holds one picture: a second hold while one is held keeps
+ |   the first, since there is one caller and a second would make this a cache
+ |   again.
+ |
+ |   show_held re-uploads to NBG0 every call rather than checking whether the
+ |   picture is still there, because it is not: room_art puts the room back on
+ |   NBG0 the moment the map closes.
+ |
+ |   The picture lives in High Work RAM, where every TGA has lived since the
+ |   cache went -- not the Low Work RAM megabyte the jingle, the area archives
+ |   and the typeahead trie share, which has under 90 KB spare at its tightest
+ |   pairing (see tests/test_lwram_budget.py).
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_held
+ | Params: hold takes a bare /TGA filename; show_held takes the name to record
+ |   for title_bg_loaded_file
+ | Returns: hold and show_held return true on success; held reports whether a
+ |   picture is held; drop_held returns N/A
+ ----------------------*/
+bool title_bg_hold(const char *file);
+bool title_bg_held(void);
+bool title_bg_show_held(const char *tag);
+void title_bg_drop_held(void);
+
+/*----------------------
  | title_bg_hide
  | Description: Hides the title background image by disabling scroll on VDP2 NBG0.
  | Author: suinevere

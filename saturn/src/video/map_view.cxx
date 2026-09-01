@@ -45,6 +45,33 @@
 #define MAP_GROUND_555 0x2B5Eu
 
 /*----------------------
+ | MAP_BG_FILE / MAP_BG_TAG
+ | Description: The parchment the map is drawn on and the name NBG0 records it
+ |   under. A bare /TGA filename, because that is the directory title.cxx steps
+ |   into; the tag is what title_bg_loaded_file answers while the map is up, and
+ |   is deliberately not a CGL area stem so room_art's nbg0_shows_area can never
+ |   mistake the parchment for a room picture it left there.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_BG_FILE "MAP.TGA"
+#define MAP_BG_TAG  "MAP"
+
+/*----------------------
+ | MAP_BACK_555
+ | Description: MAP_GROUND_555 as a colour rather than as a tint target, which
+ |   is a different thing by one bit. dash_tint takes the tint apart into three
+ |   channels and puts the opaque bit back itself when it writes CRAM
+ |   (dash_view.cxx's write_palette ORs 0x8000), so the constant it is given does
+ |   not carry one. A HighColor does: every colour SRL defines has bit 15 set --
+ |   HighColor::Colors::Black is 0x8000, not 0 -- and a back-screen colour handed
+ |   over without it comes out black, which is exactly what the first build of
+ |   this did.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_BACK_555 ((unsigned short) (MAP_GROUND_555 | 0x8000u))
+
+
+/*----------------------
  | MAP_ROW_PLAYERS / MAP_ROW_STATUS / MAP_ROW_HELP / MAP_TEXT_COLS
  | Description: The text rows written over the map and how wide they may run.
  |   The roster opens at MAP_ROW_PLAYERS and takes one row per occupied seat, so
@@ -508,11 +535,13 @@ static void draw_players(void)
 
 /*----------------------
  | draw_once
- | Description: Paints one whole frame of the map: the ground, every room of one
- |   floor the viewport reaches, the links between them, the figure beside the
- |   local player, the crosshair, and the four rows of text around them -- the
- |   roster at the top, the picked room and the floor number along the bottom.
- |   Clears the text layer first,
+ | Description: Paints one whole frame of the map: every room of one floor the
+ |   viewport reaches, the links between them, the figure beside the local
+ |   player, the crosshair, and the four rows of text around them -- the roster
+ |   at the top, the picked room and the floor number along the bottom. The
+ |   ground is not among them: it is the parchment behind this layer, and every
+ |   cell nothing is painted into shows it through. Clears the text layer
+ |   first,
  |   because the caller is the Options menu, which redraws its title and every
  |   row each frame and would otherwise leave them lit over a map whose box
  |   border dash_map_begin has just blanked.
@@ -570,12 +599,11 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
     dash_map_begin();
     g_flash_n = 0;
 
-    for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
-        int c;
-        for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++)
-            dash_map_paint(c, MAP_TOP + i, DT_GROUND);
-    }
-
+    // No ground is painted. The map's ground is the parchment on NBG0, or the
+    // tan back colour where there is no parchment, and every cell this layer
+    // does not claim is DT_BLANK already -- dash_map_begin clears it to that.
+    // Paving the viewport with DT_GROUND, which is what this used to do, would
+    // hide whichever of the two is behind it.
     n = gather(sx, sy, page);
 
     for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
@@ -727,9 +755,9 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
  |   Easy would leave the whole drawing on the map for the rest of the session,
  |   through every later difficulty change.
  |
- |   The wallpaper is hidden for the map's duration and restored by asking
- |   room_art for the room again, which is free when NBG0 still holds that
- |   frame. None of that is compiled into the netbin, which has neither room art
+ |   The wallpaper is replaced for the map's duration by the parchment and
+ |   restored by asking room_art for the room again, which re-uploads because
+ |   the parchment has taken the layer's recorded name with it. None of that is compiled into the netbin, which has neither room art
  |   nor a title background to put back -- the three symbols it would need
  |   (title_bg_hide, room_art_available, room_art_reshow) are the only ones in
  |   this file that build does not already link, which is why they are the only
@@ -754,12 +782,42 @@ extern "C" void map_view_show(void) {
     int sx = 0, sy = 0, hx = 0, hy = 0;
     int pages, page, frame = 0, phase = -1;
     unsigned short tint = dash_tint_current();
+    bool parchment = false;
 #ifndef NETBIN
     const bool had_art = (g_display.palette == DISP_PAL_DYNAMIC)
                          && room_art_available() != 0;
 
-    title_bg_hide();
+    // The parchment goes on NBG0 rather than into the tile layer because NBG2
+    // has one plane and the marks have to sit over the paper, not carry a patch
+    // of it each. NBG0 is already the layer below NBG2 -- priorities are 1 and 2
+    // -- so it needs no reordering, and room_art puts the room back on it when
+    // the map closes.
+    //
+    // Read once and held for the rest of the session. The map is opened and
+    // closed repeatedly with a CD-DA track playing, and tga_decode is the one
+    // thing here that touches the drive; a read per open would stop the music
+    // every time, which is the reason the room pictures stopped being TGAs.
+    if (title_bg_hold(MAP_BG_FILE)) parchment = title_bg_show_held(MAP_BG_TAG);
+    if (!parchment) title_bg_hide();
 #endif
+    // The menu that opened this armed the VDP2 window that suppresses NBG0
+    // inside a box -- MenuBacking's constructor switches it on and every
+    // menu_frame aims it at whatever box is being drawn -- and nothing re-aims
+    // it for a full-screen page that draws no box. Left on, it cuts the last
+    // menu's rectangle out of the parchment and the back colour shows through:
+    // nineteen cells by fifteen of black in the middle of the sheet. It was
+    // invisible for as long as the map paved itself with opaque ground, and
+    // appeared the moment it stopped.
+    image_window_off();
+
+    // Where there is no parchment -- the netbin, which has no drive, and a disc
+    // whose MAP.TGA would not read -- the back colour is the ground instead, so
+    // the marks sit on flat tan rather than on black.
+    //
+    // Not touched when there is one. The sheet's torn edges are transparent by
+    // design and are drawn to read against a dark ground; filling that with tan
+    // would flatten the edge the picture is shaped around.
+    if (!parchment) SRL::VDP2::SetBackColor(SRL::Types::HighColor(MAP_BACK_555));
     dash_tint(MAP_GROUND_555);
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
     else                           map_model_clear_reveal();
@@ -848,7 +906,26 @@ extern "C" void map_view_show(void) {
     text_clear_line(MAP_ROW_HELP);
     text_flush();
     dash_tint(tint);
+    if (!parchment)
+        // Back to what SRL::Core::Initialize set in both builds (main.cxx:361,
+        // main_netbin.cxx:251), so this restores a known value rather than a
+        // guess.
+        SRL::VDP2::SetBackColor(SRL::Types::HighColor::Colors::Black);
+    // And the window back on for the page underneath, which is where it came
+    // from: this screen is only ever reached from a menu, so a MenuBacking is
+    // always up around it and wants its box suppressing the image again. Its
+    // rectangle is still aimed where that page last put it, and the page aims
+    // it again on its next menu_frame either way. If this were ever the
+    // outermost backing instead, the destructor below re-defers the switch-off
+    // and undoes this, which is also right.
+    image_window_on();
 #ifndef NETBIN
-    if (had_art) room_art_reshow();
+    // room_art_reshow re-uploads rather than trusting what is on the layer --
+    // its own check is against the area NBG0 records, and the parchment
+    // records MAP -- so the room comes back whether or not it was there before.
+    // A game with no art has nothing to put back, so the parchment is taken
+    // down instead of being left standing behind the console.
+    if (had_art)         room_art_reshow();
+    else if (parchment)  title_bg_hide();
 #endif
 }

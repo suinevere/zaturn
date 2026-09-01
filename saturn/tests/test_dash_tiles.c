@@ -66,12 +66,21 @@ static void same_as_field(int tile, int rp, int cp,
 }
 
 /*----------------------
- | ground_at
- | Description: The ground tile's own pixel at a position, which is what a link
- |   tile shows anywhere it has not drawn an arm.
+ | is_map_ink
+ | Description: Whether a tile is one the map draws over its parchment, and so
+ |   one whose surround must be transparent. Two ranges rather than one because
+ |   the inventory overlay's picture frame sits between them in the enum and is
+ |   marble like every other frame -- it is drawn over a module, not over paper.
  | Author: suinevere
+ | Dependencies: dash_map.h
+ | Globals: N/A
+ | Params: t -- a DT_* index
+ | Returns: 1 when the tile is map ink, 0 otherwise
  ----------------------*/
-static int ground_at(int x, int y) { return pixel(DT_GROUND, x, y); }
+static int is_map_ink(int t) {
+    return (t >= DT_ROOM && t <= DT_LINK_STAIR) ||
+           (t >= DT_ROOM_SEL && t < DT_N);
+}
 
 int main(void) {
     int i, v, x, y;
@@ -190,12 +199,12 @@ int main(void) {
        pixels to the byte.
 
        DT_LINK0 is the exception and is skipped everywhere below: it is the link
-       tile for a cell no line leaves through any side, so it is bare ground by
+       tile for a cell no line leaves through any side, so it is empty by
        construction and the renderer never paints it. Every other mask draws at
        least one arm. */
     {
         int t;
-        for (t = DT_GROUND; t <= DT_LINK_STAIR; t++) {
+        for (t = DT_GROUND; t < DT_N; t++) {
             int i, nonzero = 0;
             if (t == DT_LINK0) continue;
             for (i = 0; i < 32; i++)
@@ -204,14 +213,42 @@ int main(void) {
         }
     }
 
-    /* Every mark must be visible on the ground it sits on, as a palette
-       distance rather than as a byte difference. */
+    /* The map's ink is drawn on transparency, because the ground it sits on is
+       not on this layer: map_view paints NBG2 with DT_BLANK and the parchment
+       shows through from NBG0 behind it. A tile carrying its own opaque field
+       would be an 8x8 patch of marble on a sheet of paper, so every one of them
+       has to leave some of itself unpainted.
+
+       DT_GROUND is the other half of the same statement. Nothing paints it any
+       more -- it stays in the set so the indices after it do not move -- but it
+       is what an opaque tile looks like, so requiring it to have no transparent
+       pixel at all is what stops this check passing by accident on a set where
+       everything came out blank. */
+    {
+        int t, x, y, clear;
+        for (t = DT_GROUND; t < DT_N; t++) {
+            if (!is_map_ink(t) && t != DT_GROUND) continue;
+            clear = 0;
+            for (y = 0; y < 8; y++)
+                for (x = 0; x < 8; x++)
+                    if (pixel(t, x, y) == 0) clear++;
+            if (t == DT_GROUND) assert(clear == 0);
+            else                assert(clear > 0);
+        }
+    }
+
+    /* Every mark must be visible against the tan it sits on, as a palette
+       distance rather than as a byte difference. The tan is the parchment now
+       rather than the marble field, but it is the same entries either way:
+       dash_view's half-tint bends 5..8 to the ground colour, and a mark painted
+       inside that range would vanish into it. DT_GROUND still measures the
+       range because it is still the tile made of exactly those entries. */
     {
         int t;
         measure_ground();
         assert(ground_lo <= ground_hi);
-        for (t = DT_ROOM; t <= DT_LINK_STAIR; t++) {
-            if (t == DT_LINK0) continue;
+        for (t = DT_GROUND; t < DT_N; t++) {
+            if (t == DT_LINK0 || !is_map_ink(t)) continue;
             assert(escapes_ground(t));
         }
     }
@@ -219,15 +256,18 @@ int main(void) {
     /* The link tiles are indexed by their connection mask, so the shape of each
        must follow from the bits. An arm reaches the tile's own edge exactly
        when its bit is set, which is what makes two cells drawn from adjoining
-       masks meet rather than stop short of each other. */
+       masks meet rather than stop short of each other. Tested against
+       transparency rather than against the ground tile: an unpainted edge is
+       index 0 now, and comparing it to the marble it used to be drawn over
+       would call every edge an arm. */
     {
         int mask;
         for (mask = 1; mask < 16; mask++) {
             int t = DT_LINK0 + mask;
-            assert(!!(mask & DT_EDGE_N) == (pixel(t, 3, 0) != ground_at(3, 0)));
-            assert(!!(mask & DT_EDGE_S) == (pixel(t, 3, 7) != ground_at(3, 7)));
-            assert(!!(mask & DT_EDGE_W) == (pixel(t, 0, 3) != ground_at(0, 3)));
-            assert(!!(mask & DT_EDGE_E) == (pixel(t, 7, 3) != ground_at(7, 3)));
+            assert(!!(mask & DT_EDGE_N) == (pixel(t, 3, 0) != 0));
+            assert(!!(mask & DT_EDGE_S) == (pixel(t, 3, 7) != 0));
+            assert(!!(mask & DT_EDGE_W) == (pixel(t, 0, 3) != 0));
+            assert(!!(mask & DT_EDGE_E) == (pixel(t, 7, 3) != 0));
         }
         /* And the two straight masks are what the H/V names claim. */
         assert(DT_LINK_H == DT_LINK0 + (DT_EDGE_E | DT_EDGE_W));

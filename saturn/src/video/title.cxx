@@ -481,6 +481,86 @@ bool title_bg_show_raw(const unsigned char *pixels, const unsigned short *clut,
 }
 
 /*----------------------
+ | g_held
+ | Description: One decoded picture kept for the rest of the session, so a
+ |   screen that shows the same wallpaper every time it opens pays the disc once
+ |   rather than once per open. The map's parchment is the only user: it is
+ |   opened and closed repeatedly with CD audio playing, and a read per open
+ |   would stop the track every time -- which is the whole reason the room
+ |   pictures stopped being TGAs.
+ |
+ |   Deliberately one slot and not a cache. There is exactly one picture that
+ |   wants this; the nine-slot LRU that used to live here went with the room
+ |   backgrounds, and a second one would be a cache again.
+ | Author: suinevere
+ ----------------------*/
+static TgaImage g_held = { nullptr, nullptr, 0, 0 };
+
+/*----------------------
+ | title_bg_hold
+ | Description: See title.h.
+ | Author: suinevere
+ | Dependencies: tga_decode, bitmap_read_end
+ | Globals: g_held
+ | Params: file -- bare /TGA filename
+ | Returns: true when the picture is held, false when it could not be read
+ ----------------------*/
+bool title_bg_hold(const char *file) {
+    if (g_held.Pixels != nullptr) return true;
+    TgaImage img = { nullptr, nullptr, 0, 0 };
+    bool decoded = tga_decode(file, &img);
+    bitmap_read_end();
+    if (!decoded) return false;
+    g_held = img;
+    return true;
+}
+
+/*----------------------
+ | title_bg_held
+ | Description: See title.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_held
+ | Params: N/A
+ | Returns: true when a picture is held
+ ----------------------*/
+bool title_bg_held(void) {
+    return g_held.Pixels != nullptr;
+}
+
+/*----------------------
+ | title_bg_show_held
+ | Description: See title.h. Touches no CD, so it is safe with a track playing
+ |   -- which is the point of holding the picture in the first place.
+ | Author: suinevere
+ | Dependencies: tga_blit_nbg0, nbg0_note_loaded, SRL
+ | Globals: g_held
+ | Params: tag -- the name to record as loaded, for title_bg_loaded_file
+ | Returns: true when the picture is on NBG0
+ ----------------------*/
+bool title_bg_show_held(const char *tag) {
+    if (g_held.Pixels == nullptr) return false;
+    if (!tga_blit_nbg0(&g_held)) return false;
+    SRL::VDP2::NBG0::SetPriority(SRL::VDP2::Priority::Layer1);
+    nbg0_note_loaded(tag ? tag : "");
+    SRL::VDP2::NBG0::ScrollEnable();
+    return true;
+}
+
+/*----------------------
+ | title_bg_drop_held
+ | Description: See title.h.
+ | Author: suinevere
+ | Dependencies: tga_image_free
+ | Globals: g_held
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void title_bg_drop_held(void) {
+    tga_image_free(&g_held);
+}
+
+/*----------------------
  | title_bg_hide
  | Description: Hides the title background image by disabling scroll on VDP2 NBG0.
  | Author: suinevere

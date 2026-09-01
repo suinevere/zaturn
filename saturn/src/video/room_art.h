@@ -77,30 +77,18 @@ int room_art_available(void);
 int room_art_show(unsigned int obj);
 
 /*----------------------
- | room_art_frame_count / room_art_show_frame
- | Description: The picture route with the room taken out of it, for the title
- |   screen: frame_count is how many frames the disc's archives hold between
- |   them, and show_frame puts one of them up by index.
+ | room_art_changes_for
+ | Description: Whether putting `obj`'s background up would actually change the
+ |   picture, asked without changing it. The same test frame_put short-circuits on,
+ |   so the answer and the act cannot disagree: an unauthored room, or one whose
+ |   frame is the one NBG0 already holds, is no change.
  |
- |   Deliberately not gated on room_art_set_game. The title screen has no story
- |   selected -- that is the point of it -- but the frames themselves belong to
- |   the disc rather than to any one game, so a picture can be shown there
- |   without pretending a game is running. Every other refusal (an index out of
- |   range, an archive that will not open, a stream that will not decode) is the
- |   room route's, unchanged, and means the same thing: hold what is showing.
- |
- |   The archive one of these leaves resident is the caller's to drop --
- |   room_art_release() -- once the picture has faded out. Left alone it holds
- |   up to 408.5 KB of Low Work RAM for the whole menu phase.
+ |   For the transition, which has to know before it starts whether there is
+ |   anything for a ramp to move: fading a picture out and back into itself is a
+ |   second of blackout in exchange for nothing.
  | Author: suinevere
- | Dependencies: scene/presentation.h
- | Globals: g_area, g_archive, g_archive_len, g_pixels, g_clut, g_cur_image
- | Params: image -- 1-based index, 1..room_art_frame_count()
- | Returns: frame_count the count; show_frame 1 when that picture is on screen,
- |   0 on any refusal
  ----------------------*/
-int room_art_frame_count(void);
-int room_art_show_frame(int image);
+int room_art_changes_for(unsigned int obj);
 
 /*----------------------
  | room_art_note_room

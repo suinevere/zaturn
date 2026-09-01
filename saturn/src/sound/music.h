@@ -141,6 +141,27 @@ int  music_transition_active(void);
 void music_transition_flush(void);
 
 /*----------------------
+ | music_set_art_fn / music_art_change
+ | Description: The picture's half of a room change, split across the two ends of
+ |   the transition it belongs to. music_set_room_fn still fires the moment the
+ |   room changes, and the client answers music_art_change with whether that room's
+ |   picture differs from the one on screen. A yes arms the ramp by itself, so a
+ |   walk into a new scene fades out, swaps and fades back in even when the mood
+ |   and the track do not move -- before this, only a mood change ramped, and a
+ |   picture that changed without one simply appeared. A no cancels an arm that a
+ |   previous room in the same settle had earned.
+ |
+ |   The art_fn is called at the bottom of the ramp, where the screen is black and
+ |   an area read costs nothing anyone can see, and before the new track is issued.
+ |   The client must not put the picture up from the room_fn itself: doing that is
+ |   what made a room change show the new picture at full brightness, then darken
+ |   it, then light the same picture back up.
+ | Author: suinevere
+ ----------------------*/
+void music_set_art_fn(void (*fn)(void));
+void music_art_change(int changed);
+
+/*----------------------
  | music_transition_skip_fade
  | Description: Commits an armed mood change with no ramp at all -- for a caller
  |   that knows there is nothing on screen for a ramp to move, which in practice
@@ -178,13 +199,15 @@ void music_set_debounce_frames(int n);                 /* room-switch debounce l
  |   the picture would never change between them. The picture needs the room,
  |   which is what this hands over.
  |
- |   Fired on the room change itself rather than at the debounced commit,
- |   because the picture must not lag the text -- the area's archive is resident
- |   and the change costs a decompress, not a disc read.
+ |   Fired on the room change itself rather than at the debounced commit, because
+ |   the client needs the room early enough to answer music_art_change with it. The
+ |   picture it resolves is not put up there -- see music_set_art_fn.
  | Author: suinevere
  ----------------------*/
 void music_set_room_fn(void (*fn)(unsigned int obj));
-void music_set_fade_fn(void (*fn)(int level));         /* 0 = black/quiet, 255 = normal */
+void music_set_fade_fn(void (*fn)(int level, int audio)); /* level: 0 = black/quiet, 255 = normal;
+                                                          audio: 1 when the track is being re-issued
+                                                          under this ramp and its volume must ride it */
 void music_set_fade_frames(int n);                     /* ramp length; 0 = instant commit */
 
 /*----------------------

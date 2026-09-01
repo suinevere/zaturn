@@ -28,11 +28,11 @@ void title_draw_art(void);
 /*----------------------
  | title_bg_show_oneoff
  | Description: Reads a TGA off the disc into a throwaway High Work RAM buffer,
- |   uploads it to VDP2 NBG0 and frees the buffer again. The only TGA read left
- |   in the port, and the boot splash logo is the only picture that takes it --
- |   every background is a CGL frame that reaches NBG0 through
- |   title_bg_show_raw instead. Reads the disc, so it stops CD audio; the splash
- |   calls it before any track is playing.
+ |   uploads it to VDP2 NBG0 and frees the buffer again. The TGA route: the boot
+ |   splash logo and the title screen's own background take it, and every room
+ |   background is a CGL frame that reaches NBG0 through title_bg_show_raw
+ |   instead. Reads the disc, so it stops CD audio; both callers are on the way to
+ |   the title screen, before any track is playing.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A

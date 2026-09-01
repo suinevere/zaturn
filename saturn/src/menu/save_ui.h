@@ -83,4 +83,32 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars);
 int choose_dest(const char *title_dev, const char *title_slot,
                 int *out_device, int *out_slot);
 
+/*----------------------
+ | save_space_warn
+ | Description: The boot-time backup-memory check. Works out what a first save
+ |   would cost -- the game blob at its worst case plus the map companion, each a
+ |   record of its own with its own block overhead -- and asks the internal memory
+ |   and the cartridge whether either can take it. Returns quietly when one can, or
+ |   when a device is present but unformatted (about to be formatted, therefore
+ |   empty). Otherwise it puts up a modal naming both numbers and offering the only
+ |   two things the player can do about it from here: leave for the BIOS, whose
+ |   memory manager can delete saves, or play on knowing SAVE will fail.
+ |
+ |   Runs before a game is chosen, so it can only speak for the worst case rather
+ |   than for the story the player is about to load. Silent, too, for a player who
+ |   already has a save for any of the disc's games: the slot they used can be
+ |   written over without the device finding another block, so a warning about a
+ |   first save has nothing to tell them. Settings are not a save -- MOJOOPTS is
+ |   named for no story and nothing here looks for it.
+ | Author: suinevere
+ | Dependencies: menu.h, menu_layout.h, saturn_backup.h, saturn_glue.h
+ |   (SAVE_BLOB_MAX), map_model.h (MAP_BLOB_MAX), game_catalog.h
+ |   (scan_z3_folder), input.h, console_view.h, saturn_keyboard.h, SGL's SYS_Exit
+ | Globals: g_pad, g_kbd_visible
+ | Params: N/A
+ | Returns: N/A (returns only when the player elects to continue; the other
+ |   answer does not come back)
+ ----------------------*/
+void save_space_warn(void);
+
 #endif /* SAVE_UI_H */

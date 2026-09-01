@@ -229,9 +229,9 @@ static bool nbg0_shows_area(int area) {
 /*----------------------
  | frame_put
  | Description: Puts one 1-based image on NBG0, reading its area archive first
- |   if a different one is resident. The whole picture path, shared by the room
- |   route and the title screen's own pick, so both get the same refusals, the
- |   same short-circuit and the same CD restore.
+ |   if a different one is resident. The whole room picture path -- the title
+ |   screen used to come through here too, for a frame picked at random, and now
+ |   shows its own TITLE.TGA instead.
  |
  |   Skips the decode and the upload when this image is the one already showing
  |   -- verified against what NBG0 actually records, not only against
@@ -292,26 +292,25 @@ int room_art_show(unsigned int obj) {
 }
 
 /*----------------------
- | room_art_frame_count
- | Description: See room_art.h.
+ | room_art_changes_for
+ | Description: See room_art.h. Mirrors frame_put's short-circuit exactly --
+ |   g_cur_image and what NBG0 records -- rather than restating the rule, so the
+ |   two cannot drift into a transition that ramps for a picture that never moves,
+ |   or skips one that does.
  | Author: suinevere
- | Dependencies: scene/presentation.h
- | Globals: N/A
- | Params: N/A
- | Returns: PRES_FRAME_N
+ | Dependencies: frame_of, nbg0_shows_area, scene/presentation.h
+ | Globals: g_cur_image
+ | Params: obj -- the room's object number
+ | Returns: 1 when showing that room would put a different picture up, 0 otherwise
  ----------------------*/
-int room_art_frame_count(void) { return PRES_FRAME_N; }
+int room_art_changes_for(unsigned int obj) {
+    int image, area;
+    unsigned long off, len;
 
-/*----------------------
- | room_art_show_frame
- | Description: See room_art.h.
- | Author: suinevere
- | Dependencies: frame_put
- | Globals: N/A
- | Params: image -- 1-based image index
- | Returns: 1 when that image is on screen, 0 on any refusal
- ----------------------*/
-int room_art_show_frame(int image) { return frame_put(image); }
+    if (!frame_of(obj, &image)) return 0;
+    if (pres_frame(image, &area, &off, &len) != 1) return 0;
+    return (image == g_cur_image && nbg0_shows_area(area)) ? 0 : 1;
+}
 
 /*----------------------
  | room_art_note_room

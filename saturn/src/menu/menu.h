@@ -296,6 +296,21 @@ int menu_select(const char *title, const char *const *items, int count);
 int menu_select_at(const char *title, const char *const *items, int count, int *sel);
 
 /*----------------------
+ | menu_select_final
+ | Description: menu_select_at with no way out: B, Esc and Backspace do nothing
+ |   and the call returns only on a pick. For a list that has nowhere to go back
+ |   to -- the mode menu at the root of the boot, whose caller answered a cancel
+ |   by re-entering the same list, which redrew the box and read on screen as a
+ |   flicker rather than as input being ignored.
+ | Author: suinevere
+ | Dependencies: as menu_select_at
+ | Globals: as menu_select_at
+ | Params: as menu_select_at
+ | Returns: the chosen item's 0-based index; never -1
+ ----------------------*/
+int menu_select_final(const char *title, const char *const *items, int count, int *sel);
+
+/*----------------------
  | menu_confirm
  | Description: Modal Yes/No confirmation box showing `line1` and an optional
  |   `line2`. Accepts C/A/Start/Enter/Y as yes and B/N/Esc/Backspace as no.

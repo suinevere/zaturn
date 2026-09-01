@@ -73,6 +73,93 @@ extern "C" int saturn_bup_present(int device) {
 }
 
 /*----------------------
+ | saturn_bup_space
+ | Description: Reports what a `bytes`-sized record costs on a device and how many
+ |   blocks that device has free, using the driver's own geometry rather than any
+ |   assumption about it -- internal RAM and a cartridge report different block
+ |   sizes, so a block count only means anything beside the free count from the
+ |   same device.
+ |
+ |   The cost is the record's blocks plus one, because a file never packs into
+ |   exactly its data's worth: its first block also carries the 30-byte directory
+ |   header and the chain of block numbers that follows it. Rounding the overhead
+ |   up to a whole block overstates the cost by at most one block and never
+ |   understates it, which is the direction a "will this fit?" answer has to err
+ |   in.
+ |
+ |   BUP_Stat is asked with the real size rather than a token 1, because the
+ |   driver's free figures are computed against the size being asked about.
+ | Author: suinevere
+ | Dependencies: sega_bup.h
+ | Globals: bup_ready
+ | Params: device -- backup device id; bytes -- the record's data length;
+ |   out_need -- receives the blocks that record would cost; out_free -- receives
+ |   the blocks currently free
+ | Returns: SATURN_BUP_MEASURED with both counts set, SATURN_BUP_UNFORMATTED for a
+ |   device present but never formatted (counts left at 0), or SATURN_BUP_ABSENT
+ ----------------------*/
+extern "C" int saturn_bup_space(int device, uint32_t bytes, uint32_t *out_need,
+                                uint32_t *out_free) {
+    *out_need = 0;
+    *out_free = 0;
+    if (!bup_ready) saturn_bup_init();
+    BupStat st;
+    int32_t s = BUP_Stat((uint32_t) device, bytes, &st);
+    if (s == BUP_UNFORMAT) return SATURN_BUP_UNFORMATTED;
+    if (s != 0 || st.blocksize == 0) return SATURN_BUP_ABSENT;
+    *out_need = (bytes + st.blocksize - 1) / st.blocksize + 1;
+    *out_free = st.freeblock;
+    return SATURN_BUP_MEASURED;
+}
+
+/*----------------------
+ | saturn_bup_list
+ | Description: Lists a device's filenames in one driver call, using BUP_Dir's "*"
+ |   wildcard, so a caller can match them against names it knows rather than
+ |   probing for each one in turn -- 160 name lookups against a full cartridge is
+ |   seconds of boot, and this is one.
+ |
+ |   Returns 0 both for a device that holds nothing and for a driver that did not
+ |   honour the wildcard, which a caller cannot tell apart and does not need to: an
+ |   empty directory is also the cheapest thing to probe by name, so falling back
+ |   on 0 costs nothing in the case that is genuinely empty.
+ |
+ |   A full table is also reported as 0. Listing the first `max` of more files than
+ |   that would let a caller conclude "not here" from a list that never reached the
+ |   end, and a wrong negative here is a warning shown to someone who did not need
+ |   it.
+ | Author: suinevere
+ | Dependencies: sega_bup.h
+ | Globals: bup_ready
+ | Params: device -- backup device id; out -- receives NUL-terminated names of up
+ |   to 11 chars; max -- capacity of out, capped at SATURN_BUP_LIST_MAX
+ | Returns: the number of names written, or 0 if none were, the device is absent,
+ |   or the device holds more files than the table could take
+ ----------------------*/
+extern "C" int saturn_bup_list(int device, char out[][12], int max) {
+    if (!bup_ready) saturn_bup_init();
+    if (max > SATURN_BUP_LIST_MAX) max = SATURN_BUP_LIST_MAX;
+    if (max <= 0) return 0;
+
+    BupStat st;
+    int32_t s = BUP_Stat((uint32_t) device, 1, &st);
+    if (s != 0) return 0;
+
+    BupDir  tbl[SATURN_BUP_LIST_MAX];
+    uint8_t pattern[12];
+    copy_name(pattern, "*");
+    int32_t n = BUP_Dir((uint32_t) device, pattern, (uint16_t) max, tbl);
+    if (n <= 0 || n >= max) return 0;
+
+    for (int32_t i = 0; i < n; i++) {
+        int j = 0;
+        for (; j < 11 && tbl[i].filename[j]; j++) out[i][j] = (char) tbl[i].filename[j];
+        out[i][j] = 0;
+    }
+    return (int) n;
+}
+
+/*----------------------
  | saturn_bup_write
  | Description: Writes a named save to a device, formatting it first only if it is
  |   present but unformatted (so formatting happens at write time, never on a

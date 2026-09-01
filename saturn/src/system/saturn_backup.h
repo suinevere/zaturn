@@ -42,6 +42,48 @@ void saturn_bup_init(void);
 int  saturn_bup_present(int device);
 
 /*----------------------
+ | SATURN_BUP_ABSENT / SATURN_BUP_MEASURED / SATURN_BUP_UNFORMATTED
+ | Description: saturn_bup_space's three answers. UNFORMATTED is not folded into
+ |   ABSENT because a never-formatted device cannot be asked for its geometry
+ |   without formatting it -- which no probe in this file may do -- and is by
+ |   definition empty, so a caller asking whether a first save fits should read it
+ |   as room enough rather than as a failure.
+ | Author: suinevere
+ ----------------------*/
+#define SATURN_BUP_ABSENT      0
+#define SATURN_BUP_MEASURED    1
+#define SATURN_BUP_UNFORMATTED 2
+
+/*----------------------
+ | saturn_bup_space
+ | Description: Asks a device what a record of `bytes` would cost it and what it
+ |   has left, both counted in that device's own blocks -- internal RAM and a
+ |   cartridge do not share a block size, so the two numbers are only ever
+ |   comparable against each other. Read-only: it never formats.
+ | Author: suinevere
+ ----------------------*/
+int  saturn_bup_space(int device, uint32_t bytes, uint32_t *out_need,
+                      uint32_t *out_free);
+
+/*----------------------
+ | SATURN_BUP_LIST_MAX
+ | Description: The most filenames saturn_bup_list will report in one call, and
+ |   the size of the driver table it builds to do it. A device holding more files
+ |   than this cannot be listed exhaustively, which is why the call says so (see
+ |   saturn_bup_list) rather than quietly returning a prefix.
+ | Author: suinevere
+ ----------------------*/
+#define SATURN_BUP_LIST_MAX 32
+
+/*----------------------
+ | saturn_bup_list
+ | Description: Names every file on a device, so a caller can decide what is its
+ |   own without asking after each candidate by name. Read-only; never formats.
+ | Author: suinevere
+ ----------------------*/
+int  saturn_bup_list(int device, char out[][12], int max);
+
+/*----------------------
  | saturn_bup_write / saturn_bup_read / saturn_bup_info / saturn_bup_delete
  | Description: write stores len bytes under name+comment (overwriting a same-named
  |   file); read loads a named save into `data` (sized for the stored blob); info

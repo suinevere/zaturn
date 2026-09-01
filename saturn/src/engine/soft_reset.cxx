@@ -10,7 +10,7 @@
  | Dependencies: soft_reset.h, app_state.h (g_title_jmp), net/net_connect.h
  |   (drops the modem link), sound.h (stops audio), input.h (g_pad), menu.h +
  |   menu_layout.h (the confirm box), console_view.h (hint/device/render),
- |   dash_view.h (dash_hold), saturn_keyboard.h (key events), SRL/SGL.
+ |   saturn_keyboard.h (key events), SRL/SGL.
  ----------------------*/
 
 #include <srl.hpp>
@@ -19,7 +19,6 @@
 #include "soft_reset.h"
 #include "menu.h"
 #include "console_view.h"
-#include "dash_view.h"
 #include "input.h"
 extern "C" {
 #include "menu_layout.h"
@@ -186,14 +185,16 @@ void check_soft_reset(void) {
  |   soft-resets to the title (never returns); No returns false so the caller
  |   resumes the game.
  |
- |   menu_sync ends in SRL::Core::Synchronize() with the console still displayed
- |   but no dashboard renderer between them, which is exactly the case
- |   dash_frame_end reads as "stopped being displayed" and blanks the marble for.
- |   dash_hold before it claims the panel each frame this loop runs, so the strip
- |   stays up behind the confirm box for however long the player takes to answer.
+ |   menu_sync's own dash_hold_any is the whole of the NBG2 bookkeeping here. This
+ |   loop used to call dash_hold as well, to keep the gamepad strip up behind the
+ |   box -- but NBG2 carries one variant at a time, and dash_hold paints the strip,
+ |   so it was overwriting the marble menu_frame had just drawn on every single
+ |   frame. The box was never marbled, which is the exact failure dash_hold_any's
+ |   own box warns about; holding whatever is painted, and painting nothing, is
+ |   what leaves the marble where menu_frame put it.
  | Author: suinevere
- | Dependencies: menu.h, menu_layout.h, console_view.h, dash_view.h (dash_hold),
- |   saturn_keyboard.h, input.h, SRL
+ | Dependencies: menu.h, menu_layout.h, console_view.h, saturn_keyboard.h,
+ |   input.h, SRL
  | Globals: g_pad, g_kbd_visible
  | Params: question -- the yes/no question shown in the box
  | Returns: false when the player declines (Yes does not return)
@@ -228,7 +229,6 @@ bool confirm_return_to_title(const char *question) {
         if (!g_kbd_visible) text_print(cx, cy + 2, "1) Yes    2) No");
         text_print(cx, cy + 3, "%s", hint("(A) (C) (Start) = yes", "Y / Enter = yes"));
         text_print(cx, cy + 4, "%s", hint("(B) = no", "N / Esc = no"));
-        dash_hold();
         menu_sync();
     }
 }

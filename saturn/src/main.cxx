@@ -49,7 +49,14 @@ using namespace SRL::Types;
 /*----------------------
  | TITLE_FADE_FRAMES
  | Description: Title-screen fade length, ~1.5s at 60fps, matching the boot
- |   splash's SPLASH_FADE_FRAMES.
+ |   splash's SPLASH_FADE_FRAMES on both sides of it.
+ |
+ |   Unconditional, including on a boot whose logo the player skipped. That case
+ |   briefly ran on QUICK_FADE_FRAMES, on the reasoning that a press is a request
+ |   to be at the title already -- but a quarter-second is the length of a cut,
+ |   not of a title screen arriving, and it read as one against the ramp that had
+ |   just taken the logo off. What the skip saves is the logo's own hold; the
+ |   screen it hands to is worth the same second and a half either way.
  | Author: suinevere
  ----------------------*/
 #define TITLE_FADE_FRAMES 90
@@ -108,37 +115,70 @@ using namespace SRL::Types;
  ----------------------*/
 #define STORY_READ_CHUNK (2048 * 8)
 /*----------------------
+ | g_art_room
+ | Description: The room whose picture the next transition owes. Written when the
+ |   engine reports the room change, spent when the ramp reaches the bottom -- and
+ |   overwritten in between by any further room the player walks into during the
+ |   settle, which is the point: what should come up is the room they stopped in,
+ |   not the first one they passed through.
+ | Author: suinevere
+ ----------------------*/
+static unsigned int g_art_room = 0;
+
+/*----------------------
  | on_text_room
- | Description: The authored art's half of a room change, for stories that carry
- |   a per-room presentation. Unlike on_text_category this fires on every room,
- |   because every room has its own picture, and it takes that picture
- |   immediately rather than at the bottom of a fade: within an area the
- |   archive is already resident, so the change costs a decompress and touches
- |   no CD.
+ | Description: The authored art's half of a room change, for stories that carry a
+ |   per-room presentation. Fires on every room, because every room has its own
+ |   picture -- but it does not put that picture up. It resolves whether the
+ |   picture would move and hands the answer to the engine, which arms its ramp on
+ |   it and calls on_art_commit at the bottom.
  |
- |   An area change does read the disc, and not under a fade: music_on_turn
- |   (music.c) calls g_room_fn -- this function -- inside its room_changed
- |   block, before it arms the debounced pending switch that later drives the
- |   fade, so room_art_show's read (up to 408.5 KB) happens immediately at full
- |   volume and the fade only starts once music_tick counts that switch down.
- |   Whether the read is audible against the CD-DA has not been measured. It is
- |   not a first-room cost either -- every area change that happens with music
- |   already playing is also a track change, since only track 0 spans more than
- |   one area.
+ |   Showing it here is what the transition used to look wrong for: the new picture
+ |   arrived at full brightness the instant the turn was parsed, and the ramp that
+ |   followed then darkened it and lit the same picture back up. Deferring also
+ |   moves an area change's disc read -- up to 408.5 KB -- under the black, where a
+ |   read nobody can see is a read nobody minds.
+ |
+ |   Answering 0 outside Dynamic is not just a skip: no picture is showing under
+ |   the other palettes, so there is nothing for a ramp to move, and an arm left
+ |   standing from an earlier room would spend one on a screen that cannot change.
  |
  |   The room is noted on every turn, not only on the turns that draw one: the
  |   picture goes up only under the Dynamic palette, and room_art_reshow needs a
  |   room to redraw for the player who selects Dynamic standing still.
  | Author: suinevere
- | Dependencies: room_art.h, options.h
- | Globals: g_display
+ | Dependencies: room_art.h, options.h, music.h
+ | Globals: g_art_room, g_display
  | Params: obj -- the room's object number
  | Returns: N/A
  ----------------------*/
 static void on_text_room(unsigned int obj) {
     room_art_note_room(obj);
+    g_art_room = obj;
+    if (g_display.palette != DISP_PAL_DYNAMIC) { music_art_change(0); return; }
+    music_art_change(room_art_changes_for(obj));
+}
+
+/*----------------------
+ | on_art_commit
+ | Description: Puts the room's background up, called by the music engine at the
+ |   bottom of a transition's ramp. Everything about this is the timing: the screen
+ |   is black here, so an area archive read costs nothing anyone can see, and the
+ |   picture is already in place when the ramp lights it.
+ |
+ |   The palette is re-tested rather than trusted from the arm, because a
+ |   transition is a second and a half long and Options is reachable inside it --
+ |   a player who left Dynamic during the ramp would otherwise get the room picture
+ |   they had just turned off.
+ | Author: suinevere
+ | Dependencies: room_art.h, options.h
+ | Globals: g_art_room, g_display
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void on_art_commit(void) {
     if (g_display.palette != DISP_PAL_DYNAMIC) return;
-    room_art_show(obj);
+    room_art_show(g_art_room);
 }
 
 /*----------------------
@@ -169,25 +209,32 @@ static void music_fade_volume(int level) {
 /*----------------------
  | on_music_fade
  | Description: The room-transition step: everything that is not text moves on
- |   one counter. The picture rides colour offset channel B (title_bg_dyn_fade),
- |   the CD-DA track its volume register, and the PCM effects their own
- |   per-channel scale, so a room change takes the images and the sound down
- |   together and brings them back together on the far side of the swap.
+ |   one counter. The picture rides colour offset channel B (title_bg_dyn_fade)
+ |   and the PCM effects their own per-channel scale, so a room change takes the
+ |   images and the effects down together and brings them back on the far side of
+ |   the swap.
  |
- |   The text deliberately does not go with them. It is on channel A with the
- |   marble chrome, and the turn's description is being read while this runs --
+ |   The CD-DA volume only joins them when the engine says the track is being
+ |   re-issued under this ramp. That is what the dip is for -- covering a fresh
+ |   play -- and Zork I changes picture at 74 room boundaries against 13 track
+ |   changes, so riding the volume on all of them would leave the score pulsing
+ |   for the sixty-one where nothing about it changed.
+ |
+ |   The text deliberately does not go with any of them. It is on channel A with
+ |   the marble chrome, and the turn's description is being read while this runs --
  |   a transition that blinked the words out mid-sentence is the thing
  |   title_bg_dyn_fade's channel split exists to prevent.
  | Author: suinevere
  | Dependencies: title.h, music.h, sound.h
  | Globals: N/A
- | Params: level -- 0 (black/silent) to 255 (normal)
+ | Params: level -- 0 (black/silent) to 255 (normal); audio -- nonzero when the
+ |   track is being re-issued and its volume must ride the ramp too
  | Returns: N/A
  ----------------------*/
-static void on_music_fade(int level) {
+static void on_music_fade(int level, int audio) {
     title_bg_dyn_fade(level);
-    music_fade_volume(level);
     sound_fade_level(level);
+    if (audio) music_fade_volume(level);
 }
 
 /*----------------------
@@ -229,70 +276,26 @@ static void on_title_fade(int level) { music_fade_volume(level); }
 static void game_intro_reveal(void) { menu_fade_in_ex(GAME_REVEAL_FRAMES, music_fade_volume); }
 
 /*----------------------
- | boot_entropy
- | Description: A number that differs from one run to the next, read off the
- |   Saturn's real-time clock. Used to pick the title screen's background from
- |   the disc's CGL frames.
+ | title_show_wallpaper
+ | Description: Puts TITLE.TGA behind the title screen.
  |
- |   The RTC rather than the frame counter, because at this point in the boot there
- |   is no frame counter worth reading -- title_and_seed's is generated by the
- |   player's own reaction time and does not exist until AFTER the title has been
- |   composed, which is exactly what needs the number. Deliberately does not issue
- |   its own slGetStatus: SRL::Core::Initialize and the per-frame input path already
- |   refresh Smpc_Status, and extra SMPC traffic is how the peripheral table gets
- |   disturbed.
+ |   One authored picture, committed to the disc, shown every boot. It used to be
+ |   one of Zork I's own room frames picked off the real-time clock, on the
+ |   reasoning that the disc carried no title art and any picture would do; there
+ |   is title art now, so none of that reasoning survives -- not the clock read,
+ |   not the retry walk over the frame table, and not the room-art frame API the
+ |   walk was the only caller of.
  |
- |   Seconds-of-the-day, so it changes every second and wraps daily. A soft reset
- |   back to the title re-reads it and gets a different answer, which is the point.
+ |   A refusal leaves no wallpaper rather than whatever a previous game left on
+ |   NBG0, which is the one thing the old pick and this share.
  | Author: suinevere
- | Dependencies: SRL (DateTime)
- | Globals: N/A
- | Params: N/A
- | Returns: an arbitrary run-to-run-varying value
- ----------------------*/
-static unsigned int boot_entropy(void) {
-    SRL::Types::DateTime now = SRL::Types::DateTime::Now();
-    return (unsigned int) now.Second()
-         + 60u  * (unsigned int) now.Minute()
-         + 3600u * (unsigned int) now.Hour();
-}
-
-/*----------------------
- | title_pick_wallpaper
- | Description: Puts one of the disc's own room backgrounds behind the title
- |   screen, chosen fresh on every boot and every soft-reset return.
- |
- |   The frames are Zork I's CGL archives -- the same pictures the game shows in
- |   its rooms -- rather than a folder of title art, of which the disc carries
- |   none. Any of them will do: the title screen has no room, no scene and no
- |   game to suit, so the only requirement is that it is a picture and that it
- |   is not the same one every time.
- |
- |   Retried up to WALLPAPER_TRIES times because a pick can legitimately fail:
- |   the boot jingle is still resident here, and an area whose archive will not
- |   fit beside it is refused by room_art rather than forced. Stepping to the
- |   next frame lands in a different archive soon enough, and stepping by a
- |   number coprime with the frame count visits them in a different order for
- |   each seed instead of always walking the same run of neighbours. If every
- |   try is refused the title simply shows no wallpaper, which is what it did
- |   before it had one at all.
- | Author: suinevere
- | Dependencies: room_art.h, title.h, boot_entropy
+ | Dependencies: title.h
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
-static void title_pick_wallpaper(void) {
-    const int WALLPAPER_TRIES = 6;
-    const int n = room_art_frame_count();
-    if (n <= 0) { title_bg_hide(); return; }
-
-    unsigned int seed = boot_entropy();
-    for (int try_i = 0; try_i < WALLPAPER_TRIES; try_i++) {
-        if (room_art_show_frame((int) (seed % (unsigned int) n) + 1)) return;
-        seed += 7u;
-    }
-    title_bg_hide();   // nothing would load: no stale picture left over from a game
+static void title_show_wallpaper(void) {
+    if (!title_bg_show_oneoff("TITLE.TGA")) title_bg_hide();
 }
 
 /*----------------------
@@ -324,7 +327,7 @@ static void title_pick_wallpaper(void) {
  |   A soft-reset re-entry runs exactly the same sequence, deliberately: there is no
  |   cold-boot/return branch anywhere below. The catalogue is a cached static the
  |   longjmp did not touch, so a return pays for the logo's six seconds and one
- |   fresh wallpaper archive and nothing else. The Z3 load retries the flaky
+ |   re-read of TITLE.TGA and nothing else. The Z3 load retries the flaky
  |   first-access GFS size stat before allocating and reading. Both it and the
  |   sound-blorb read after it run underneath the loading screen, which is
  |   raised before them and not taken down until the game is built -- the
@@ -378,6 +381,11 @@ int main(void) {
     static MultiPad pads;
     g_pad = &pads;
 
+    // Before the splash, and before the setjmp below, so a soft reset does not
+    // re-ask: the answer cannot have changed, and one of the two answers leaves
+    // for the BIOS anyway. Needs the pad, hence its place under it.
+    save_space_warn();
+
     setjmp(g_title_jmp);
     g_title_jmp_armed = true;
     GFS_Reset();
@@ -415,13 +423,14 @@ int main(void) {
 
     // No game is selected at the title, so the Dynamic palette the client
     // defaults to correctly draws no room picture behind the menus. The title
-    // screen's own wallpaper does not come from there -- it is picked below.
+    // screen's own wallpaper does not come from there -- it is TITLE.TGA, put up
+    // below.
     splash_show();                // the logo, six seconds, loading nothing
 
     text_set_color(DISP_RGB555(0xFF, 0xFF, 0xFF), DISP_RGB555(0, 0, 0));
     title_bg_fade_arm();          // black out first, so the title is composed unseen
 
-    title_pick_wallpaper();
+    title_show_wallpaper();
 
     // The backend goes in here rather than at game start, because the menu track
     // below is the engine's now too -- that is what makes it obey the cycle rule
@@ -445,10 +454,11 @@ int main(void) {
 
     int seed = title_and_seed();
     title_bg_fade_out(QUICK_FADE_FRAMES);
-    // The wallpaper's own archive, up to 408.5 KB, has done its job and the menu
-    // phase has no picture at all -- so it goes back to the zone here rather than
-    // sitting in it until a game is picked. Safe now and not a frame earlier: the
-    // screen is black, so nothing is on NBG0 that anyone can see go.
+    // The title's own picture frees itself -- title_bg_show_oneoff drops its
+    // buffer the moment the upload lands -- so what this still answers for is a
+    // previous game's area archive, and forgetting which image NBG0 holds. Safe
+    // here and not a frame earlier: the screen is black, so nothing is on NBG0
+    // that anyone can see go.
     room_art_release();
     item_art_close();
     display_apply();              // set the menu's background image/colour + text
@@ -457,6 +467,7 @@ int main(void) {
     // own house, and music_start_menu() announces the neutral category, and
     // neither is meant to repaint the title out from under itself.
     music_set_room_fn(on_text_room);
+    music_set_art_fn(on_art_commit);
     music_set_fade_fn(on_music_fade);
     music_set_fade_frames(MUSIC_FADE_FRAMES);
     menu_intro_fade_arm();        // ...then hold it black across the swap so the
@@ -485,8 +496,7 @@ int main(void) {
     static int mode_sel = 0;
 
     for (;;) {
-        int mode = menu_select_at("Z-ATURN", modes, 5, &mode_sel);
-        if (mode < 0) continue;
+        int mode = menu_select_final("Z-ATURN", modes, 5, &mode_sel);
         if (mode == 3) {
             menu_fade_out(QUICK_FADE_FRAMES);      // mode-select dims to black
             // The menu track plays straight through Options here, unlike in-game

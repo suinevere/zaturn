@@ -437,7 +437,10 @@ MenuBacking::MenuBacking() {
 
 /*----------------------
  | menu_backing_window_off
- | Description: Switches the image-suppressing window back off. Deferred through
+ | Description: Switches the image-suppressing window back off and drops the
+ |   marble latch with it, which is the point of doing both here: the window and
+ |   the box are the two halves of one piece of chrome, and anything that ends one
+ |   of them a frame before the other is visible as the box going hollow. Deferred through
  |   text_on_flush rather than run from ~MenuBacking, because the guard object
  |   dies at the `return` that picked a menu item and the box it backs is still
  |   on screen at that point -- every caller either fades the box out or draws
@@ -452,13 +455,15 @@ MenuBacking::MenuBacking() {
  ----------------------*/
 static void menu_backing_window_off(void) {
     image_window_off();
+    dash_hold_latch(0);
 }
 
 /*----------------------
  | MenuBacking::~MenuBacking
  | Description: On the outermost destruction (refcount 1 -> 0), owes the window
  |   off to the next frame that changes the text (see menu_backing_window_off)
- |   rather than switching it off here. A destructor rather than a paired call
+ |   rather than switching it off here, and latches the marble so NBG2 cannot
+ |   expire ahead of it. A destructor rather than a paired call
  |   because every page has several exit paths and forgetting to undo the
  |   windowing on one of them is the exact bug shape that has already cost this
  |   project a release.
@@ -469,7 +474,16 @@ static void menu_backing_window_off(void) {
  | Returns: N/A
  ----------------------*/
 MenuBacking::~MenuBacking() {
-    if (--g_menu_backing_depth == 0) text_on_flush(&menu_backing_window_off);
+    if (--g_menu_backing_depth != 0) return;
+    // The marble has to last exactly as long as the window does. Left to expire
+    // on its own it goes on the first frame nobody claims it, which is usually
+    // before this flush lands -- and with the window still suppressing the
+    // picture, what is left is the box in backdrop colour with the menu's own
+    // letters still lit on it, sitting there until the text finally changes.
+    // Latched here and released by the same callback that takes the window down,
+    // so the two leave together whatever the caller does in between.
+    dash_hold_latch(1);
+    text_on_flush(&menu_backing_window_off);
 }
 
 /*----------------------
@@ -706,7 +720,8 @@ void menu_message(const char *title, const char *line1, const char *line2) {
  |   of items; sel_io -- in/out remembered row (see menu_select_at)
  | Returns: the chosen item's 0-based index, or -1 if cancelled
  ----------------------*/
-int menu_select_at(const char *title, const char *const *items, int count, int *sel_io) {
+static int select_at(const char *title, const char *const *items, int count,
+                     int *sel_io, bool allow_cancel) {
     const int VIS = 16;         // max list rows shown at once; longer lists scroll
     MenuBacking backing;        // opaque while the list is up; restored on exit
     int intro = g_menu_intro_fade;  // one-shot: fade this first frame up from black
@@ -738,11 +753,11 @@ int menu_select_at(const char *title, const char *const *items, int count, int *
         if (g_pad->WasPressed(Button::Down))  sel = (sel + 1) % count;
         bool pick = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                  || g_pad->WasPressed(Button::START);
-        bool cancel = g_pad->WasPressed(Button::B);
+        bool cancel = allow_cancel && g_pad->WasPressed(Button::B);
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         if (ke.kind == SATURN_KEY_ENTER) pick = true;
-        else if (ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE) cancel = true;
+        else if (ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE) cancel = allow_cancel;
         else if (ke.kind == SATURN_KEY_CHAR) {
             int idx = menu_visible_digit(ke.ch, top, VIS, count);
             if (idx >= 0) { sel = idx; pick = true; }
@@ -782,6 +797,23 @@ int menu_select_at(const char *title, const char *const *items, int count, int *
         menu_sync();
         if (intro) { menu_fade_in(intro); intro = 0; }
     }
+}
+
+int menu_select_at(const char *title, const char *const *items, int count, int *sel_io) {
+    return select_at(title, items, count, sel_io, true);
+}
+
+/*----------------------
+ | menu_select_final
+ | Description: See menu.h.
+ | Author: suinevere
+ | Dependencies: select_at
+ | Globals: as select_at
+ | Params: as menu_select_at
+ | Returns: the chosen item's 0-based index; never -1
+ ----------------------*/
+int menu_select_final(const char *title, const char *const *items, int count, int *sel_io) {
+    return select_at(title, items, count, sel_io, false);
 }
 
 /*----------------------

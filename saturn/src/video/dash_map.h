@@ -212,6 +212,20 @@ void dash_box_hold(void);
 int dash_hold_painted(void);
 
 /*----------------------
+ | dash_hold_latch
+ | Description: Holds whatever is painted across frames nobody claims it on,
+ |   until it is switched back off. dash_hold_painted answers for one frame and
+ |   needs a caller on each of them; this is for the stretch where there is no
+ |   such caller -- a menu box whose owner has already returned, waiting on the
+ |   text flush that turns its window off. Without it the marble expires on the
+ |   first unclaimed frame while the window is still suppressing the picture, so
+ |   the box goes hollow -- backdrop colour and the menu's own letters, sitting
+ |   there until the flush finally arrives.
+ | Author: suinevere
+ ----------------------*/
+void dash_hold_latch(int on);
+
+/*----------------------
  | dash_map_begin
  | Description: Claims the layer for the map and clears it, exactly as
  |   dash_build and dash_box do: one thing is on this layer at a time. Call

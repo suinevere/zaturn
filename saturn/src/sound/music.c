@@ -228,6 +228,22 @@ static void (*g_room_fn)(unsigned int) = 0;
 void music_set_room_fn(void (*fn)(unsigned int obj)) { g_room_fn = fn; }
 
 /*----------------------
+ | g_art_fn / g_pending_art / music_set_art_fn
+ | Description: The picture's half of a commit. g_room_fn tells the client a room
+ |   changed; the client answers with music_art_change, and if it said the picture
+ |   moves, g_pending_art holds that answer until the bottom of the ramp calls
+ |   g_art_fn to put it up.
+ |
+ |   Two callbacks and not one because they happen at opposite ends of the same
+ |   transition: the room is known when the turn is parsed, and the picture must
+ |   not appear until the screen has gone dark for it.
+ | Author: suinevere
+ ----------------------*/
+static void (*g_art_fn)(void) = 0;
+static int  g_pending_art = 0;
+void music_set_art_fn(void (*fn)(void)) { g_art_fn = fn; }
+
+/*----------------------
  | g_same_cat_rooms
  | Description: Rooms entered since the last commit while the category held. At
  |   MUSIC_ROTATE_ROOMS the engine cycles to another track within the category it
@@ -466,6 +482,13 @@ void music_set_game(unsigned int release, const char* serial) {
  |   cannot drift apart. g_fade_frames of 0 is the default and skips the phases
  |   entirely, reproducing the instant commit the pre-existing tests assert.
  |
+ |   The counter is shared but the audio is not always along for the ride: a
+ |   picture-only change leaves the track playing, and a ramp that dipped the
+ |   music for it would make the score pulse at every one of Zork I's 74 image
+ |   boundaries for the sake of 13 track changes. g_fade_audio carries that answer
+ |   to the client, latched at the top of the ramp because commit_pending clears
+ |   what it was derived from before the ramp back up needs it.
+ |
  |   These are ticked one step per music_tick, never looped: title.cxx's fades are
  |   blocking `for i ... Synchronize()` ramps, and running one of those from a
  |   commit would stall the interpreter for the whole fade every time a room's
@@ -476,17 +499,30 @@ enum { MP_IDLE = 0, MP_FADE_OUT, MP_FADE_IN };
 static int  g_phase = MP_IDLE;
 static int  g_fade_frames = 0;
 static int  g_fade_i = 0;
-static void (*g_fade_fn)(int) = 0;
+static void (*g_fade_fn)(int, int) = 0;
+/* Whether the transition now ramping will re-issue the track. Latched when the
+   ramp starts, because commit_pending clears g_pending_cat at the bottom and the
+   ramp back up still has to lift the volume it took down. */
+static int  g_fade_audio = 0;
 
-void music_set_fade_fn(void (*fn)(int level)) { g_fade_fn = fn; }
+void music_set_fade_fn(void (*fn)(int level, int audio)) { g_fade_fn = fn; }
 void music_set_fade_frames(int n) { g_fade_frames = (n < 0) ? 0 : n; }
 
-static void fade_emit(int level) { if (g_fade_fn) g_fade_fn(level); }
+static void fade_emit(int level) { if (g_fade_fn) g_fade_fn(level, g_fade_audio); }
 
 /*----------------------
  | commit_pending
- | Description: Takes the pending category, announces it, and starts its track.
- |   Shared by the instant path and the bottom of a fade so the two cannot drift.
+ | Description: Everything a transition was holding back, applied at the point the
+ |   screen and the audio are both down. The picture first and the track second,
+ |   because putting a picture up can cost an area read off the CD and that read is
+ |   better spent while the volume is still at the floor than under a track that
+ |   has just been issued.
+ |
+ |   Either half can be absent. A picture-only change -- a new room in a mood that
+ |   is already sounding -- returns before play_dyn rather than re-issuing track 0,
+ |   which is the stop code and would end the music the transition was not asked to
+ |   touch. Shared by the instant path and the bottom of a fade so the two cannot
+ |   drift.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_active_kind, g_active_cat, g_pending_kind, g_pending_cat, g_pending_track
@@ -494,8 +530,13 @@ static void fade_emit(int level) { if (g_fade_fn) g_fade_fn(level); }
  | Returns: N/A
  ----------------------*/
 static void commit_pending(void) {
-    int t = g_pending_track;
-    int rotate = g_pending_rotate;
+    int t;
+    if (g_pending_art) {
+        g_pending_art = 0;
+        if (g_art_fn) g_art_fn();
+    }
+    if (g_pending_cat < 0) return;   // a picture-only change: nothing to re-issue
+    t = g_pending_track;
     g_active_kind = g_pending_kind;
     g_active_cat = g_pending_cat;
     g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0; g_pending_rotate = 0;
@@ -536,7 +577,7 @@ static void fade_out_step(void) {
  | Returns: nonzero while a switch is still owed some frames
  ----------------------*/
 int music_transition_active(void) {
-    return (g_pending_cat >= 0 || g_phase != MP_IDLE) ? 1 : 0;
+    return (g_pending_cat >= 0 || g_pending_art || g_phase != MP_IDLE) ? 1 : 0;
 }
 
 /*----------------------
@@ -559,7 +600,7 @@ int music_transition_active(void) {
  ----------------------*/
 void music_transition_skip_fade(void) {
     if (g_phase != MP_IDLE) return;
-    if (g_pending_cat < 0) return;
+    if (g_pending_cat < 0 && !g_pending_art) return;
     g_pending_frames = 0;
     commit_pending();
 }
@@ -580,7 +621,36 @@ void music_transition_skip_fade(void) {
  | Returns: N/A
  ----------------------*/
 void music_transition_flush(void) {
-    if (g_pending_cat >= 0) g_pending_frames = 0;
+    if (g_pending_cat >= 0 || g_pending_art) g_pending_frames = 0;
+}
+
+/*----------------------
+ | music_art_change
+ | Description: The client's answer to a room change: whether that room puts a
+ |   different picture on screen. A yes arms the ramp on its own, so a walk into a
+ |   new scene fades and swaps even when the mood -- and the track -- does not
+ |   move; only the picture ever moved on those turns, and it used to move by
+ |   appearing.
+ |
+ |   A no cancels an arm the walk had already earned, the same way a mood change
+ |   that is walked back out of is dropped: two rooms into a corridor and back to
+ |   the picture that is still on screen, there is nothing left to ramp for.
+ |
+ |   Takes the debounce a mood change takes, and from the same counter, so a
+ |   room that changes both does not settle twice.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pending_art, g_pending_frames
+ | Params: changed -- nonzero when this room's picture differs from what is showing
+ | Returns: N/A
+ ----------------------*/
+void music_art_change(int changed) {
+    if (changed) {
+        g_pending_art = 1;
+        g_pending_frames = g_debounce_frames;
+    } else {
+        g_pending_art = 0;
+    }
 }
 
 /*----------------------
@@ -602,13 +672,13 @@ void music_reset(void) {
     g_active_track = 0; g_turn_len = 0; g_turn_text[0] = 0;
     g_active_kind = CAT_KIND_NONE; g_active_cat = -1;
     g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0; g_pending_frames = 0;
-    g_pending_rotate = 0; g_same_cat_rooms = 0;
+    g_pending_rotate = 0; g_same_cat_rooms = 0; g_pending_art = 0;
     g_await_play = 0;
     g_dyn_pass = 0;
     g_paused = 0;   // a soft reset can land here with a menu still nominally open
     g_hold_kind = HOLD_NONE;
-    if (g_phase != MP_IDLE) fade_emit(255);   // mid-ramp: nothing else would lift it
-    g_phase = MP_IDLE; g_fade_i = 0;
+    if (g_phase != MP_IDLE) { g_fade_audio = 1; fade_emit(255); }  // mid-ramp: nothing else would lift it
+    g_phase = MP_IDLE; g_fade_i = 0; g_fade_audio = 0;
     // Nothing to announce.
     // is no active scene right after a reset, so the subscriber hears nothing
     // and holds whatever picture it is already showing.
@@ -730,10 +800,11 @@ void music_tick(void) {
             if (g_fade_i >= g_fade_frames) g_phase = MP_IDLE;
             return;
         }
-        if (g_pending_cat >= 0) {
+        if (g_pending_cat >= 0 || g_pending_art) {
             if (g_pending_frames > 0) g_pending_frames--;
             if (g_pending_frames <= 0) {
                 if (g_fade_frames > 0) {
+                    g_fade_audio = (g_pending_cat >= 0);
                     g_phase = MP_FADE_OUT; g_fade_i = g_fade_frames;
                     fade_out_step();   // the ramp starts on this frame, not the next
                 } else {
@@ -850,7 +921,7 @@ void music_note_output(const char* str, unsigned int len) {
 void music_on_win(void) {
     g_event_cat = EV_WIN;
     g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1;
-    g_pending_track = 0; g_pending_rotate = 0; g_pending_frames = 0;
+    g_pending_track = 0; g_pending_rotate = 0; g_pending_frames = 0; g_pending_art = 0;
     g_active_kind = CAT_KIND_EVENT; g_active_cat = EV_WIN;
     g_same_cat_rooms = 0;
     play_dyn(pick_dynamic_track(CAT_KIND_EVENT, EV_WIN), 1);
@@ -885,8 +956,18 @@ void music_on_turn(unsigned int obj) {
     if (target_kind != g_active_kind || target != g_active_cat) {
         /* A real mood change. It supersedes any rotation that was waiting: the
            point of the rotation was to relieve an unchanging mood, and the mood
-           just changed. */
-        if (g_active_track == 0) {
+           just changed.
+
+           Nothing is sounding yet, so the first room of a game normally starts its
+           track outright rather than arming a switch nobody would hear settle.
+           Not while a picture is owed: putting that picture up can read an area
+           archive off the CD, and a data read stops CD-DA, so a track started here
+           would be killed by the read that follows it and nothing would restart it
+           -- the drive never reports playing, so g_await_play never clears and the
+           loop-end branch that would re-issue is never reached. Routing it through
+           the pending commit instead puts the read first and the track after it,
+           which is the order commit_pending exists to guarantee. */
+        if (g_active_track == 0 && !g_pending_art) {
             g_active_kind = target_kind; g_active_cat = target; g_same_cat_rooms = 0;
             play_dyn(pick_dynamic_track(target_kind, target), 1);
         } else if (target != g_pending_cat || target_kind != g_pending_kind || g_pending_rotate) {

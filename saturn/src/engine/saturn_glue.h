@@ -73,6 +73,30 @@ int saturn_save_blob(const uint8_t *data, uint32_t len);
 int saturn_load_blob(uint8_t *buf, uint32_t maxlen);
 
 /*----------------------
+ | SAVE_DYNAMIC_MAX / SAVE_BLOB_MAX
+ | Description: The largest a save blob can come out at, for the boot-time check
+ |   that asks whether backup memory can take a first save at all. That check runs
+ |   before a story is chosen, so it cannot read the story's own dynamic-memory
+ |   size and has to carry a ceiling instead.
+ |
+ |   SAVE_DYNAMIC_MAX is that ceiling: 14 KB, above the largest dynamic memory of
+ |   the 31 stories in /Z3 (Planetfall, 0x37D0 = 14288 bytes). A story with more
+ |   dynamic memory than this is not refused -- it saves exactly as before -- it
+ |   just means the boot check under-counted what it would cost.
+ |
+ |   SAVE_BLOB_MAX applies opcode_save's format to that ceiling: a 21-byte header
+ |   (magic, dynlen, pc, sp, bp, rle length), the delta, and the used stack. The
+ |   delta's worst case is 1.5 bytes per dynamic byte, not 1: a zero run costs two
+ |   bytes and a differing byte costs one, so the most expensive input is one that
+ |   alternates between them and can never be coalesced into longer runs. The stack
+ |   is the whole 2048-entry array at two bytes each -- 4096 -- since a save may be
+ |   taken at any depth.
+ | Author: suinevere
+ ----------------------*/
+#define SAVE_DYNAMIC_MAX 0x3800u
+#define SAVE_BLOB_MAX    (21u + SAVE_DYNAMIC_MAX + (SAVE_DYNAMIC_MAX + 1u) / 2u + 4096u)
+
+/*----------------------
  | mojo_boot / mojo_run
  | Description: The interpreter entry points (in mojozork_saturn.c): boot wires the
  |   hooks and loads the story with a seed; run executes until the game quits.

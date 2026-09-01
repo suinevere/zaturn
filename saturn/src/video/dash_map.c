@@ -120,6 +120,10 @@ static int g_base = 0;
 static int g_dirty_top = DASH_ROWS;
 static int g_dirty_bottom = -1;
 static int g_touched = 0;
+/* Set while a menu box is owed a teardown its owner has already left: see
+   dash_hold_latch. Read only by dash_frame_end, and never a substitute for a
+   renderer -- it holds what is painted, it does not paint. */
+static int g_latched = 0;
 
 /*----------------------
  | put
@@ -398,9 +402,14 @@ int dash_input_up(void)
             || g_variant == DASH_OVERLAY || g_variant == DASH_OVERLAY_TALL) ? 1 : 0;
 }
 
+void dash_hold_latch(int on)
+{
+    g_latched = on ? 1 : 0;
+}
+
 void dash_frame_end(void)
 {
-    if (!g_touched) dash_build(DASH_NONE, 0);
+    if (!g_touched && !g_latched) dash_build(DASH_NONE, 0);
     g_touched = 0;
 }
 
@@ -415,5 +424,6 @@ void dash_reset(void)
     g_box.x0 = 0;
     g_box.x1 = 0;
     g_touched = 0;
+    g_latched = 0;
     dash_dirty_clear();
 }

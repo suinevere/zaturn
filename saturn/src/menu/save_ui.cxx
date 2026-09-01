@@ -8,7 +8,11 @@
  |   menu_layout.h (menu_box_fit/menu_visible_digit/MENU_DIGIT_COLS), keyboard.h
  |   (on-screen keyboard state/layout), saturn_backup.h (SATURN_BUP_* ids and bup
  |   queries), saturn_keyboard.h (key events), input.h (g_pad), console_view.h
- |   (note_input_device/hint/g_kbd_visible), app_state.h (g_story_filename), SRL.
+ |   (note_input_device/hint/g_kbd_visible), app_state.h (g_story_filename),
+ |   saturn_glue.h (SAVE_BLOB_MAX), map_model.h (MAP_BLOB_MAX), game_catalog.h
+ |   (scan_z3_folder), SRL -- whose
+ |   srl.hpp is also what gives SYS_Exit its C linkage, by including sega_sys.h
+ |   inside an extern "C" block of its own.
  ----------------------*/
 
 #include <srl.hpp>
@@ -25,6 +29,9 @@ extern "C" {
 #include "input.h"
 #include "console_view.h"
 #include "app_state.h"
+#include "saturn_glue.h"
+#include "map_model.h"
+#include "game_catalog.h"
 
 /*----------------------
  | snprintf (extern)
@@ -35,11 +42,34 @@ extern "C" {
 extern "C" int snprintf(char *str, size_t size, const char *fmt, ...);
 
 /*----------------------
- | make_slot_name
- | Description: Copies the story filename's base (up to 9 chars, stopping at the
+ | slot_name_for
+ | Description: Copies a story filename's base (up to 9 chars, stopping at the
  |   extension dot, forcing lowercase to uppercase) into `out`, then appends the
  |   slot digit and a NUL. The per-game prefix is what keeps each game's slots
- |   separate on the same backup device.
+ |   separate on the same backup device. Takes the story rather than reading
+ |   g_story_filename, because the boot-time check asks after games the player has
+ |   not chosen -- and, at that point, could not have chosen.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: story -- the story's CD filename; out -- destination buffer (>= 11
+ |   bytes); slot -- appended as one digit
+ | Returns: N/A
+ ----------------------*/
+static void slot_name_for(const char *story, char *out, int slot) {
+    int i = 0;
+    for (const char *p = story; *p && *p != '.' && i < 9; p++) {
+        char c = *p;
+        if (c >= 'a' && c <= 'z') c = (char) (c - 'a' + 'A');
+        out[i++] = c;
+    }
+    out[i++] = (char) ('0' + slot);
+    out[i] = 0;
+}
+
+/*----------------------
+ | make_slot_name
+ | Description: slot_name_for against the story the player is playing.
  | Author: suinevere
  | Dependencies: app_state.h (g_story_filename)
  | Globals: g_story_filename
@@ -47,14 +77,7 @@ extern "C" int snprintf(char *str, size_t size, const char *fmt, ...);
  | Returns: N/A
  ----------------------*/
 void make_slot_name(char *out, int slot) {
-    int i = 0;
-    for (const char *p = g_story_filename; *p && *p != '.' && i < 9; p++) {
-        char c = *p;
-        if (c >= 'a' && c <= 'z') c = (char) (c - 'a' + 'A');
-        out[i++] = c;
-    }
-    out[i++] = (char) ('0' + slot);
-    out[i] = 0;
+    slot_name_for(g_story_filename, out, slot);
 }
 
 /*----------------------
@@ -320,5 +343,199 @@ int choose_dest(const char *title_dev, const char *title_slot,
         }
         menu_message(title_slot, "That slot is empty.", hint("A/C = back", "Enter = back"));
         menu_wait();
+    }
+}
+
+/*----------------------
+ | GAME_SCAN_MAX
+ | Description: How many story filenames any_save_present will take off /Z3,
+ |   matching game_catalog.cxx's own catalogue cap -- a scan that stopped short
+ |   would only ever miss a save, and missing one shows a warning that was not
+ |   needed.
+ | Author: suinevere
+ ----------------------*/
+#define GAME_SCAN_MAX 32
+
+/*----------------------
+ | same_name
+ | Description: Compares two NUL-terminated names. Character by character rather
+ |   than through strcmp, as game_catalog.cxx does, to keep <string.h> out of this
+ |   file for one comparison.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: a, b -- the names to compare
+ | Returns: 1 when they match, 0 otherwise
+ ----------------------*/
+static int same_name(const char *a, const char *b) {
+    while (*a && *a == *b) { a++; b++; }
+    return (*a == *b);
+}
+
+/*----------------------
+ | device_has_save
+ | Description: True when one device holds a save for any of `games` stories.
+ |
+ |   Listed once and matched in memory where the driver will list: 160 name
+ |   lookups against a full cartridge is seconds of boot, and the whole point of
+ |   this check is to be spent before the player sees anything. The per-name probe
+ |   is kept only as the fallback saturn_bup_list's contract asks for, and the case
+ |   that falls back -- a directory the listing found nothing in -- is also the case
+ |   where a probe has nothing to scan, so the slow path is only ever taken when it
+ |   is not slow.
+ |
+ |   Either way the question is asked by name, never by shape: a name is ours
+ |   because it is a story on this disc plus a slot digit, so another Saturn game's
+ |   file -- which can perfectly well be eight uppercase characters ending in a
+ |   digit -- is not mistaken for one. MOJOOPTS falls out on its own: it is
+ |   settings, it is named for no story, and nothing here asks for it.
+ | Author: suinevere
+ | Dependencies: saturn_backup.h
+ | Globals: N/A
+ | Params: device -- backup device id; games -- story filenames from /Z3; count --
+ |   how many
+ | Returns: 1 if any of those stories has a save on this device, 0 otherwise
+ ----------------------*/
+static int device_has_save(int device, const char games[][16], int count) {
+    char files[SATURN_BUP_LIST_MAX][12];
+    int  listed = saturn_bup_list(device, files, SATURN_BUP_LIST_MAX);
+    char name[12];
+
+    for (int g = 0; g < count; g++) {
+        for (int slot = 0; slot < SAVE_SLOTS; slot++) {
+            slot_name_for(games[g], name, slot);
+            if (listed > 0) {
+                for (int f = 0; f < listed; f++)
+                    if (same_name(files[f], name)) return 1;
+            } else {
+                char comment[12];
+                if (saturn_bup_info(device, name, comment)) return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/*----------------------
+ | any_save_present
+ | Description: True when either backup device already holds a save for any story
+ |   on the disc.
+ |
+ |   The scan reads /Z3 and leaves it as the current CD directory; main follows
+ |   this with GFS_Reset and cd_capture_root, which puts that back. scan_z3_folder
+ |   caches nothing by design -- re-establishing that directory record is what the
+ |   call is for -- so this is a real directory read, and it is why nothing calls
+ |   it until the space check has already decided it is about to complain. A boot
+ |   with room to spare never touches the drive here at all.
+ | Author: suinevere
+ | Dependencies: game_catalog.h (scan_z3_folder), saturn_backup.h
+ | Globals: g_z3_dir_valid, and the CD's current directory (both reset by main)
+ | Params: N/A
+ | Returns: 1 if any story has a save on any device, 0 otherwise
+ ----------------------*/
+static int any_save_present(void) {
+    char games[GAME_SCAN_MAX][16];
+    int  count = scan_z3_folder(games, GAME_SCAN_MAX);
+    if (count <= 0) return 0;
+
+    for (int device = SATURN_BUP_CONSOLE; device <= SATURN_BUP_CARTRIDGE; device++) {
+        if (!saturn_bup_present(device)) continue;
+        if (device_has_save(device, games, count)) return 1;
+    }
+    return 0;
+}
+
+/*----------------------
+ | save_space_warn
+ | Description: Boot-time check that backup memory can take a first save at all,
+ |   and the modal shown when it cannot.
+ |
+ |   The cost is two records, not one: the game blob at SAVE_BLOB_MAX and the map
+ |   companion at MAP_BLOB_MAX are separate files, each rounded up to whole blocks
+ |   and each charged its own header block, so their block costs add rather than
+ |   their byte counts. Both devices are asked, because either one alone is enough
+ |   to save on and the player is only stuck when neither will do.
+ |
+ |   A device that is present but unformatted ends the check without a word: it is
+ |   empty, it gets formatted at the first write, and the only way to learn its
+ |   geometry before then is to format it on a probe -- which nothing here does.
+ |
+ |   When it does warn, it reports the device that came closest rather than the
+ |   first one asked, so the numbers on screen are the best case the player has.
+ |   Internal memory and a cartridge count in blocks of different sizes, so the two
+ |   figures shown are always from the same device. A machine with no backup device
+ |   at all is left alone: there is nothing to free and nothing to advise.
+ |
+ |   So is a player who already has a save for one of the disc's games, however
+ |   short the free space now is: they have saved before, the slot they used can be
+ |   written over without asking the device for another block, and a warning about
+ |   a first save is not about them. Settings do not count -- MOJOOPTS is not a
+ |   save and any_save_present never looks at it.
+ |
+ |   menu_fade_clear before the box because boot holds the screen black for the
+ |   splash to take over, and main re-arms that hold on the way past. The
+ |   Synchronize before the loop eats the button edge that arrived with the call,
+ |   as menu_confirm does, so an in-flight press cannot answer the question.
+ | Author: suinevere
+ | Dependencies: menu.h, menu_layout.h, saturn_backup.h, saturn_glue.h,
+ |   map_model.h, input.h, console_view.h, saturn_keyboard.h, sega_sys.h
+ | Globals: g_pad, g_kbd_visible
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void save_space_warn(void) {
+    uint32_t need = 0, have = 0;
+    int measured = 0;
+
+    for (int device = SATURN_BUP_CONSOLE; device <= SATURN_BUP_CARTRIDGE; device++) {
+        uint32_t blob_need, blob_free, map_need, map_free;
+        int state = saturn_bup_space(device, SAVE_BLOB_MAX, &blob_need, &blob_free);
+        if (state == SATURN_BUP_UNFORMATTED) return;
+        if (state != SATURN_BUP_MEASURED) continue;
+        if (saturn_bup_space(device, MAP_BLOB_MAX, &map_need, &map_free)
+                != SATURN_BUP_MEASURED) continue;
+
+        uint32_t want = blob_need + map_need;
+        if (blob_free >= want) return;
+        if (!measured || (want - blob_free) < (need - have)) {
+            need = want; have = blob_free;
+        }
+        measured = 1;
+    }
+    if (!measured) return;
+    if (any_save_present()) return;
+
+    char line1[MENU_ROW_TEXT_MAX + 1];
+    char line2[MENU_ROW_TEXT_MAX + 1];
+    snprintf(line1, sizeof(line1), "You need %u blocks to save,", (unsigned int) need);
+    snprintf(line2, sizeof(line2), "only %u available.", (unsigned int) have);
+
+    menu_fade_clear();
+
+    MenuBacking backing;
+    int x0, y0, w, h;
+    menu_box_fit("BACKUP MEMORY", MENU_ROW_TEXT_MAX, 5, &x0, &y0, &w, &h);
+
+    SRL::Core::Synchronize();
+    for (;;) {
+        SaturnKeyEvent ke = saturn_keyboard_poll();
+        note_input_device(ke);
+        if (ke.kind == SATURN_KEY_ENTER) SYS_Exit(0);
+        if (ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE) return;
+        if (ke.kind != SATURN_KEY_CHAR) {
+            if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)) SYS_Exit(0);
+            if (g_pad->WasPressed(Button::B)) return;
+        }
+
+        menu_clear();
+        menu_frame(x0, y0, w, h, "BACKUP MEMORY");
+        int cy = y0 + 3;
+        menu_text(x0, w, cy, 0, line1);
+        menu_text(x0, w, cy + 1, 0, line2);
+        menu_text(x0, w, cy + 3, 0,
+            hint("A / C = Restart to BIOS", "Enter = Restart to BIOS"));
+        menu_text(x0, w, cy + 4, 0,
+            hint("B = Continue without Saving", "Esc = Continue w/o Saving"));
+        menu_sync();
     }
 }

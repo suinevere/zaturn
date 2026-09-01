@@ -393,9 +393,14 @@ static void submit_command(KeyboardState &k, const char *cmd) {
 
 /*----------------------
  | run_room_transition
- | Description: Runs an armed mood change to completion before the turn's text is
+ | Description: Runs an armed transition to completion before the turn's text is
  |   drawn, so a new room's picture and track come up first and the description
  |   arrives onto them.
+ |
+ |   Armed by either half. A mood change arms it, and so does a room whose picture
+ |   differs from the one on screen even when the track does not move -- which is
+ |   most of a walk through an authored story, and used to be the case where the
+ |   new picture simply appeared.
  |
  |   It works only because of where it sits. The interpreter prints a whole turn
  |   into the console buffer without advancing a frame, so at this point the new
@@ -412,6 +417,12 @@ static void submit_command(KeyboardState &k, const char *cmd) {
  |   The strip is the one thing that must not go with the old screen: its rows
  |   survive on_text_category's wipe, so dash_hold keeps their panel under them
  |   for every frame of the fade.
+ |
+ |   The opening room takes none of it: main holds the screen black until the first
+ |   prompt reveals it, so the ramp would be spent fading black into black.
+ |   music_transition_skip_fade commits outright instead -- picture swapped, track
+ |   started -- so what the reveal uncovers is the same screen, arrived at without
+ |   the wait.
  | Author: suinevere
  | Dependencies: music.h, dash_view.h (dash_hold), SRL
  | Globals: N/A
@@ -421,11 +432,6 @@ static void submit_command(KeyboardState &k, const char *cmd) {
 static void run_room_transition(void) {
     if (!music_transition_active()) return;
 
-    // The opening room is a special case: main() holds the screen black until the
-    // first prompt reveals it, so the forty fields this would otherwise spend are
-    // spent fading black into black. Commit it outright instead -- the picture is
-    // still swapped and the track still started, so what the reveal uncovers is
-    // the same screen, just arrived at without the wait.
     if (g_intro_reveal) { music_transition_skip_fade(); return; }
 
     music_transition_flush();

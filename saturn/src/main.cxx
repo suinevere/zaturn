@@ -418,6 +418,14 @@ int main(void) {
     // the sequence below is meant not to know which boot it is.
     room_art_release();
     item_art_close();
+    // And the map's parchment, which is the same claim against the OTHER zone:
+    // 78 KB of a 194 KB C heap, held from the first time the player opened the
+    // map and kept by a plain static across the longjmp. Left resident it is
+    // taken out of the next story's allocation, and nine of the thirty-one
+    // stories on the disc are larger than what would be left -- which is the
+    // load that silently retries for forty seconds and then says it could not
+    // read the disc.
+    title_bg_drop_held();
 
     for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
 
@@ -461,6 +469,7 @@ int main(void) {
     // that anyone can see go.
     room_art_release();
     item_art_close();
+    title_bg_drop_held();
     display_apply();              // set the menu's background image/colour + text
     // Subscribed here rather than beside the other music callbacks above, and
     // deliberately after this display_apply: the title screen picks and shows its

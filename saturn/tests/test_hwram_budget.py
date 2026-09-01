@@ -8,9 +8,12 @@ program image leaves behind: about 194 KB in the shipped build. The single
 largest thing in it is the running story image, and the shipped stories run
 from 47 KB (MZORKI) to 129 KB (LURKING, the Lurking Horror).
 
-That leaves no room for two of them. The rule this file exists to hold is:
+That leaves no room for two of them, nor for one of them beside the map's held
+parchment, which title_bg_hold keeps decoded in the same heap for the rest of
+the run. The rule this file exists to hold is:
 
-  a story image must be released before the next one is read.
+  nothing a finished session allocated may still be resident when the next
+  story is read -- the story image itself, and the held parchment beside it.
 
 mojozork's initStory frees the outgoing image, but only after main.cxx has
 already allocated the incoming one -- so on its own it makes a game switch
@@ -59,7 +62,7 @@ def heap_bytes():
 
 
 def stories():
-    """Every shipped story and its size, largest first."""
+    """Every story present in this checkout and its size, largest first."""
     if not Z3_DIR.is_dir():
         raise RuntimeError("no cd/data/Z3 to measure")
     found = [(p.name, p.stat().st_size) for p in Z3_DIR.iterdir()
@@ -67,6 +70,40 @@ def stories():
     if not found:
         raise RuntimeError("no .Z3 stories found under cd/data/Z3")
     return sorted(found, key=lambda s: -s[1])
+
+
+def declared_stories():
+    """Every .Z3 GAME.INF names -- the disc as shipped.
+
+    GAME.INF is tracked; the stories themselves are not (.gitignore excludes
+    cd/data/Z3/*.z3), so a clean checkout has three of the thirty-one. This is
+    how the arithmetic below can tell it is looking at a partial library rather
+    than at a disc whose worst case has genuinely shrunk.
+    """
+    inf = Z3_DIR / "GAME.INF"
+    if not inf.is_file():
+        return []
+    return sorted(set(re.findall("[A-Z0-9]{1,8}[.]Z3",
+                                 inf.read_text(encoding="utf-8", errors="replace"))))
+
+
+def require_full_library():
+    """Skip rather than pass on an incomplete checkout.
+
+    Every pairing below is about the worst case the disc can present. Measured
+    against three stories instead of thirty-one it would report that two of them
+    fit and call the release optional -- a green run asserting the opposite of
+    the truth, which is worse than no run at all.
+    """
+    declared = declared_stories()
+    if not declared:
+        pytest.skip("cd/data/Z3/GAME.INF is missing -- cannot tell the disc's "
+                    "worst case from this checkout's")
+    missing = [n for n in declared if not (Z3_DIR / n).is_file()]
+    if missing:
+        pytest.skip(f"{len(missing)} of {len(declared)} stories GAME.INF names "
+                    "are not in this checkout (cd/data/Z3/*.z3 is gitignored), "
+                    "so the disc's worst case cannot be measured here")
 
 
 def tga_gate(name, sector=2048):
@@ -98,6 +135,32 @@ def tga_gate(name, sector=2048):
 
 def source(*parts):
     return (SRC.joinpath(*parts)).read_text(encoding="utf-8", errors="replace")
+
+
+def code_lines(src):
+    """Statement lines only, comments stripped -- the comments here name the
+    very calls being searched for, so a plain substring match finds the prose
+    that explains a call rather than the call."""
+    out, in_block = [], False
+    for line in src.splitlines():
+        s = line.strip()
+        if in_block:
+            if "*/" in s:
+                in_block = False
+                s = s.split("*/", 1)[1].strip()
+            else:
+                continue
+        while "/*" in s:
+            head, rest = s.split("/*", 1)
+            if "*/" in rest:
+                s = head + rest.split("*/", 1)[1]
+            else:
+                s, in_block = head, True
+                break
+        s = s.split("//", 1)[0].strip()
+        if s:
+            out.append(s)
+    return out
 
 
 def function_body(text, name):
@@ -167,6 +230,7 @@ def test_two_stories_do_not_fit():
     heap = heap_bytes()
     if heap is None:
         pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    require_full_library()
     ranked = stories()
     (n1, s1), (n2, s2) = ranked[0], ranked[1]
     assert s1 + s2 > heap, (
@@ -177,6 +241,50 @@ def test_two_stories_do_not_fit():
         "against the pairing that is tightest now.")
 
 
+def test_held_map_parchment_is_released_at_the_title():
+    """The map's parchment is the second thing that outlives a session.
+
+    title_bg_hold keeps MAP.TGA decoded in the same C heap for the rest of the
+    run, and g_held is a plain static, so it survives the longjmp exactly as the
+    story image used to. Left resident it comes straight out of the next story's
+    allocation.
+    """
+    lines = code_lines((SRC / "main.cxx").read_text(encoding="utf-8", errors="replace"))
+    drops = [l for l in lines if "title_bg_drop_held()" in l]
+    assert drops, (
+        "main.cxx never calls title_bg_drop_held(), so the map's parchment "
+        "stays in the C heap across the title screen and the next story is "
+        "loaded into what is left of it. Release it beside room_art_release() "
+        "and item_art_close(), which answer for exactly the same thing in the "
+        "other zone.")
+    releases = [i for i, l in enumerate(lines) if "room_art_release()" in l]
+    for i in releases:
+        assert any("title_bg_drop_held()" in l for l in lines[i:i + 4]), (
+            "one of main.cxx's session-teardown points releases the area "
+            "archive but not the held parchment. Both are a finished session's "
+            "art; they go together or the next one is missed.")
+
+
+def test_held_map_and_the_largest_story_do_not_fit():
+    """Why that release is mandatory rather than tidy, in bytes."""
+    heap = heap_bytes()
+    if heap is None:
+        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    require_full_library()
+    resident = tga_gate("MAP.TGA") - 4096      # the gate less its own headroom
+    name, size = stories()[0]
+    assert size + resident > heap, (
+        f"{name} ({size}) and the held parchment ({resident}) now both fit in "
+        f"{heap} bytes. That does not make the release optional -- it is still "
+        "a whole session's allocation stranded across the title -- but this "
+        "check has stopped saying anything, so re-derive it.")
+    free = heap - resident
+    stranded = [n for n, s in stories() if s > free]
+    assert stranded, (
+        "no shipped story is larger than what a held parchment leaves free, so "
+        "this check no longer names a consequence. Re-derive it.")
+
+
 def test_each_claimant_fits_the_heap_alone():
     """Neither of the two big HWRAM claimants is oversized by itself. They are
     only ever meant to be resident one at a time -- the story during a session,
@@ -185,6 +293,7 @@ def test_each_claimant_fits_the_heap_alone():
     heap = heap_bytes()
     if heap is None:
         pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    require_full_library()
     name, size = stories()[0]
     assert size <= heap, (
         f"{name} ({size} bytes) does not fit the {heap}-byte C heap at all. "
@@ -209,6 +318,7 @@ def test_title_wallpaper_needs_the_story_gone():
     heap = heap_bytes()
     if heap is None:
         pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    require_full_library()
     name, size = stories()[0]
     gate = tga_gate("TITLE.TGA")
     assert size + gate > heap, (
@@ -242,6 +352,13 @@ def _print_report():
               % gate)
         print("  largest + that gate      %8d  of %d  (%s)"
               % (s1 + gate, heap, "OVER" if s1 + gate > heap else "fits"))
+        held = tga_gate("MAP.TGA") - 4096
+        print("  map parchment held       %8d  (kept for the session once opened)"
+              % held)
+        print("  largest + held parchment %8d  of %d  (%s)"
+              % (s1 + held, heap, "OVER" if s1 + held > heap else "fits"))
+        print("  stories over what a held parchment leaves free: %d of %d"
+              % (len([1 for _, s in ranked if s > heap - held]), len(ranked)))
 
 
 def main():
@@ -255,6 +372,10 @@ def main():
         (test_soft_reset_releases_the_story, "soft reset releases the story"),
         (test_release_actually_frees_the_image, "mojo_release frees the image"),
         (test_two_stories_do_not_fit, "two stories do not fit"),
+        (test_held_map_parchment_is_released_at_the_title,
+         "held parchment released at the title"),
+        (test_held_map_and_the_largest_story_do_not_fit,
+         "held parchment and largest story do not fit"),
         (test_each_claimant_fits_the_heap_alone, "each claimant fits the heap alone"),
         (test_title_wallpaper_needs_the_story_gone,
          "title wallpaper needs the story gone"),

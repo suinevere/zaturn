@@ -400,6 +400,36 @@ int main(void) {
     assert(dash_hold_painted() == 0);
     for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
 
+    /* The latch: an abandoned menu box survives frames nobody claims it on,
+       which is the stretch between ~MenuBacking and the text flush that ends
+       the box. dash_hold_latched is what a would-be claimant asks. */
+    dash_box(6, 4, 12, 8);
+    dash_frame_end();
+    assert(dash_hold_latched() == 0);
+    dash_hold_latch(1);
+    assert(dash_hold_latched() == 1);
+    for (y = 0; y < 6; y++) {
+        dash_frame_end();                      /* claimed by nobody */
+        assert(dash_cell(6, 4) == DT_CORNER_TL);
+    }
+
+    /* And what the latch cannot do, which is the whole reason saturn_readline
+       has to check it before painting the strip: a latch stops the layer
+       EXPIRING, not another claimant taking it. The box's letters are still on
+       screen at this point, so whoever does this owes them a clear on the same
+       frame. */
+    dash_build(DASH_PANEL, 19);
+    dash_frame_end();
+    assert(dash_hold_latched() == 1);          /* still latched... */
+    assert(dash_cell(6, 4) != DT_CORNER_TL);   /* ...and the box is gone anyway */
+    assert(dash_cell(0, 19) == DT_CORNER_TL);
+
+    dash_hold_latch(0);
+    assert(dash_hold_latched() == 0);
+    dash_frame_end();
+    dash_frame_end();
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+
     printf("test_dash_map: ok\n");
     return 0;
 }

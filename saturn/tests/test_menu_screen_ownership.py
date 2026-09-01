@@ -126,6 +126,39 @@ def test_marble_latch_drop_hands_the_layer_over():
         "off the game path.")
 
 
+def test_the_prompt_ends_a_menus_chrome_before_claiming_its_layer():
+    """(3b) The latch stops NBG2 expiring. It cannot stop it being taken.
+
+    saturn_readline opens with a debounce frame that repaints the input strip.
+    Entered straight out of Save or Load, that frame lands while the box's
+    letters are still in the text shadow and the image window is still aimed at
+    its rectangle -- so repainting NBG2 there produced the hollow box by
+    replacement, which is the one route the latch is blind to. Clearing the
+    box's text on that frame is what fires the teardown ~MenuBacking deferred,
+    so all three halves end together.
+    """
+    lines = code_lines(body("engine/saturn_glue.cxx", "saturn_readline"))
+    try:
+        guard = next(i for i, l in enumerate(lines) if "dash_hold_latched()" in l)
+        claim = next(i for i, l in enumerate(lines) if re.fullmatch(r"dash_hold\(\);", l))
+    except StopIteration:
+        raise AssertionError(
+            "saturn_readline claims NBG2 for the input strip without first "
+            "asking whether a menu box is still owed its teardown "
+            "(dash_hold_latched). Entered from Save or Load that repaint takes "
+            "the marble out from under the box's own letters.")
+    assert guard < claim, (
+        "the dash_hold_latched() check comes after the dash_hold() it is meant "
+        "to guard, so the strip is painted over the box before anything asks.")
+    tail = lines[guard:claim]
+    assert any("menu_clear()" in l for l in tail) and any("render_console()" in l for l in tail), (
+        "the latched branch does not replace the box's text. Clearing it is "
+        "what dirties the shadow, and a dirty shadow is the only thing that "
+        "fires the window-off and latch-drop ~MenuBacking deferred -- without "
+        "it the box's letters stay lit over a marble that has just become the "
+        "input strip.")
+
+
 def test_the_two_comments_that_hid_this_still_tell_the_truth():
     """g_menu_page_fade is live in game. Both of the bugs above came from source
     that said otherwise, so the claim is worth pinning where it is made."""

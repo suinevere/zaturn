@@ -221,9 +221,25 @@ int dash_hold_painted(void);
  |   first unclaimed frame while the window is still suppressing the picture, so
  |   the box goes hollow -- backdrop colour and the menu's own letters, sitting
  |   there until the flush finally arrives.
+ |
+ |   It stops the layer EXPIRING, and only that. A second claimant painting over
+ |   it -- dash_hold repainting the input strip, say -- takes the marble out from
+ |   under a box whose letters are still lit and produces the same hollow box the
+ |   latch exists to prevent. dash_hold_latched is how such a claimant can tell
+ |   that a box is still owed its teardown and clear its text first, so the three
+ |   halves of the chrome end on one frame.
  | Author: suinevere
  ----------------------*/
 void dash_hold_latch(int on);
+
+/*----------------------
+ | dash_hold_latched
+ | Description: Whether a latch is in force -- that is, whether a menu box has
+ |   been abandoned by its owner and is still waiting on the text flush that ends
+ |   it. Read by anyone about to claim NBG2 for something else.
+ | Author: suinevere
+ ----------------------*/
+int dash_hold_latched(void);
 
 /*----------------------
  | dash_map_begin

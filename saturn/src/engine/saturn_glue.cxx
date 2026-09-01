@@ -551,6 +551,25 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
     k.cursor = 0;
     k.submitted = 0;
     cp_reset(&cpanel);
+    console_scroll_to_output();
+    // A prompt entered straight out of a menu -- Save and Load are the two that
+    // leave the frame loop to get here -- still has that menu's box on screen:
+    // its letters are in the text shadow, the image window is still aimed at its
+    // rectangle, and NBG2 still holds its marble, because ~MenuBacking owes all
+    // three to the next frame that changes the text. Nothing below draws until
+    // the loop's first pass, so the debounce frame under it used to repaint the
+    // strip over that marble and leave the box's letters on bare backdrop
+    // colour -- the hollow box dash_hold_latch exists to prevent, arrived at by
+    // a second claimant rather than by expiry, which is the one way the latch
+    // cannot stop. Clearing the box's text here is what fires the owed teardown,
+    // so the marble, the window and the letters end on one frame together.
+    // Gated on the latch so an ordinary turn, which has no chrome to take down,
+    // keeps its own composed screen through the debounce instead of blinking
+    // its input strip empty once per command.
+    if (dash_hold_latched()) {
+        menu_clear();
+        render_console();
+    }
     dash_hold();
     SRL::Core::Synchronize();
     int sug_index = 0;
@@ -561,7 +580,6 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
        is composed for the ramp to reveal; revealing at the call site would spend
        the ramp on a half-drawn screen and snap the rest in at the end of it. */
     bool reveal_owed = false;
-    console_scroll_to_output();
     /* The game hand-off ends here. Everything above has run for this turn --
        run_room_transition has settled the room's picture and track -- so this is
        the first moment the opening frame is complete and still unseen. Compose it,

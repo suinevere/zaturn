@@ -407,6 +407,11 @@ void dash_hold_latch(int on)
     g_latched = on ? 1 : 0;
 }
 
+int dash_hold_latched(void)
+{
+    return g_latched;
+}
+
 void dash_frame_end(void)
 {
     if (!g_touched && !g_latched) dash_build(DASH_NONE, 0);

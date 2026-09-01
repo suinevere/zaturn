@@ -118,8 +118,12 @@ void menu_clear(void) {
  | g_menu_intro_fade
  | Description: See menu.h. 0 = the next menu_select draws instantly; >0 = it
  |   fades its first frame up from black over that many fields, then clears
- |   itself back to 0. Only main() sets it, once, for the title -> mode-select
- |   hand-off; every other menu_select caller leaves it 0 and is unaffected.
+ |   itself back to 0. main() sets it for the title -> mode-select hand-off, and
+ |   save_ui's choose_device sets it for the save/load pickers; every other
+ |   menu_select caller leaves it 0 and draws instantly. Whoever sets it owes the
+ |   ramp a screen that is actually being held black -- a fade-in over a released
+ |   one reaches the picture and the backdrop but not the box, since the release
+ |   has already taken NBG2 and NBG3 off the offset channel.
  | Author: suinevere
  ----------------------*/
 int g_menu_intro_fade = 0;
@@ -127,9 +131,11 @@ int g_menu_intro_fade = 0;
 /*----------------------
  | g_menu_page_fade
  | Description: See menu.h. Ramp length the Options pages (menu_pages.cxx) read
- |   for their entry/exit fades; 0 = instant. main() sets it around its
- |   options_menu() call and clears it after, so in-game page openings stay
- |   instant.
+ |   for their entry/exit fades; 0 = instant. main() sets it before the mode menu
+ |   and deliberately leaves it set, so it is live in game too -- every reader
+ |   here has to hold for the in-game menus as well as the title-screen ones. It
+ |   used to be cleared at the game hand-off, and a reader written against that
+ |   is what left the save/load pickers ramping a screen nobody was holding.
  | Author: suinevere
  ----------------------*/
 int g_menu_page_fade = 0;
@@ -447,8 +453,18 @@ MenuBacking::MenuBacking() {
  |   over it afterwards. Dropping the window there put the wallpaper back inside
  |   the box's rectangle while its text was still lit, so a main-menu pick showed
  |   the picture through the box for the whole of the outgoing fade.
+ |
+ |   The dash_hold is the hand-over that the latch drop needs. Dropping the latch
+ |   only says the box no longer owns NBG2; it does not say who does, and in game
+ |   the answer is the input strip, which is not repainted until the next prompt
+ |   frame. Between the two the layer went unclaimed, dash_frame_end expired it,
+ |   and the window coming off in the same breath left the wallpaper and the
+ |   console text sitting there with no strip under them. dash_hold paints it here
+ |   instead, and is a no-op wherever there is no game to paint it for -- the
+ |   title screen and the menus above it, where expiring is the correct end.
  | Author: suinevere
- | Dependencies: console_view.h (image_window_off)
+ | Dependencies: console_view.h (image_window_off), dash_view.h (dash_hold),
+ |   dash_map.h (dash_hold_latch)
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
@@ -456,6 +472,7 @@ MenuBacking::MenuBacking() {
 static void menu_backing_window_off(void) {
     image_window_off();
     dash_hold_latch(0);
+    dash_hold();
 }
 
 /*----------------------

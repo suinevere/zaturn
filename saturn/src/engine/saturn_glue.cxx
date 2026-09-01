@@ -608,13 +608,24 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             // one through the same single-shot the Load path uses.
             const char *vcmd = (g_verbosity != verb_was) ? verbosity_command() : nullptr;
             // Every exit below that submits a command ends the turn and hands the
-            // screen to the interpreter -- and, for Save and Load, to its own
-            // device and slot pickers, which draw at normal brightness. None of
-            // them comes back through the frame loop, so none of them can be
-            // revealed there and all of them have to release the black here. Only
-            // the exits that return to this same prompt are ramped back up.
-            if (om == OM_SAVE || om == OM_RESTORE || vcmd != nullptr) menu_ramp_cut();
-            else                                                      reveal_owed = true;
+            // screen to the interpreter, which draws at normal brightness. None
+            // of them comes back through the frame loop, so none of them can be
+            // revealed there and each has to release the black itself. Only the
+            // exits that return to this same prompt are ramped back up.
+            //
+            // Save and Load are the two that release it somewhere else. Their
+            // device and slot pickers fade IN from black -- choose_device arms
+            // g_menu_intro_fade, which is live in game because main leaves
+            // g_menu_page_fade set -- so releasing here handed them a screen
+            // already lit, and their ramp then drove the picture and the backdrop
+            // alone while the box and its text sat at full brightness on the
+            // black. The hooks own the release at the far end of their own
+            // pickers now, exactly as they already own music_resume.
+            const bool hook_owns_screen = (om == OM_SAVE || om == OM_RESTORE);
+            if (!hook_owns_screen) {
+                if (vcmd != nullptr) menu_ramp_cut();
+                else                 reveal_owed = true;
+            }
             if (om == OM_SAVE)    { if (vcmd) g_verb_pending = 1; submit_command(k, "save");    continue; }
             if (om == OM_RESTORE) { if (vcmd) g_verb_pending = 1; submit_command(k, "restore"); continue; }
             if (vcmd) { submit_command(k, vcmd); continue; }
@@ -947,9 +958,18 @@ extern "C" int saturn_load_blob(uint8_t *buf, uint32_t maxlen) {
     if (g_restore_slot >= 0) {
         device = g_restore_device; slot = g_restore_slot;
         g_restore_device = -1; g_restore_slot = -1;
-    } else if (!choose_dest("RESTORE - device?", "RESTORE - slot?", &device, &slot)) {
-        music_resume();
-        return 0;
+    } else {
+        int picked = choose_dest("RESTORE - device?", "RESTORE - slot?", &device, &slot);
+        // choose_dest ends held black on every one of its exits, which is what
+        // the title-menu Load flow it was written for wants -- there the game
+        // load runs under the same black and main's reveal lifts it. Nothing is
+        // loading here: the empty-slot box below, the story's own reply and the
+        // prompt after it all draw at normal brightness, so this is where the
+        // release belongs. Without it the prompt came back to a screen that
+        // stayed black until the player opened a menu, which ramps it up on the
+        // way out and so looked like the fix rather than the symptom.
+        menu_ramp_cut();
+        if (!picked) { music_resume(); return 0; }
     }
     char name[12];
     make_slot_name(name, slot);

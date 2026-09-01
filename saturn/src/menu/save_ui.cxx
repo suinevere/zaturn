@@ -100,7 +100,12 @@ int choose_device(const char *title) {
     if (saturn_bup_present(SATURN_BUP_CARTRIDGE)) {
         dev_items[ndev] = "Cartridge"; dev_ids[ndev] = SATURN_BUP_CARTRIDGE; ndev++;
     }
-    g_menu_intro_fade = g_menu_page_fade;   // fades in from black in the title-menu Load flow; no-op in-game
+    // Fades in from black -- in game as well as under the title menu, since
+    // g_menu_page_fade stays set once a game is running. So whoever opens this
+    // has to hand it a screen that IS black: saturn_glue.cxx used to release
+    // the hold before submitting "save", and this ramp then ran on a lit screen
+    // and drove only the picture and the backdrop.
+    g_menu_intro_fade = g_menu_page_fade;
     static int dev_sel = 0;   // held across visits, like every other list
     int d = menu_select_at(title, dev_items, ndev, &dev_sel);
     return (d < 0) ? -1 : dev_ids[d];

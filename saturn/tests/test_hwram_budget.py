@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Hold the High Work RAM budget against the stories actually shipped.
+
+HWRAM is the C heap -- malloc/free/new in saturn_compat.cxx route there -- and
+it is not a megabyte. sgl.linker puts __heap_start immediately after .bss and
+__heap_end at the SGL work area (0x060C0000), so the heap is whatever the
+program image leaves behind: about 194 KB in the shipped build. The single
+largest thing in it is the running story image, and the shipped stories run
+from 47 KB (MZORKI) to 129 KB (LURKING, the Lurking Horror).
+
+That leaves no room for two of them. The rule this file exists to hold is:
+
+  a story image must be released before the next one is read.
+
+mojozork's initStory frees the outgoing image, but only after main.cxx has
+already allocated the incoming one -- so on its own it makes a game switch
+demand both at once. soft_reset_to_title() is what closes that window, by
+releasing the outgoing image on the way back to the title screen, where the
+heap then reads as it does on a cold boot.
+
+Without that release the failure is silent and looks like a hang: the story
+malloc returns NULL, main's retry loop spends 300 attempts x 8 fields under a
+held-black fade -- roughly forty seconds of black screen -- and only then says
+"Could not load". ZORK1 -> HORROR is the pair that cannot ever fit; the pairs
+that do fit leave the outgoing image stranded mid-heap and fragment it, so the
+switch after that one fails instead.
+
+Run as a human-readable report: python saturn/tests/test_hwram_budget.py
+Run as tests: pytest saturn/tests/test_hwram_budget.py
+"""
+import re
+import sys
+import pathlib
+
+import pytest
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+SRC = ROOT / "saturn" / "src"
+Z3_DIR = ROOT / "saturn" / "cd" / "data" / "Z3"
+MAP_FILE = (ROOT / "saturn" / "BuildDrop"
+            / "Zaturn (USA) (Netlink Edition).map")
+
+
+def heap_bytes():
+    """The HWRAM C heap, measured off the link map.
+
+    __heap_start moves with .bss, so this is a property of the build and not a
+    constant anything declares. Returns None when there is no map to read --
+    BuildDrop is not committed, so a clean checkout has none.
+    """
+    if not MAP_FILE.is_file():
+        return None
+    text = MAP_FILE.read_text(encoding="utf-8", errors="replace")
+    start = re.search(r"(?m)^\s*(0x[0-9a-fA-F]+)\s+__heap_start\s*=", text)
+    end = re.search(r"(?m)^\s*(0x[0-9a-fA-F]+)\s+__heap_end\s*=", text)
+    if start is None or end is None:
+        return None
+    return int(end.group(1), 16) - int(start.group(1), 16)
+
+
+def stories():
+    """Every shipped story and its size, largest first."""
+    if not Z3_DIR.is_dir():
+        raise RuntimeError("no cd/data/Z3 to measure")
+    found = [(p.name, p.stat().st_size) for p in Z3_DIR.iterdir()
+             if p.is_file() and p.suffix.upper() == ".Z3"]
+    if not found:
+        raise RuntimeError("no .Z3 stories found under cd/data/Z3")
+    return sorted(found, key=lambda s: -s[1])
+
+
+def tga_gate(name, sector=2048):
+    """What tga_decode demands be FREE before it will decode one wallpaper.
+
+    Its literal gate -- `span + palsize + 4096`, where span is the pixel plane
+    plus the leading partial sector it reads and shifts off, and palsize is the
+    256-entry HighColor palette. Modelled off the shipped file's own header
+    rather than assumed, the same way test_lwram_budget measures its archives.
+    """
+    p = ROOT / "saturn" / "cd" / "data" / "TGA" / name
+    if not p.is_file():
+        raise RuntimeError(f"no {name} under cd/data/TGA to measure")
+    hdr = p.read_bytes()[:18]
+    idlen, cmaptype, imgtype = hdr[0], hdr[1], hdr[2]
+    cmaplen = hdr[5] | (hdr[6] << 8)
+    cmapbits = hdr[7]
+    w = hdr[12] | (hdr[13] << 8)
+    h = hdr[14] | (hdr[15] << 8)
+    if cmaptype != 1 or imgtype != 1 or hdr[16] != 8:
+        raise RuntimeError(f"{name} is not the 8bpp uncompressed paletted TGA "
+                           "tga_decode accepts -- it would be refused on format "
+                           "before any of this arithmetic mattered")
+    pixoff = 18 + idlen + cmaplen * (cmapbits // 8)
+    span = (pixoff % sector) + w * h
+    palsize = 256 * 2                    # sizeof(SRL::Types::HighColor)
+    return span + palsize + 4096
+
+
+def source(*parts):
+    return (SRC.joinpath(*parts)).read_text(encoding="utf-8", errors="replace")
+
+
+def function_body(text, name):
+    """The body of a brace-balanced C/C++ function definition, or None.
+
+    Walked rather than regexed because the bodies here contain braces of their
+    own, and a lazy match would stop at the first inner one and read as empty.
+    """
+    m = re.search(r"(?m)^[A-Za-z_][\w :*&]*\b" + re.escape(name) + r"\s*\([^;{]*\)\s*\{", text)
+    if m is None:
+        return None
+    depth, i = 0, m.end() - 1
+    for j in range(i, len(text)):
+        if text[j] == "{":
+            depth += 1
+        elif text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[i:j + 1]
+    return None
+
+
+def test_soft_reset_releases_the_story():
+    """The regression guard: the outgoing image goes back before the title.
+
+    A source check rather than a runtime one because there is nowhere on the
+    Saturn to observe it from -- the failure is a heap that will not satisfy
+    the next load, forty seconds later, with no message until it gives up.
+    """
+    body = function_body(source("engine", "soft_reset.cxx"), "soft_reset_to_title")
+    assert body is not None, (
+        "soft_reset_to_title is not where this test can find it -- if it moved "
+        "or changed shape, move this check with it rather than deleting it.")
+    assert "mojo_release" in body, (
+        "soft_reset_to_title() does not release the story image. The outgoing "
+        "story then stays in the C heap across the title screen, and mojozork's "
+        "initStory does not free it until main.cxx has already allocated the "
+        "incoming one -- so a game switch demands both at once in a heap that "
+        "cannot hold two. See this file's header for the sizes.")
+
+
+def test_release_actually_frees_the_image():
+    """mojo_release has to drop the buffer, not just forget about it."""
+    text = (ROOT / "saturn" / "src" / "engine" / "mojozork_saturn.c").read_text(
+        encoding="utf-8", errors="replace")
+    body = function_body(text, "mojo_release")
+    assert body is not None, (
+        "mojo_release is not defined in mojozork_saturn.c -- it is the only "
+        "translation unit that can see mojozork.c's GState.")
+    tight = re.sub(r"\s+", "", body)
+    assert "free(GState->story)" in tight, (
+        "mojo_release does not free the story image, which is the whole reason "
+        "it exists.")
+    assert "GState->story=NULL" in tight, (
+        "mojo_release frees the story without clearing GState->story, so the "
+        "next initStory frees the same pointer twice and saturn_story_data "
+        "hands the typeahead a dangling image.")
+
+
+def test_two_stories_do_not_fit():
+    """Why the release is mandatory rather than tidy.
+
+    Skipped rather than guessed at when BuildDrop has no map: the heap size is
+    a property of the built image, and a made-up number here would make this
+    pass while proving nothing.
+    """
+    heap = heap_bytes()
+    if heap is None:
+        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    ranked = stories()
+    (n1, s1), (n2, s2) = ranked[0], ranked[1]
+    assert s1 + s2 > heap, (
+        f"the two largest stories ({n1} {s1} + {n2} {s2} = {s1 + s2}) now fit "
+        f"in the {heap}-byte heap together. That does not make the release "
+        "optional -- the outgoing image still strands mid-heap and fragments "
+        "it -- but this check has stopped saying anything, so re-derive it "
+        "against the pairing that is tightest now.")
+
+
+def test_each_claimant_fits_the_heap_alone():
+    """Neither of the two big HWRAM claimants is oversized by itself. They are
+    only ever meant to be resident one at a time -- the story during a session,
+    the decoded wallpaper at the title -- so this is the shape the release
+    produces, and it has to hold or nothing works at all."""
+    heap = heap_bytes()
+    if heap is None:
+        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    name, size = stories()[0]
+    assert size <= heap, (
+        f"{name} ({size} bytes) does not fit the {heap}-byte C heap at all. "
+        "Nothing can load it. Trim the program image (__heap_start moves with "
+        ".bss) or drop the story.")
+    gate = tga_gate("TITLE.TGA")
+    assert gate <= heap, (
+        f"the title wallpaper asks tga_decode for {gate} free bytes of a "
+        f"{heap}-byte heap. The title screen would be black on a cold boot.")
+
+
+def test_title_wallpaper_needs_the_story_gone():
+    """The second half of why the release is mandatory, and the half that is
+    visible without picking anything.
+
+    tga_decode refuses outright when HighWorkRam has less free than
+    span + palette + 4096, and says nothing. Come back to the title with the
+    outgoing story still resident and that gate is what fails: no logo, no
+    wallpaper, a black title screen -- before the player has even chosen the
+    next game.
+    """
+    heap = heap_bytes()
+    if heap is None:
+        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    name, size = stories()[0]
+    gate = tga_gate("TITLE.TGA")
+    assert size + gate > heap, (
+        f"{name} ({size}) and the title wallpaper's gate ({gate}) now both fit "
+        f"in {heap} bytes. That does not make the release optional -- the "
+        "outgoing image still strands mid-heap and fragments what the next "
+        "story needs contiguously -- but this check has stopped saying "
+        "anything, so re-derive it against what is tightest now.")
+
+
+def _print_report():
+    heap = heap_bytes()
+    ranked = stories()
+    print("  HWRAM C heap             %8s  (%s)"
+          % (heap if heap is not None else "unknown",
+             "measured from BuildDrop map" if heap is not None
+             else "no map -- build once"))
+    print("  stories shipped          %8d" % len(ranked))
+    for name, size in ranked[:3]:
+        print("    %-14s       %8d" % (name, size))
+    print("    ...")
+    for name, size in ranked[-2:]:
+        print("    %-14s       %8d" % (name, size))
+    if heap is not None:
+        (n1, s1), (n2, s2) = ranked[0], ranked[1]
+        print("  ------------------------------------")
+        print("  two largest at once      %8d  of %d  (%s)"
+              % (s1 + s2, heap, "OVER" if s1 + s2 > heap else "fits"))
+        gate = tga_gate("TITLE.TGA")
+        print("  title wallpaper gate     %8d  (what tga_decode wants free)"
+              % gate)
+        print("  largest + that gate      %8d  of %d  (%s)"
+              % (s1 + gate, heap, "OVER" if s1 + gate > heap else "fits"))
+
+
+def main():
+    try:
+        _print_report()
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+
+    checks = [
+        (test_soft_reset_releases_the_story, "soft reset releases the story"),
+        (test_release_actually_frees_the_image, "mojo_release frees the image"),
+        (test_two_stories_do_not_fit, "two stories do not fit"),
+        (test_each_claimant_fits_the_heap_alone, "each claimant fits the heap alone"),
+        (test_title_wallpaper_needs_the_story_gone,
+         "title wallpaper needs the story gone"),
+    ]
+    fails = 0
+    for fn, label in checks:
+        try:
+            fn()
+        except AssertionError as e:
+            print(f"\ntest_hwram_budget: FAILED -- {label}\n{e}", file=sys.stderr)
+            fails += 1
+        except Exception as e:                      # a skip outside pytest
+            print(f"\ntest_hwram_budget: SKIPPED -- {label} ({e})")
+
+    if fails:
+        sys.exit(1)
+    print("\ntest_hwram_budget: OK")
+
+
+if __name__ == "__main__":
+    main()

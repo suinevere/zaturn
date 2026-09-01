@@ -124,6 +124,13 @@ void soft_reset_to_title(void) {
     // start; the online one is rebuilt only if the player dials again.
     saturn_typeahead_release();
     online_typeahead_release();
+    // And the story image, after the typeahead that indexes it: it is the one
+    // big HWRAM claimant, and the ~194 KB C heap cannot hold two of them.
+    // initStory would free it, but not until the next mojo_boot, by which point
+    // main has already allocated the incoming one -- so releasing it here is
+    // what makes a game switch possible at all, and what leaves the title
+    // screen's wallpaper decode the 82 KB it refuses to work without.
+    mojo_release();
     // And the catalogue, so the next load re-captures /Z3 from the root rather
     // than trusting a record from before the game that just ended.
     game_catalog_invalidate();

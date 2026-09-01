@@ -106,6 +106,17 @@ void mojo_boot(uint8_t *story, uint32_t len, int seed);
 void mojo_run(void);
 
 /*----------------------
+ | mojo_release
+ | Description: Frees the loaded story image (in mojozork_saturn.c) and clears
+ |   the interpreter's pointers into it. The C heap is ~194 KB and a story is up
+ |   to 129 KB, so nothing between one session and the next -- the title
+ |   wallpaper's own decode included -- fits beside an image that was not given
+ |   back. A no-op before any story has been booted.
+ | Author: suinevere
+ ----------------------*/
+void mojo_release(void);
+
+/*----------------------
  | saturn_sound_effect
  | Description: The Z-machine sound_effect hook (in sound.cxx).
  | Author: suinevere

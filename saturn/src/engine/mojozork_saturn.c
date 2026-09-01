@@ -75,6 +75,37 @@ void mojo_run(void) {
 }
 
 /*----------------------
+ | mojo_release
+ | Description: Frees the loaded story image and its filename copy and clears
+ |   every pointer into them, so the C heap comes back to what a cold boot has.
+ |   initStory frees the outgoing image too, but not until mojo_boot -- by which
+ |   point main has already allocated the incoming one, and the heap is ~194 KB
+ |   against stories up to 129 KB, so the two never fit. Between them sits the
+ |   title screen, whose wallpaper decode refuses outright without 82 KB of the
+ |   same heap free. So the release belongs on the way back to the title rather
+ |   than at the next load, and soft_reset_to_title is where it is called from.
+ |   A no-op before any story has been booted.
+ | Author: suinevere
+ | Dependencies: ../../mojozork.c (GState), saturn_compat.h (free)
+ | Globals: GState
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void mojo_release(void) {
+    if (GState == NULL) return;
+    if (GState->story != NULL) { free(GState->story); GState->story = NULL; }
+    if (GState->story_filename != NULL) {
+        free(GState->story_filename);
+        GState->story_filename = NULL;
+    }
+    GState->story_len = 0;
+    GState->pc = NULL;
+    GState->sp = NULL;
+    GState->bp = 0;
+    GState->quit = 1;
+}
+
+/*----------------------
  | saturn_story_data
  | Description: Exposes the loaded story image so the typeahead can decode the
  |   game's own dictionary/grammar at runtime.

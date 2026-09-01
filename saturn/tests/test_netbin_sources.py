@@ -10,6 +10,13 @@ src/net/netbin_pages.cxx into a plain `make all`, handing the linker
 duplicate main()/soft-reset symbols. Comment lines inside the NETBIN block
 are stripped before any of this is scanned, so a source commented out of the
 list cannot still register as present.
+
+Runs both ways: `python saturn/tests/test_netbin_sources.py` prints the
+findings and exits non-zero, and `pytest saturn/tests/test_netbin_sources.py`
+collects test_netbin_sources. The pytest half is why main() returns a status
+instead of calling sys.exit -- a bare script with no test_* function collects
+zero items and reports success, which is how this check spent a whole branch
+being invoked and proving nothing.
 """
 import re, sys, pathlib
 
@@ -146,7 +153,18 @@ def main():
             fails += 1
 
     if fails:
-        print(f"test_netbin_sources: {fails} FAILED", file=sys.stderr); sys.exit(1)
+        print(f"test_netbin_sources: {fails} FAILED", file=sys.stderr)
+        return 1
     print("test_netbin_sources: OK")
+    return 0
 
-main()
+
+def test_netbin_sources():
+    """The pytest entry point. main() prints every finding to stderr, which
+    pytest captures and shows on failure, so the status code is all this
+    needs to assert on."""
+    assert main() == 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

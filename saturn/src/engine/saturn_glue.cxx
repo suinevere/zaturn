@@ -60,6 +60,7 @@ extern "C" {
 #include "typeahead_solution.h"
 }
 #include "app_state.h"
+#include "video/item_art.h"
 
 using namespace SRL::Types;
 
@@ -483,10 +484,22 @@ static void run_room_transition(void) {
  |   block) and exit the frame loop; their own device/slot picker runs later,
  |   inside saturn_save_blob/saturn_load_blob, entirely outside this
  |   function, where no reset placed here could reach it.
+ |   The same three blocking sites, and the keyboard-interface branch of the
+ |   editor split, each take the item picture down first. render_command_panel
+ |   is the only thing that ever puts one up and the only thing that takes it
+ |   down, so any path that stops running it leaves NBG1 latched -- and NBG1
+ |   sits above the marble and the wallpaper, so a treasure would sit on top
+ |   of the Options menu, the map reached from it, the controls and sound
+ |   pages, and the software keyboard. item_art_hide early-outs on an already
+ |   blank pane, so the calls cost nothing on the frames that do not need
+ |   them. The archive itself is left resident: it is bound to the overlay's
+ |   own lifetime by render_command_panel, and the player is still inside that
+ |   overlay while a menu is up over it.
  | Author: suinevere
  | Dependencies: console.h, console_view.h, command_view.h, room_model.h,
  |   keyboard.h, saturn_keyboard.h, input.h, menu.h, menu_pages.h, soft_reset.h,
- |   sound.h, music.h, typeahead.h, dash_view.h (dash_hold), SRL
+ |   sound.h, music.h, typeahead.h, dash_view.h (dash_hold), video/item_art.h,
+ |   SRL
  | Globals: g_save_device, g_save_slot, g_last_device, g_last_slot,
  |   g_restore_device, g_restore_slot, g_autocmd, g_kbd_visible, g_cmd_mode,
  |   g_scroll, g_output_start, g_pad, g_typeahead_root
@@ -576,6 +589,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             // before that picker is even open. saturn_save_blob/saturn_load_blob
             // call music_resume() themselves once THAT closes instead.
             int verb_was = g_verbosity;
+            item_art_hide();
             music_duck();
             menu_ramp_down();
             int om = options_menu();
@@ -601,6 +615,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             continue;
         }
         if (ke.kind == SATURN_KEY_F11) {
+            item_art_hide();
             menu_ramp_down();
             keyboard_controls_page();
             mode_toggle_reset();
@@ -610,6 +625,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         }
         if (ke.kind == SATURN_KEY_F12) {
             if (music_cdda_has_audio() || sound_has_audio()) {
+                item_art_hide();
                 menu_ramp_down();
                 sound_options_page();
                 mode_toggle_reset();
@@ -656,6 +672,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             render_command_panel(cpanel, *room_model_get(), cw);
         } else {
             DictionaryWord* selected; int cw_len;
+            item_art_hide();
             typeahead_edit(k, g_typeahead_root, sug_index, sug_last, ke, pad, selected, cw_len);
             pad_scroll_update();
             render_console();

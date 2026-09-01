@@ -1,7 +1,8 @@
 /*----------------------
  | cgl.c
  | Description: See cgl.h. The LZSS is the Okumura variant the disc uses for
- |   *.CGZ and *.SLD alike, ported from analysis/zork_cgl.py.
+ |   *.CGZ and *.SLD alike, ported from analysis/zork_cgl.py, plus the CGL
+ |   record layout built on top of it.
  | Author: suinevere
  | Dependencies: cgl.h
  | Globals: g_ring
@@ -18,48 +19,48 @@
 static unsigned char g_ring[CGL_RING];
 
 /*----------------------
- | cgl_decode
+ | cgl_lzss
  | Description: See cgl.h.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_ring
- | Params: rec, rec_len, dst, dst_cap -- see cgl.h
+ | Params: src, src_len, dst, dst_cap -- see cgl.h
  | Returns: bytes written, or 0 on refusal
  ----------------------*/
-unsigned long cgl_decode(const unsigned char *rec, unsigned long rec_len,
-                         unsigned char *dst, unsigned long dst_cap) {
+unsigned long cgl_lzss(const unsigned char *src, unsigned long src_len,
+                       unsigned char *dst, unsigned long dst_cap) {
     unsigned long size, out = 0, i;
     unsigned int flags = 0, nbits = 0, r = CGL_RING - 18;
 
-    if (rec == 0 || dst == 0) return 0;
-    if (rec_len < (unsigned long) CGL_PAL_BYTES + 4) return 0;
+    if (src == 0 || dst == 0) return 0;
+    if (src_len < 4) return 0;
 
-    size = (unsigned long) rec[CGL_PAL_BYTES]
-         | ((unsigned long) rec[CGL_PAL_BYTES + 1] << 8)
-         | ((unsigned long) rec[CGL_PAL_BYTES + 2] << 16)
-         | ((unsigned long) rec[CGL_PAL_BYTES + 3] << 24);
+    size = (unsigned long) src[0]
+         | ((unsigned long) src[1] << 8)
+         | ((unsigned long) src[2] << 16)
+         | ((unsigned long) src[3] << 24);
     if (size == 0 || size > dst_cap) return 0;
 
     for (i = 0; i < CGL_RING; i++) g_ring[i] = 0;
 
-    i = (unsigned long) CGL_PAL_BYTES + 4;
-    while (i < rec_len && out < size) {
+    i = 4;
+    while (i < src_len && out < size) {
         unsigned int bit;
         if (nbits == 0) {
-            flags = rec[i++];
+            flags = src[i++];
             nbits = 8;
-            if (i >= rec_len) break;
+            if (i >= src_len) break;
         }
         bit = flags & 1u; flags >>= 1; nbits--;
         if (bit) {
-            unsigned char c = rec[i++];
+            unsigned char c = src[i++];
             dst[out++] = c;
             g_ring[r] = c; r = (r + 1u) & (CGL_RING - 1u);
         } else {
             unsigned int off, len, k;
-            if (i + 1 >= rec_len) break;
-            off = ((unsigned int) (rec[i + 1] & 0xf0u) << 4) | (unsigned int) rec[i];
-            len = (unsigned int) (rec[i + 1] & 0x0fu) + 3u;
+            if (i + 1 >= src_len) break;
+            off = ((unsigned int) (src[i + 1] & 0xf0u) << 4) | (unsigned int) src[i];
+            len = (unsigned int) (src[i + 1] & 0x0fu) + 3u;
             i += 2;
             for (k = 0; k < len && out < size; k++) {
                 unsigned char c = g_ring[(off + k) & (CGL_RING - 1u)];
@@ -69,6 +70,24 @@ unsigned long cgl_decode(const unsigned char *rec, unsigned long rec_len,
         }
     }
     return out;
+}
+
+/*----------------------
+ | cgl_decode
+ | Description: See cgl.h. A CGL record is its own CLUT followed by an LZSS
+ |   stream, so this is cgl_lzss with the palette stepped over.
+ | Author: suinevere
+ | Dependencies: cgl_lzss
+ | Globals: N/A
+ | Params: rec, rec_len, dst, dst_cap -- see cgl.h
+ | Returns: bytes written, or 0 on refusal
+ ----------------------*/
+unsigned long cgl_decode(const unsigned char *rec, unsigned long rec_len,
+                         unsigned char *dst, unsigned long dst_cap) {
+    if (rec == 0) return 0;
+    if (rec_len < (unsigned long) CGL_PAL_BYTES + 4) return 0;
+    return cgl_lzss(rec + CGL_PAL_BYTES, rec_len - (unsigned long) CGL_PAL_BYTES,
+                    dst, dst_cap);
 }
 
 /*----------------------

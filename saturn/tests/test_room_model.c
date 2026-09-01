@@ -23,7 +23,12 @@
  |   actually converges: the shared child is mutated into the second room's
  |   family between the two refresh_room calls (standing in for the story's own
  |   object-tree edits as the player walks), and the resolved player's own
- |   children come back as the carried set -- and room_model_object_word
+ |   children come back as the carried set -- and a third synthetic image for
+ |   the pick-up heuristic, which answers the same question without a room
+ |   change: a thing moved out of a container and under the player between two
+ |   refreshes of one room is the only child count in that room to go up, and
+ |   moving it back is not mistaken for a second answer -- and
+ |   room_model_object_word
  |   against the real image: the mailbox (160) and door (181) each carry a
  |   synonym property of dictionary addresses, found without hardcoding its
  |   property number, decoding to the dictionary's truncated forms ("mailbo",
@@ -252,6 +257,74 @@ int main(void) {
             assert(m->carried[0] == 6);
             assert(m->carried[1] == 7);
         }
+    }
+
+    /* A third synthetic image, for the player who picks something up without
+       leaving the room -- the ordinary opening move, which the intersection
+       above cannot see at all. Room 1 holds a container (4) and the player (3);
+       the container holds one thing (6). Moving that thing under the player
+       between two refreshes of the same room is the only child count in the
+       room that goes up, and that is what names the player. */
+    {
+        unsigned char img[210];
+        int i;
+        for (i = 0; i < 210; i++) img[i] = 0;
+
+        img[0x08] = 0x00; img[0x09] = 16;
+        img[0x0a] = 0x00; img[0x0b] = 64;
+        img[0x0c] = 0x00; img[0x0d] = 204;
+
+        img[16] = 0;
+        img[17] = 6;
+        img[18] = 0; img[19] = 4;
+
+        img[20] = 0x4E; img[21] = 0x97; img[22] = 0x65; img[23] = 0xA0;
+        img[24] = 0x10; img[25] = 31;
+        img[26] = 0x28; img[27] = 0xD8; img[28] = 0x64; img[29] = 0x00;
+        img[30] = 0x10; img[31] = 30;
+        img[32] = 0x71; img[33] = 0x58; img[34] = 0x64; img[35] = 0x00;
+        img[36] = 0x10; img[37] = 29;
+        img[38] = 0x62; img[39] = 0x9A; img[40] = 0x65; img[41] = 0xA0;
+        img[42] = 0x10; img[43] = 28;
+
+        img[132] = 4;               /* room 1's first child is the container */
+        img[158] = 3;               /* the container's sibling is the player */
+        img[159] = 6;               /* and the container holds object 6      */
+        img[133] = 0; img[134] = 190;
+        img[190] = 0; img[191] = 0;
+
+        assert(room_model_bind(img, 210) == 1);
+        assert(room_model_available() == 1);
+
+        room_model_refresh_room(1);
+        {
+            const RoomModel *m = room_model_get();
+            assert(m->nhere == 2);
+            assert(room_model_player() == 0);
+            assert(m->ncarried == 0);
+        }
+
+        img[159] = 0;               /* out of the container... */
+        img[150] = 6;               /* ...and into the player  */
+        img[175] = 3;
+
+        room_model_refresh_room(1);
+        {
+            const RoomModel *m = room_model_get();
+            assert(m->nhere == 2);
+            assert(room_model_player() == 3);
+            assert(m->ncarried == 1);
+            assert(m->carried[0] == 6);
+        }
+
+        /* Putting it back moves a child the other way, so nothing in the room
+           gains one and the answer already reached is simply kept. */
+        img[150] = 0;
+        img[159] = 6;
+        img[175] = 4;
+        room_model_refresh_room(1);
+        assert(room_model_player() == 3);
+        assert(room_model_get()->ncarried == 0);
     }
 
     room_model_bind(g_story, g_len);

@@ -45,6 +45,11 @@ extern "C" {
  |   rather than being cut, because every index after them is a literal in
  |   dash_tiles.c and removing eight would renumber the map tiles for 256 bytes
  |   of VRAM.
+ |
+ |   The DT_PIC_* set is the inventory overlay's second frame: the same bead
+ |   over the same marble as the module frames, but facing inward, so it closes
+ |   hard against the item picture rather than around the module. It goes last
+ |   for the same numbering reason the DT_BOX_* set stays.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -66,6 +71,11 @@ enum {
     DT_GROUND, DT_ROOM, DT_ROOM_HERE,
     DT_LINK0,
     DT_LINK_STAIR = DT_LINK0 + 16,
+    DT_PIC_TOP0, DT_PIC_TOP1, DT_PIC_TOP2, DT_PIC_TOP3,
+    DT_PIC_BOTTOM0, DT_PIC_BOTTOM1, DT_PIC_BOTTOM2, DT_PIC_BOTTOM3,
+    DT_PIC_LEFT0, DT_PIC_LEFT1, DT_PIC_LEFT2, DT_PIC_LEFT3,
+    DT_PIC_RIGHT0, DT_PIC_RIGHT1, DT_PIC_RIGHT2, DT_PIC_RIGHT3,
+    DT_PIC_TL, DT_PIC_TR, DT_PIC_BL, DT_PIC_BR,
     DT_N
 };
 
@@ -90,13 +100,17 @@ enum {
  | DASH_NONE .. DASH_VARIANT_N
  | Description: The fixed panel shapes, the nothing-painted state the shadow
  |   starts in, and the runtime rectangle. PANEL and GAMEKB are the two in-game
- |   gamepad strips and OVERLAY is PANEL without its dividers. BOX is OVERLAY's
- |   shape with its rectangle supplied per call by dash_box rather than read
- |   from the table, since a menu is sized and placed at runtime; it paints the
- |   same bevel and marble field every other variant does.
+ |   gamepad strips and OVERLAY is PANEL without its dividers. OVERLAY_TALL is
+ |   OVERLAY five rows taller and split once, for the overlay's own picture
+ |   module, which only a story with item art draws; that module's interior
+ |   carries a second frame of its own, closing hard against the picture.
+ |   BOX is OVERLAY's shape with its rectangle supplied per call by dash_box
+ |   rather than read from the table, since a menu is sized and placed at
+ |   runtime; it paints the same bevel and marble field every other variant
+ |   does.
  | Author: suinevere
  ----------------------*/
-enum { DASH_NONE = 0, DASH_PANEL, DASH_GAMEKB, DASH_OVERLAY,
+enum { DASH_NONE = 0, DASH_PANEL, DASH_GAMEKB, DASH_OVERLAY, DASH_OVERLAY_TALL,
        DASH_BOX, DASH_VARIANT_MAP, DASH_VARIANT_N };
 
 /*----------------------
@@ -246,7 +260,8 @@ unsigned char dash_cell(int x, int y);
  | Dependencies: N/A
  | Globals: g_variant
  | Params: N/A
- | Returns: 1 for DASH_PANEL, DASH_GAMEKB or DASH_OVERLAY, else 0
+ | Returns: 1 for DASH_PANEL, DASH_GAMEKB, DASH_OVERLAY or DASH_OVERLAY_TALL,
+ |   else 0
  ----------------------*/
 int dash_input_up(void);
 

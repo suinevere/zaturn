@@ -40,6 +40,7 @@ extern "C" {
 #include "save_ui.h"
 #include "title.h"
 #include "room_art.h"
+#include "video/item_art.h"
 #include "splash.h"
 #include "game_catalog.h"
 #include "online.h"
@@ -408,6 +409,7 @@ int main(void) {
     // Unconditional: on a cold boot nothing is held and this costs nothing, and
     // the sequence below is meant not to know which boot it is.
     room_art_release();
+    item_art_close();
 
     for (int r = 0; r < console_screen_rows(); r++) text_clear_line(r);
 
@@ -448,6 +450,7 @@ int main(void) {
     // sitting in it until a game is picked. Safe now and not a frame earlier: the
     // screen is black, so nothing is on NBG0 that anyone can see go.
     room_art_release();
+    item_art_close();
     display_apply();              // set the menu's background image/colour + text
     // Subscribed here rather than beside the other music callbacks above, and
     // deliberately after this display_apply: the title screen picks and shows its
@@ -627,6 +630,7 @@ int main(void) {
         music_set_level(g_music_level);
         music_set_game(game_release, game_serial);
         room_art_set_game(game_release, game_serial);
+        item_art_set_game(game_release, game_serial);
         // Authored per-room art is the only art there is, so this flag is what
         // makes the Dynamic palette entry reachable at all: without it Dynamic is
         // skipped, and the room-art path, which only runs under Dynamic, never

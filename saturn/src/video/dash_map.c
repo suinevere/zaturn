@@ -3,9 +3,10 @@
  | Description: Implements the dashboard's geometry table and the painting of
  |   the NBG2 map shadow. Nothing here touches hardware; see dash_map.h.
  | Author: suinevere
- | Dependencies: dash_map.h
+ | Dependencies: dash_map.h, panel_layout.h
  ----------------------*/
 #include "dash_map.h"
+#include "panel_layout.h"
 
 /*----------------------
  | DashGeom
@@ -13,6 +14,12 @@
  |   ends are inclusive, so x0 and x1 are the frame itself rather than the space
  |   inside it. rule_row is the content row carrying a horizontal rule inside the
  |   rightmost module, counted from the first content row, or -1 for none.
+ |
+ |   pic_* is a second frame drawn inside the variant, for the inventory
+ |   overlay's picture module: pic_x0/pic_x1 are absolute columns and
+ |   pic_r0/pic_r1 rows within the panel, all inclusive and all naming the ring
+ |   itself rather than the picture inside it. pic_r0 of -1 is no such frame,
+ |   which is every variant but one.
  | Author: suinevere
  ----------------------*/
 typedef struct {
@@ -22,23 +29,37 @@ typedef struct {
     unsigned char ndiv;
     unsigned char div[2];
     signed char   rule_row;
+    unsigned char pic_x0;
+    unsigned char pic_x1;
+    signed char   pic_r0;
+    signed char   pic_r1;
 } DashGeom;
 
 /*----------------------
  | g_geom
- | Description: The three variants, and the empty one the shadow starts in.
- |   Each is the nine-row box the ASCII chrome drew. PANEL closes at column 39
- |   and GAMEKB at 38 because their printed borders do; reproducing that keeps
- |   every existing text position exactly where it is. OVERLAY repeats PANEL's
- |   rectangle with no dividers, for the frames the command panel gives over to
- |   the inventory overlay's own box.
+ | Description: The four variants, and the empty one the shadow starts in.
+ |   PANEL and GAMEKB are the nine-row box the ASCII chrome drew; PANEL closes
+ |   at column 39 and GAMEKB at 38 because their printed borders do,
+ |   reproducing that keeps every existing text position exactly where it is.
+ |   OVERLAY repeats PANEL's rectangle with no dividers, for the inventory
+ |   overlay's list-only box -- its frame is the overlay's frame, so there is no
+ |   printed box inside it. OVERLAY_TALL is that same rectangle five rows
+ |   taller, split once at column 27: the item list closes there and the picture
+ |   module opens in column 28, which is the border between the list and the
+ |   picture, drawn in stone like every other seam on the strip. That module's
+ |   interior carries a second frame of its own -- the ring of columns 29..38
+ |   across rows 1..12 -- which closes hard against the 64x80 picture drawn in
+ |   the cells inside it.
  | Author: suinevere
  ----------------------*/
 static const DashGeom g_geom[DASH_BOX] = {
-    { 0, 0,  0, 0, {  0, 0 }, -1 },
-    { 9, 0, 39, 2, { 14, 30 }, -1 },
-    { 9, 0, 38, 1, { 14,  0 },  2 },
-    { 9, 0, 39, 0, {  0, 0 }, -1 }
+    {  0, 0,  0, 0, {  0, 0 }, -1,  0,  0, -1, -1 },
+    {  9, 0, 39, 2, { 14, 30 }, -1,  0,  0, -1, -1 },
+    {  9, 0, 38, 1, { 14,  0 },  2,  0,  0, -1, -1 },
+    {  9, 0, 39, 0, {  0, 0 }, -1,  0,  0, -1, -1 },
+    { 14, 0, 39, 1, { CV_OVERLAY_DIV_X, 0 }, -1,
+      CV_OVERLAY_PANE_X, CV_OVERLAY_PANE_X + CV_OVERLAY_PANE_W - 1,
+      1, CV_OVERLAY_TALL_ROWS }
 };
 
 /*----------------------
@@ -48,7 +69,7 @@ static const DashGeom g_geom[DASH_BOX] = {
  |   rectangle cannot live in a table.
  | Author: suinevere
  ----------------------*/
-static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1 };
+static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1, 0, 0, -1, -1 };
 
 /*----------------------
  | g_map_geom
@@ -60,14 +81,14 @@ static DashGeom g_box = { 0, 0, 0, 0, { 0, 0 }, -1 };
  | Author: suinevere
  ----------------------*/
 static const DashGeom g_map_geom =
-    { DASH_ROWS, 0, DASH_COLS - 1, 0, { 0, 0 }, -1 };
+    { DASH_ROWS, 0, DASH_COLS - 1, 0, { 0, 0 }, -1, 0, 0, -1, -1 };
 
 /*----------------------
  | geom_of
  | Description: The geometry a variant paints from -- the static table for the
  |   fixed shapes, the runtime slot for DASH_BOX, and the whole-shadow slot for
- |   DASH_VARIANT_MAP. g_geom is sized for DASH_NONE..DASH_OVERLAY only, so
- |   both of the other variants must be caught here rather than falling
+ |   DASH_VARIANT_MAP. g_geom is sized for DASH_NONE..DASH_OVERLAY_TALL only,
+ |   so both of the other variants must be caught here rather than falling
  |   through to an out-of-range index into it. Anything else falls back to
  |   DASH_NONE: g_variant is only ever assigned from validated sources today,
  |   but this file has already paid for that assumption once and a bounds check
@@ -148,6 +169,12 @@ static int is_div(const DashGeom *g, int x)
  |   highlight: the horizontal runs pick their tile by x & 3, the vertical ones
  |   by y & 3.
  |
+ |   A variant may also carry a second frame inside itself -- the inventory
+ |   overlay's picture module does -- and that is the same bead again, facing
+ |   inward so it closes against the picture instead of around the module. The
+ |   cells inside the ring fall through to the field, which is what the picture
+ |   on NBG1 is drawn over.
+ |
  |   A menu box takes this same path. It used to have a branch of its own
  |   returning the DT_BOX_* set -- the same bevel over transparency, with
  |   DT_BLANK inside -- so a menu was a frame with the wallpaper or the back
@@ -195,6 +222,19 @@ static unsigned char cell_at(const DashGeom *g, int r, int x, int y)
     if (bot) return (unsigned char) (DT_BOTTOM0 + (x & 3));
     if (rule && x > g->div[g->ndiv - 1])
         return (unsigned char) (DT_RULE0 + (x & 3));
+    if (g->pic_r0 >= 0 && x >= g->pic_x0 && x <= g->pic_x1
+        && r >= g->pic_r0 && r <= g->pic_r1) {
+        int l = (x == g->pic_x0), rt = (x == g->pic_x1);
+        int t = (r == g->pic_r0), b = (r == g->pic_r1);
+        if (t && l)  return DT_PIC_TL;
+        if (t && rt) return DT_PIC_TR;
+        if (b && l)  return DT_PIC_BL;
+        if (b && rt) return DT_PIC_BR;
+        if (t)  return (unsigned char) (DT_PIC_TOP0 + (x & 3));
+        if (b)  return (unsigned char) (DT_PIC_BOTTOM0 + (x & 3));
+        if (l)  return (unsigned char) (DT_PIC_LEFT0 + (y & 3));
+        if (rt) return (unsigned char) (DT_PIC_RIGHT0 + (y & 3));
+    }
     return (unsigned char) (DT_FIELD0 + ((y & 3) << 2) + (x & 3));
 }
 
@@ -355,7 +395,7 @@ void dash_dirty_clear(void)
 int dash_input_up(void)
 {
     return (g_variant == DASH_PANEL || g_variant == DASH_GAMEKB
-            || g_variant == DASH_OVERLAY) ? 1 : 0;
+            || g_variant == DASH_OVERLAY || g_variant == DASH_OVERLAY_TALL) ? 1 : 0;
 }
 
 void dash_frame_end(void)

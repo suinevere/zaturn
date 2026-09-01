@@ -109,6 +109,51 @@ int main(void) {
         for (x = 1; x <= 38; x++)
             assert(dash_cell(x, y) == DT_FIELD0 + ((y & 3) << 2) + (x & 3));
 
+    /* The tall overlay is that rectangle five rows taller and split once, at
+       column 27: the item list closes there and the picture module opens in
+       column 28. That seam is the border between the list and the picture. */
+    dash_dirty_clear();
+    dash_build(DASH_OVERLAY_TALL, 16);
+    assert(dash_cell(0, 16)  == DT_CORNER_TL);
+    assert(dash_cell(39, 16) == DT_CORNER_TR);
+    assert(dash_cell(0, 29)  == DT_CORNER_BL);
+    assert(dash_cell(39, 29) == DT_CORNER_BR);
+    assert(dash_cell(27, 16) == DT_TOP_DIVIDER);
+    assert(dash_cell(27, 29) == DT_BOTTOM_DIVIDER);
+    assert(dash_cell(28, 16) == DT_TOP_MODLEFT);
+    assert(dash_cell(28, 29) == DT_BOTTOM_MODLEFT);
+    for (y = 17; y <= 28; y++) {
+        assert(dash_cell(0, y)  == DT_LEFT0 + (y & 3));
+        assert(dash_cell(39, y) == DT_RIGHT0 + (y & 3));
+        assert(dash_cell(27, y) == DT_DIVIDER0 + (y & 3));
+        assert(dash_cell(28, y) == DT_MODLEFT0 + (y & 3));
+        /* The list module's interior is one unbroken field, so the item list
+           meets marble on every side. */
+        for (x = 1; x <= 26; x++)
+            assert(dash_cell(x, y) == DT_FIELD0 + ((y & 3) << 2) + (x & 3));
+    }
+
+    /* The picture module's interior is not: its outermost ring is a second
+       frame, facing inward, closing hard against the eight by ten cells the
+       64x80 picture occupies. Those cells stay field -- NBG1 draws over them. */
+    assert(dash_cell(29, 17) == DT_PIC_TL);
+    assert(dash_cell(38, 17) == DT_PIC_TR);
+    assert(dash_cell(29, 28) == DT_PIC_BL);
+    assert(dash_cell(38, 28) == DT_PIC_BR);
+    for (x = 30; x <= 37; x++) {
+        assert(dash_cell(x, 17) == DT_PIC_TOP0 + (x & 3));
+        assert(dash_cell(x, 28) == DT_PIC_BOTTOM0 + (x & 3));
+    }
+    for (y = 18; y <= 27; y++) {
+        assert(dash_cell(29, y) == DT_PIC_LEFT0 + (y & 3));
+        assert(dash_cell(38, y) == DT_PIC_RIGHT0 + (y & 3));
+        for (x = 30; x <= 37; x++)
+            assert(dash_cell(x, y) == DT_FIELD0 + ((y & 3) << 2) + (x & 3));
+    }
+    assert(dash_dirty_top() == 16);
+    assert(dash_dirty_bottom() == 29);
+    assert(dash_input_up() == 1);
+
     /* Moving the panel clears the rows it left. */
     dash_build(DASH_PANEL, 19);
     dash_build(DASH_PANEL, 15);
@@ -247,8 +292,8 @@ int main(void) {
        dash_map_paint could have touched, not just the rows the next variant
        repaints itself -- clear_painted has to know the map's clear extent is
        the whole shadow. Regression test for geom_of(DASH_VARIANT_MAP) running
-       out of bounds against g_geom, which is sized for DASH_NONE..DASH_OVERLAY
-       only. */
+       out of bounds against g_geom, which is sized for
+       DASH_NONE..DASH_OVERLAY_TALL only. */
     dash_reset();
     dash_map_begin();
     dash_map_paint(4, 8, DT_ROOM);

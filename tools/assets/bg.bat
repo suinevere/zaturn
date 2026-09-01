@@ -1,8 +1,9 @@
 :; # === Linux & macOS Execution Block ===
 :; # ----------------------
 :; #  bg.bat
-:; #  Description: Stages Zork I's eleven room-background archives (B*.CGL) into
-:; #    ./BG, ready for games.bat to inject them into /BG on the output disc.
+:; #  Description: Stages Zork I's twelve BG archives -- the eleven room-background
+:; #    archives (B*.CGL) and the item-picture container (OITEM.CZ) -- into ./BG,
+:; #    ready for games.bat to inject them into /BG on the output disc.
 :; #    The archives are lifted out of the data track of the original Japanese
 :; #    Saturn disc -- the same disc AUDIO_URL already names and music.bat
 :; #    already downloads and discards ("Skipping Track 1"), so this adds no new
@@ -11,7 +12,7 @@
 :; #    Source precedence: a local ZORK_DISC first (a checkout that keeps the
 :; #    reference disc under cd/ pays no download at all), then a cached
 :; #    download of AUDIO_URL. The staging directory is checked before either --
-:; #    a second build reuses the eleven files and never looks at a disc.
+:; #    a second build reuses the twelve files and never looks at a disc.
 :; #
 :; #    tools/extract_bg.py does the verification, not this script: every
 :; #    archive is matched by size and SHA-256 against the bytes
@@ -37,7 +38,7 @@
 :; #  Dependencies: curl, unzip, python3, ../extract_bg.py, CONFIG.ME
 :; #  Globals: N/A
 :; #  Params: N/A
-:; #  Returns: 0 when ./BG holds all eleven archives, 1 otherwise
+:; #  Returns: 0 when ./BG holds all twelve archives, 1 otherwise
 :; # ----------------------
 :; set -euo pipefail
 :; cd "$(dirname "$0")"
@@ -55,10 +56,13 @@
 :;
 :; # mirror_local <dir> -- copy the staged archives into the SDK's own data tree
 :; # when that tree exists. A checkout has it; the standalone release kit does not.
+:; # The whole staging directory goes across rather than a *.CGL glob: extract_bg.py
+:; # writes exactly BG_MANIFEST there, and a glob that names one extension silently
+:; # left OITEM.CZ off the disc, giving Zork I a permanently blank item pane.
 :; mirror_local() {
 :;   [ -d "../../saturn/cd/data" ] || return 0
 :;   mkdir -p ../../saturn/cd/data/BG
-:;   cp BG/*.CGL ../../saturn/cd/data/BG/ 2>/dev/null || return 0
+:;   cp BG/* ../../saturn/cd/data/BG/ 2>/dev/null || return 0
 :;   echo "Mirrored into saturn/cd/data/BG for the SDK build"
 :; }
 :;
@@ -99,8 +103,9 @@
 @ECHO OFF
 REM ----------------------
 REM  bg.bat  (Windows Execution Block)
-REM  Description: Stages Zork I's eleven room-background archives (B*.CGL) into
-REM    .\BG, ready for games.bat to inject them into /BG on the output disc, and
+REM  Description: Stages Zork I's twelve BG archives -- the eleven room-background
+REM    archives (B*.CGL) and the item-picture container (OITEM.CZ) -- into .\BG,
+REM    ready for games.bat to inject them into /BG on the output disc, and
 REM    mirrors them into saturn\cd\data\BG when that tree is present so a plain
 REM    compile-cd.bat produces an ISO that can show room art at all.
 REM    See the sh block above for the full reasoning; the two halves must agree
@@ -110,7 +115,7 @@ REM  Author: suinevere
 REM  Dependencies: curl, powershell, python, ..\extract_bg.py, CONFIG.ME
 REM  Globals: N/A
 REM  Params: N/A
-REM  Returns: 0 when .\BG holds all eleven archives, 1 otherwise
+REM  Returns: 0 when .\BG holds all twelve archives, 1 otherwise
 REM ----------------------
 SETLOCAL
 CD /D "%~dp0"
@@ -171,7 +176,9 @@ GOTO :eof
 
 REM ---------------------------------------------------------------------------
 REM :mirror
-REM Copies the staged archives into the SDK's own data tree when that tree
+REM Copies the whole staged directory -- extract_bg.py writes exactly
+REM BG_MANIFEST there, so a *.CGL glob silently left OITEM.CZ off the disc --
+REM into the SDK's own data tree when that tree
 REM exists. A checkout has it; the standalone release kit does not, and a
 REM missing tree is not an error there. Mirrors lib/pvms.bat's habit of failing
 REM soft on anything that is not the script's actual job.
@@ -179,6 +186,6 @@ REM ---------------------------------------------------------------------------
 :mirror
 IF NOT EXIST "%~dp0..\..\saturn\cd\data" GOTO :eof
 IF NOT EXIST "%~dp0..\..\saturn\cd\data\BG" MKDIR "%~dp0..\..\saturn\cd\data\BG"
-COPY /Y "%~dp0BG\*.CGL" "%~dp0..\..\saturn\cd\data\BG\" >NUL 2>&1
+COPY /Y "%~dp0BG\*" "%~dp0..\..\saturn\cd\data\BG\" >NUL 2>&1
 IF NOT ERRORLEVEL 1 ECHO Mirrored into saturn\cd\data\BG for the SDK build
 GOTO :eof

@@ -41,14 +41,22 @@ static int g_available;
 static RoomModel g_model;
 
 /*----------------------
- | g_player / g_prev_room / g_prev_kids / g_prev_n
- | Description: The identified player object, and the previous room with its
- |   child set, kept so a room change can be intersected.
+ | g_player / g_player_firm / g_prev_room / g_prev_kids / g_prev_kidn / g_prev_n
+ | Description: The identified player object, how it was identified, and the
+ |   previous room with its child set and each of those children's own child
+ |   count, kept so consecutive prompts can be compared. The child counts are
+ |   what let a pick-up be seen without a room change; the child set itself is
+ |   what a room change intersects. g_player_firm is set only by that
+ |   intersection, which cannot be wrong about what followed the player out of
+ |   a room, so the pick-up answer stays provisional and the intersection
+ |   overrides it the moment it can speak.
  | Author: suinevere
  ----------------------*/
 static unsigned short g_player;
+static int g_player_firm;
 static unsigned short g_prev_room;
 static unsigned short g_prev_kids[RM_HERE_MAX];
+static unsigned char  g_prev_kidn[RM_HERE_MAX];
 static int g_prev_n;
 
 /*----------------------
@@ -145,7 +153,7 @@ static int dir_prop_of(unsigned int off) {
  | Dependencies: rd16, dict_first, dict_entry_len, dict_count, dir_prop_of,
  |   decode_word
  | Globals: g_story, g_len, g_dict, g_obj, g_glob, g_prop, g_available,
- |   g_player, g_prev_room, g_prev_n
+ |   g_player, g_player_firm, g_prev_room, g_prev_n
  | Params: story -- the live story image; len -- its length in bytes
  | Returns: 1 if the model is available for this story, 0 otherwise
  ----------------------*/
@@ -157,6 +165,7 @@ int room_model_bind(const unsigned char *story, unsigned int len) {
     g_available = 0;
     for (i = 0; i < RM_DIR_N; i++) g_prop[i] = 0;
     g_player = 0;
+    g_player_firm = 0;
     g_prev_room = 0;
     g_prev_n = 0;
     g_story = story; g_len = len;
@@ -713,6 +722,76 @@ int room_model_full_word(unsigned short obj, const char *word, char *out, int ma
 }
 
 /*----------------------
+ | here_holds
+ | Description: Whether an object is one of the current room's children, read
+ |   off the snapshot rather than the story so it costs nothing.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_model
+ | Params: obj -- the object to look for
+ | Returns: 1 when the room holds it, 0 otherwise
+ ----------------------*/
+static int here_holds(unsigned short obj) {
+    int i;
+    if (obj == 0) return 0;
+    for (i = 0; i < g_model.nhere; i++) if (g_model.here[i] == obj) return 1;
+    return 0;
+}
+
+/*----------------------
+ | child_count
+ | Description: How many children an object has, bounded by RM_HERE_MAX so a
+ |   corrupt sibling link cannot spin -- the same bound collect_children takes
+ |   and for the same reason.
+ | Author: suinevere
+ | Dependencies: obj_child, obj_sibling
+ | Globals: N/A
+ | Params: obj -- the object to count under
+ | Returns: the count, saturating at RM_HERE_MAX
+ ----------------------*/
+static int child_count(unsigned short obj) {
+    unsigned short c = obj_child(obj);
+    int n = 0;
+    while (c != 0 && n < RM_HERE_MAX) { n++; c = obj_sibling(c); }
+    return n;
+}
+
+/*----------------------
+ | player_from_pickup
+ | Description: The player object as the last turn gives it away, for a player
+ |   who has picked something up without leaving the room -- which is the
+ |   ordinary opening move, and until now left the inventory reported empty
+ |   until the first room change.
+ |
+ |   Taking a thing moves it under the player, so of the objects standing in
+ |   this room, the one that gained a child since the last prompt is the player.
+ |   Putting a thing into a container moves it the other way and would name the
+ |   container instead -- but nothing can be put down before something has been
+ |   picked up, so the first transfer of the game is always a take, and this is
+ |   only ever asked while the player is still unknown.
+ |
+ |   Refuses rather than guesses when two of the room's objects gained
+ |   children in the same turn.
+ | Author: suinevere
+ | Dependencies: here_holds, child_count
+ | Globals: g_prev_kids, g_prev_kidn, g_prev_n
+ | Params: N/A
+ | Returns: the object number, or 0 when nothing or more than one thing fits
+ ----------------------*/
+static unsigned short player_from_pickup(void) {
+    unsigned short cand = 0;
+    int ncand = 0, j;
+    for (j = 0; j < g_prev_n; j++) {
+        unsigned short k = g_prev_kids[j];
+        if (!here_holds(k)) continue;
+        if (child_count(k) <= (int) g_prev_kidn[j]) continue;
+        cand = k;
+        ncand++;
+    }
+    return (ncand == 1) ? cand : 0;
+}
+
+/*----------------------
  | room_model_refresh
  | Description: Reads the current room out of global 0 -- which the v3
  |   specification defines as the room the status line names -- and rebuilds the
@@ -738,9 +817,10 @@ void room_model_refresh(void) {
  |   heuristic on a room change, and fills carried items once the player is
  |   known.
  | Author: suinevere
- | Dependencies: obj_entry, obj_props, dir_of_prop, collect_children
- | Globals: g_story, g_len, g_available, g_model, g_player, g_prev_room,
- |   g_prev_kids, g_prev_n
+ | Dependencies: obj_entry, obj_props, dir_of_prop, collect_children,
+ |   player_from_pickup, here_holds, child_count
+ | Globals: g_story, g_len, g_available, g_model, g_player, g_player_firm,
+ |   g_prev_room, g_prev_kids, g_prev_kidn, g_prev_n
  | Params: room -- the room object number
  | Returns: N/A
  ----------------------*/
@@ -804,16 +884,30 @@ void room_model_refresh_room(unsigned short room) {
 
     g_model.nhere = collect_children(room, g_model.here, RM_HERE_MAX);
 
-    if (g_player == 0 && g_prev_room != 0 && g_prev_room != room) {
+    if (!g_player_firm && g_prev_room != 0 && g_prev_room != room) {
         int j, k, cand = 0, ncand = 0;
         for (j = 0; j < g_prev_n; j++)
             for (k = 0; k < g_model.nhere; k++)
                 if (g_prev_kids[j] == g_model.here[k]) { cand = g_prev_kids[j]; ncand++; }
-        if (ncand == 1) g_player = (unsigned short) cand;
+        if (ncand == 1) { g_player = (unsigned short) cand; g_player_firm = 1; }
+    }
+    /* The intersection needs a room change to speak, and until it does the
+       inventory is reported empty -- which the command panel reads as nothing
+       to browse, so picking Inventory submitted the typed command instead of
+       opening the item list. Picking something up without leaving the room is
+       the ordinary opening move, so that is watched for as well; its answer is
+       provisional, and is dropped here the moment the object stops being a
+       child of the room. */
+    if (!g_player_firm) {
+        if (!here_holds(g_player)) g_player = 0;
+        if (g_player == 0 && g_prev_room == room) g_player = player_from_pickup();
     }
     g_prev_room = room;
     g_prev_n = g_model.nhere;
-    for (i = 0; i < g_model.nhere; i++) g_prev_kids[i] = g_model.here[i];
+    for (i = 0; i < g_model.nhere; i++) {
+        g_prev_kids[i] = g_model.here[i];
+        g_prev_kidn[i] = (unsigned char) child_count(g_model.here[i]);
+    }
 
     if (g_player != 0)
         g_model.ncarried = collect_children(g_player, g_model.carried, RM_CARRIED_MAX);

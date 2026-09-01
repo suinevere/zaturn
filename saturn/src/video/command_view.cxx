@@ -30,6 +30,9 @@
 #include "app_state.h"
 #include "input.h"
 #include "dash_view.h"
+#ifndef NETBIN
+#include "video/item_art.h"
+#endif
 
 /*----------------------
  | CV_TOP_MARGIN
@@ -752,150 +755,163 @@ static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
 }
 
 /*----------------------
- | CV_OVERLAY_X / CV_OVERLAY_W
- | Description: The inventory overlay's left column and total width: 34
- |   columns starting at column 2, drawn over the strip's seven interior rows
- |   (the blank rows flanking the content plus the five content rows) so the
- |   outer border and the 40-column geometry around it are undisturbed.
- | Author: suinevere
- ----------------------*/
-#define CV_OVERLAY_X 2
-#define CV_OVERLAY_W 34
-
-/*----------------------
  | cv_overlay_border
- | Description: Builds one horizontal border row of the overlay box: '+',
- |   CV_OVERLAY_W - 2 dashes, '+'.
+ | Description: Builds one horizontal frame row of the overlay box for the
+ |   fallback path: '+', dashes across the strip, '+', and a third '+' on the
+ |   divider column when the box carries a picture module. Only ever printed
+ |   when the tile layer never came up -- with it up the frame and the divider
+ |   are stone, laid by dash_map, and nothing here is printed over them.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: out -- receives CV_OVERLAY_W characters plus a NUL
+ | Params: tall -- 1 when the box carries a picture module; out -- receives
+ |   CV_OVERLAY_W characters plus a NUL
  | Returns: N/A
  ----------------------*/
-static void cv_overlay_border(char *out) {
+static void cv_overlay_border(char *out, int tall) {
     int i;
+    for (i = 0; i < CV_OVERLAY_W; i++) out[i] = '-';
     out[0] = '+';
-    for (i = 1; i < CV_OVERLAY_W - 1; i++) out[i] = '-';
     out[CV_OVERLAY_W - 1] = '+';
+    if (tall) out[CV_OVERLAY_DIV_X] = '+';
     out[CV_OVERLAY_W] = '\0';
 }
 
 /*----------------------
  | cv_overlay_row_text
- | Description: Builds one overlay content row: '|', the carried item at
- |   `idx`'s parser word -- recovered to its full spelling from the object's
- |   own short name where a longer one exists -- filling the word field at
- |   the overlay's own width (CV_OVERLAY_W minus the border and indent), not
- |   the strip's six-character column, since the overlay has room to spare.
- |   Blank once idx runs past the carried count, padded to the box's inner
- |   width, '|'. A recovered spelling longer than the field still truncates
- |   cleanly.
+ | Description: Builds one row of the overlay's item list: a leading space and
+ |   then the carried item at `idx`'s parser word -- recovered to its full
+ |   spelling from the object's own short name where a longer one exists --
+ |   padded out to `field_w` characters. The row is the list module's interior
+ |   and nothing else, with no frame characters in it, because the frame is the
+ |   strip's own. The caller picks field_w: the whole interior for the plain
+ |   box, or as far as the divider for the tall one. Blank once idx runs past
+ |   the carried count, and a recovered spelling longer than the field
+ |   truncates cleanly. The field is padded to its full width rather than
+ |   stopped at the word so that a short name cannot leave a longer one's tail
+ |   standing beside it, whatever order the rows are drawn in.
  | Author: suinevere
  | Dependencies: room_model.h
  | Globals: N/A
  | Params: m -- the room snapshot; idx -- carried index, may be out of range;
- |   out -- receives CV_OVERLAY_W characters plus a NUL
+ |   field_w -- the list module's width in characters; out -- receives field_w
+ |   characters plus a NUL
  | Returns: N/A
  ----------------------*/
-static void cv_overlay_row_text(const RoomModel &m, int idx, char *out) {
+static void cv_overlay_row_text(const RoomModel &m, int idx, int field_w, char *out) {
     char word[8] = {0};
     char full[16] = {0};
-    int i, wl, field_w;
+    int i, wl;
     if (idx >= 0 && idx < m.ncarried && room_model_object_word(m.carried[idx], word, sizeof word))
         room_model_full_word(m.carried[idx], word, full, sizeof full);
     wl = 0;
     while (wl < (int) sizeof(full) - 1 && full[wl] != '\0') wl++;
-    field_w = CV_OVERLAY_W - 3;
-    out[0] = '|';
-    out[1] = ' ';
-    for (i = 0; i < field_w; i++) out[2 + i] = (i < wl) ? full[i] : ' ';
-    out[CV_OVERLAY_W - 1] = '|';
-    out[CV_OVERLAY_W] = '\0';
+    out[0] = ' ';
+    for (i = 1; i < field_w; i++) out[i] = (i - 1 < wl) ? full[i - 1] : ' ';
+    out[field_w] = '\0';
 }
 
 /*----------------------
- | CV_OVERLAY_ROWS
- | Description: How many carried items the overlay lists at once: the strip's
- |   content height less its own two border rows. Derived rather than written as
- |   5, because it is the strip that bounds it -- the rose's own row count grew
- |   from five to seven when up, down, in and out moved into its corners, and an
- |   overlay still sized off that would have drawn two rows past the strip and
- |   through the bottom border.
- | Author: suinevere
- ----------------------*/
-#define CV_OVERLAY_ROWS (CV_STRIP_ROWS - 2)
-
-/*----------------------
  | cv_draw_overlay
- | Description: Draws the inventory overlay across the strip's seven content
- |   rows: a top border, CV_OVERLAY_ROWS carried-item rows scrolled in blocks
- |   around the cursor, and a bottom border, with the selected row in reverse
- |   video.
+ | Description: Draws the inventory overlay's item list, scrolled in blocks
+ |   around the cursor, with every row but the selected one dim. The box's frame
+ |   is the strip's own frame and its rows are the strip's own content rows, so
+ |   there is nothing here to draw a border with: the plain box's list runs the
+ |   whole interior, and the tall box's stops at the divider column, leaving
+ |   the picture module's columns untouched for NBG1's plate.
+ |     On the fallback path, where the tile layer never came up and there is no
+ |   stone to be the frame, the frame characters are printed instead -- the
+ |   strip's two sides on every row, plus the divider between list and picture.
  | Author: suinevere
  | Dependencies: room_model.h, text_map.h, command_panel.h, dash_view.h
  | Globals: N/A
- | Params: p -- panel state; m -- the room snapshot; top_y -- the row the
- |   overlay's top border is drawn on (the strip's first content row); dash --
- |   1 when the dashboard panel is up, so the border rows are skipped and the
- |   overlay sits on the marble instead of drawing a second frame over it; the
- |   rows stay blank either way, since the caller clears them first
+ | Params: p -- panel state; m -- the room snapshot; top_y -- the strip's first
+ |   content row, which is the list's first row; dash -- 1 when the tile
+ |   dashboard is up, so no frame characters are printed; tall -- 1 when the
+ |   story has item art and the box is carrying a picture module
  | Returns: N/A
  ----------------------*/
-static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y, int dash) {
-    char border[CV_OVERLAY_W + 1];
+static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y, int dash, int tall) {
     char row_text[CV_OVERLAY_W + 1];
     int window, i;
+    int rows = tall ? CV_OVERLAY_ROWS : CV_OVERLAY_SHORT_LIST;
+    int field_w = tall ? CV_OVERLAY_LIST_W : (CV_OVERLAY_W - 2);
 
-    if (!dash) {
-        cv_overlay_border(border);
-        text_print(CV_OVERLAY_X, top_y, border);
-    }
-
-    window = (p.cursor / CV_OVERLAY_ROWS) * CV_OVERLAY_ROWS;
-    for (i = 0; i < CV_OVERLAY_ROWS; i++) {
-        int y = top_y + 1 + i;
+    window = (p.cursor / rows) * rows;
+    for (i = 0; i < rows; i++) {
+        int y = top_y + i;
         int idx = window + i;
-        cv_overlay_row_text(m, idx, row_text);
-        /* Only the span between the two pipes takes the selection's ink. The
-           frame is the box and not a row, so dimming its sides along with an
-           unselected item would leave the one bright pipe pair looking like a
-           break in the border rather than like a cursor. */
-        row_text[CV_OVERLAY_W - 1] = '\0';
-        text_print(CV_OVERLAY_X, y, "|");
-        if (idx == p.cursor) text_print(CV_OVERLAY_X + 1, y, row_text + 1);
-        else                 text_print_dim(CV_OVERLAY_X + 1, y, row_text + 1);
-        text_print(CV_OVERLAY_X + CV_OVERLAY_W - 1, y, "|");
+        cv_overlay_row_text(m, idx, field_w, row_text);
+        /* The list module's ink carries the selection, the way every other
+           picker's does now that reverse video is gone: the unselected rows go
+           dim and the selected one is left at the player's own text colour.
+           The frame characters below are not part of a row and never dim --
+           they are the box, and a dim side beside a bright one would read as a
+           break in the border rather than as a cursor. */
+        if (idx == p.cursor) text_print(CV_OVERLAY_LIST_X, y, row_text);
+        else                 text_print_dim(CV_OVERLAY_LIST_X, y, row_text);
+        if (!dash) {
+            text_print(CV_OVERLAY_X, y, "|");
+            if (tall) text_print(CV_OVERLAY_DIV_X, y, "|");
+            text_print(CV_OVERLAY_X + CV_OVERLAY_W - 1, y, "|");
+        }
     }
-
-    if (!dash) text_print(CV_OVERLAY_X, top_y + 1 + CV_OVERLAY_ROWS, border);
 }
 
 /*----------------------
  | render_command_panel
  | Description: Draws the input line, the strip's borders and dividers, and
  |   either the inventory overlay or the compass rose/word page/command list,
- |   highlighting the focused module's selected entry in reverse video. The
+ |   drawing the focused module's unselected entries dim and its selected one at
+ |   the player's own text colour. The
  |   borders carry no highlight and no control hints -- both rows are the one
- |   CV_BORDER string. The overlay takes the divider-less dashboard variant,
- |   since its box spans all three modules and the grooves would otherwise show
- |   through the item list.
+ |   CV_BORDER string.
+ |     The overlay is the strip rather than a box drawn inside it: its frame is
+ |   the strip's frame and its rows are the strip's content rows. So it takes a
+ |   dashboard variant of its own shape -- OVERLAY, the three-module strip with
+ |   its grooves removed so they do not cut across the item list, or
+ |   OVERLAY_TALL, which is that five rows taller and split once at
+ |   CV_OVERLAY_DIV_X to hold the picture module. That split is the border
+ |   between the list and the picture, and it is cut in the same stone as every
+ |   other seam on the strip.
+ |     The tall shape is what a story with item art gets. The input line climbs
+ |   with it by CV_OVERLAY_RISE rows, so the strip's own bottom border stays on
+ |   the row it always sat on -- only the transcript above the panel loses rows,
+ |   never the box's floor. The selected carried item's picture goes in the
+ |   module's own frame, an item the story has no picture for fills that same
+ |   frame with black, and outside the tall shape the window comes down
+ |   altogether; the netbin has no item art module at all, so it never sees a
+ |   tall box. Nothing here opens or frees the archive: item_art_set_game read
+ |   it at game load and it is held for the session, so raising the overlay
+ |   costs no disc access at all.
  | Author: suinevere
  | Dependencies: command_rose.h, rose_draw.h, text_map.h, console_view.h,
- |   dash_view.h
+ |   dash_view.h, item_art.h
  | Globals: g_difficulty
  | Params: p -- panel state; m -- the room snapshot; w -- the current word page
  | Returns: N/A
  ----------------------*/
 void render_command_panel(const CommandPanel &p, const RoomModel &m, const CommandWords &w) {
     int base = CV_TOP_MARGIN + console_height();
-    int input_row = base;
+#ifndef NETBIN
+    int tall = (p.overlay && item_art_available()) ? 1 : 0;
+#else
+    int tall = 0;
+#endif
+    int input_row = base - (tall ? CV_OVERLAY_RISE : 0);
     int border_top = input_row + 1;
     int content0 = border_top + 1;
-    int border_bottom = content0 + CR_ROWS;
+    int border_bottom = content0 + (tall ? CV_OVERLAY_TALL_ROWS : CV_STRIP_ROWS);
+    char frame[CV_OVERLAY_W + 1];
     int row;
 
+    /* The overlay's frame is the strip's frame, so on the fallback path the
+       strip's own three-module border is the wrong shape for it: the grooves
+       between the modules would cut across the item list. */
+    if (p.overlay) cv_overlay_border(frame, tall);
+
     int dash = dash_ready();
-    dash_set(p.overlay ? DASH_OVERLAY : DASH_PANEL, border_top);
+    dash_set(p.overlay ? (tall ? DASH_OVERLAY_TALL : DASH_OVERLAY) : DASH_PANEL, border_top);
 
     /* Black behind the box on the fallback path, the way a menu box is black:
        NBG3 leaves palette entry 0 transparent, so over a wallpaper the rose and
@@ -907,13 +923,24 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     text_print(0, input_row, "> %s", p.line);
 
     text_clear_line(border_top);
-    if (!dash) text_print(0, border_top, CV_BORDER);
+    if (!dash) text_print(0, border_top, p.overlay ? frame : CV_BORDER);
 
     if (p.overlay) {
         int y;
         for (y = content0; y < border_bottom; y++) text_clear_line(y);
-        cv_draw_overlay(p, m, content0, dash);
+        cv_draw_overlay(p, m, content0, dash, tall);
+#ifndef NETBIN
+        if (!tall)
+            item_art_hide();
+        else if (p.cursor >= 0 && p.cursor < m.ncarried)
+            item_art_show((unsigned int) m.carried[p.cursor]);
+        else
+            item_art_blank();
+#endif
     } else {
+#ifndef NETBIN
+        item_art_hide();
+#endif
         unsigned char flat[RM_DIR_N];
         const unsigned char *exits;
         int sel = (p.box == CP_BOX_TRAVEL) ? p.cursor : -1;
@@ -943,7 +970,7 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     }
 
     text_clear_line(border_bottom);
-    if (!dash) text_print(0, border_bottom, CV_BORDER);
+    if (!dash) text_print(0, border_bottom, p.overlay ? frame : CV_BORDER);
 }
 
 // ---- pad-driven editing ------------------------------------------------------

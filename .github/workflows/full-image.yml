@@ -67,7 +67,18 @@ jobs:
         run: |
           set -e
           bash bg.bat
-          test "$(ls -1 BG/*.CGL | wc -l)" -eq 11
+          # Driven from BG_MANIFEST rather than a *.CGL glob: the glob counted
+          # only the eleven room archives and could not notice OITEM.CZ missing,
+          # so Zork I reached the injection step with a blank item pane.
+          python3 - <<'PY'
+          import pathlib, sys
+          sys.path.insert(0, "../../tools")
+          from extract_bg import BG_MANIFEST
+
+          missing = [n for n in BG_MANIFEST if not (pathlib.Path("BG") / n).is_file()]
+          assert not missing, f"BG staging is missing {missing}"
+          print(f"BG: staged all {len(BG_MANIFEST)} archives")
+          PY
 
       - name: Download games + inject
         working-directory: tools/assets

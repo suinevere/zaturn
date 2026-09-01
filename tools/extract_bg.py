@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """/*----------------------
  | extract_bg.py
- | Description: Pulls Zork I's eleven room-background archives (B*.CGL) out of
+ | Description: Pulls Zork I's twelve BG archives -- the eleven room-background
+ |     archives (B*.CGL) and the item-picture container (OITEM.CZ) -- out of
  |     the original Japanese Saturn disc's data track and stages them for
  |     injection into /BG by tools/assets/games.bat.
  |
@@ -43,14 +44,16 @@ BG_MANIFEST = {
     "BRIV.CGL": (367500, "f3b82d161763c0b228648950e58ed21adb1f86fcdfec016dbf22384e30d41efc"),
     "BTMP.CGL": (158404, "6a93c873e8ca7387805de4d1309b2388372d29e280bd17fa1b77bf4460dcb67c"),
     "BWOD.CGL": (126700, "8d6d95b32ef0b14cce2f8620965a1de4e2317c7380fecc3c4390277252cda163"),
+    "OITEM.CZ": (40840, "04344f3bbc6404ab6163e0d2df16614e4fc67d53855a1472baab3cfe9f54a2e0"),
 }
 """BG_MANIFEST
 
-Description: name -> (size, sha256) for the eleven area archives, taken from the
+Description: name -> (size, sha256) for the twelve BG archives, taken from the
     Japanese Saturn release of Zork I. The frame offsets in
     saturn/src/scene/game_presentation.inc are only meaningful against these
-    exact bytes, so this is the identity check on the whole presentation
-    feature, not just on the download.
+    exact bytes, and saturn/src/scene/oitem_records.inc records OITEM.CZ's own
+    per-picture offsets against them just as hard, so this is the identity
+    check on the whole presentation feature, not just on the download.
 Author: suinevere
 """
 
@@ -85,7 +88,7 @@ def find_data_track(path):
 def extract(track, out_dir):
     """/*----------------------
      | extract
-     | Description: Writes the eleven archives into out_dir, verifying each
+     | Description: Writes the twelve archives into out_dir, verifying each
      |     against BG_MANIFEST before it lands. Verification happens on the
      |     bytes in memory rather than on the file afterwards, so a disc that
      |     fails the check leaves no partial staging directory for the injection
@@ -125,7 +128,7 @@ def extract(track, out_dir):
 def staged(out_dir):
     """/*----------------------
      | staged
-     | Description: Whether out_dir already holds all eleven archives at the
+     | Description: Whether out_dir already holds all twelve archives at the
      |     right size. Lets a repeated build skip a 600 MB download without
      |     re-hashing, while still refusing a directory that is half-written.
      | Author: suinevere
@@ -155,7 +158,7 @@ def main(argv):
      | Params: argv -- argument list without the program name
      | Returns: 0 on success, 1 when --check finds the staging incomplete
      ----------------------*/"""
-    ap = argparse.ArgumentParser(description="Stage Zork I's B*.CGL archives for /BG injection")
+    ap = argparse.ArgumentParser(description="Stage Zork I's BG archives for /BG injection")
     ap.add_argument("track", nargs="?", help="data-track .bin, or a directory holding one")
     ap.add_argument("-o", "--out", default=str(ROOT / "tools" / "assets" / "BG"),
                     help="staging directory (default tools/assets/BG)")

@@ -202,10 +202,16 @@ void room_model_refresh(void);
 /*----------------------
  | room_model_player
  | Description: The object the player inhabits, or 0 while it is still unknown.
- |   There is no specified way to find it, so it is identified by intersecting
- |   the child sets of two consecutive rooms -- only the player follows the
- |   player -- which converges on the first room change. Until then carried items
- |   are simply absent.
+ |   There is no specified way to find it, so two are used. The reliable one is
+ |   to intersect the child sets of two consecutive rooms -- only the player
+ |   follows the player -- but it cannot answer until the player has moved once,
+ |   and everything downstream of it reports an empty inventory until it does.
+ |   So a pick-up is watched for as well: taking a thing moves it under the
+ |   player, so the object standing in this room that gained a child since the
+ |   last prompt is the player. That answer is provisional -- dropped if the
+ |   object stops being a child of the room, replaced outright once the
+ |   intersection speaks -- but it lands on the turn the player first has
+ |   something to look at, which is the earliest the answer is worth anything.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_player

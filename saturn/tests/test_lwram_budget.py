@@ -9,7 +9,8 @@ One megabyte, and four claimants that overlap in pairs:
     The title screen shows a randomly picked frame from one of these, which is
     what puts it beside the jingle; in game it is beside the trie instead;
   * the running game's typeahead trie, built at game start and held for the
-    session;
+    session, and OITEM.CZ beside it on the one story that has item pictures,
+    read at game start and held the same way;
   * the save/restore scratch, ~47 KB while a save is written.
 
 The pairs that actually coexist are jingle+archive (title screen) and
@@ -60,6 +61,17 @@ TRIE_RESERVE = 318 * 1024
 # for the archive, the frame and 4 KB; this is what has to survive on top of it
 # for a save written mid-session not to fail.
 SCRATCH_RESERVE = 64 * 1024
+
+# What item_art_open demands of Low Work RAM before it will read the archive:
+# the whole OITEM.CZ container (40,840), one decoded 64x80 picture
+# (OITEM_PIC_BYTES, 5,120) and 4,096 bytes of slack. That is its literal gate --
+# item_art.cxx asks for `bytes + OITEM_PIC_BYTES + 4096` -- so this models the
+# refusal rather than the allocation. The 512-byte palette is NOT in it: g_clut
+# is a static in item_art.cxx, not an LWRAM claim. Read once when the story is
+# selected and held for the session, which does not change this figure: it was
+# always checked against the whole in-game pairing -- trie + area archive +
+# scratch -- because the window it used to be resident in sat inside all three.
+ITEM_ART_RESERVE = 40840 + 5120 + 4096
 
 
 def cdefines(path):
@@ -156,6 +168,24 @@ def test_biggest_archive_fits_beside_the_largest_trie(budget):
         f"are {over} bytes over LWRAM. The trie is built first, so the archive "
         "is what goes short -- every room in that area draws no background, and "
         "nothing says so. Split the archive or trim the vocabulary.")
+
+
+def test_item_pane_fits_beside_the_in_game_claimants(budget):
+    """The pane opens mid-game, on top of the trie, the largest area archive
+    and the save scratch. If it does not fit, item_art_open refuses and the
+    pane is silently blank for the rest of the session -- which looks exactly
+    like an unbound item."""
+    resident = budget["resident"]
+    need = resident + TRIE_RESERVE + SCRATCH_RESERVE + ITEM_ART_RESERVE
+    over = need - LWRAM_TOTAL
+    assert need <= LWRAM_TOTAL, (
+        f"{budget['biggest'].name} plus its decode target ({resident}), the "
+        f"largest trie ({TRIE_RESERVE}), the save scratch ({SCRATCH_RESERVE}) "
+        f"and the item pane's own claim ({ITEM_ART_RESERVE}) are {over} bytes "
+        "over LWRAM. The pane opens on top of all three, so it is what goes "
+        "short, and item_art_open's refusal is silent -- the pane looks "
+        "exactly like an item with no bound picture. Free something before "
+        "the pane opens, or trim the item container.")
 
 
 def test_jingle_fits_lwram_alone(budget):

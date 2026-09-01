@@ -30,6 +30,23 @@ extern "C" {
 #define CGL_RING        4096
 
 /*----------------------
+ | cgl_lzss
+ | Description: Expands one Okumura-LZSS stream. The stream begins with its own
+ |   4-byte little-endian decompressed size, so this is the whole codec with no
+ |   knowledge of what wraps it -- a CGL record's palette prefix, or an OITEM
+ |   record's absence of one. Refuses rather than truncating, on the same terms
+ |   cgl_decode does.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_ring
+ | Params: src -- the stream, starting at its size header; src_len -- bytes
+ |   available from src; dst -- destination; dst_cap -- capacity of dst
+ | Returns: bytes written, or 0 on refusal
+ ----------------------*/
+unsigned long cgl_lzss(const unsigned char *src, unsigned long src_len,
+                       unsigned char *dst, unsigned long dst_cap);
+
+/*----------------------
  | cgl_decode
  | Description: Decompresses one record's LZSS stream into dst. Refuses rather
  |   than truncating: a null argument, a record too short to hold a palette and

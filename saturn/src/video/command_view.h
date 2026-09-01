@@ -12,24 +12,10 @@
 
 #include "command_panel.h"
 #include "keyboard.h"
+#include "panel_layout.h"
 #include "room_model.h"
 #include "saturn_keyboard.h"
 #include "typeahead.h"
-
-/*----------------------
- | CV_TRAVEL_X / CV_WORD_X / CV_CMD_X / CV_STRIP_ROWS
- | Description: The inner starting column of each module and the strip's content
- |   height. The strip is 1 + 13 + 1 + 15 + 1 + 8 + 1 = 40 columns and seven
- |   rows, all seven of them content: the compass rose is that tall, and the word
- |   and command lists are five rows sitting one row in from either end of it.
- |   The two blank rows that used to pad a five-row rose out to the strip's
- |   height are gone, so the panel's overall height is unchanged.
- | Author: suinevere
- ----------------------*/
-#define CV_TRAVEL_X    1
-#define CV_WORD_X     15
-#define CV_CMD_X      31
-#define CV_STRIP_ROWS  7
 
 /*----------------------
  | render_command_panel

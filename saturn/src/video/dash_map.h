@@ -242,6 +242,23 @@ void dash_hold_latch(int on);
 int dash_hold_latched(void);
 
 /*----------------------
+ | dash_clear
+ | Description: Drops the latch and blanks the layer, marking the blank dirty so
+ |   it actually reaches VRAM -- which is what separates this from dash_reset,
+ |   whose dirty_clear leaves whatever was painted sitting in VRAM with no record
+ |   that it is there.
+ |
+ |   For the soft reset. A longjmp out of a menu skips every destructor that
+ |   would have ended its box, so the box is still painted and, if a MenuBacking
+ |   died first, still latched -- and a latch is exactly what stops dash_frame_end
+ |   expiring it. The title screen then wears the last session's menu box over the
+ |   logo and the menu, permanently, since nothing there ever claims the layer to
+ |   paint something else over it.
+ | Author: suinevere
+ ----------------------*/
+void dash_clear(void);
+
+/*----------------------
  | dash_map_begin
  | Description: Claims the layer for the map and clears it, exactly as
  |   dash_build and dash_box do: one thing is on this layer at a time. Call

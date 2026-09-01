@@ -41,6 +41,7 @@ extern "C" {
 #include "title.h"
 #include "room_art.h"
 #include "video/item_art.h"
+#include "map_view.h"
 #include "splash.h"
 #include "game_catalog.h"
 #include "online.h"
@@ -392,6 +393,17 @@ int main(void) {
     cd_capture_root();
     g_z3_dir_valid = false;
     g_menu_backing_depth = 0;
+    // The map sets this while it is showing its own ground, and clears it on the
+    // way out -- a way out the reset chord skips, since the map polls for it.
+    // Left set, every fade from here on would drive the map's tan.
+    menu_back_override(0);
+    // And the menu chrome the same longjmp left painted. Coming out of Return to
+    // Title there are two guards whose destructors never ran -- the confirm box's
+    // and the Options page's underneath it -- so NBG2 still holds the box, and a
+    // latch owed by an earlier one holds it there: dash_frame_end will not expire
+    // a latched layer, and nothing on the title screen ever claims NBG2 to paint
+    // over it. The box sat on the logo and the menu for the rest of the session.
+    dash_clear();
     g_in_game = false;
     display_set_authored(0); // no game is selected at the title/menu, so there is
                              // no room art; a longjmp back here does not otherwise
@@ -650,6 +662,14 @@ int main(void) {
         music_set_game(game_release, game_serial);
         room_art_set_game(game_release, game_serial);
         item_art_set_game(game_release, game_serial);
+        // The map's parchment, read here for the same reason item_art_set_game
+        // reads OITEM.CZ here: it is the last moment the drive is free. Every
+        // later opening of the map would take this seek with CD-DA playing, and
+        // a seek does not merely interrupt a track -- one that was never held
+        // reads to the music engine as ended and restarts from the top, which is
+        // heard as the music cutting out and coming back. Declines by itself
+        // when the story is too large to hold the picture beside it.
+        map_view_preload();
         // Authored per-room art is the only art there is, so this flag is what
         // makes the Dynamic palette entry reachable at all: without it Dynamic is
         // skipped, and the room-art path, which only runs under Dynamic, never

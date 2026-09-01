@@ -7,20 +7,68 @@
 #include "command_panel.h"
 
 /*----------------------
+ | slot_remember / slot_restore
+ | Description: Save the word module's place in the slot being left, and take
+ |   back the place held in the slot being entered. Two halves of one rule: each
+ |   slot's list keeps its own cursor, so a slot change never drops the player at
+ |   the top of a list they were part-way down, and the verb they used last turn
+ |   is still under the cursor on the next one. A restored cursor was measured
+ |   against that slot's previous list and can name a cell a shorter one does not
+ |   reach, which is what cp_clamp answers for on the refill that follows.
+ |
+ |   The bound at the end is for a panel whose rows were never initialised: this
+ |   reads them on the very first cp_reset, so a caller that skipped cp_init on a
+ |   stack panel would restore a cursor out of whatever was there. It bounds the
+ |   damage to something the module can draw rather than curing it -- cp_init is
+ |   the cure, and the shipped panels take it or live in static storage.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: N/A
+ ----------------------*/
+static void slot_remember(CommandPanel *p) {
+    if (p->slot >= 0 && p->slot < CP_SLOT_DONE) {
+        p->slot_cursor[p->slot] = p->cursor;
+        p->slot_top[p->slot]    = p->top;
+    }
+}
+
+static void slot_restore(CommandPanel *p) {
+    if (p->slot >= 0 && p->slot < CP_SLOT_DONE) {
+        p->cursor = p->slot_cursor[p->slot];
+        p->top    = p->slot_top[p->slot];
+    } else {
+        p->cursor = 0;
+        p->top    = 0;
+    }
+    if (p->cursor < 0 || p->cursor >= CP_WORD_CELLS) p->cursor = 0;
+    if (p->top < 0) p->top = 0;
+}
+
+/*----------------------
  | cp_reset
  | Description: Clears the assembled command and returns focus to the word
- |   module at the verb slot, scrolled to the top of the list.
+ |   module at the verb slot, on the row that slot was last left on. The
+ |   remembered rows deliberately survive this: it runs once per prompt, and
+ |   zeroing them here would put the cursor back at the top of the verb list
+ |   every turn, which is the whole thing slot_restore exists to stop.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: p -- panel state to clear
  | Returns: N/A
  ----------------------*/
+void cp_init(CommandPanel *p) {
+    int i;
+    for (i = 0; i < CP_SLOT_DONE; i++) { p->slot_cursor[i] = 0; p->slot_top[i] = 0; }
+    cp_reset(p);
+}
+
 void cp_reset(CommandPanel *p) {
     p->box = CP_BOX_WORD;
     p->slot = CP_SLOT_VERB;
-    p->cursor = 0;
-    p->top = 0;
+    slot_restore(p);
     p->line[0] = '\0';
     p->line_len = 0;
     p->submitted = 0;
@@ -92,6 +140,7 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
 
     if (p->box == CP_BOX_TRAVEL) { p->slot = CP_SLOT_DONE; p->submitted = 1; p->overlay = 0; return; }
 
+    slot_remember(p);
     switch (p->slot) {
         case CP_SLOT_VERB:  p->slot = CP_SLOT_NOUN; break;
         case CP_SLOT_NOUN:  p->slot = wants_prep ? CP_SLOT_PREP : CP_SLOT_DONE; break;
@@ -99,8 +148,7 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
         case CP_SLOT_NOUN2: p->slot = CP_SLOT_DONE; break;
         default: break;
     }
-    p->cursor = 0;
-    p->top = 0;
+    slot_restore(p);
     p->overlay = 0;
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
 }
@@ -158,8 +206,7 @@ void cp_load_line(CommandPanel *p, const char *text) {
             : (words == 1) ? CP_SLOT_NOUN
             : (words == 3) ? CP_SLOT_NOUN2
                            : CP_SLOT_DONE;
-    p->cursor = 0;
-    p->top = 0;
+    slot_restore(p);
     p->overlay = 0;
     p->submitted = 0;
 }
@@ -184,10 +231,10 @@ void cp_back(CommandPanel *p) {
     for (i = p->line_len - 1; i >= 0; i--) if (p->line[i] == ' ') break;
     p->line_len = (i < 0) ? 0 : i;
     p->line[p->line_len] = '\0';
+    slot_remember(p);
     if (p->slot > CP_SLOT_VERB) p->slot--;
     if (p->slot > CP_SLOT_NOUN && p->line_len == 0) p->slot = CP_SLOT_VERB;
-    p->cursor = 0;
-    p->top = 0;
+    slot_restore(p);
     p->submitted = 0;
 }
 
@@ -251,6 +298,25 @@ static int cp_top_max(int ncand) {
  | Params: p -- panel state; ncand -- candidate count
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | cp_clamp
+ | Description: See command_panel.h. The scroll first, because the cursor is
+ |   clamped against the window the scroll selects and a `top` left past the end
+ |   of a shorter list would make every cell in it read as empty.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; ncand -- candidate count for the current slot
+ | Returns: N/A
+ ----------------------*/
+static void cp_clamp_cursor(CommandPanel *p, int ncand);
+
+void cp_clamp(CommandPanel *p, int ncand) {
+    if (p->top < 0) p->top = 0;
+    if (p->top > cp_top_max(ncand)) p->top = cp_top_max(ncand);
+    cp_clamp_cursor(p, ncand);
+}
+
 static void cp_clamp_cursor(CommandPanel *p, int ncand) {
     int filled = ncand - p->top * CP_WORD_COLS;
     if (filled > CP_WORD_CELLS) filled = CP_WORD_CELLS;

@@ -55,6 +55,12 @@ typedef struct {
     int  slot;
     int  cursor;
     int  top;       /* first candidate row showing in the word module */
+    /* Where the cursor was left in each slot's own list, so a slot change puts
+       it back rather than at the top. One entry per fillable slot; DONE has no
+       list and so no place to remember. Survives cp_reset, which is what makes
+       the verb the player used last turn still be under the cursor this turn. */
+    int  slot_cursor[CP_SLOT_DONE];
+    int  slot_top[CP_SLOT_DONE];
     char line[CP_LINE_MAX];
     int  line_len;
     int  submitted;
@@ -62,9 +68,26 @@ typedef struct {
 } CommandPanel;
 
 /*----------------------
+ | cp_init
+ | Description: Prepares a panel that has never been used: clears the per-slot
+ |   rows, which cp_reset deliberately preserves, then resets it. Call this once
+ |   for any panel that is not in static storage -- cp_reset alone would restore
+ |   a cursor out of whatever the stack happened to hold.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state to prepare
+ | Returns: N/A
+ ----------------------*/
+void cp_init(CommandPanel *p);
+
+/*----------------------
  | cp_reset
  | Description: Clears the assembled command and returns focus to the word
- |   module at the verb slot, scrolled to the top of the list.
+ |   module at the verb slot, on the row that slot was last left on. The
+ |   per-prompt entry: it runs once a turn, so the remembered rows survive it
+ |   and the verb the player used last turn is still under the cursor. A panel
+ |   that has never been touched wants cp_init first.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -200,6 +223,21 @@ typedef struct {
  | Returns: N/A
  ----------------------*/
 void cp_fill(const char *const *cands, int ncand, int top, CommandWords *out);
+
+/*----------------------
+ | cp_clamp
+ | Description: Brings the scroll and the cursor back inside a list of `ncand`
+ |   candidates. Call once per frame after the list is sourced: the cursor a
+ |   slot change restores was measured against that slot's previous list, which
+ |   may have been longer, and until this runs it can name a cell the new list
+ |   does not reach.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; ncand -- candidate count for the current slot
+ | Returns: N/A
+ ----------------------*/
+void cp_clamp(CommandPanel *p, int ncand);
 
 /*----------------------
  | cp_word_rows

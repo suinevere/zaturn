@@ -258,8 +258,10 @@ struct TgaImage {
  ----------------------*/
 static void tga_image_free(TgaImage *img) {
     if (img == nullptr) return;
-    if (img->Pixels != nullptr) SRL::Memory::HighWorkRam::Free(img->Pixels);
-    if (img->Colors != nullptr) SRL::Memory::HighWorkRam::Free(img->Colors);
+    // The generic free, not the zone's: a decode can land in either zone now
+    // (see tga_decode's `low`), and SRL routes a pointer to whichever owns it.
+    if (img->Pixels != nullptr) SRL::Memory::Free(img->Pixels);
+    if (img->Colors != nullptr) SRL::Memory::Free(img->Colors);
     img->Pixels = nullptr;
     img->Colors = nullptr;
 }
@@ -267,12 +269,20 @@ static void tga_image_free(TgaImage *img) {
 /*----------------------
  | tga_decode
  | Description: Reads an uncompressed 8bpp colour-mapped TGA off the CD and
- |   decodes it into freshly allocated High Work RAM: palette expanded to 256
- |   entries, rows flipped to top-down, and the leading partial sector shifted
- |   off the front. This is the only function here that touches the disc, so it
- |   is also the only one that interrupts CD audio -- and the only picture it is
- |   ever asked for is the boot logo, read under a black screen before any track
- |   is playing.
+ |   decodes it into a freshly allocated plane: palette expanded to 256 entries,
+ |   rows flipped to top-down, and the leading partial sector shifted off the
+ |   front. This is the only function here that touches the disc, so it is also
+ |   the only one that interrupts CD audio -- so every caller reads under a black
+ |   screen with no track playing.
+ |
+ |   `low` picks the zone. A throwaway picture takes High Work RAM, where it is
+ |   allocated and freed inside one call and competes with nothing. A picture
+ |   held for the session takes Low Work RAM instead: the C heap is ~194 KB
+ |   against a story image of up to 129 KB, so 78 KB held there is 78 KB the next
+ |   story cannot have, while LWRAM is a separate megabyte with room for it
+ |   beside the trie, the area archive and the item container (see
+ |   tests/test_lwram_budget.py). Slower to fill -- 16 bits wide, behind the SCU
+ |   -- which costs one DMA at load and nothing afterwards.
  |
  |   Steps into /TGA through cd_enter_tga before opening, and calls
  |   cd_enter_root() on every exit that follows -- success, every validation
@@ -287,11 +297,11 @@ static void tga_image_free(TgaImage *img) {
  | Dependencies: SRL, cd_enter_tga, cd_enter_root
  | Globals: N/A
  | Params: file -- a bare /TGA filename, e.g. "SUINE.TGA"; out -- filled on
- |   success
+ |   success; low -- true to decode into Low Work RAM rather than the C heap
  | Returns: true on success; on failure out is left blank and nothing is
  |   allocated
  ----------------------*/
-static bool tga_decode(const char *file, TgaImage *out) {
+static bool tga_decode(const char *file, TgaImage *out, bool low) {
     out->Pixels = nullptr;
     out->Colors = nullptr;
     out->W      = 0;
@@ -332,13 +342,16 @@ static bool tga_decode(const char *file, TgaImage *out) {
     const uint32_t skip    = (uint32_t) (pixoff % ss);
     const uint32_t span    = skip + npix;
     const uint32_t palsize = 256 * sizeof(SRL::Types::HighColor);
-    if ((uint32_t) SRL::Memory::HighWorkRam::GetFreeSpace() < span + palsize + 4096) {
+    const uint32_t zone_free = low ? (uint32_t) SRL::Memory::LowWorkRam::GetFreeSpace()
+                                   : (uint32_t) SRL::Memory::HighWorkRam::GetFreeSpace();
+    if (zone_free < span + palsize + 4096) {
         cd_enter_root();
         return false;
     }
 
-    SRL::Types::HighColor *colors =
-        (SRL::Types::HighColor *) SRL::Memory::HighWorkRam::Malloc(palsize);
+    SRL::Types::HighColor *colors = (SRL::Types::HighColor *)
+        (low ? SRL::Memory::LowWorkRam::Malloc(palsize)
+             : SRL::Memory::HighWorkRam::Malloc(palsize));
     if (colors == nullptr) { cd_enter_root(); return false; }
     for (int i = 0; i < 256; i++) {
         SRL::Types::HighColor c;
@@ -352,17 +365,18 @@ static bool tga_decode(const char *file, TgaImage *out) {
         colors[i] = c;
     }
 
-    uint8_t *pix = (uint8_t *) SRL::Memory::HighWorkRam::Malloc(span);
+    uint8_t *pix = (uint8_t *) (low ? SRL::Memory::LowWorkRam::Malloc(span)
+                                    : SRL::Memory::HighWorkRam::Malloc(span));
     // LoadBytes wants a long-aligned destination; refuse rather than corrupt.
     if (pix == nullptr || ((unsigned int) pix & 3) != 0) {
-        if (pix != nullptr) SRL::Memory::HighWorkRam::Free(pix);
-        SRL::Memory::HighWorkRam::Free(colors);
+        if (pix != nullptr) SRL::Memory::Free(pix);
+        SRL::Memory::Free(colors);
         cd_enter_root();
         return false;
     }
     if (f.LoadBytes((size_t) (pixoff / ss), (int32_t) span, pix) <= 0) {
-        SRL::Memory::HighWorkRam::Free(pix);
-        SRL::Memory::HighWorkRam::Free(colors);
+        SRL::Memory::Free(pix);
+        SRL::Memory::Free(colors);
         cd_enter_root();
         return false;
     }
@@ -435,7 +449,7 @@ static bool tga_blit_nbg0(const TgaImage *img) {
  ----------------------*/
 bool title_bg_show_oneoff(const char *file) {
     TgaImage oneoff = { nullptr, nullptr, 0, 0 };
-    bool decoded = tga_decode(file, &oneoff);
+    bool decoded = tga_decode(file, &oneoff, false);
     bitmap_read_end();
     if (!decoded) return false;
 
@@ -508,7 +522,7 @@ static TgaImage g_held = { nullptr, nullptr, 0, 0 };
 bool title_bg_hold(const char *file) {
     if (g_held.Pixels != nullptr) return true;
     TgaImage img = { nullptr, nullptr, 0, 0 };
-    bool decoded = tga_decode(file, &img);
+    bool decoded = tga_decode(file, &img, true);   // held for the session: LWRAM
     bitmap_read_end();
     if (!decoded) return false;
     g_held = img;

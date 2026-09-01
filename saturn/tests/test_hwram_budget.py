@@ -8,12 +8,14 @@ program image leaves behind: about 194 KB in the shipped build. The single
 largest thing in it is the running story image, and the shipped stories run
 from 47 KB (MZORKI) to 129 KB (LURKING, the Lurking Horror).
 
-That leaves no room for two of them, nor for one of them beside the map's held
-parchment, which title_bg_hold keeps decoded in the same heap for the rest of
-the run. The rule this file exists to hold is:
+That leaves no room for two of them. The rule this file exists to hold is:
 
-  nothing a finished session allocated may still be resident when the next
-  story is read -- the story image itself, and the held parchment beside it.
+  a story image must be released before the next one is read.
+
+The map's parchment used to be measured here too, and was the reason nine of the
+thirty-one stories stopped loading once a player had opened the map. It is
+decoded into Low Work RAM now, so that pairing moved to test_lwram_budget.py
+with it -- which is also why the largest stories can hold it at all.
 
 mojozork's initStory frees the outgoing image, but only after main.cxx has
 already allocated the incoming one -- so on its own it makes a game switch
@@ -241,48 +243,6 @@ def test_two_stories_do_not_fit():
         "against the pairing that is tightest now.")
 
 
-def test_held_map_parchment_is_released_at_the_title():
-    """The map's parchment is the second thing that outlives a session.
-
-    title_bg_hold keeps MAP.TGA decoded in the same C heap for the rest of the
-    run, and g_held is a plain static, so it survives the longjmp exactly as the
-    story image used to. Left resident it comes straight out of the next story's
-    allocation.
-    """
-    lines = code_lines((SRC / "main.cxx").read_text(encoding="utf-8", errors="replace"))
-    drops = [l for l in lines if "title_bg_drop_held()" in l]
-    assert drops, (
-        "main.cxx never calls title_bg_drop_held(), so the map's parchment "
-        "stays in the C heap across the title screen and the next story is "
-        "loaded into what is left of it. Release it beside room_art_release() "
-        "and item_art_close(), which answer for exactly the same thing in the "
-        "other zone.")
-    releases = [i for i, l in enumerate(lines) if "room_art_release()" in l]
-    for i in releases:
-        assert any("title_bg_drop_held()" in l for l in lines[i:i + 4]), (
-            "one of main.cxx's session-teardown points releases the area "
-            "archive but not the held parchment. Both are a finished session's "
-            "art; they go together or the next one is missed.")
-
-
-def test_held_map_and_the_largest_story_do_not_fit():
-    """Why that release is mandatory rather than tidy, in bytes."""
-    heap = heap_bytes()
-    if heap is None:
-        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
-    require_full_library()
-    resident = tga_gate("MAP.TGA") - 4096      # the gate less its own headroom
-    name, size = stories()[0]
-    assert size + resident > heap, (
-        f"{name} ({size}) and the held parchment ({resident}) now both fit in "
-        f"{heap} bytes. That does not make the release optional -- it is still "
-        "a whole session's allocation stranded across the title -- but this "
-        "check has stopped saying anything, so re-derive it.")
-    free = heap - resident
-    stranded = [n for n, s in stories() if s > free]
-    assert stranded, (
-        "no shipped story is larger than what a held parchment leaves free, so "
-        "this check no longer names a consequence. Re-derive it.")
 
 
 def test_each_claimant_fits_the_heap_alone():
@@ -352,13 +312,6 @@ def _print_report():
               % gate)
         print("  largest + that gate      %8d  of %d  (%s)"
               % (s1 + gate, heap, "OVER" if s1 + gate > heap else "fits"))
-        held = tga_gate("MAP.TGA") - 4096
-        print("  map parchment held       %8d  (kept for the session once opened)"
-              % held)
-        print("  largest + held parchment %8d  of %d  (%s)"
-              % (s1 + held, heap, "OVER" if s1 + held > heap else "fits"))
-        print("  stories over what a held parchment leaves free: %d of %d"
-              % (len([1 for _, s in ranked if s > heap - held]), len(ranked)))
 
 
 def main():
@@ -372,10 +325,6 @@ def main():
         (test_soft_reset_releases_the_story, "soft reset releases the story"),
         (test_release_actually_frees_the_image, "mojo_release frees the image"),
         (test_two_stories_do_not_fit, "two stories do not fit"),
-        (test_held_map_parchment_is_released_at_the_title,
-         "held parchment released at the title"),
-        (test_held_map_and_the_largest_story_do_not_fit,
-         "held parchment and largest story do not fit"),
         (test_each_claimant_fits_the_heap_alone, "each claimant fits the heap alone"),
         (test_title_wallpaper_needs_the_story_gone,
          "title wallpaper needs the story gone"),

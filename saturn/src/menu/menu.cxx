@@ -141,6 +141,33 @@ int g_menu_intro_fade = 0;
 int g_menu_page_fade = 0;
 
 /*----------------------
+ | g_back_override / menu_back_override / menu_back_rgb
+ | Description: The backdrop the fade drives, and the one page that does not want
+ |   the player's own. 0 means none, which no real colour can be: every backdrop
+ |   here carries the opaque bit.
+ |
+ |   The map is why. It paints its ground with the back colour when it has no
+ |   parchment to lay over it, and every fade recomputed that colour from
+ |   g_display.bg -- so the tan it had just set survived exactly until the first
+ |   frame of its own fade-in, and the map came up on the player's background
+ |   colour instead. Invisible for as long as a parchment covered the ground, and
+ |   the whole screen once one would not fit.
+ | Author: suinevere
+ | Dependencies: display.c (display_bg_rgb)
+ | Globals: g_back_override, g_display
+ | Params: packed -- a DISP_RGB555 colour with its opaque bit, or 0 to clear
+ | Returns: menu_back_rgb returns the colour the fade should drive
+ ----------------------*/
+static unsigned short g_back_override = 0;
+
+void menu_back_override(unsigned short packed) { g_back_override = packed; }
+
+static unsigned short menu_back_rgb(void) {
+    return (g_back_override != 0) ? g_back_override
+                                  : (unsigned short) display_bg_rgb(g_display.bg);
+}
+
+/*----------------------
  | menu_intro_scale
  | Description: Scales a packed RGB555 colour's three channels by (255+v)/255,
  |   v in -255..0 (so -255 is black, 0 is the colour unchanged). Fades the
@@ -227,7 +254,7 @@ static void menu_intro_level(int v) {
     title_bg_fade_level(v);
 #endif
     SRL::VDP2::SetBackColor(SRL::Types::HighColor(
-        menu_intro_scale(display_bg_rgb(g_display.bg), v)));
+        menu_intro_scale(menu_back_rgb(), v)));
 }
 
 /*----------------------
@@ -361,7 +388,7 @@ void menu_fade_in_ex(int frames, MenuFadeStep step) {
         SRL::Core::Synchronize();
     }
     menu_offset_release();
-    SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
+    SRL::VDP2::SetBackColor(SRL::Types::HighColor(menu_back_rgb()));
 }
 
 void menu_fade_in(int frames) { menu_fade_in_ex(frames, 0); }
@@ -392,7 +419,7 @@ void menu_fade_in(int frames) { menu_fade_in_ex(frames, 0); }
 void menu_fade_clear(void) {
     text_flush();
     menu_offset_release();
-    SRL::VDP2::SetBackColor(SRL::Types::HighColor(display_bg_rgb(g_display.bg)));
+    SRL::VDP2::SetBackColor(SRL::Types::HighColor(menu_back_rgb()));
 }
 
 // ---- opaque backing for menus over an image --------------------------------

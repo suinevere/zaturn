@@ -19,6 +19,9 @@
 
 int main(void) {
     CommandPanel p;
+    /* Not cp_reset: that restores the per-slot rows, which on a stack panel
+       have never been set. cp_init is what clears them first. */
+    cp_init(&p);
 
     cp_reset(&p);
     assert(p.box == CP_BOX_WORD);
@@ -333,6 +336,48 @@ int main(void) {
     assert(p.slot == CP_SLOT_VERB);
     cp_load_line(&p, 0);
     assert(p.line_len == 0);
+
+    /* Each slot's list keeps its own cursor. Picking a verb from part-way down
+       the list used to drop the cursor at the top of the noun list, and the next
+       prompt at the top of the verb list again -- so a player repeating "take X"
+       walked back down to "take" every single turn. */
+    cp_init(&p);                        /* a clean slate: cp_reset keeps the rows */
+    p.cursor = 4;                       /* part-way down the verb list */
+    p.top    = 1;
+    cp_pick(&p, "take", 0);
+    assert(p.slot == CP_SLOT_NOUN);
+    assert(p.cursor == 0);              /* the noun list has its own place */
+    assert(p.top == 0);
+
+    p.cursor = 3;                       /* and part-way down that one */
+    cp_back(&p);                        /* back to the verb slot... */
+    assert(p.slot == CP_SLOT_VERB);
+    assert(p.cursor == 4);              /* ...where the cursor was left */
+    assert(p.top == 1);
+
+    /* Turn to turn: cp_reset runs once per prompt and must not forget. */
+    cp_pick(&p, "take", 0);
+    cp_pick(&p, "lamp", 0);
+    assert(p.slot == CP_SLOT_DONE);
+    assert(p.submitted == 1);
+    cp_reset(&p);
+    assert(p.slot == CP_SLOT_VERB);
+    assert(p.cursor == 4);
+    assert(p.top == 1);
+
+    /* A restored place can name a cell the new list does not reach -- a noun
+       list is the room's, so it shrinks on any move. cp_clamp is what stops it
+       sitting on an empty cell until the player pushes the stick. */
+    cp_init(&p);
+    p.cursor = CP_WORD_CELLS - 1;
+    p.top    = 6;
+    cp_clamp(&p, 3);                    /* three candidates, one part-full row */
+    assert(p.top == 0);
+    assert(p.cursor < 3);
+
+    cp_clamp(&p, 0);                    /* and an empty list is not a crash */
+    assert(p.top == 0);
+    assert(p.cursor == 0);
 
     printf("test_command_panel ok\n");
     return 0;

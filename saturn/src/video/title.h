@@ -86,10 +86,16 @@ bool title_bg_show_raw(const unsigned char *pixels, const unsigned short *clut,
  |   picture is still there, because it is not: room_art puts the room back on
  |   NBG0 the moment the map closes.
  |
- |   The picture lives in High Work RAM, where every TGA has lived since the
- |   cache went -- not the Low Work RAM megabyte the jingle, the area archives
- |   and the typeahead trie share, which has under 90 KB spare at its tightest
- |   pairing (see tests/test_lwram_budget.py).
+ |   The picture lives in Low Work RAM, beside the jingle, the area archives and
+ |   the typeahead trie, and NOT in the C heap where every other TGA is decoded.
+ |   It went there first, on the reasoning that LWRAM was the tighter zone; the
+ |   arithmetic says the opposite once the picture is held for a whole session.
+ |   The C heap is ~194 KB and a story image is up to 129 KB, so 78 KB kept there
+ |   is 78 KB the next story cannot have -- nine of the thirty-one stories on the
+ |   disc stopped fitting, and the largest could not hold the picture in the first
+ |   place, which is what left the map drawing on bare ground for them. LWRAM has
+ |   room for it beside all three of its own claimants; tests/test_lwram_budget.py
+ |   holds that pairing.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_held

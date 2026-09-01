@@ -777,6 +777,21 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
  | Params: N/A
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | map_view_preload
+ | Description: See map_view.h.
+ | Author: suinevere
+ | Dependencies: title.h (title_bg_hold)
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+extern "C" void map_view_preload(void) {
+#ifndef NETBIN
+    title_bg_hold(MAP_BG_FILE);
+#endif
+}
+
 extern "C" void map_view_show(void) {
     MenuBacking backing;
     int sx = 0, sy = 0, hx = 0, hy = 0;
@@ -797,7 +812,15 @@ extern "C" void map_view_show(void) {
     // closed repeatedly with a CD-DA track playing, and tga_decode is the one
     // thing here that touches the drive; a read per open would stop the music
     // every time, which is the reason the room pictures stopped being TGAs.
-    if (title_bg_hold(MAP_BG_FILE)) parchment = title_bg_show_held(MAP_BG_TAG);
+    // Asked, never read. The read is map_view_preload's, done under the loading
+    // ramp before CD-DA has started, because a data seek silences the track
+    // whatever else is going on -- and a track that was never held reads to the
+    // engine as one that ended, so it restarts from the top rather than
+    // resuming. That is the cut in and out this used to make on the first open.
+    // Reading here was worse than once, too: tga_decode reads the header before
+    // it checks the heap, so on a story too large to hold the picture the seek
+    // happened on every open and still put no paper up.
+    if (title_bg_held()) parchment = title_bg_show_held(MAP_BG_TAG);
     if (!parchment) title_bg_hide();
 #endif
     // The menu that opened this armed the VDP2 window that suppresses NBG0
@@ -817,7 +840,16 @@ extern "C" void map_view_show(void) {
     // Not touched when there is one. The sheet's torn edges are transparent by
     // design and are drawn to read against a dark ground; filling that with tan
     // would flatten the edge the picture is shaped around.
-    if (!parchment) SRL::VDP2::SetBackColor(SRL::Types::HighColor(MAP_BACK_555));
+    // The override alongside the colour, or the fade below undoes this on its
+    // first frame: every ramp recomputes the backdrop from the player's own
+    // background setting, so the tan lasted until the screen started coming up
+    // and the map arrived on their colour instead. Nothing saw it while a
+    // parchment covered the ground; on a story too large to hold one it was the
+    // entire screen.
+    if (!parchment) {
+        SRL::VDP2::SetBackColor(SRL::Types::HighColor(MAP_BACK_555));
+        menu_back_override(MAP_BACK_555);
+    }
     dash_tint(MAP_GROUND_555);
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
     else                           map_model_clear_reveal();
@@ -906,11 +938,16 @@ extern "C" void map_view_show(void) {
     text_clear_line(MAP_ROW_HELP);
     text_flush();
     dash_tint(tint);
-    if (!parchment)
+    if (!parchment) {
+        // After the fade-out above, so that ramp takes the tan down rather than
+        // the player's colour, and before the page underneath fades itself back
+        // in on its own.
+        menu_back_override(0);
         // Back to what SRL::Core::Initialize set in both builds (main.cxx:361,
         // main_netbin.cxx:251), so this restores a known value rather than a
         // guess.
         SRL::VDP2::SetBackColor(SRL::Types::HighColor::Colors::Black);
+    }
     // And the window back on for the page underneath, which is where it came
     // from: this screen is only ever reached from a menu, so a MenuBacking is
     // always up around it and wants its box suppressing the image again. Its

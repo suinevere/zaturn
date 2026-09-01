@@ -430,6 +430,30 @@ int main(void) {
     dash_frame_end();
     for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
 
+    /* dash_clear: what the soft reset needs. A latched, painted box has to go,
+       and the blank has to be DIRTY or it never reaches VRAM -- which is the
+       whole difference from dash_reset, whose dirty_clear leaves the old box
+       sitting in VRAM with no record that it is there. Without this the title
+       screen wore the last session's menu box over the logo, permanently: the
+       latch stops dash_frame_end expiring it, and nothing on the title ever
+       claims the layer to paint over it. */
+    dash_box(6, 4, 12, 8);
+    dash_frame_end();
+    dash_hold_latch(1);
+    dash_dirty_clear();
+    assert(dash_cell(6, 4) == DT_CORNER_TL);
+
+    dash_clear();
+    assert(dash_hold_latched() == 0);
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+    assert(dash_dirty_top() <= dash_dirty_bottom());   /* the blank will be written */
+
+    /* And it stays gone across frames nobody claims, which is what the title
+       screen's own loops are. */
+    dash_frame_end();
+    dash_frame_end();
+    assert(dash_hold_painted() == 0);
+
     printf("test_dash_map: ok\n");
     return 0;
 }

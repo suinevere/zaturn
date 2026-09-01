@@ -422,7 +422,7 @@ void online_mode(void) {
     char sug_last[256] = "";
     int last_scan_lines = -1;
 #ifdef NETBIN
-    CommandPanel cpanel; cp_reset(&cpanel);
+    CommandPanel cpanel; cp_init(&cpanel);
     g_cmd_mode = g_cmd_iface;
     mode_toggle_reset();
     /* The rose can show this game's real exits, but only the exits: the story

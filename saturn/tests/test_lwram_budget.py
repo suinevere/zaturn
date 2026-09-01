@@ -11,7 +11,12 @@ One megabyte, and four claimants that overlap in pairs:
   * the running game's typeahead trie, built at game start and held for the
     session, and OITEM.CZ beside it on the one story that has item pictures,
     read at game start and held the same way;
-  * the save/restore scratch, ~47 KB while a save is written.
+  * the save/restore scratch, ~47 KB while a save is written;
+  * the map's parchment (MAP.TGA), decoded at game start and held for the
+    session so opening the map never touches the drive -- a seek stops the
+    CD-DA track, and an unheld track is restarted from the top rather than
+    resumed. It was in the C heap first; a session-long 78 KB there is 78 KB
+    the next story image cannot have (tests/test_hwram_budget.py).
 
 The pairs that actually coexist are jingle+archive (title screen) and
 trie+archive+scratch (in game). Neither is checked anywhere at runtime in a way
@@ -72,6 +77,19 @@ SCRATCH_RESERVE = 64 * 1024
 # always checked against the whole in-game pairing -- trie + area archive +
 # scratch -- because the window it used to be resident in sat inside all three.
 ITEM_ART_RESERVE = 40840 + 5120 + 4096
+
+# The map's parchment, decoded once at game start (map_view_preload) and held
+# for the session so opening the map costs no disc access -- a seek would stop
+# the CD-DA track, and an unheld track is restarted from the top rather than
+# resumed. Measured off the shipped file the way the archives are, not declared:
+# the pixel plane plus the leading partial sector tga_decode reads and shifts
+# off, plus the 256-entry palette. tga_decode's own gate asks for 4096 more on
+# top, and that slack is what this models, since a refusal is what would be seen.
+#
+# It is here rather than in the C heap on purpose. Held for a whole session it is
+# 78 KB the next story image cannot have, and the heap is ~194 KB against stories
+# of up to 129 KB -- see tests/test_hwram_budget.py.
+PARCHMENT_RESERVE = None      # filled by compute_budget from the shipped TGA
 
 
 def cdefines(path):
@@ -137,12 +155,43 @@ def compute_budget():
     return {
         "frame": frame, "jingle": jingle, "archives": archives,
         "biggest": biggest, "resident": resident,
+        "parchment": tga_gate("MAP.TGA"),
     }
+
+
+def tga_gate(name, sector=2048):
+    """What tga_decode demands be FREE in its zone before it will decode.
+
+    Its literal gate -- span + palette + 4096, where span is the pixel plane plus
+    the leading partial sector it reads and shifts off. Read off the shipped
+    file's own header, the same way the archives above are measured, because a
+    refusal is silent: the map simply draws on its back colour.
+    """
+    p = ROOT / "saturn" / "cd" / "data" / "TGA" / name
+    if not p.is_file():
+        raise RuntimeError(f"no {name} under cd/data/TGA to measure")
+    hdr = p.read_bytes()[:18]
+    idlen, cmaptype, imgtype = hdr[0], hdr[1], hdr[2]
+    cmaplen, cmapbits = hdr[5] | (hdr[6] << 8), hdr[7]
+    w, h = hdr[12] | (hdr[13] << 8), hdr[14] | (hdr[15] << 8)
+    if cmaptype != 1 or imgtype != 1 or hdr[16] != 8:
+        raise RuntimeError(f"{name} is not the 8bpp uncompressed paletted TGA "
+                           "tga_decode accepts")
+    pixoff = 18 + idlen + cmaplen * (cmapbits // 8)
+    return (pixoff % sector) + w * h + 256 * 2 + 4096
 
 
 @pytest.fixture(scope="module")
 def budget():
-    return compute_budget()
+    try:
+        return compute_budget()
+    except RuntimeError as e:
+        # The area archives and the boot PCM are generated, not committed
+        # (.gitignore), so a clean checkout cannot measure this budget at all.
+        # Skipping says so; erroring says the budget is broken, which is a
+        # different and untrue thing. The direct-script path below still exits
+        # non-zero, since a person running it wants the setup problem named.
+        pytest.skip(str(e))
 
 
 def test_biggest_archive_fits_beside_the_jingle(budget):
@@ -188,6 +237,44 @@ def test_item_pane_fits_beside_the_in_game_claimants(budget):
         "the pane opens, or trim the item container.")
 
 
+def test_parchment_fits_beside_the_in_game_claimants(budget):
+    """The map's paper is read at game start and held for the session, so it
+    sits on top of everything the game already has resident. A refusal is
+    silent -- tga_decode returns false and the map draws on its tan back colour,
+    which looks exactly like a disc whose MAP.TGA would not read."""
+    need = (budget["resident"] + TRIE_RESERVE + SCRATCH_RESERVE
+            + ITEM_ART_RESERVE + budget["parchment"])
+    over = need - LWRAM_TOTAL
+    assert need <= LWRAM_TOTAL, (
+        f"{budget['biggest'].name} plus its decode target ({budget['resident']}), "
+        f"the largest trie ({TRIE_RESERVE}), the save scratch ({SCRATCH_RESERVE}), "
+        f"the item pane ({ITEM_ART_RESERVE}) and the map's parchment "
+        f"({budget['parchment']}) are {over} bytes over LWRAM. The parchment is "
+        "read last of these, so it is what goes short, and the map then draws on "
+        "flat tan for the whole session with nothing said. Shrink MAP.TGA -- a "
+        "tilemap of its repeated middle would cost a tenth of this -- or move it "
+        "back out of this zone.")
+
+
+def test_parchment_is_released_at_the_title(budget):
+    """And it has to go when the game does. g_held is a plain static, so it
+    survives the longjmp; left resident it comes out of the next game's trie,
+    which is the largest thing in this zone and the one with no headroom check
+    of its own -- the build ran the heap dry part-way and the allocations that
+    failed were unchecked."""
+    text = (SRC / "main.cxx").read_text(encoding="utf-8", errors="replace")
+    lines = []
+    for line in text.splitlines():
+        s = line.split("//", 1)[0].strip()
+        if s:
+            lines.append(s)
+    assert any("title_bg_drop_held()" in l for l in lines), (
+        "main.cxx never calls title_bg_drop_held(), so the map's parchment "
+        "stays resident across the title screen and the next game builds its "
+        "trie into what is left. Release it beside room_art_release() and "
+        "item_art_close(), which answer for the other two claimants here.")
+
+
 def test_jingle_fits_lwram_alone(budget):
     jingle = budget["jingle"]
     assert jingle <= LWRAM_TOTAL, (
@@ -200,6 +287,13 @@ def test_every_frame_lies_inside_its_archive():
     """room_art refuses a frame whose offset+length runs past the archive it was
     generated against, one frame at a time and without a word. Catch the
     mismatch here, where it can name the frame."""
+    # The archives are generated, not committed, so a clean checkout has none and
+    # every frame would be reported as running past an archive that is simply not
+    # there -- 74 failures naming a problem that does not exist.
+    if not BG_DIR.is_dir() or not any(p.suffix.upper() == ".CGL"
+                                      for p in BG_DIR.iterdir() if p.is_file()):
+        pytest.skip("no CGL archives in this checkout -- run tools/assets/bg.bat "
+                    "to generate them before this can say anything")
     inc = SRC / "scene" / "game_presentation.inc"
     text = inc.read_text(encoding="utf-8", errors="replace")
 
@@ -247,8 +341,12 @@ def _print_report(b):
     print("  ------------------------------------")
     print("  title:  archive + jingle          %8d  of %d"
           % (b["resident"] + b["jingle"], LWRAM_TOTAL))
+    print("  map parchment            %8d  (held for the session)" % b["parchment"])
     print("  game:   archive + trie + scratch  %8d  of %d"
           % (b["resident"] + TRIE_RESERVE + SCRATCH_RESERVE, LWRAM_TOTAL))
+    print("  game:   + item pane + parchment   %8d  of %d"
+          % (b["resident"] + TRIE_RESERVE + SCRATCH_RESERVE + ITEM_ART_RESERVE
+             + b["parchment"], LWRAM_TOTAL))
 
 
 def main():
@@ -269,6 +367,10 @@ def main():
          "biggest archive fits beside the jingle"),
         (lambda: test_biggest_archive_fits_beside_the_largest_trie(b),
          "biggest archive fits beside the largest trie"),
+        (lambda: test_parchment_fits_beside_the_in_game_claimants(b),
+         "parchment fits beside the in-game claimants"),
+        (lambda: test_parchment_is_released_at_the_title(b),
+         "parchment released at the title"),
         (lambda: test_jingle_fits_lwram_alone(b), "jingle fits LWRAM alone"),
         (test_every_frame_lies_inside_its_archive,
          "every frame lies inside its archive"),
@@ -286,7 +388,8 @@ def main():
 
     print("\ntest_lwram_budget: OK (%d bytes spare on the tightest pairing)"
           % (LWRAM_TOTAL - max(b["resident"] + b["jingle"],
-                               b["resident"] + TRIE_RESERVE + SCRATCH_RESERVE)))
+                               b["resident"] + TRIE_RESERVE + SCRATCH_RESERVE
+                               + ITEM_ART_RESERVE + b["parchment"])))
 
 
 if __name__ == "__main__":

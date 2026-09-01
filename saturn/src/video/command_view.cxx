@@ -594,7 +594,7 @@ static int cv_cache_stale(const CommandPanel &p, TrieNode *root) {
  ----------------------*/
 static int g_cv_ncand = 0;
 
-static int cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &w) {
+static int cv_refill_words(CommandPanel &p, TrieNode *root, CommandWords &w) {
     if (cv_cache_stale(p, root)) {
         int core_n = 0;
         DictionaryWord *prev = 0;
@@ -610,6 +610,13 @@ static int cv_refill_words(const CommandPanel &p, TrieNode *root, CommandWords &
         cv_reorder(g_cv_cand, g_cv_ncand, prev, core_n);
         cv_truncate_all(g_cv_cand, g_cv_ncand);
     }
+    // Before the fill, not after: the cursor and scroll a slot change restored
+    // were measured against that slot's previous list, and this one may be
+    // shorter -- a noun list is the room's, so it changes on every move. Nothing
+    // else clamps on a refill; cp_clamp_cursor was only ever reached from
+    // cp_word_move, so an out-of-range place survived until the player pushed
+    // the stick.
+    cp_clamp(&p, g_cv_ncand);
     cp_fill(g_cv_cand, g_cv_ncand, p.top, &w);
     return g_cv_ncand;
 }

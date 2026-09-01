@@ -444,4 +444,25 @@ void menu_fade_in_ex(int frames, MenuFadeStep step);
  ----------------------*/
 void menu_fade_clear(void);
 
+/*----------------------
+ | menu_back_override
+ | Description: Makes every fade drive `packed` as the backdrop instead of the
+ |   player's chosen background colour, for a page that paints its own ground.
+ |   0 clears it, and is not a colour any caller can mean: a backdrop carries the
+ |   opaque bit.
+ |
+ |   Set it before the page's fade-in and clear it after its fade-out, so both
+ |   ramps run on the colour the page is actually showing. Without it a page that
+ |   sets the back colour itself keeps that colour only until the first frame of
+ |   its own fade, which recomputes it from g_display.bg -- the map's tan ground
+ |   lasted exactly that long. Cleared on the way to the title as well, since a
+ |   soft reset out of such a page skips the far end.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: packed -- a DISP_RGB555 colour with its opaque bit, or 0 to clear
+ | Returns: N/A
+ ----------------------*/
+void menu_back_override(unsigned short packed);
+
 #endif /* MENU_H */

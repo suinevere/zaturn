@@ -290,6 +290,23 @@ static void test_duck_withholds_category_commit(void) {
     printf("  duck withholds category:   OK\n");
 }
 
+/* The soft reset. A longjmp out of the in-game Options menu skips the resume
+   the read loop owes, so the engine lands at the title with a duck still in
+   force. music_reset clears its own latch -- and used to stop there, which put
+   the backend's duck out of reach for good: every level written afterwards goes
+   through it, so the whole next session played quiet with nothing able to lift
+   it. The reset has to lift the backend's too. */
+static void test_reset_lifts_a_duck_the_longjmp_skipped(void) {
+    engine_up();
+    music_duck();
+    assert(g_ducks == 1 && g_unducks == 0);
+
+    music_reset();                     /* what main() runs at the title */
+    assert(g_unducks == 1);            /* the backend is un-ducked, not just forgotten */
+    assert(music_is_paused() == 0);
+    printf("  reset lifts a duck:        OK\n");
+}
+
 int main(void) {
     printf("test_music_pause:\n");
     test_latch_reports_state();
@@ -304,6 +321,7 @@ int main(void) {
     test_tick_is_inert_while_paused();
     test_tick_advances_while_ducked();
     test_duck_withholds_category_commit();
+    test_reset_lifts_a_duck_the_longjmp_skipped();
     printf("test_music_pause: OK\n");
     return 0;
 }

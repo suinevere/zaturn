@@ -677,6 +677,15 @@ void music_reset(void) {
     g_dyn_pass = 0;
     g_paused = 0;   // a soft reset can land here with a menu still nominally open
     g_hold_kind = HOLD_NONE;
+    // And the backend's own duck latch, which this could not reach by clearing
+    // the two above: the CD-DA side keeps its own g_ducked and every level it
+    // writes is filtered through it. A reset that cleared the engine's latch and
+    // left the backend's set took the only thing that could lift it out of reach,
+    // so the whole next session played at the ducked level -- which is what a
+    // soft reset out of the in-game Options menu does, since the menu ducks on
+    // the way in and the longjmp skips the resume on the way out. Unconditional
+    // and idempotent: unduck clears the flag whether or not a track is playing.
+    if (g_unduck_fn) g_unduck_fn();
     if (g_phase != MP_IDLE) { g_fade_audio = 1; fade_emit(255); }  // mid-ramp: nothing else would lift it
     g_phase = MP_IDLE; g_fade_i = 0; g_fade_audio = 0;
     // Nothing to announce.

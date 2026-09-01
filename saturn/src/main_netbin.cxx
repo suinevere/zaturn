@@ -298,6 +298,19 @@ int main(void) {
     // image-suppressing window stuck on. Mirrors main.cxx's own post-setjmp
     // reset of the same global.
     g_menu_backing_depth = 0;
+    // And the chrome that guard was backing, which resetting the count does not
+    // take down: NBG2 still holds the box the longjmp jumped out of, and a latch
+    // owed by a guard that died first holds it there, since dash_frame_end will
+    // not expire a latched layer and nothing below ever claims NBG2 to paint over
+    // it. The dial page and the terminal would wear the pause menu's box for the
+    // rest of the session. Mirrors main.cxx, which answers for the same thing on
+    // its own way back to the title.
+    dash_clear();
+    // The map sets this while it is showing its own ground and clears it on the
+    // way out -- a way out Restart skips, since map_view polls for it. Inert here
+    // while g_menu_page_fade stays 0 and no fade reads it, and cleared anyway so
+    // that stops being the only thing keeping it harmless.
+    menu_back_override(0);
     // Same reasoning for the menu service: online_mode registers its RX pump
     // around the pause menu, and Restart longjmps out from inside it, leaving
     // menu_sync holding a pointer into a frame that no longer exists.

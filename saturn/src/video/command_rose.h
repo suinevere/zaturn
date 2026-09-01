@@ -5,7 +5,7 @@
  |   columns, drawn so that an unavailable direction erases its own spoke as well
  |   as its label -- the rose is a map of the room rather than a menu of twelve
  |   buttons. Pure string building and index arithmetic; the view prints what
- |   this returns and overprints the selected label in reverse video.
+ |   this returns dim and overprints the selected label at full brightness.
  |   Implemented in command_rose.c.
  |
  |   The shape:

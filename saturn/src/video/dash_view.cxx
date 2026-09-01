@@ -41,6 +41,34 @@
 #define DASH_TINT_DEN 2
 
 /*----------------------
+ | DASH_LEVEL_NUM / DASH_LEVEL_DEN
+ | Description: How far a marble entry travels from full brightness toward the
+ |   background's own -- half. The hue tint above cannot darken anything: it
+ |   normalises against the ground's brightest channel precisely so the stone
+ |   keeps its ramp, which means an achromatic ground leaves the marble exactly
+ |   as quarried. Black therefore produced the same pale slab as Bright White,
+ |   and Light Gray the same again. This second term is the part that answers
+ |   how DARK the ground is rather than what colour it is, so a black ground
+ |   gets black marble and a grey one gets grey.
+ |
+ |   Half, not all: at full travel a black ground scales every entry to nothing
+ |   and the slab, its bevel and the frame around it disappear into the
+ |   backplane. Half leaves a dark stone that is still legibly stone -- the
+ |   same reasoning, and the same fraction, as the hue tint above.
+ | Author: suinevere
+ ----------------------*/
+#define DASH_LEVEL_NUM 1
+#define DASH_LEVEL_DEN 2
+
+/*----------------------
+ | DASH_CH_MAX
+ | Description: The largest value one RGB555 channel holds, which is the
+ |   brightness DASH_LEVEL_* measures the background's own against.
+ | Author: suinevere
+ ----------------------*/
+#define DASH_CH_MAX 31
+
+/*----------------------
  | g_ready / g_cell / g_map_vram / g_char_base
  | Description: Whether the layer came up, where its two allocations landed, and
  |   the character number its first tile sits at.
@@ -104,14 +132,18 @@ static void flush_hook(void)
 
 /*----------------------
  | write_palette
- | Description: Writes CRAM entries 16..31 from dash_tiles.c's ramp, each scaled
- |   DASH_TINT_NUM/DASH_TINT_DEN of the way toward g_tint_bg's hue. `peak` is the
- |   background's brightest channel, so scaling by (peak + channel) / 2*peak
- |   leaves the dominant channel exactly where it was and halves one that the
- |   background has none of. A background with no colour at all (peak 0, i.e.
- |   black) divides by nothing and is left alone. Straight into the SH-2's
- |   uncached CRAM mirror, as text_set_color does it, so no flush is needed and
- |   nothing has to wait for a DMA.
+ | Description: Writes CRAM entries 16..31 from dash_tiles.c's ramp, each taken
+ |   DASH_TINT_NUM/DASH_TINT_DEN of the way toward g_tint_bg's hue and then
+ |   DASH_LEVEL_NUM/DASH_LEVEL_DEN of the way toward its brightness. `peak` is
+ |   the background's brightest channel and carries both: for the hue, scaling
+ |   by (peak + channel) / 2*peak leaves the dominant channel exactly where it
+ |   was and halves one the background has none of, and a background with no
+ |   colour at all (peak 0, i.e. black) has no hue to travel toward and skips
+ |   that step rather than dividing by nothing; for the level, peak measured
+ |   against DASH_CH_MAX is how bright the ground is at all, which is the part
+ |   black and the greys have to move on. Straight into the SH-2's uncached CRAM
+ |   mirror, as text_set_color does it, so no flush is needed and nothing has to
+ |   wait for a DMA.
  | Author: suinevere
  | Dependencies: dash_tiles.h (dash_palette), SRL (VDP2_COLRAM)
  | Globals: g_tint_bg
@@ -127,6 +159,10 @@ static void write_palette(void)
     unsigned peak = br > bg ? br : bg;
     if (bb > peak) peak = bb;
 
+    const unsigned ld = DASH_LEVEL_DEN, ln = DASH_LEVEL_NUM;
+    const unsigned lnum = (ld - ln) * DASH_CH_MAX + ln * peak;
+    const unsigned lden = ld * DASH_CH_MAX;
+
     for (int i = 0; i < 16; i++) {
         unsigned short src = dash_palette[i];
         if (src == 0) { cram[DASH_PAL_NO * 16 + i] = 0; continue; }   // transparent
@@ -137,6 +173,9 @@ static void write_palette(void)
             g = (g * ((d - n) * peak + n * bg)) / (d * peak);
             b = (b * ((d - n) * peak + n * bb)) / (d * peak);
         }
+        r = (r * lnum) / lden;
+        g = (g * lnum) / lden;
+        b = (b * lnum) / lden;
         cram[DASH_PAL_NO * 16 + i] =
             (unsigned short) (0x8000 | (b << 10) | (g << 5) | r);
     }
@@ -234,5 +273,11 @@ void dash_hold(void)
     int border_top = TOP_MARGIN + console_height() + 1;
     if (g_cmd_mode == IFACE_PANEL) dash_set(DASH_PANEL, border_top);
     else                           dash_set(DASH_GAMEKB, border_top);
+}
+
+void dash_hold_any(void)
+{
+    if (dash_hold_painted()) return;
+    dash_hold();
 }
 

@@ -742,9 +742,11 @@ static const char *KB_STRIP_BORDER = "+-------------+-----------------------+";
  | Description: Draws the in-game keyboard as a bordered strip matching the command
  |   panel: the input line above it, then the seven-row compass rose on the left and
  |   the key block on the right, split by a divider on the middle row between the
- |   number and letter rows and closed by the space bar. The focused picker cell is
- |   reverse-video for a key or, when focus has crossed left, the rose's selected
- |   direction; the space bar instead blinks filled/blank on the caret phase, like
+ |   number and letter rows and closed by the space bar. The block is drawn dim
+ |   and the focused picker cell alone at full brightness -- a key, or, when
+ |   focus has crossed left, the rose's selected direction, which leaves the
+ |   unfocused half of the strip uniformly dim; the space bar instead blinks
+ |   filled/blank on the caret phase, like
  |   the input-line cursor. CapsLock shows on the input row.
  | Author: suinevere
  | Dependencies: command_rose.h, rose_draw.h (cv_draw_rose_row), game_kb.h,
@@ -797,15 +799,16 @@ static void render_game_keyboard(const KeyboardState &k, DictionaryWord *predict
         int gr = kb_grid_row(r);
         if (gr == GKB_SPACE_ROW) {
             bool selected = !g_kb_on_rose && k.cursor_row == GKB_SPACE_ROW;
-            /* Steady block when unselected; when the picker is on it, blink the
-               bar between filled and blank on the caret phase, the way the input
-               line's block cursor does, rather than sit reverse-video. */
-            if (!selected || block_on) {
-                char bar[15];
-                for (int i = 0; i < 14; i++) bar[i] = (char) 0x7f;
-                bar[14] = '\0';
-                text_print(20, y, bar);
-            }
+            /* Steady dim block when unselected, like the key rows around it;
+               when the picker is on it, blink the bar between filled and blank
+               on the caret phase, the way the input line's block cursor does,
+               rather than merely brighten -- a solid bar has no letter shape to
+               read a brightness change off. */
+            char bar[15];
+            for (int i = 0; i < 14; i++) bar[i] = (char) 0x7f;
+            bar[14] = '\0';
+            if (!selected)     text_print_dim(20, y, bar);
+            else if (block_on) text_print(20, y, bar);
         } else {
             char keys[GKB_COLS * 2];
             int p = 0;
@@ -814,10 +817,10 @@ static void render_game_keyboard(const KeyboardState &k, DictionaryWord *predict
                 if (c < GKB_COLS - 1) keys[p++] = ' ';
             }
             keys[p] = '\0';
-            text_print(17, y, keys);
+            text_print_dim(17, y, keys);
             if (!g_kb_on_rose && k.cursor_row == gr) {
                 char one[2] = { game_kb_char_at(gr, k.cursor_col, caps), '\0' };
-                text_print_hl(17 + k.cursor_col * 2, y, one);
+                text_print(17 + k.cursor_col * 2, y, one);
             }
         }
     }
@@ -833,7 +836,7 @@ static void render_game_keyboard(const KeyboardState &k, DictionaryWord *predict
  |   below first) and any "more v" marker is repainted. In game the bordered strip
  |   -- rose plus key block -- is drawn by render_game_keyboard. Off the title
  |   screen's online terminal there is no room, so the original KB_ROWS grid is
- |   drawn instead, its picker cell in reverse video.
+ |   drawn instead, dim, with its picker cell alone at full brightness.
  | Author: suinevere
  | Dependencies: keyboard.c, input.cxx, SRL
  | Globals: g_kbd_visible, g_more_below
@@ -866,7 +869,7 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
     if (g_in_game) { render_game_keyboard(k, prediction, current_word_len, block_on, base); return; }
 
     /* Off the title screen's online terminal (no room, no rose): the original
-       four-row grid, its picker cell in reverse video. */
+       four-row grid, dim, with its picker cell alone at full brightness. */
     int row = base;
     text_clear_line(row);
     draw_input_line(row, k, prediction, current_word_len, block_on);
@@ -879,10 +882,10 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
         }
         rowbuf[p] = '\0';
         text_clear_line(row + 1 + r);
-        text_print(2, row + 1 + r, "%s", rowbuf);
+        text_print_dim(2, row + 1 + r, rowbuf);
         if (r == k.cursor_row) {
             char sel[2] = { keyboard_char_at(r, k.cursor_col), '\0' };
-            text_print_hl(2 + k.cursor_col * 2 + 1, row + 1 + r, sel);
+            text_print(2 + k.cursor_col * 2 + 1, row + 1 + r, sel);
         }
     }
     if (keyboard_get_caps()) text_print(30, row + 1, "CAPS");

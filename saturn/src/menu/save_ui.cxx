@@ -251,10 +251,10 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                     rowbuf[p++] = KB_LAYOUT[r][c];
                 }
                 rowbuf[p] = '\0';
-                text_print(kbx, cy + SAVE_SLOTS + 1 + r, "%s", rowbuf);
+                text_print_dim(kbx, cy + SAVE_SLOTS + 1 + r, rowbuf);
                 if (r == k.cursor_row) {
                     char sel[2] = { KB_LAYOUT[r][k.cursor_col], '\0' };
-                    text_print_hl(kbx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
+                    text_print(kbx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
                 }
             }
         }

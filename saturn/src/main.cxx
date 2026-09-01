@@ -56,15 +56,15 @@ using namespace SRL::Types;
 /*----------------------
  | MUSIC_FADE_FRAMES
  | Description: Half the length of a room-mood transition, in frames: the
- |   wallpaper and the music ramp down over this many, swap at the bottom, and
- |   ramp back up over as many again. 20 is a third of a second each way, which
- |   lands a mood change a little over two seconds after the player stops moving
- |   once the engine's 90-frame settle is counted. This is the number to cut if
- |   that reads sluggish -- not the settle, which is what stops fast movement
- |   through a corridor from thrashing the music.
+ |   picture, the CD-DA track and the PCM effects ramp down over this many
+ |   together, swap at the bottom, and ramp back up over as many again. 45 is
+ |   three quarters of a second each way, matching the splash jingle's
+ |   TITLE_JINGLE_FADE_FRAMES. This is the number to cut if a mood change reads
+ |   sluggish -- not the engine's 90-frame settle, which is what stops fast
+ |   movement through a corridor from thrashing the music.
  | Author: suinevere
  ----------------------*/
-#define MUSIC_FADE_FRAMES 20
+#define MUSIC_FADE_FRAMES 45
 
 /*----------------------
  | QUICK_FADE_FRAMES
@@ -141,30 +141,16 @@ static void on_text_room(unsigned int obj) {
 }
 
 /*----------------------
- | on_music_fade
- | Description: Drives one step of a transition ramp: the wallpaper's brightness
- |   and the CD-DA volume together, off the engine's single counter, so the
- |   picture and the track cannot drift apart.
- |
- |   The volume floor is 1, never 0, and that is load-bearing rather than
- |   cosmetic: music_set_volume(0) calls StopPause(), which halts the drive
- |   outright, and unlike music_set_level it has no resurrect path -- the ramp
- |   back up would raise a volume on a stopped disc and the music would simply be
- |   gone. Level 1 is quiet enough, and the swap at the bottom re-issues the track
- |   anyway.
+ | music_fade_volume
+ | Description: Maps a 0..255 fade level onto the CD-DA volume range, flooring at
+ |   1 because music_set_volume(0) stops the drive with no way back -- that call
+ |   is StopPause, not attenuation, and unlike music_set_level it has no
+ |   resurrect path, so a ramp that reached 0 would raise a volume on a stopped
+ |   disc and the music would simply be gone. Level 1 is quiet enough, and the
+ |   swap at the bottom of a transition re-issues the track anyway.
  |
  |   A player who has set Music to 0 keeps silence: a fade never raises what they
  |   turned off.
- | Author: suinevere
- | Dependencies: title.h, music.h, app_state.h
- | Globals: g_music_level
- | Params: level -- 0 (black/quiet) to 255 (normal)
- | Returns: N/A
- ----------------------*/
-/*----------------------
- | music_fade_volume
- | Description: Maps a 0..255 fade level onto the CD-DA volume range, flooring at
- |   1 because music_set_volume(0) stops the drive with no way back.
  | Author: suinevere
  | Dependencies: music.h, app_state.h
  | Globals: g_music_level
@@ -179,9 +165,28 @@ static void music_fade_volume(int level) {
     music_set_volume(v);
 }
 
+/*----------------------
+ | on_music_fade
+ | Description: The room-transition step: everything that is not text moves on
+ |   one counter. The picture rides colour offset channel B (title_bg_dyn_fade),
+ |   the CD-DA track its volume register, and the PCM effects their own
+ |   per-channel scale, so a room change takes the images and the sound down
+ |   together and brings them back together on the far side of the swap.
+ |
+ |   The text deliberately does not go with them. It is on channel A with the
+ |   marble chrome, and the turn's description is being read while this runs --
+ |   a transition that blinked the words out mid-sentence is the thing
+ |   title_bg_dyn_fade's channel split exists to prevent.
+ | Author: suinevere
+ | Dependencies: title.h, music.h, sound.h
+ | Globals: N/A
+ | Params: level -- 0 (black/silent) to 255 (normal)
+ | Returns: N/A
+ ----------------------*/
 static void on_music_fade(int level) {
     title_bg_dyn_fade(level);
     music_fade_volume(level);
+    sound_fade_level(level);
 }
 
 /*----------------------
@@ -460,9 +465,11 @@ int main(void) {
                                    "Load Save Game", "Options", "Credits" };
     const char* game_file = nullptr;
 
-    // Menu-phase navigation fades are on for the whole loop: the mode menu,
-    // Options and its pages, and the game/save pickers all fade between screens.
-    // Cleared to 0 before gameplay so the in-game F10/F11/F12 menus stay instant.
+    // Navigation fades are on from here and stay on: the mode menu, Options and
+    // its pages, the game/save pickers, and -- since it is the same
+    // options_menu reached over live gameplay -- the in-game F10/F11/F12
+    // openings too, which saturn_glue.cxx brackets with a matching ramp of the
+    // gameplay screen so the same length reads as one transition either side.
     // game_select() and choose_dest() are entered at normal brightness and every
     // return leaves the screen faded to black -- so on a cancel the mode menu is
     // faded back in (g_menu_intro_fade), and on a pick the black simply carries
@@ -513,7 +520,10 @@ int main(void) {
         break;
     }
     g_story_filename = game_file;
-    g_menu_page_fade = 0;   // leaving the menu phase; in-game menus stay instant
+    // g_menu_page_fade is deliberately NOT cleared here. It used to be, so
+    // that the in-game menus opened and closed instantly; what that actually
+    // bought was a menu that popped on and, on the way out, left one frame
+    // of its own text on a black rectangle before gameplay came back.
 
     // The menu goes down from here, and everything below happens underneath that
     // ramp rather than after it: game_select deliberately returns without fading,

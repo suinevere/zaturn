@@ -50,6 +50,22 @@ int sound_has_audio(void);
 void sound_set_enabled(int on);
 void sound_set_level(int level);
 
+/*----------------------
+ | sound_fade_level
+ | Description: A transient 0..255 scale over every effect's own volume -- 255 is
+ |   the player's level untouched, 0 is silence -- applied at once to whatever is
+ |   already sounding and carried into every play the engine issues while it is
+ |   set. Separate from sound_set_level because it is not the player's setting: a
+ |   room transition ramps this down and back up, and must find the PCM level
+ |   exactly where the player left it on the far side.
+ |
+ |   It scales rather than stops, so a looping effect survives a transition it is
+ |   playing across -- stopping and restarting one is audible in a way a ramp is
+ |   not, and the loop's own ping-pong hand-off would fight it.
+ | Author: suinevere
+ ----------------------*/
+void sound_fade_level(int level);
+
 #ifdef __cplusplus
 }
 #endif

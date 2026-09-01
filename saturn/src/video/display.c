@@ -16,13 +16,20 @@
  | Description: Background colors and their display names, in selector order. RGB
  |   values approximate the design spec's ANSI codes; ANSI collisions collapse to
  |   one entry (the three blues to \033[44m, the two whites to \033[47m).
+ |
+ |   Light Gray is the one deliberate departure. ANSI 47 is 0xAA, which on this
+ |   screen sits close enough to Bright White that the two stops read as one --
+ |   and the marble the menus are cut from follows the ground's brightness
+ |   (dash_view.cxx's DASH_LEVEL_*), so at 0xAA it came out as pale as the white
+ |   stop's. 0x77 is a grey the row can tell apart, and still light enough for
+ |   the two presets that put dark text on it (VIC-20, ZX Spectrum).
  | Author: suinevere
  ----------------------*/
 static const unsigned short BG_RGB[DISP_BG_COLOR_N] = {
     DISP_RGB555(0x00, 0x00, 0x00),   /* Black          ANSI 40  */
     DISP_RGB555(0xFF, 0xB0, 0x00),   /* Glowing Amber  ANSI 43  */
     DISP_RGB555(0x00, 0x00, 0xAA),   /* Blue           ANSI 44  */
-    DISP_RGB555(0xAA, 0xAA, 0xAA),   /* Light Gray     ANSI 47  */
+    DISP_RGB555(0x77, 0x77, 0x77),   /* Light Gray     ANSI 47, darkened */
     DISP_RGB555(0x55, 0xFF, 0xFF),   /* Bright Cyan    ANSI 106 */
     DISP_RGB555(0x00, 0xAA, 0x00),   /* Green          ANSI 42  */
     DISP_RGB555(0xFF, 0xFF, 0xFF)    /* Bright White   ANSI 107 */
@@ -77,16 +84,15 @@ static const char *const TEXT_NAME[DISP_TEXT_N] = {
  |   posterises, and a stop the player can name is easier to return to than a
  |   position on a bar.
  |
- |   The labels are the offset expressed in steps away from the DEFAULT stop, so
- |   the row a player sees is centred on where they started rather than on the
- |   hardware's zero -- offset = 32 * (label - 2), which puts unmodified at "+2"
- |   (DISP_DIM_NORMAL) and the shipped default at "0". Keep the two arrays in
- |   step with that arithmetic; test_display.c checks it.
+ |   The labels are the offset expressed in steps of 32 -- offset = 32 * label --
+ |   so "0" is the hardware's zero, the picture as authored, and is both the
+ |   middle of the row and the shipped default. Keep the two arrays in step with
+ |   that arithmetic; test_display.c checks it.
  | Author: suinevere
  ----------------------*/
-static const short DIM_STOPS[DISP_DIM_N] = { -160, -128, -96, -64, -32, 0, 32 };
+static const short DIM_STOPS[DISP_DIM_N] = { -64, -32, 0, 32, 64 };
 static const char *const DIM_NAMES[DISP_DIM_N] = {
-    "-3", "-2", "-1", "0", "+1", "+2", "+3"
+    "-2", "-1", "0", "+1", "+2"
 };
 
 /*----------------------
@@ -118,24 +124,49 @@ const char *display_dim_name(int index) {
 }
 
 /*----------------------
- | dim_index_v6
- | Description: The current dim-row index for a dim byte stored by a sentinel-6
- |   blob. That form indexed a brightest-first row running +64 down to -128; the
- |   row now runs darkest-first from -160 up to +32. Both step by 32, so
- |   reversing the index is an exact match by offset value and a chosen darkness
- |   survives the renumbering. Only the old +64 stop has no equivalent left, and
- |   it lands on +32, the brightest the row still offers.
+ | dim_index_for_offset
+ | Description: The current dim-row index whose stop is `off`, clamped into the
+ |   row when `off` lies outside it. Every dim row this format has carried
+ |   stepped by 32, so an offset identifies a stop exactly and a saved darkness
+ |   survives a renumbering unchanged wherever the current row still reaches
+ |   that far. This is how the old rows are read back rather than by index --
+ |   see dim_index_v6 and dim_index_v8.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: v6 -- the stored byte, 0..6
- | Returns: 0..DISP_DIM_N-1, or DISP_DIM_DEFAULT if v6 is out of that range
+ | Params: off -- a signed VDP2 colour offset, a multiple of 32
+ | Returns: 0..DISP_DIM_N-1
+ ----------------------*/
+static int dim_index_for_offset(int off) {
+    int i = off / 32 + DISP_DIM_NORMAL;
+    if (i < 0) return 0;
+    if (i > DISP_DIM_N - 1) return DISP_DIM_N - 1;
+    return i;
+}
+
+/*----------------------
+ | dim_index_v6 / dim_index_v8
+ | Description: The current dim-row index for a dim byte stored by a sentinel-6
+ |   or sentinel-8 blob. Sentinel 6 indexed a brightest-first row running +64
+ |   down to -128; sentinel 8 a darkest-first one running -160 up to +32. Both
+ |   are translated by offset value, so a chosen darkness survives as far as the
+ |   current -64..+64 row reaches and anything past either end clamps to it --
+ |   sentinel 6's stops below -64 and sentinel 8's whole dark half land on the
+ |   darkest stop the row still offers.
+ | Author: suinevere
+ | Dependencies: dim_index_for_offset
+ | Globals: N/A
+ | Params: v -- the stored byte, 0..6
+ | Returns: 0..DISP_DIM_N-1, or DISP_DIM_DEFAULT if v is out of that range
  ----------------------*/
 static int dim_index_v6(int v6) {
-    int i;
     if (v6 < 0 || v6 > 6) return DISP_DIM_DEFAULT;
-    i = 7 - v6;                                 /* both rows step by 32 */
-    return (i > DISP_DIM_N - 1) ? DISP_DIM_N - 1 : i;
+    return dim_index_for_offset(64 - 32 * v6);
+}
+
+static int dim_index_v8(int v8) {
+    if (v8 < 0 || v8 > 6) return DISP_DIM_DEFAULT;
+    return dim_index_for_offset(-160 + 32 * v8);
 }
 
 /*----------------------
@@ -555,7 +586,7 @@ void display_cycle_palette(DisplayState *d, int dir) {
 
 /*----------------------
  | display_encode
- | Description: Serializes a DisplayState into a save blob (sentinel 8 -- not 5
+ | Description: Serializes a DisplayState into a save blob (sentinel 9 -- not 5
  |   or 7, see DISP_BLOB_BYTES in display.h): palette, background, text and dim bytes
  |   (Dynamic is marked DISP_BLOB_DYNAMIC). The name field is always written
  |   empty now -- see the comment below.
@@ -568,7 +599,7 @@ void display_cycle_palette(DisplayState *d, int dir) {
 int display_encode(const DisplayState *d, unsigned char *out) {
     int i;
 
-    out[0] = 8;                                /* block sentinel: renumbered dim row */
+    out[0] = 9;                                /* block sentinel: renumbered dim row */
     out[1] = (d->palette == DISP_PAL_DYNAMIC) ? DISP_BLOB_DYNAMIC
            : (unsigned char) d->palette;
     out[2] = (unsigned char) d->bg;            /* always a color now */
@@ -593,11 +624,11 @@ int display_encode(const DisplayState *d, unsigned char *out) {
  | Description: Restores a DisplayState from a save blob, defaulting first so a bad
  |   blob leaves a sane state. Handles the original slot-only form (sentinel 1,
  |   image slots refused since the picture cannot be trusted), and the named forms
- |   (sentinels 2/3/4/6/7): resolves the image by name, refusing one this disc lacks,
- |   and validates each field independently. Only sentinels 6 and 7 carry a dim
- |   byte -- 6's indexes the pre-renumbering row and is translated by
- |   dim_index_v6 -- and the older forms leave d->dim at the DISP_DIM_DEFAULT
- |   display_defaults set.
+ |   (sentinels 2/3/4/6/8/9): resolves the image by name, refusing one this disc lacks,
+ |   and validates each field independently. Only sentinels 6, 8 and 9 carry a dim
+ |   byte -- 6's and 8's index the two earlier rows and are translated by
+ |   dim_index_v6/dim_index_v8 -- and the older forms leave d->dim at the
+ |   DISP_DIM_DEFAULT display_defaults set.
  |
  |   Sentinels 1, 2 and 3 were written before Dynamic took palette index 0, so a
  |   colour-preset index stored in them is one lower than it should be now and is
@@ -637,14 +668,14 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         } else ok = 0;
         if (buf[2] < DISP_BG_COLOR_N) d->bg      = (int) buf[2];  else ok = 0;
         if (buf[3] < DISP_TEXT_N)     d->text    = (int) buf[3];  else ok = 0;
-    } else if (buf[0] == 6 || buf[0] == 8) {
+    } else if (buf[0] == 6 || buf[0] == 8 || buf[0] == 9) {
         /* Current form: sentinel 2/3/4's layout plus a dim byte ahead of the
            name, and its own length -- DISP_BLOB_BYTES, not DISP_BLOB_BYTES_V4.
            Post-Dynamic numbering throughout, like sentinel 4, so the palette
-           byte needs no shift. Sentinel is 8, not 5 or 7 -- see DISP_BLOB_BYTES
+           byte needs no shift. Sentinel is 9, not 5 or 7 -- see DISP_BLOB_BYTES
            in display.h for why both are reserved for options.cxx's gameplay
-           block. 6 is the same block with the pre-renumbering dim row and
-           differs only in that byte, which dim_index_v6 translates below. */
+           block. 6 and 8 are the same block with the two earlier dim rows and
+           differ only in that byte, which dim_index_v6/v8 translate below. */
         const char *name = (const char *) (buf + 5);
         int slot, n = 0;
 
@@ -679,6 +710,8 @@ int display_decode(const unsigned char *buf, int len, DisplayState *d) {
         if (buf[3] < DISP_TEXT_N) d->text = (int) buf[3];  else ok = 0;
         if (buf[0] == 6) {
             if (buf[4] <= 6) d->dim = dim_index_v6((int) buf[4]);  else ok = 0;
+        } else if (buf[0] == 8) {
+            if (buf[4] <= 6) d->dim = dim_index_v8((int) buf[4]);  else ok = 0;
         } else if (buf[4] < DISP_DIM_N) {
             d->dim = (int) buf[4];
         } else ok = 0;

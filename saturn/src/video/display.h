@@ -118,28 +118,27 @@ typedef struct {
 /*----------------------
  | DISP_DIM_N / DISP_DIM_NORMAL / DISP_DIM_DEFAULT
  | Description: The wallpaper-dim row's length, the stop that leaves the picture
- |   unmodified, and the stop a fresh install starts on. Discrete steps rather
- |   than a continuous slider: the picture is 8bpp, so a large offset clips
- |   distinct palette entries onto one value and posterises, and a stop the
- |   player can name is easier to return to than a position on a bar.
+ |   unmodified, and the stop a fresh install starts on -- the same stop, the
+ |   middle one. Discrete steps rather than a continuous slider: the picture is
+ |   8bpp, so a large offset clips distinct palette entries onto one value and
+ |   posterises, and a stop the player can name is easier to return to than a
+ |   position on a bar.
  |
  |   The row runs darkest first, so pressing left steps darker and right steps
  |   brighter -- the direction a brightness control is expected to move -- and it
  |   stops at both ends rather than wrapping, since a control that jumps from
  |   darkest to brightest on one press too many is not a slider.
  |
- |   Its labels are relative to the default, not to the hardware: the default
- |   reads "0" and the stops either side run -3..+3. Unmodified is "+2", two
- |   stops up, because the default IS a dim -- the shipped wallpaper competes
- |   with the text over it at full brightness, so "no adjustment" is the setting
- |   a player should have to ask for rather than the one they start on.
- |   DISP_DIM_NORMAL therefore sits near the top of the row, not at its end;
- |   "+3" is the one stop that lightens past the picture's own palette.
+ |   Its labels are the offset in steps from the picture's own brightness, so
+ |   "0" means the wallpaper as authored and the row runs -2..+2 either side of
+ |   it. The default used to be a dim of its own, two stops below unmodified;
+ |   it is now unmodified, so the shipped appearance is the picture as drawn and
+ |   every adjustment away from it is one the player asked for.
  | Author: suinevere
  ----------------------*/
-#define DISP_DIM_N       7
-#define DISP_DIM_NORMAL  5
-#define DISP_DIM_DEFAULT 3
+#define DISP_DIM_N       5
+#define DISP_DIM_NORMAL  2
+#define DISP_DIM_DEFAULT DISP_DIM_NORMAL
 
 /*----------------------
  | display_dim_offset / display_dim_name / display_cycle_dim
@@ -284,22 +283,24 @@ void display_cycle_palette(DisplayState *d, int dir);
  |   standing rather than a setting. dim is the wallpaper-offset row index (see
  |   DISP_DIM_N); sentinels 1-4 predate it and always decode to DISP_DIM_DEFAULT.
  |
- |   The sentinel moved from 6 to 8 because the dim row was renumbered: 6 stored
- |   an index into a seven-stop, brightest-first row that had two lightening
- |   stops, and 8 stores one into the five-stop, darkest-first row that replaced
- |   it. The two blocks are the same length, so only the sentinel tells them
- |   apart -- a 6 read as an 8 would land two stops away from where the player
- |   left it, brightest reading as darkest. display_decode remaps a sentinel-6
- |   index by offset value instead (see there).
+ |   The sentinel has moved twice, both times because the dim row was
+ |   renumbered, and each move is only detectable because of it: the blocks are
+ |   all the same length, so a stale sentinel read as the current one lands the
+ |   player some stops away from where they left the slider rather than failing.
+ |   6 indexed a seven-stop brightest-first row, 8 a seven-stop darkest-first
+ |   one, and 9 indexes the five-stop row centred on the picture's own
+ |   brightness. display_decode translates 6 and 8 by offset VALUE rather than
+ |   by index (see there), so a chosen darkness survives both renumberings as
+ |   far as the shorter row can carry it.
  |
- |   8 and not 7, the next free number, for the same reason it was never 5:
+ |   9 and not 7, and 8 before it and not 5, for the same reason:
  |   options.cxx's MOJOOPTS reader (options_load) locates the gameplay block
  |   ahead of this one by testing that position's byte against 5 and 7, and both
  |   were picked there specifically because no display sentinel had ever used
  |   them -- see options.cxx's "gameplay-block sentinel" comment and
  |   test_display.c's test_five_is_not_a_display_sentinel. Taking either here
  |   would make that peek ambiguous for a saved blob that has this block but no
- |   gameplay block ahead of it. 8 carries no meaning anywhere else in the save
+ |   gameplay block ahead of it. 9 carries no meaning anywhere else in the save
  |   format.
  |
  |   display_encode always writes the name field empty now (see its comment):
@@ -310,10 +311,10 @@ void display_cycle_palette(DisplayState *d, int dir);
  |   indistinguishable, and display_decode still reads a name out of it for
  |   blobs written before this change.
  |
- |   Five older forms are still read. Sentinel 6 is this exact layout with the
- |   pre-renumbering dim row (see above). Sentinel 4 is that layout minus the
- |   dim byte -- its block is DISP_BLOB_BYTES_V4 (17) bytes where a sentinel-6
- |   or -8 block is DISP_BLOB_BYTES (18), so length and sentinel agree -- and,
+ |   Six older forms are still read. Sentinels 6 and 8 are this exact layout with
+ |   the two earlier dim rows (see above). Sentinel 4 is that layout minus the
+ |   dim byte -- its block is DISP_BLOB_BYTES_V4 (17) bytes where a sentinel-6,
+ |   -8 or -9 block is DISP_BLOB_BYTES (18), so length and sentinel agree -- and,
  |   along with sentinels 2 and 3, predates Dynamic taking palette index 0, so a
  |   colour-preset index in any of them is one lower than it should be now and is
  |   shifted up on read. Sentinel 3 is the same layout as 4 without

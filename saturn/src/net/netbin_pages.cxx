@@ -202,10 +202,10 @@ void netbin_dial_page(void) {
                 char rowbuf[NP_COLS * 2]; int p = 0;
                 for (int c = 0; c < NP_COLS; c++) { rowbuf[p++] = np_char(r, c); if (c < NP_COLS - 1) rowbuf[p++] = ' '; }
                 rowbuf[p] = '\0';
-                text_print(npx, y, rowbuf);
+                text_print_dim(npx, y, rowbuf);
                 if (arow < 0 && r == k.cursor_row && np_valid(r, k.cursor_col)) {
                     char one[2] = { np_char(r, k.cursor_col), '\0' };
-                    text_print_hl(npx + k.cursor_col * 2, y, one);
+                    text_print(npx + k.cursor_col * 2, y, one);
                 }
                 y++;
             }

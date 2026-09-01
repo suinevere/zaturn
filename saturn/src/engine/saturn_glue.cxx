@@ -337,6 +337,50 @@ static void typeahead_scan_screen(TrieNode *root) {
  | Params: k -- keyboard/input-line state to fill; cmd -- command text
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | menu_ramp_down / menu_ramp_up / menu_ramp_cut
+ | Description: The gameplay half of an in-game menu's fade. ramp_down takes the
+ |   whole screen to black over the same fields the title-screen menus use, so
+ |   that the page opening next -- which fades itself in from black, exactly as
+ |   it does under the mode menu -- is preceded by a ramp rather than by a pop.
+ |   ramp_up is the other end, and is called from the bottom of the frame loop
+ |   rather than from beside ramp_down: the reveal has to land on the first frame
+ |   that has a whole gameplay screen composed for it, or the ramp is spent
+ |   lighting a half-drawn one (see `reveal_owed`). It advances exactly one frame
+ |   when there is no ramp to run, so the loop's frame count is the same either
+ |   way.
+ |
+ |   ramp_cut is the exit for the paths that must not stay black: every menu
+ |   choice that submits a command ends the turn, and the interpreter -- and, for
+ |   Save and Load, its own device and slot pickers -- draws at normal
+ |   brightness, so a screen left held black would simply hide it. It releases
+ |   the hold with no ramp, on a screen cleared first so the menu's own text is
+ |   not what flashes back.
+ |
+ |   All three are inert when the fade length is 0, which is what the netbin sets
+ |   and what a build that wants the old instant menus would set.
+ | Author: suinevere
+ | Dependencies: menu.h (menu_fade_out/menu_fade_in/menu_fade_clear/menu_clear,
+ |   g_menu_page_fade), SRL
+ | Globals: g_menu_page_fade
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void menu_ramp_down(void) {
+    if (g_menu_page_fade > 0) menu_fade_out(g_menu_page_fade);
+}
+
+static void menu_ramp_up(void) {
+    if (g_menu_page_fade > 0) menu_fade_in(g_menu_page_fade);
+    else                      SRL::Core::Synchronize();
+}
+
+static void menu_ramp_cut(void) {
+    if (g_menu_page_fade <= 0) return;
+    menu_clear();
+    menu_fade_clear();
+}
+
 static void submit_command(KeyboardState &k, const char *cmd) {
     int n = 0;
     while (cmd[n] != '\0' && n < KB_INPUT_MAX - 1) { k.input[n] = cmd[n]; n++; }
@@ -492,6 +536,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
     SRL::Core::Synchronize();
     int sug_index = 0;
     char sug_last[256] = "";
+    /* Set by every branch that opened a menu and left the screen held black.
+       Spent at the bottom of the frame loop rather than where it is set, because
+       that is the first point a whole gameplay frame -- console, strip and all --
+       is composed for the ramp to reveal; revealing at the call site would spend
+       the ramp on a half-drawn screen and snap the rest in at the end of it. */
+    bool reveal_owed = false;
     console_scroll_to_output();
     /* The game hand-off ends here. Everything above has run for this turn --
        run_room_transition has settled the room's picture and track -- so this is
@@ -527,34 +577,44 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             // call music_resume() themselves once THAT closes instead.
             int verb_was = g_verbosity;
             music_duck();
+            menu_ramp_down();
             int om = options_menu();
             mode_toggle_reset();
             if (om != OM_SAVE && om != OM_RESTORE) music_resume();
             ensure_typeahead();
             typeahead_scan_screen(g_typeahead_root);
-            SRL::Core::Synchronize();
             // Room text is the story's own state, so a change only takes hold by
             // being typed at it. Save/Load own this turn, so it waits for the next
             // one through the same single-shot the Load path uses.
             const char *vcmd = (g_verbosity != verb_was) ? verbosity_command() : nullptr;
+            // Every exit below that submits a command ends the turn and hands the
+            // screen to the interpreter -- and, for Save and Load, to its own
+            // device and slot pickers, which draw at normal brightness. None of
+            // them comes back through the frame loop, so none of them can be
+            // revealed there and all of them have to release the black here. Only
+            // the exits that return to this same prompt are ramped back up.
+            if (om == OM_SAVE || om == OM_RESTORE || vcmd != nullptr) menu_ramp_cut();
+            else                                                      reveal_owed = true;
             if (om == OM_SAVE)    { if (vcmd) g_verb_pending = 1; submit_command(k, "save");    continue; }
             if (om == OM_RESTORE) { if (vcmd) g_verb_pending = 1; submit_command(k, "restore"); continue; }
             if (vcmd) { submit_command(k, vcmd); continue; }
             continue;
         }
         if (ke.kind == SATURN_KEY_F11) {
+            menu_ramp_down();
             keyboard_controls_page();
             mode_toggle_reset();
             menu_clear();
-            SRL::Core::Synchronize();
+            reveal_owed = true;
             continue;
         }
         if (ke.kind == SATURN_KEY_F12) {
             if (music_cdda_has_audio() || sound_has_audio()) {
+                menu_ramp_down();
                 sound_options_page();
                 mode_toggle_reset();
                 menu_clear();
-                SRL::Core::Synchronize();
+                reveal_owed = true;
             }
             continue;
         }
@@ -601,7 +661,11 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             render_console();
             render_keyboard(k, selected, cw_len);
         }
-        SRL::Core::Synchronize();
+        // The frame is composed but not yet pushed, which is exactly what the
+        // ramp wants: its own first Synchronize is what carries it to VRAM,
+        // under the black the menu left behind. Every other frame just syncs.
+        if (reveal_owed) { reveal_owed = false; menu_ramp_up(); }
+        else             SRL::Core::Synchronize();
         sound_service();
         music_tick();
       }
@@ -613,18 +677,23 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
       console_write("\n", 1);
       g_output_start = console_total_lines();
       render_console();
+      // No ramp around these two, unlike the F10/F11/F12 menus: a confirm box
+      // draws at normal brightness and fades itself neither way, so a screen
+      // taken to black ahead of one would simply hide the question. The
+      // Synchronize that used to sit at the end of each is gone instead -- it
+      // was a frame nobody drew and nobody held, which is where the marble
+      // expired from under the box's still-lit text; the `continue` reaches the
+      // loop's own render one frame sooner without it.
       if (is_reboot_command(k.input)) {
           confirm_return_to_title("reboot back to the title screen?");
           mode_toggle_reset();
           k.input_len = 0; k.input[0] = '\0'; k.cursor = 0; k.submitted = 0;
-          SRL::Core::Synchronize();
           continue;
       }
       if (is_quit_command(k.input)) {
           confirm_return_to_title("quit back to the title screen?");
           mode_toggle_reset();
           k.input_len = 0; k.input[0] = '\0'; k.cursor = 0; k.submitted = 0;
-          SRL::Core::Synchronize();
           continue;
       }
       break;

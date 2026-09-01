@@ -280,6 +280,45 @@ extern "C" void sound_set_level(int level) {
 }
 
 /*----------------------
+ | g_fade / faded_vol / sound_fade_level
+ | Description: The transition ramp's scale over every slot's own volume, and the
+ |   two places it has to be honoured. faded_vol is what actually reaches the
+ |   hardware, so every Play in this file goes through it rather than through
+ |   s.vol: a looping effect re-issues itself on the ping-pong hand-off, and one
+ |   that re-issued at s.vol would jump back to full in the middle of a ramp.
+ |   sound_fade_level rewrites the live channels as well, since a sound already
+ |   sounding has to move with the ramp and not merely start at the new level.
+ |
+ |   slPCMParmChange (behind SetVolumePan) edits the channel's parameters in
+ |   place, so this neither restarts nor re-queues anything -- which is what makes
+ |   a per-frame ramp affordable at all. Pan is passed as 0 because that is what
+ |   Play uses; the slots carry no pan of their own to preserve.
+ | Author: suinevere
+ | Dependencies: SRL (Sound::Pcm)
+ | Globals: g_fade, g_slot
+ | Params: level -- 0 (silent) to 255 (the player's level), clamped
+ | Returns: faded_vol the scaled volume; sound_fade_level N/A
+ ----------------------*/
+static int g_fade = 255;
+
+static uint8_t faded_vol(const Slot& s) {
+    return (uint8_t) (((int) s.vol * g_fade) / 255);
+}
+
+extern "C" void sound_fade_level(int level) {
+    if (level < 0)   level = 0;
+    if (level > 255) level = 255;
+    g_fade = level;
+    for (int i = 0; i < NSLOT; i++) {
+        Slot& s = g_slot[i];
+        if (s.number == 0) continue;
+        uint8_t v = faded_vol(s);
+        if (s.channel  >= 0) SRL::Sound::Pcm::SetVolumePan((uint8_t) s.channel,  v);
+        if (s.channel2 >= 0) SRL::Sound::Pcm::SetVolumePan((uint8_t) s.channel2, v);
+    }
+}
+
+/*----------------------
  | cached_slice
  | Description: Returns a sound number's PCM slice via the persistent cache: one
  |   CD read per number, reused thereafter (freed by sound_stop_all). On a miss it
@@ -350,7 +389,7 @@ extern "C" void saturn_sound_effect(int number, int effect, int volume) {
     s.vol = (volume == 255 || volume <= 0) ? 100 : (uint8_t)((volume > 8 ? 8 : volume) * 127 / 8);
     s.vol = (uint8_t) (((int) s.vol) * g_level / 7);
     if (s.vol == 0) s.vol = 1;
-    s.channel = s.pcm.Play(s.vol);
+    s.channel = s.pcm.Play(faded_vol(s));
     if (s.channel < 0) { free_slot(s); return; }
     if (loops) {
         uint32_t p = ((uint32_t) play * SND_FPS) / (rate ? rate : 1);
@@ -389,7 +428,7 @@ extern "C" void sound_service(void) {
 
         if (s.countdown > 0) s.countdown--;
         if (s.countdown <= 0) {
-            int nb = s.pcm.Play(s.vol);
+            int nb = s.pcm.Play(faded_vol(s));
             if (nb >= 0) {
                 if (s.channel2 >= 0) SRL::Sound::Pcm::StopSound((uint8_t) s.channel2);
                 s.channel2 = s.channel;
@@ -399,7 +438,7 @@ extern "C" void sound_service(void) {
             if (s.countdown < 1) s.countdown = 1;
         }
         if (s.channel >= 0 && SRL::Sound::Pcm::IsChannelFree((uint8_t) s.channel)) {
-            s.pcm.PlayOnChannel((uint8_t) s.channel, s.vol);
+            s.pcm.PlayOnChannel((uint8_t) s.channel, faded_vol(s));
             s.countdown = s.period - SND_LEAD;
             if (s.countdown < 1) s.countdown = 1;
         }

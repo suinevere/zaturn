@@ -67,11 +67,11 @@ int dash_ready(void);
  | Description: Recolours the marble to carry the background's hue, by writing
  |   the layer's sixteen CRAM entries from dash_tiles.c's ramp scaled toward
  |   `bg555`. The tiles are 4bpp indices, so the whole look is those sixteen
- |   words and nothing in VRAM moves. Each entry keeps its own lightness and
- |   gives up half its distance to the background's hue, so a blue ground makes
- |   a blue-grey marble and an amber one a warm marble, while a neutral ground
- |   -- black, white, grey, which is most of the presets -- leaves the ramp
- |   exactly as it was, because a colourless background has no hue to take.
+ |   words and nothing in VRAM moves. Each entry gives up half its distance to
+ |   the background's hue and half its distance to the background's brightness,
+ |   so a blue ground makes a blue-grey marble, an amber one a warm marble, and
+ |   a dark ground a dark one -- see DASH_TINT_* and DASH_LEVEL_* in
+ |   dash_view.cxx for why it takes two terms rather than one.
  |   Remembers its argument, so dash_init can re-apply it whichever order the
  |   two run in.
  | Author: suinevere
@@ -118,5 +118,28 @@ unsigned short dash_tint_current(void);
  | Returns: N/A
  ----------------------*/
 void dash_hold(void);
+
+/*----------------------
+ | dash_hold_any
+ | Description: Claims the layer for one frame with whatever is already on it,
+ |   and paints the gameplay strip if nothing is on it at all. The
+ |   variant-specific holds are not interchangeable and picking the wrong one is
+ |   worse than picking none: dash_hold paints the strip, so running it while a
+ |   menu box or the map is up replaces what it was called to preserve.
+ |
+ |   Every frame a caller spends without drawing wants this rather than one of
+ |   them: a fade ramp and a modal wait both hold the screen for many frames
+ |   with no renderer between them, and either can be sitting over a menu box,
+ |   over the map, or over the gamepad strip depending on where it was entered
+ |   from. Holding only the box is what left an in-game menu's last frame as a
+ |   black rectangle with the menu's text still lit on it -- the strip's marble
+ |   expired, the image-suppressing window did not.
+ | Author: suinevere
+ | Dependencies: dash_map.h (dash_hold_painted)
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void dash_hold_any(void);
 
 #endif /* DASH_VIEW_H */

@@ -41,6 +41,10 @@ static void test_known_colors(void) {
     assert(display_bg_rgb(DISP_BG_AMBER)        == rgb(0xFF, 0xB0, 0x00));
     assert(display_bg_rgb(DISP_BG_BLUE)         == rgb(0x00, 0x00, 0xAA));
     assert(display_bg_rgb(DISP_BG_BRIGHT_WHITE) == rgb(0xFF, 0xFF, 0xFF));
+    /* Light Gray departs from ANSI 47 (0xAA) on purpose -- see BG_RGB's comment
+       in display.c. It has to stay a good way clear of Bright White, since the
+       marble takes its brightness from whichever of the two is chosen. */
+    assert(display_bg_rgb(DISP_BG_LIGHT_GRAY)   == rgb(0x77, 0x77, 0x77));
     assert(display_text_rgb(DISP_TEXT_BRIGHT_AMBER) == rgb(0xFF, 0xAF, 0x00));
     assert(display_text_rgb(DISP_TEXT_BRIGHT_GREEN) == rgb(0x55, 0xFF, 0x55));
     /* ANSI 37 is light gray and named Gray -- keeps BBC Micro / MSX authentic.
@@ -341,7 +345,7 @@ static void test_encode_decode_roundtrip(void) {
 
     n = display_encode(&a, buf);
     assert(n == DISP_BLOB_BYTES);
-    assert(buf[0] == 8);            /* current sentinel: renumbered dim row */
+    assert(buf[0] == 9);            /* current sentinel: renumbered dim row */
 
     assert(display_decode(buf, n, &b) == 1);
     assert(b.palette == a.palette && b.bg == a.bg && b.text == a.text);
@@ -767,22 +771,21 @@ static void test_dim_table_and_blob(void) {
     unsigned char buf[DISP_BLOB_BYTES];
     int i;
 
-    assert(DISP_DIM_N == 7);
+    assert(DISP_DIM_N == 5);
 
     /* Darkest first, so left steps darker and right steps brighter. A row that
        ran the other way is exactly the bug this ordering fixes. */
     for (i = 1; i < DISP_DIM_N; i++)
         assert(display_dim_offset(i) == display_dim_offset(i - 1) + 32);
 
-    /* The labels are steps away from the DEFAULT stop, not from the hardware's
-       zero: the default reads "0" and unmodified reads "+2". Pin the arithmetic
-       tying the two arrays together, since nothing else can. */
-    assert(display_dim_offset(DISP_DIM_DEFAULT) == -64);
-    assert(display_dim_offset(DISP_DIM_NORMAL)  ==   0);
-    assert(strcmp(display_dim_name(DISP_DIM_DEFAULT), "0")  == 0);
-    assert(strcmp(display_dim_name(DISP_DIM_NORMAL),  "+2") == 0);
-    assert(strcmp(display_dim_name(0),               "-3") == 0);
-    assert(strcmp(display_dim_name(DISP_DIM_N - 1),  "+3") == 0);
+    /* "0" is the hardware's zero -- the picture as authored -- and is both the
+       middle stop and the shipped default, with two stops either side. Pin the
+       arithmetic tying the two arrays together, since nothing else can. */
+    assert(DISP_DIM_DEFAULT == DISP_DIM_NORMAL);
+    assert(display_dim_offset(DISP_DIM_NORMAL) == 0);
+    assert(strcmp(display_dim_name(DISP_DIM_NORMAL), "0")  == 0);
+    assert(strcmp(display_dim_name(0),               "-2") == 0);
+    assert(strcmp(display_dim_name(DISP_DIM_N - 1),  "+2") == 0);
     for (i = 0; i < DISP_DIM_N; i++)
         assert(display_dim_offset(i) == 32 * (i - DISP_DIM_NORMAL));
 
@@ -793,19 +796,19 @@ static void test_dim_table_and_blob(void) {
        display_decode does with an out-of-range byte. */
     assert(strcmp(display_dim_name(-1), display_dim_name(DISP_DIM_DEFAULT)) == 0);
 
-    /* A fresh install starts on "0" -- which is a dim, not unmodified. */
+    /* A fresh install starts on "0" -- the picture as authored, not a dim. */
     display_defaults(&d);
     assert(d.dim == DISP_DIM_DEFAULT);
-    assert(display_dim_offset(d.dim) == -64);
-    assert(d.dim != DISP_DIM_NORMAL);
+    assert(display_dim_offset(d.dim) == 0);
+    assert(d.dim == DISP_DIM_NORMAL);
 
     d.dim = 1;
     assert(display_encode(&d, buf) == DISP_BLOB_BYTES);
-    /* Sentinel is 8, not 5 or 7: both of those at this position in the save are
+    /* Sentinel is 9, not 5 or 7: both of those at this position in the save are
        reserved for options.cxx's gameplay-block marker (see
        test_five_is_not_a_display_sentinel above), and either here would have
        collided with it. See DISP_BLOB_BYTES's comment in display.h. */
-    assert(buf[0] == 8);
+    assert(buf[0] == 9);
     assert(buf[4] == 1);
     assert(display_decode(buf, DISP_BLOB_BYTES, &r) == 1);
     assert(r.dim == 1);
@@ -816,35 +819,64 @@ static void test_dim_table_and_blob(void) {
     assert(r.dim == DISP_DIM_DEFAULT);
 }
 
-static void test_v6_dim_is_remapped(void) {
-    /* Sentinel 6 stored an index into the old brightest-first row
-       {+64,+32,0,-32,-64,-96,-128}. The row now runs darkest first, so a stored
-       index read verbatim would land somewhere else entirely -- the old
-       brightest stop (0) is close to the new darkest. display_decode matches by
-       offset value instead; only +64 has no equivalent left. */
-    static const short old_offset[7] = { 64, 32, 0, -32, -64, -96, -128 };
+/* Decode one old-form blob's dim byte and return the row index it landed on. */
+static int decode_old_dim(int sentinel, int byte) {
     DisplayState d;
     unsigned char buf[DISP_BLOB_BYTES];
     int i;
 
     for (i = 0; i < DISP_BLOB_BYTES; i++) buf[i] = 0;
-    buf[0] = 6;
+    buf[0] = (unsigned char) sentinel;
     buf[1] = DISP_PAL_PRESET0;
     buf[2] = DISP_BG_BLACK;
     buf[3] = DISP_TEXT_WHITE;
+    buf[4] = (unsigned char) byte;
+    assert(display_decode(buf, DISP_BLOB_BYTES, &d) == 1);
+    assert(d.dim >= 0 && d.dim < DISP_DIM_N);
+    return d.dim;
+}
+
+/* The index the current row holds `off` at, clamped into it -- the mapping
+   display_decode is expected to perform on an old blob, restated here so a
+   change to the row is caught rather than tracked. */
+static int expect_index(int off) {
+    if (off <= display_dim_offset(0))              return 0;
+    if (off >= display_dim_offset(DISP_DIM_N - 1)) return DISP_DIM_N - 1;
+    return off / 32 + DISP_DIM_NORMAL;
+}
+
+static void test_old_dim_rows_are_remapped(void) {
+    /* Sentinel 6 stored an index into a brightest-first row and sentinel 8 into
+       a seven-stop darkest-first one. Neither index means the same thing in the
+       five-stop row that replaced them, so display_decode matches by offset
+       VALUE and clamps whatever falls off either end. */
+    static const short v6_offset[7] = {   64,   32,   0,  -32,  -64,  -96, -128 };
+    static const short v8_offset[7] = { -160, -128, -96,  -64,  -32,    0,   32 };
+    DisplayState d;
+    unsigned char buf[DISP_BLOB_BYTES];
+    int i;
 
     for (i = 0; i < 7; i++) {
-        buf[4] = (unsigned char) i;
-        assert(display_decode(buf, DISP_BLOB_BYTES, &d) == 1);
-        assert(d.dim >= 0 && d.dim < DISP_DIM_N);
-        if (old_offset[i] > display_dim_offset(DISP_DIM_N - 1))
-            assert(d.dim == DISP_DIM_N - 1);        /* +64: off the top of the row */
-        else
-            assert(display_dim_offset(d.dim) == old_offset[i]);
+        assert(decode_old_dim(6, i) == expect_index(v6_offset[i]));
+        assert(decode_old_dim(8, i) == expect_index(v8_offset[i]));
     }
 
-    /* Out of the old row's range too, not just the new one's. */
+    /* Sentinel 8's default stop was -64, two below unmodified; it survives as
+       the darkest stop the shorter row still reaches, not as the new default. */
+    assert(decode_old_dim(8, 3) == 0);
+    /* Sentinel 6's unmodified stop is unmodified here too. */
+    assert(decode_old_dim(6, 2) == DISP_DIM_NORMAL);
+
+    /* Out of the old rows' range too, not just the new one's. */
+    for (i = 0; i < DISP_BLOB_BYTES; i++) buf[i] = 0;
+    buf[1] = DISP_PAL_PRESET0;
+    buf[2] = DISP_BG_BLACK;
+    buf[3] = DISP_TEXT_WHITE;
     buf[4] = 7;
+    buf[0] = 6;
+    assert(display_decode(buf, DISP_BLOB_BYTES, &d) == 0);
+    assert(d.dim == DISP_DIM_DEFAULT);
+    buf[0] = 8;
     assert(display_decode(buf, DISP_BLOB_BYTES, &d) == 0);
     assert(d.dim == DISP_DIM_DEFAULT);
 }
@@ -948,7 +980,7 @@ int main(void) {
     test_old_form_preset_sweep_round_trips();
     test_sentinel_2_decode();
     test_dim_table_and_blob();
-    test_v6_dim_is_remapped();
+    test_old_dim_rows_are_remapped();
     test_cycle_dim();
     test_old_blobs_get_no_dim();
     printf("test_display: OK\n");

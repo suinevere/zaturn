@@ -2,8 +2,8 @@
  | command_view.cxx
  | Description: Implements the command panel's rendering and its pad-driven
  |   editor. render_command_panel draws the input line and the three-module
- |   strip (compass rose, word list, fixed commands), highlighting the focused
- |   module's selected entry in reverse video. command_edit reads the
+ |   strip (compass rose, word list, fixed commands) dim, with the focused
+ |   module's selected entry alone at full brightness. command_edit reads the
  |   pad, drives the CommandPanel state machine, sources and orders each word
  |   slot's candidates, and hands the sentence to the same KeyboardState the
  |   on-screen keyboard fills -- either when the grammar slot chain completes on
@@ -46,8 +46,8 @@ static const int CV_TOP_MARGIN = 1;
  | Description: The strip's horizontal border, verbatim from the design --
  |   exactly 40 columns with the dividers already in place at columns 0, 14, 30
  |   and 39. Both rows print it. The bottom row used to be built segment by
- |   segment instead, carrying each module's control hints and a reverse-video
- |   mark on the focused one; it carries neither now, so the two rows are the
+ |   segment instead, carrying each module's control hints and a highlight on
+ |   the focused one; it carries neither now, so the two rows are the
  |   same string and the focused module is shown only by its selected entry.
  | Author: suinevere
  ----------------------*/
@@ -699,12 +699,12 @@ static int cv_pad_field(const char *text, char *field) {
  |   holds a candidate -- the list scrolls a row at a time against the bottom
  |   edge rather than spending a cell on a marker.
  |
- |   The selected cell is drawn plain and then has its letters alone overprinted
- |   in reverse video. Inverting the whole seven-column field put a black bar
- |   several characters wider than the word inside it, which read as the cursor
- |   covering the empty cell beside the word rather than the word; the padding is
- |   there to erase the previous frame, not to be part of the selection. Matches
- |   the rose, where the highlight is the direction's label and nothing else.
+ |   Every cell is drawn dim and the selected one has its letters alone
+ |   overprinted at full brightness. Its letters and not its whole field: the
+ |   padding is there to erase the previous frame, not to be part of the
+ |   selection, and brightening seven columns for a four-letter word would read
+ |   as the cursor covering the empty cell beside it. Matches the rose, where
+ |   the bright text is the direction's label and nothing else.
  | Author: suinevere
  | Dependencies: command_panel.h, text_map.h
  | Globals: N/A
@@ -720,10 +720,10 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
         char field[8];
         const char *text = (idx < w.n) ? w.word[idx] : 0;
         int used = cv_pad_field(text, field);
-        text_print(x, y, field);
+        text_print_dim(x, y, field);
         if (used > 0 && p.box == CP_BOX_WORD && p.cursor == idx) {
             field[used] = '\0';
-            text_print_hl(x, y, field);
+            text_print(x, y, field);
         }
     }
 }
@@ -731,9 +731,9 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
 /*----------------------
  | cv_draw_cmd_row
  | Description: Draws one command-module content row -- CV_CMD_ROW[row] in a
- |   seven-column field, its letters alone in reverse video when the command
- |   module holds focus and its cursor sits on this row. Letters and not the
- |   whole field for the reason cv_draw_word_row gives.
+ |   seven-column field, dim, its letters alone at full brightness when the
+ |   command module holds focus and its cursor sits on this row. Letters and not
+ |   the whole field for the reason cv_draw_word_row gives.
  | Author: suinevere
  | Dependencies: command_panel.h, text_map.h
  | Globals: N/A
@@ -744,10 +744,10 @@ static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
     int x = CV_CMD_X + 1;
     char field[8];
     int used = cv_pad_field(CV_CMD_ROW[row], field);
-    text_print(x, y, field);
+    text_print_dim(x, y, field);
     if (used > 0 && p.box == CP_BOX_CMD && p.cursor == row) {
         field[used] = '\0';
-        text_print_hl(x, y, field);
+        text_print(x, y, field);
     }
 }
 
@@ -856,8 +856,15 @@ static void cv_draw_overlay(const CommandPanel &p, const RoomModel &m, int top_y
         int y = top_y + 1 + i;
         int idx = window + i;
         cv_overlay_row_text(m, idx, row_text);
-        if (idx == p.cursor) text_print_hl(CV_OVERLAY_X, y, row_text);
-        else                 text_print(CV_OVERLAY_X, y, row_text);
+        /* Only the span between the two pipes takes the selection's ink. The
+           frame is the box and not a row, so dimming its sides along with an
+           unselected item would leave the one bright pipe pair looking like a
+           break in the border rather than like a cursor. */
+        row_text[CV_OVERLAY_W - 1] = '\0';
+        text_print(CV_OVERLAY_X, y, "|");
+        if (idx == p.cursor) text_print(CV_OVERLAY_X + 1, y, row_text + 1);
+        else                 text_print_dim(CV_OVERLAY_X + 1, y, row_text + 1);
+        text_print(CV_OVERLAY_X + CV_OVERLAY_W - 1, y, "|");
     }
 
     if (!dash) text_print(CV_OVERLAY_X, top_y + 1 + CV_OVERLAY_ROWS, border);

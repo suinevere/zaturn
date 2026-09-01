@@ -159,6 +159,22 @@ void dash_box(int x, int y, int w, int h);
 void dash_box_hold(void);
 
 /*----------------------
+ | dash_hold_painted
+ | Description: Keeps whatever is on the layer up for one more frame, whichever
+ |   of the variants it is -- box, map, panel, keyboard or overlay -- and reports
+ |   whether there was anything to keep. The variant-specific holds beside this
+ |   one each answer for their own picture and are no use to a caller that does
+ |   not know which is up; asking one of them while another is painted is worse
+ |   than asking none, since dash_hold repaints the strip over whatever it finds.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_variant, g_touched
+ | Params: N/A
+ | Returns: 1 if something was painted and is now held, 0 if the layer is empty
+ ----------------------*/
+int dash_hold_painted(void);
+
+/*----------------------
  | dash_map_begin
  | Description: Claims the layer for the map and clears it, exactly as
  |   dash_build and dash_box do: one thing is on this layer at a time. Call

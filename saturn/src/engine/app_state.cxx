@@ -60,12 +60,13 @@ const char *verbosity_command(void) {
 /*----------------------
  | g_music_level / g_pcm_level
  | Description: Persisted audio options: CD-DA music level and PCM effect level
- |   (0..7, 0 = off). Defaults match the Options sliders. Music level 0 is the
- |   only "off" there is, now that the mix modes are gone.
+ |   (0..7, 0 = off). Defaults match the Options sliders. Level 0 is the only
+ |   "off" either has, now that the mix modes are gone -- the Sound page's master
+ |   switch is these two at 0 and nothing more.
  | Author: suinevere
  ----------------------*/
-int g_music_level = 7;
-int g_pcm_level   = 4;
+int g_music_level = MUSIC_LEVEL_DEFAULT;
+int g_pcm_level   = PCM_LEVEL_DEFAULT;
 
 /*----------------------
  | g_display

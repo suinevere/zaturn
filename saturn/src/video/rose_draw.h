@@ -12,8 +12,10 @@
 
 /*----------------------
  | cv_draw_rose_row
- | Description: Draws one composed rose row at a text-map cell row, overprinting
- |   the selected direction's label in reverse video.
+ | Description: Draws one composed rose row at a text-map cell row dim, then
+ |   overprints the selected direction's label at full brightness. A row with no
+ |   selection on it stays dim throughout, which is also what the whole rose
+ |   looks like while the focus is somewhere else.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h, command_view.h (CV_TRAVEL_X)
  | Globals: N/A

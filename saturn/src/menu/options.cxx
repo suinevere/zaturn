@@ -53,31 +53,24 @@ static unsigned short text_dim_rgb(unsigned short ink, unsigned short bg) {
 /*----------------------
  | text_set_color
  | Description: Writes the Saturn RGB555 word `rgb555` into the VDP2 CRAM
- |   entries that color the SGL debug font, the reverse-video letter, and the
- |   block cursor, via the raw VDP2_COLRAM address (a bare integer, hence the
+ |   entries that color the SGL debug font and the block cursor, via the raw
+ |   VDP2_COLRAM address (a bare integer, hence the
  |   cast; it reaches this file through <srl.hpp>). The font lives in ASCII
  |   palette 0, not palette 1: colorBank's declarator initializes it to
  |   1 << 12, but Core::Initialize -> VDP2::Initialize calls
  |   ASCII::SetPalette(0) before any of our code runs and nothing here calls
  |   SetPalette again, and NBG3 is COL_TYPE_16 (4bpp), so palette 0 is CRAM
- |   entries 0-15 (bytes 0-31). Three entries matter and entry 1 and entry 15
- |   are not adjacent: entry 1 is the glyph foreground (VDP2::Initialize seeds
+ |   entries 0-15 (bytes 0-31). Two entries matter and they are not adjacent:
+ |   entry 1 is the glyph foreground (VDP2::Initialize seeds
  |   it via SetPrintPaletteColor(0, White), which writes 1 + (index << 8); its
  |   other six calls, index 1..6, land on entries 257, 513, ... which a 4bpp
  |   cell cannot reach, so index 0 is the only one that colors anything);
- |   entry 2 is the letter punched out of a reverse-video cell's solid ink
- |   block (glyph_invert.h) and is painted the BACKGROUND colour. It used to be
- |   forced black, on the reasoning that black stays legible against every
- |   background this page can set -- but the letter does not sit on the
- |   background, it sits inside a block of the ink, so what it has to contrast
- |   with is the ink. Six presets set the text colour to black (ZX Spectrum,
- |   TRS-80 CoCo, TI-99/4A, Mac Classic, Monochrome P3), and on those the block
- |   and the punched letter were both black, so every highlighted word in the
- |   command panel, the compass rose and the on-screen keyboards came out a
- |   solid black box. The background colour instead gives the punched letter
- |   exactly the contrast against the ink that the player already chose for
- |   text against ground, which is correct for every preset by construction; and entry 15 is the cursor (install_block_glyph() fills its tile
- |   with 0xFF, and 4bpp pixel value 15 selects entry 15). SRL::ASCII::SetColor
+ |   and entry 15 is the cursor (install_block_glyph() fills its tile
+ |   with 0xFF, and 4bpp pixel value 15 selects entry 15). Entry 2 used to be
+ |   written too -- it coloured the letter punched out of a reverse-video cell's
+ |   solid ink block -- and is left alone now that nothing draws in reverse
+ |   video; selection is the dim ink below against entry 1, everywhere.
+ |   SRL::ASCII::SetColor
  |   cannot be used for the glyphs: it indexes from (colorBank >> 6), which is
  |   0 here, so SetColor(c, i) writes
  |   entry i -- that reaches the cursor at i=15 but never the glyphs, which is
@@ -96,7 +89,6 @@ static unsigned short text_dim_rgb(unsigned short ink, unsigned short bg) {
 void text_set_color(unsigned short rgb555, unsigned short bg555) {
     volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
     cram[1]  = rgb555;   // glyph foreground
-    cram[2]  = bg555;    // reverse-video letter, punched out of the ink block
     cram[15] = rgb555;   // install_block_glyph()'s cursor tile
     cram[TEXT_DIM_CRAM] = text_dim_rgb(rgb555, bg555);   // unselected menu rows
     dash_tint(bg555);   // and the marble chrome, which follows the same ground
@@ -289,7 +281,7 @@ void options_load(void) {
        the display block is the variable-width tail. Sentinel 5 (v1, verbosity
        only) and sentinel 7 (v2, verbosity plus a packed command-interface byte)
        rather than 3 or 6: this byte is where a blob written before the block
-       existed has its display sentinel, and those run 1..4, 6 and 8, so 5 and
+       existed has its display sentinel, and those run 1..4, 6, 8 and 9, so 5 and
        7 -- neither ever a display sentinel, and both off-limits to the next one
        for that reason -- are the values that cannot be mistaken for one. A v1
        blob (sentinel 5) is still accepted so an older

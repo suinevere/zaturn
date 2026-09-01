@@ -199,10 +199,10 @@ static void network_page(void) {
                 char rowbuf[NP_COLS * 2]; int p = 0;
                 for (int c = 0; c < NP_COLS; c++) { rowbuf[p++] = np_char(r, c); if (c < NP_COLS - 1) rowbuf[p++] = ' '; }
                 rowbuf[p] = '\0';
-                text_print(npx, y, rowbuf);
+                text_print_dim(npx, y, rowbuf);
                 if (arow < 0 && r == k.cursor_row && np_valid(r, k.cursor_col)) {
                     char one[2] = { np_char(r, k.cursor_col), '\0' };
-                    text_print_hl(npx + k.cursor_col * 2, y, one);
+                    text_print(npx + k.cursor_col * 2, y, one);
                 }
                 y++;
             }
@@ -646,14 +646,23 @@ bool keyboard_controls_page(void) {
 
 /*----------------------
  | sound_options_page
- | Description: Sound Options (full-screen, Ok/Cancel). Two levels and nothing
- |   else: the Audio Mix row and the Track row it fed are gone with the mix modes
- |   themselves, so the music is the dynamic engine or, at Music 0, silence.
- |   Which rows appear still depends on what is available: Music needs CD-DA on
+ | Description: Sound Options (full-screen, Ok/Cancel). A master switch and two
+ |   levels: the Audio Mix row and the Track row it fed are gone with the mix
+ |   modes themselves, so the music is the dynamic engine or, at CD Music 0,
+ |   silence. Music On/Off is both levels at once -- Off puts each to 0 and On
+ |   restores the shipped pair -- and its value is READ BACK from them rather
+ |   than stored, so raising either level below turns it On without the two
+ |   having to be kept in step, and nothing new goes into the save blob. The two
+ |   level rows underneath it stay usable while it is Off; moving one is how a
+ |   player turns just that half back on.
+ |   Which rows appear depends on what is available: CD Music needs CD-DA on
  |   the disc (has_cd, from music_cdda_audio_tracks() > 0); PCM needs the loaded
- |   game's .BLB (has_blb, from sound_has_audio()); Ok/Cancel always show.
+ |   game's .BLB (has_blb, from sound_has_audio()); Music On/Off needs either,
+ |   since with neither it would switch two levels nothing reads; Ok/Cancel
+ |   always show.
  |   `sel` indexes the resulting visible-row list, not a fixed row number.
- |   Snapshots g_music_level/g_pcm_level for Cancel.
+ |   Snapshots g_music_level/g_pcm_level for Cancel, which is what restores a
+ |   mistaken Off.
  |   Opening this page resumes the music if the in-game Options menu paused it:
  |   every row here is judged by ear, so it is the one page that cannot work in
  |   silence. Leaving it puts that pause back (`was_paused`, restored once after
@@ -688,11 +697,15 @@ void sound_options_page(void) {
     MenuBacking backing;
     const int SND_ROW_W   = 31;
     const int SND_LABEL_W = 14;
-    enum { SR_MUSIC, SR_PCM, SR_OK, SR_CANCEL };
+    enum { SR_SOUND, SR_MUSIC, SR_PCM, SR_OK, SR_CANCEL };
     bool has_cd  = (music_cdda_audio_tracks(0) > 0);
     bool has_blb = (sound_has_audio() != 0);
 
-    int rows[4], nrows = 0;
+    int rows[5], nrows = 0;
+    // The master switch is listed whenever there is anything for it to switch.
+    // On a disc with neither CD audio nor a sound blob it would sit there
+    // toggling two levels nothing reads.
+    if (has_cd || has_blb) rows[nrows++] = SR_SOUND;
     if (has_cd)  rows[nrows++] = SR_MUSIC;
     if (has_blb) rows[nrows++] = SR_PCM;
     rows[nrows++] = SR_OK;
@@ -701,7 +714,7 @@ void sound_options_page(void) {
     // Remembered as a row ID, not an index: Music is only listed when there is
     // CD audio and PCM only when there is a sound blob, so the same index names
     // a different row on a different disc.
-    static int last_row = SR_MUSIC;
+    static int last_row = SR_SOUND;
     int sel = 0;
     for (int i = 0; i < nrows; i++) if (rows[i] == last_row) { sel = i; break; }
     int s_mus = g_music_level, s_pcm = g_pcm_level;
@@ -746,7 +759,20 @@ void sound_options_page(void) {
             options_save();
             break;
         }
-        if (row == SR_MUSIC) { if (left && g_music_level > 0) g_music_level--; if (right && g_music_level < 7) g_music_level++;
+        if (row == SR_SOUND && (left || right || ok)) {
+            // One switch over both levels, and derived from them rather than
+            // held beside them: a level row moved off 0 turns this back On by
+            // itself, and there is no second piece of state to keep in step or
+            // to find room for in the save blob. Off is 0, which is what each
+            // level's own bottom stop already means; On is the shipped pair,
+            // since the levels the player had are exactly what Off overwrote.
+            bool on = (g_music_level > 0 || g_pcm_level > 0);
+            g_music_level = on ? 0 : MUSIC_LEVEL_DEFAULT;
+            g_pcm_level   = on ? 0 : PCM_LEVEL_DEFAULT;
+            music_set_volume(g_music_level);
+            sound_set_level(g_pcm_level);
+        }
+        else if (row == SR_MUSIC) { if (left && g_music_level > 0) g_music_level--; if (right && g_music_level < 7) g_music_level++;
                                if (left || right) music_set_volume(g_music_level); }
         else if (row == SR_PCM) { if (left && g_pcm_level > 0) g_pcm_level--; if (right && g_pcm_level < 7) g_pcm_level++;
                                   if (left || right) sound_set_level(g_pcm_level); }
@@ -758,9 +784,14 @@ void sound_options_page(void) {
         for (int i = 0; i < nrows; i++) {
             const char *n = menu_num(nums, i);
             switch (rows[i]) {
+                case SR_SOUND:
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s", n,
+                              menu_pad("Music", SND_LABEL_W),
+                              (g_music_level > 0 || g_pcm_level > 0) ? "On" : "Off");
+                    break;
                 case SR_MUSIC:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
-                              menu_pad("Music", SND_LABEL_W), g_music_level);
+                              menu_pad("CD Music", SND_LABEL_W), g_music_level);
                     break;
                 case SR_PCM:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,

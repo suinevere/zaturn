@@ -512,6 +512,13 @@ extern "C" void map_view_show(void) {
     else                           map_model_clear_reveal();
     draw_once(sx, sy);
     menu_sync();
+    // The Options row that opens this fades to black first, the same as it does
+    // for every other page it can reach, so the map has to bring the screen back
+    // up itself or it is drawn where nobody can see it. Guarded on
+    // g_menu_page_fade like menu_pages.cxx's page_fade_in/out, and after the
+    // first menu_sync for the reason those are: menu_fade_in reveals a frame
+    // that is already composed.
+    if (g_menu_page_fade > 0) menu_fade_in(g_menu_page_fade);
     for (;;) {
         check_soft_reset();
         SaturnKeyEvent ke = saturn_keyboard_poll();
@@ -544,6 +551,7 @@ extern "C" void map_view_show(void) {
         menu_sync();
     }
 
+    if (g_menu_page_fade > 0) menu_fade_out(g_menu_page_fade);
     text_clear_line(1);
     text_clear_line(26);
     text_clear_line(27);

@@ -81,7 +81,7 @@ void menu_sync(void) {
     sound_service();
     music_tick();
 #endif
-    dash_box_hold();
+    dash_hold_any();
     SRL::Core::Synchronize();
 }
 
@@ -258,8 +258,11 @@ void menu_fade_out(int frames) {
     for (int i = 0; i <= frames; i++) {
         menu_intro_level(-(255 * i) / frames);
         // A fade holds the screen for `frames` frames without redrawing, so
-        // without this the box it is fading out vanishes on the first of them.
-        dash_box_hold();
+        // without this whatever it is fading out vanishes on the first of
+        // them. dash_hold_any and not dash_box_hold: this ramp runs over the
+        // gamepad strip as well as over a menu box, now that the in-game
+        // menus fade the gameplay screen down before they open.
+        dash_hold_any();
         SRL::Core::Synchronize();
     }
 }
@@ -348,7 +351,7 @@ void menu_fade_in_ex(int frames, MenuFadeStep step) {
         // frame that brightness belongs to -- the same ordering title_bg_fade_in_ex
         // uses, and the reason the CD-DA rises with the picture rather than behind it.
         if (step) step(level);
-        dash_box_hold();      // as in menu_fade_out: a fade redraws nothing
+        dash_hold_any();      // as in menu_fade_out: a fade redraws nothing
         SRL::Core::Synchronize();
     }
     menu_offset_release();

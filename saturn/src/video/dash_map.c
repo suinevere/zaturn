@@ -277,6 +277,13 @@ void dash_box_hold(void)
     if (g_variant == DASH_BOX) g_touched = 1;
 }
 
+int dash_hold_painted(void)
+{
+    if (g_variant == DASH_NONE) return 0;
+    g_touched = 1;
+    return 1;
+}
+
 /*----------------------
  | dash_map_begin
  | Description: See dash_map.h.

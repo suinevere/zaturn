@@ -314,6 +314,47 @@ int main(void) {
     dash_frame_end();
     for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
 
+    /* dash_hold_painted holds whichever variant is up, and says so. This is the
+       one hold a caller that does not know what is on the layer can use: a fade
+       ramp or a modal wait can be sitting over a box, over the map or over the
+       strip, and holding the wrong one of those is what expired the marble out
+       from under an in-game menu's last frame. */
+    dash_reset();
+    assert(dash_hold_painted() == 0);          /* empty layer: nothing to hold */
+    dash_frame_end();
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+
+    dash_box(6, 4, 28, 9);
+    dash_frame_end();                          /* claimed by dash_box above */
+    for (y = 0; y < 6; y++) {
+        assert(dash_hold_painted() == 1);
+        dash_frame_end();
+        assert(dash_cell(6, 4) == DT_CORNER_TL);
+    }
+
+    dash_build(DASH_PANEL, 19);
+    dash_frame_end();                          /* claimed by dash_build above */
+    for (y = 0; y < 6; y++) {
+        assert(dash_hold_painted() == 1);
+        dash_frame_end();
+        assert(dash_cell(0, 19) == DT_CORNER_TL);
+    }
+
+    dash_map_begin();
+    dash_map_paint(4, 8, DT_ROOM);
+    dash_frame_end();                          /* claimed by dash_map_begin */
+    for (y = 0; y < 6; y++) {
+        assert(dash_hold_painted() == 1);
+        dash_frame_end();
+        assert(dash_cell(4, 8) == DT_ROOM);
+    }
+
+    /* Stop holding and it expires, exactly as the variant-specific holds do --
+       this is a hold, not a pin. */
+    dash_frame_end();
+    assert(dash_hold_painted() == 0);
+    for (y = 0; y < DASH_ROWS; y++) assert(row_all(y, DT_BLANK));
+
     printf("test_dash_map: ok\n");
     return 0;
 }

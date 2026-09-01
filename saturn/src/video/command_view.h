@@ -34,8 +34,9 @@
 /*----------------------
  | render_command_panel
  | Description: Draws the input line, the strip's borders and dividers, the
- |   compass rose, the word page, and the fixed command list, highlighting the
- |   focused module's selected entry in reverse video. The borders are plain.
+ |   compass rose, the word page, and the fixed command list dim, with the
+ |   focused module's selected entry alone at full brightness. The borders stay
+ |   at full brightness throughout -- they are the frame, not a row.
  | Author: suinevere
  | Dependencies: command_rose.h, text_map.h, console_view.h
  | Globals: N/A

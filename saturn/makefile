@@ -71,7 +71,6 @@ SOURCES = src/main_netbin.cxx \
           src/video/console.c \
           src/video/display.c \
           src/video/text_map.cxx \
-          src/video/glyph_invert.c \
           src/video/dash_map.c \
           src/video/dash_tiles.c \
           src/video/dash_view.cxx \

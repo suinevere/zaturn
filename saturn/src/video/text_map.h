@@ -76,24 +76,6 @@ void text_map_init(void);
 void text_print_str(int x, int y, const char *s);
 
 /*----------------------
- | text_print_hl
- | Description: Writes one unformatted string at (x, y) in reverse video, by
- |   resolving each character to an inverted-glyph scratch slot (glyph_invert.h)
- |   and baking that slot's character code into the pattern name. A character
- |   that cannot be given a slot -- more than GI_SLOT_N distinct ones on screen
- |   at once -- is drawn normally rather than dropped. Touches only the shadow;
- |   a newly claimed slot's tile write is deferred to flush_hook, which drains
- |   glyph_invert's pending queue inside the same vblank as the map copy so the
- |   tile never reaches VRAM mid-frame.
- | Author: suinevere
- | Dependencies: glyph_invert.h
- | Globals: g_shadow
- | Params: x, y -- cell position; s -- the string
- | Returns: N/A
- ----------------------*/
-void text_print_hl(int x, int y, const char *s);
-
-/*----------------------
  | TEXT_DIM_PAL / TEXT_DIM_CRAM
  | Description: The 4bpp palette number a dimmed cell names in its pattern name,
  |   and the CRAM entry its ink reads from. NBG3's font is palette 0 (entries
@@ -111,8 +93,17 @@ void text_print_hl(int x, int y, const char *s);
  | text_print_dim
  | Description: text_print_str into the dim palette: the same glyphs, drawn from
  |   CRAM entry TEXT_DIM_CRAM instead of entry 1. Costs one bit-or per cell and
- |   no VRAM traffic beyond the map itself, unlike text_print_hl, which has to
- |   build an inverted tile per distinct character and can run out of slots.
+ |   no VRAM traffic beyond the map itself.
+ |
+ |   This is the whole of how selection is shown, everywhere: what is not
+ |   selected is printed dim and what is selected is printed plain, so the
+ |   cursor is the one thing on the screen at the brightness the player chose
+ |   for text. The alternative -- reverse video, a solid block of ink with the
+ |   letter punched out of it -- is gone. It had to build an inverted tile per
+ |   distinct character on screen and could run out of the 32 slots it borrowed;
+ |   it read as a black bar rather than as emphasis on the six presets whose
+ |   text colour is black; and it did not match the menus, which have always
+ |   selected by brightness.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_shadow

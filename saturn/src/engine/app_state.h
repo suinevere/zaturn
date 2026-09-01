@@ -86,6 +86,18 @@ extern void (*g_intro_reveal)(void);
  ----------------------*/
 const char *verbosity_command(void);
 
+/*----------------------
+ | MUSIC_LEVEL_DEFAULT / PCM_LEVEL_DEFAULT
+ | Description: The shipped audio levels. Named rather than left as the literals
+ |   app_state.cxx seeds the globals with because the Sound page's master switch
+ |   has to put them back: turning sound off drops both levels to 0, and turning
+ |   it on again has nothing to restore them from -- the levels the player had
+ |   before are the ones it just overwrote -- so it restores these instead.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_LEVEL_DEFAULT 7
+#define PCM_LEVEL_DEFAULT   4
+
 // CD-DA music volume level, 0..7 (0 = off); persisted in MOJOOPTS.
 extern int g_music_level;
 

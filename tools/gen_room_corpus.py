@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tempfile
 
+import zexits
 import zstory
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -172,27 +173,37 @@ def find_rooms_hub(story, min_children=5, high_prop=20):
 
     Z-machine v3 doesn't mark an object as "a room" anywhere explicit; a room
     is just an object other objects (and the player) end up parented to. What
-    picks rooms out from every *other* kind of "things sit inside this"
-    grouping a compiled story has (an abstract-topics bucket, a scenery/props
-    bucket, item containers) is that rooms specifically carry direction/exit
-    data, and that data is compiled to a cluster of high-numbered properties
-    -- empirically property >= 20 across every story checked by hand (Zork I,
-    Starcross, Sorcerer, Seastalker, Suspended, Witness, Moonmist all cleanly
-    separate this way: the true rooms parent averages several such properties
-    per child, while a topics/scenery parent of comparable size averages at
-    or near zero). So: group objects by parent, and among parents with at
-    least min_children of them, pick the one whose children carry the most
-    high-numbered properties per child, on average. Returns (parent_object,
-    [children]), or (None, []) if no parent has enough children to be a
-    plausible hub at all (the two Infocom samplers, which barely have an
-    object tree).
+    picks rooms out is that rooms carry direction properties -- and which
+    property numbers those are is not a guess: the story's own dictionary
+    flags its direction words and names the property each one writes, which is
+    what room_model.c binds at run time and what zexits reads here.
+
+    So: group objects by parent, and among parents with at least min_children
+    of them, take the one the largest SHARE of whose children carry a real
+    direction property. A share, not a total, because a hub of sixty rooms and
+    a hub of six both answer 1.0 and the tie then goes to the larger.
+
+    Averaging high-numbered properties per child was the old proxy for this,
+    and Spellbreaker is why it is gone: its spell book has seven spells hanging
+    off it, each carrying more high-numbered properties than a room does, so it
+    outscored the real hub of sixty-five rooms and the story came out with
+    seven "rooms" in it. The proxy survives only as a fallback for a story
+    whose dictionary names no directions at all, which is what the two Infocom
+    samplers look like.
+
+    Returns (parent_object, [children]), or (None, []) if no parent has enough
+    children to be a plausible hub at all.
     """
     children_of = {}
     for obj in story.objects:
         if obj.parent:
             children_of.setdefault(obj.parent, []).append(obj)
 
+    dirs = set(zexits.direction_properties(story.raw))
+
     def score(children):
+        if dirs:
+            return sum(1 for o in children if o.properties.keys() & dirs) / len(children)
         hits = sum(1 for o in children for p in o.properties if p >= high_prop)
         return hits / len(children)
 
@@ -203,11 +214,34 @@ def find_rooms_hub(story, min_children=5, high_prop=20):
     return story.by_num[best_parent], children_of[best_parent]
 
 
-def derive_direction_props(hub_children, desc_prop, high_prop=20, min_count=2):
-    """Property numbers that look like per-direction exit data among the
-    rooms hub's children: high-numbered (see find_rooms_hub) and carried by
-    more than one child, so a single stray property on one odd object can't
-    qualify alone."""
+def _frequent_props(hub_children, desc_prop, high_prop, min_count):
+    """The old inference: high-numbered properties more than one hub child
+    carries. Kept alongside the dictionary's own answer because a room the
+    player can only be put into -- Hitchhiker's whale, Starcross's Floating in
+    Space -- carries no direction property at all and would otherwise stop
+    being a room, and it is still a place that needs a picture."""
+    freq = {}
+    for obj in hub_children:
+        for p in obj.properties:
+            if p == desc_prop or p < high_prop:
+                continue
+            freq[p] = freq.get(p, 0) + 1
+    return {p for p, n in freq.items() if n >= min_count}
+
+
+def derive_direction_props(hub_children, desc_prop, high_prop=20, min_count=2,
+                           story=None):
+    """Property numbers holding per-direction exit data.
+
+    The story's dictionary names them outright -- see find_rooms_hub -- and
+    that answer is union'd with the older inference over the hub's children
+    rather than replacing it, so an exit-less room still counts as one. Which
+    hub those children came from is the part the dictionary fixed; which of
+    them are rooms was never the part that was wrong."""
+    if story is not None:
+        dirs = set(zexits.direction_properties(story.raw)) - {desc_prop}
+        if dirs:
+            return dirs | _frequent_props(hub_children, desc_prop, high_prop, min_count)
     freq = {}
     for obj in hub_children:
         for p in obj.properties:
@@ -233,7 +267,7 @@ def static_rooms(story):
         return [], 0, 0, 0
     desc_prop, desc_score = detect_description_property(story, children)
 
-    direction_props = derive_direction_props(children, desc_prop)
+    direction_props = derive_direction_props(children, desc_prop, story=story)
     rows = []
     skipped = 0
     for obj in children:
@@ -318,12 +352,22 @@ time_t time(time_t *out) {
 
 
 def build_mojozork(tmp):
-    """Compile the host interpreter once; returns the binary path."""
+    """Compile the host interpreter once; returns the binary path.
+
+    The suffix is asked for rather than assumed. gcc on Windows writes
+    mojozork.exe whatever it is told to call the output, so returning the name
+    handed to -o gave back a path that does not exist -- and every caller runs
+    the capture pass inside a try, so the whole runtime half of the corpus went
+    quietly missing on that platform instead of failing."""
     exe = tmp / "mojozork"
     shim = tmp / "fixed_time.c"
     shim.write_text(_TIME_SHIM, encoding="utf-8")
     subprocess.run(["gcc", "-O2", "-o", str(exe),
                     str(ROOT / "saturn" / "mojozork.c"), str(shim)], check=True)
+    if not exe.is_file():
+        built = exe.with_suffix(".exe")
+        if built.is_file():
+            return built
     return exe
 
 

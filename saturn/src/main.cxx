@@ -751,7 +751,7 @@ int main(void) {
         // reads to the music engine as ended and restarts from the top, which is
         // heard as the music cutting out and coming back. Declines by itself
         // when the story is too large to hold the picture beside it.
-        map_view_preload();
+        map_view_preload(game_release, game_serial);
         // Authored per-room art is the only art there is, so this flag is what
         // makes the Dynamic palette entry reachable at all: without it Dynamic is
         // skipped, and the room-art path, which only runs under Dynamic, never

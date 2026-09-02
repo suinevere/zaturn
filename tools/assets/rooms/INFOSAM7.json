@@ -1,5 +1,5 @@
 {
- "count": 41,
+ "count": 42,
  "desc_prop": 15,
  "release": 8,
  "rooms": [
@@ -200,6 +200,12 @@
    "obj": 144,
    "source": null,
    "title": "Wading"
+  },
+  {
+   "description": "This is the attic. The only exit is a staircase leading down.",
+   "obj": 146,
+   "source": "static",
+   "title": "Attic"
   },
   {
    "description": "You are facing the south side of a white house. There is no door here, and all the windows are boarded.",

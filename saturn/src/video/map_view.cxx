@@ -26,6 +26,7 @@
 #include "party.h"
 #include "map_layout.h"
 #include "map_edges.h"
+#include "../scene/presentation.h"
 #include "map_view.h"
 
 /*----------------------
@@ -48,11 +49,15 @@
 
 /*----------------------
  | MAP_BG_FILE / MAP_BG_TAG
- | Description: The parchment the map is drawn on and the name NBG0 records it
- |   under. A bare /TGA filename, because that is the directory title.cxx steps
- |   into; the tag is what title_bg_loaded_file answers while the map is up, and
- |   is deliberately not a CGL area stem so room_art's nbg0_shows_area can never
- |   mistake the parchment for a room picture it left there.
+ | Description: The sheet the map is drawn on when the story does not name one,
+ |   and the name NBG0 records it under. A bare /TGA filename, because that is
+ |   the directory title.cxx steps into; the tag is what title_bg_loaded_file
+ |   answers while the map is up, and is deliberately not a CGL area stem so
+ |   room_art's nbg0_shows_area can never mistake the sheet for a room picture
+ |   it left there.
+ |     The tag stays "MAP" for all four sheets. It says which LAYER holds what,
+ |   not which file: only one sheet is ever held at a time, dropped on the way
+ |   back to the title before another game can ask for a different one.
  | Author: suinevere
  ----------------------*/
 #define MAP_BG_FILE "MAP.TGA"
@@ -651,9 +656,12 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
  | Params: N/A
  | Returns: N/A
  ----------------------*/
-extern "C" void map_view_preload(void) {
+extern "C" void map_view_preload(unsigned int release, const char *serial) {
 #ifndef NETBIN
-    title_bg_hold(MAP_BG_FILE);
+    const char *sheet = pres_map_bg(release, serial);
+    title_bg_hold((sheet != nullptr) ? sheet : MAP_BG_FILE);
+#else
+    (void) release; (void) serial;
 #endif
 }
 

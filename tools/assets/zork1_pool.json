@@ -864,7 +864,7 @@
   {
    "track": 7,
    "length": "1:48",
-   "role": "UNATTRIBUTED - needs a runtime capture",
+   "role": "UNUSED - no code path selects it",
    "rooms": 0
   },
   {
@@ -876,7 +876,7 @@
   {
    "track": 9,
    "length": "1:18",
-   "role": "script music command 2",
+   "role": "script music command 2; the rainbow solidifies at End Of Rainbow (room 81), set at 0x06038c6c",
    "rooms": 0
   },
   {
@@ -900,31 +900,31 @@
   {
    "track": 13,
    "length": "1:49",
-   "role": "UNATTRIBUTED - needs a runtime capture",
+   "role": "danger cue: sword glow drops to level 1 (0x060347a4), sword examined at level 1 (0x06038814), or a troll/cyclops fight ends with the sword still carried (0x06048dc8)",
    "rooms": 0
   },
   {
    "track": 14,
    "length": "2:38",
-   "role": "UNATTRIBUTED - needs a runtime capture",
+   "role": "troll in the Troll Room: room 20 and IN?(188, 20), set at 0x06048c9a",
    "rooms": 0
   },
   {
    "track": 15,
    "length": "1:57",
-   "role": "UNATTRIBUTED - needs a runtime capture",
+   "role": "thief present outside the Treasure Room, set at 0x06048e48",
    "rooms": 0
   },
   {
    "track": 16,
    "length": "1:58",
-   "role": "UNATTRIBUTED - needs a runtime capture",
+   "role": "thief present in the Treasure Room (room 43), set at 0x06048e48",
    "rooms": 0
   },
   {
    "track": 17,
    "length": "2:18",
-   "role": "UNATTRIBUTED - needs a runtime capture",
+   "role": "cyclops in the Cyclops Room: room 41 and IN?(195, 41), set at 0x06048d3a",
    "rooms": 0
   },
   {
@@ -936,7 +936,7 @@
   {
    "track": 19,
    "length": "2:34",
-   "role": "room BGM, looped by 2 rooms",
+   "role": "room BGM, looped by 2 rooms; death sequence, set at 0x0603a5dc",
    "rooms": 2
   },
   {
@@ -948,61 +948,61 @@
   {
    "track": 21,
    "length": "0:32",
-   "role": "rank screen: (Japanese)",
+   "role": "rank screen: (placeholder '????') (score <= 25)",
    "rooms": 0
   },
   {
    "track": 22,
    "length": "0:33",
-   "role": "script music command 7; rank screen: Amateur Adventurer",
+   "role": "script music command 7; rank screen: Amateur Adventurer (score > 25)",
    "rooms": 0
   },
   {
    "track": 23,
    "length": "0:28",
-   "role": "rank screen: Novice Adventurer",
+   "role": "rank screen: Novice Adventurer (score > 50)",
    "rooms": 0
   },
   {
    "track": 24,
    "length": "0:29",
-   "role": "rank screen: Junior Adventurer",
+   "role": "rank screen: Junior Adventurer (score > 100)",
    "rooms": 0
   },
   {
    "track": 25,
    "length": "0:06",
-   "role": "special-cased at 0x06048a7c and 0x06048b92",
+   "role": "one-shot cue armed by a successful TAKE (0x060331d8); the loop player refuses it at 0x06048a7c so only the play-once path at 0x06048b92 sounds it",
    "rooms": 0
   },
   {
    "track": 26,
    "length": "0:34",
-   "role": "rank screen: Adventurer",
+   "role": "rank screen: Adventurer (score > 200)",
    "rooms": 0
   },
   {
    "track": 27,
    "length": "0:25",
-   "role": "rank screen: Master",
+   "role": "rank screen: Master (score > 300)",
    "rooms": 0
   },
   {
    "track": 28,
    "length": "0:31",
-   "role": "rank screen: Wizard",
+   "role": "rank screen: Wizard (score > 330)",
    "rooms": 0
   },
   {
    "track": 29,
    "length": "0:39",
-   "role": "rank screen: Master Adventurer",
+   "role": "rank screen: Master Adventurer (score = 350)",
    "rooms": 0
   },
   {
    "track": 30,
    "length": "4:18",
-   "role": "played once from 0x0600b9f2",
+   "role": "ending screen (END.CGD/END.COL), played once from 0x0600b9f2",
    "rooms": 0
   },
   {
@@ -1014,7 +1014,7 @@
   {
    "track": 32,
    "length": "4:18",
-   "role": "UNATTRIBUTED - needs a runtime capture",
+   "role": "UNUSED - the same recording as track 30 (292 differing bytes in 46 MB) with volume-table entry 0",
    "rooms": 0
   }
  ],
@@ -1254,8 +1254,8 @@
    "source": "measured"
   },
   "CORRIDOR": {
-   "image": 37,
-   "track": 0,
+   "image": 33,
+   "track": 3,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1264,8 +1264,8 @@
    "source": "analogue"
   },
   "GARDEN": {
-   "image": 1,
-   "track": 0,
+   "image": 5,
+   "track": 11,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1274,8 +1274,8 @@
    "source": "analogue"
   },
   "DESERT": {
-   "image": 61,
-   "track": 0,
+   "image": 62,
+   "track": 6,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1285,7 +1285,7 @@
   },
   "VILLAGE": {
    "image": 8,
-   "track": 0,
+   "track": 10,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1295,7 +1295,7 @@
   },
   "CASTLE": {
    "image": 46,
-   "track": 0,
+   "track": 2,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1305,7 +1305,7 @@
   },
   "DOCK": {
    "image": 63,
-   "track": 0,
+   "track": 6,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1315,7 +1315,7 @@
   },
   "BEDROOM": {
    "image": 9,
-   "track": 0,
+   "track": 10,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1325,7 +1325,7 @@
   },
   "BATHROOM": {
    "image": 10,
-   "track": 0,
+   "track": 10,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1334,8 +1334,8 @@
    "source": "analogue"
   },
   "LIBRARY": {
-   "image": 15,
-   "track": 0,
+   "image": 14,
+   "track": 4,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1345,7 +1345,7 @@
   },
   "OFFICE": {
    "image": 11,
-   "track": 0,
+   "track": 10,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1355,7 +1355,7 @@
   },
   "LAB": {
    "image": 51,
-   "track": 0,
+   "track": 8,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1364,8 +1364,8 @@
    "source": "analogue"
   },
   "STORAGE": {
-   "image": 14,
-   "track": 0,
+   "image": 15,
+   "track": 4,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1374,8 +1374,8 @@
    "source": "analogue"
   },
   "CELL": {
-   "image": 12,
-   "track": 0,
+   "image": 18,
+   "track": 4,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1384,8 +1384,8 @@
    "source": "analogue"
   },
   "CRYPT": {
-   "image": 41,
-   "track": 0,
+   "image": 45,
+   "track": 2,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1395,7 +1395,7 @@
   },
   "THEATER": {
    "image": 43,
-   "track": 0,
+   "track": 2,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1405,7 +1405,7 @@
   },
   "SHIP_EXT": {
    "image": 60,
-   "track": 0,
+   "track": 12,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1415,7 +1415,7 @@
   },
   "SHIP_INT": {
    "image": 70,
-   "track": 0,
+   "track": 18,
    "n": 0,
    "image_support": 0,
    "track_support": 0,
@@ -1425,7 +1425,7 @@
   },
   "SPACE": {
    "image": 42,
-   "track": 0,
+   "track": 3,
    "n": 0,
    "image_support": 0,
    "track_support": 0,

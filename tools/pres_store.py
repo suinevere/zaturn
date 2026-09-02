@@ -19,7 +19,7 @@
  |     in flight.
  | Author: suinevere
  | Dependencies: json, pathlib
- | Globals: ROOT, STORE, POOL, ROOMS, SCENES, ZORK1_STEM
+ | Globals: ROOT, STORE, POOL, MOOD, ROOMS, SCENES, ZORK1_STEM, NEUTRAL_POOL
  ----------------------*/"""
 import json
 import pathlib
@@ -32,6 +32,7 @@ import scene_vocab as vocab
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STORE = ROOT / "tools" / "assets" / "presentation"
 POOL = ROOT / "tools" / "assets" / "zork1_pool.json"
+MOOD = ROOT / "tools" / "assets" / "track_mood.json"
 ROOMS = ROOT / "tools" / "assets" / "rooms"
 SCENES = ROOT / "tools" / "assets" / "scenes"
 
@@ -40,6 +41,20 @@ ZORK1_STEM = "ZORK1"
 
 Description: The one game excluded from this store. Its table is measured, not
     blessed -- see the module docstring.
+Author: suinevere
+"""
+
+NEUTRAL_POOL = (0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 20, 31)
+"""NEUTRAL_POOL
+
+Description: The only tracks a room may be given, mirroring P_NEUTRAL in
+    saturn/src/sound/music_data.c with silence added. The disc's other fifteen
+    tracks are spoken for -- the villain and danger cues, the death sting, the
+    eight rank fanfares, the take sting, the ending theme and its muted
+    duplicate -- and the runtime re-decides those every turn from the cue
+    table, so a room that named one would either be overridden or would
+    announce something that did not happen. Offering them at all would be
+    offering a choice the engine does not honour.
 Author: suinevere
 """
 
@@ -58,6 +73,40 @@ def pool():
         raise SystemExit("pres_store: tools/assets/zork1_pool.json missing -- "
                          "run python tools/gen_pool.py first")
     return json.loads(POOL.read_text(encoding="utf-8"))
+
+
+def tracks(p=None):
+    """/*----------------------
+     | tracks
+     | Description: The tracks a room may actually be given -- the catalogue
+     |     filtered to NEUTRAL_POOL, in disc order.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: NEUTRAL_POOL
+     | Params: p -- an already-read catalogue, or None to read one
+     | Returns: a list of track records
+     ----------------------*/"""
+    return [t for t in (p or pool())["tracks"] if t["track"] in NEUTRAL_POOL]
+
+
+def mood():
+    """/*----------------------
+     | mood
+     | Description: What each track sounds like, measured off the ripped audio
+     |     by gen_track_mood.py. Returns an empty map when the file is absent
+     |     rather than refusing: the mood words decorate a menu, and a review
+     |     app that will not start because an optional measurement is missing
+     |     has confused decoration with data.
+     | Author: suinevere
+     | Dependencies: json
+     | Globals: MOOD
+     | Params: N/A
+     | Returns: {track number: measurements with a "mood" word list}
+     ----------------------*/"""
+    if not MOOD.is_file():
+        return {}
+    d = json.loads(MOOD.read_text(encoding="utf-8")).get("tracks", {})
+    return {int(k): v for k, v in d.items()}
 
 
 def games():
@@ -282,7 +331,166 @@ def suggest(scene, defaults, origin="stored"):
     n, sup = d["n"], d["image_support"]
     pct = (100 * sup) // n if n else 0
     conf = "strong" if pct >= 60 and origin == "stored" else "weak"
-    return {"image": d["image"], "track": d["track"], "scene": scene,
+    trk = d["track"] if d["track"] in NEUTRAL_POOL else 0
+    return {"image": d["image"], "track": trk, "scene": scene,
             "confidence": conf,
             "why": f"{sup} of {n} Zork I {scene} rooms took this picture ({pct}%); "
                    f"{d['track_support']} of {n} took track {d['track']}{from_title}"}
+
+
+def accepted(rec):
+    """/*----------------------
+     | accepted
+     | Description: Whether a record is a finished verdict -- a picture and a
+     |     track both named. A record holding only one of the two is a room
+     |     half-decided, not a decided one, and the review app shows it as such
+     |     rather than counting it done.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: rec -- a stored {image, track} record, or None
+     | Returns: True when both are named
+     ----------------------*/"""
+    return bool(rec) and bool(rec.get("image")) and bool(rec.get("track"))
+
+
+def basis(rec, sug):
+    """/*----------------------
+     | basis
+     | Description: How well founded a room's current pairing is -- the strength
+     |     of the association behind it, which does not stop mattering once the
+     |     pairing is stored. A record that matches the suggestion keeps the
+     |     suggestion's confidence; one that does not was a human overruling the
+     |     evidence and is reported as "chosen", which is the strongest basis
+     |     there is and the only one this app cannot derive.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: rec -- the stored record or None; sug -- suggest()'s result
+     | Returns: "chosen", "strong", "weak", "analogue" or "none"
+     ----------------------*/"""
+    if rec and (rec.get("image") != sug["image"] or rec.get("track") != sug["track"]):
+        return "chosen"
+    return sug["confidence"]
+
+
+def bless(stem, suggest_for=None):
+    """/*----------------------
+     | bless
+     | Description: Writes the standing suggestion into every room of one game
+     |     that has no record at all, so the table starts populated and a human
+     |     revises rather than originates. Rooms that already have a record are
+     |     left exactly as they are, including half-decided ones: a stored
+     |     verdict is a human's and this must never overwrite one.
+     |
+     |     A room whose suggestion names no picture is still skipped rather
+     |     than written as blank. With room_guess supplying the suggestions
+     |     that no longer happens for any room on the disc, but the rule stays:
+     |     a blank record hides that a room needs a human, and nothing should
+     |     be able to write one by accident.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: stem -- the story stem; suggest_for -- object -> a suggestion,
+     |     or None to use this module's own scene-tag suggestion
+     | Returns: how many rooms were written
+     ----------------------*/"""
+    p = pool()
+    tags = scenes(stem)
+    saved = load(stem)["rooms"]
+    n = 0
+    for r in rooms(stem):
+        if str(r["obj"]) in saved:
+            continue
+        if suggest_for is not None:
+            s = suggest_for(r["obj"])
+        else:
+            scene, origin = scene_of(r["obj"], r["title"], tags)
+            s = suggest(scene, p["scene_defaults"], origin)
+        if not s or not s["image"]:
+            continue
+        assign(stem, r["obj"], s["image"], s["track"])
+        n += 1
+    return n
+
+
+def set_rooms_track(stem, objs, track, image_for=None):
+    """/*----------------------
+     | set_rooms_track
+     | Description: Gives one set of rooms the same track, keeping each room's
+     |     picture. This is what an area's track menu writes: the store has no
+     |     record of an area and never will -- areas are derived and can split
+     |     when a room is re-tagged -- so setting one writes through to the
+     |     rooms it currently holds, which is a verdict that survives the area
+     |     it was made in.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: stem -- the story stem; objs -- the object numbers; track -- the
+     |     CD-DA track, 0 for silence
+     | Returns: how many rooms changed
+     ----------------------*/"""
+    track = int(track)
+    p = pool()
+    tags = scenes(stem)
+    titles = {r["obj"]: r["title"] for r in rooms(stem)}
+    saved = load(stem)["rooms"]
+    n = 0
+    for obj in objs:
+        rec = saved.get(str(obj))
+        if rec and rec.get("track") == track:
+            continue
+        if rec:
+            image = rec.get("image", 0)
+        elif image_for is not None:
+            image = image_for(obj)
+        else:
+            scene, origin = scene_of(obj, titles.get(obj, ""), tags)
+            image = suggest(scene, p["scene_defaults"], origin)["image"]
+        if not image and not track:
+            continue
+        assign(stem, obj, image, track)
+        n += 1
+    return n
+
+
+def set_all_tracks(stem, track, image_for=None):
+    """/*----------------------
+     | set_all_tracks
+     | Description: Gives every room of one game the same track, keeping each
+     |     room's picture. A room with no record keeps the picture the app was
+     |     showing it -- its suggestion -- rather than losing it to a blank,
+     |     because the sweep is about the track and silently dropping a picture
+     |     the reviewer could see is not what was asked for.
+     |
+     |     One undo entry per room changed, like any other write. A sweep is not
+     |     a single decision that can be taken back in one step, and pretending
+     |     otherwise would mean a second, differently-shaped kind of entry on a
+     |     stack whose whole value is that every entry means the same thing.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: stem -- the story stem; track -- the CD-DA track, 0 for silence
+     | Returns: how many rooms changed
+     ----------------------*/"""
+    track = int(track)
+    p = pool()
+    tags = scenes(stem)
+    saved = load(stem)["rooms"]
+    n = 0
+    for r in rooms(stem):
+        rec = saved.get(str(r["obj"]))
+        if rec and rec.get("track") == track:
+            continue
+        if rec:
+            image = rec.get("image", 0)
+        elif image_for is not None:
+            image = image_for(r["obj"])
+        else:
+            scene, origin = scene_of(r["obj"], r["title"], tags)
+            image = suggest(scene, p["scene_defaults"], origin)["image"]
+        if not image and not track:
+            continue
+        assign(stem, r["obj"], image, track)
+        n += 1
+    return n

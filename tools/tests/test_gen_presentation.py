@@ -26,7 +26,7 @@ def test_every_saturn_room_is_claimed_exactly_once():
 
 def test_the_table_is_keyed_by_release_and_serial():
     text = INC.read_text(encoding="utf-8")
-    assert '{ 88, "840726", GAME_PRES_ZORK1 }' in text
+    assert '{ 88, "840726", GAME_PRES_ZORK1, 0 }' in text
 
 
 def test_rooms_reference_seventy_four_of_the_seventy_five_frames():

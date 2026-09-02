@@ -1,49 +1,475 @@
 {
- "count": 7,
- "desc_prop": 11,
+ "count": 78,
+ "desc_prop": 21,
  "release": 87,
  "rooms": [
   {
    "description": null,
-   "obj": 14,
+   "obj": 3,
    "source": null,
-   "title": "rezrov spell"
+   "title": "Boulder"
   },
   {
    "description": null,
-   "obj": 35,
+   "obj": 6,
    "source": null,
-   "title": "lesoch spell"
+   "title": "Carving Room"
   },
   {
    "description": null,
-   "obj": 150,
+   "obj": 7,
    "source": null,
-   "title": "frotz spell"
+   "title": "Ogre Lair"
+  },
+  {
+   "description": "You wander around for a while and end up back in the square.",
+   "obj": 18,
+   "source": "static",
+   "title": "Belwit Square"
   },
   {
    "description": null,
-   "obj": 178,
+   "obj": 24,
    "source": null,
-   "title": "yomin spell"
+   "title": "Boulder"
   },
   {
    "description": null,
-   "obj": 204,
+   "obj": 28,
    "source": null,
-   "title": "gnusto spell"
+   "title": "Octagonal Room"
   },
   {
    "description": null,
-   "obj": 229,
+   "obj": 29,
    "source": null,
-   "title": "malyon spell"
+   "title": "Cliff Middle"
+  },
+  {
+   "description": "The current is too strong.",
+   "obj": 37,
+   "source": "static",
+   "title": "In Pipe"
   },
   {
    "description": null,
-   "obj": 240,
+   "obj": 38,
    "source": null,
-   "title": "jindak spell"
+   "title": "Dungeon Cell"
+  },
+  {
+   "description": null,
+   "obj": 39,
+   "source": null,
+   "title": "Air Room"
+  },
+  {
+   "description": "This is the entrance to the Guild Hall in Borphee. To the north is the Council Chamber, and to the south is an exit leading outside. Little is left of the sumptuous buffet lunch. Only a loaf of bread and some smoked fish remains.",
+   "obj": 45,
+   "source": "runtime",
+   "title": "Guild Hall"
+  },
+  {
+   "description": null,
+   "obj": 46,
+   "source": null,
+   "title": "Meadow"
+  },
+  {
+   "description": null,
+   "obj": 49,
+   "source": null,
+   "title": "Boulder"
+  },
+  {
+   "description": null,
+   "obj": 51,
+   "source": null,
+   "title": "Grue Cave"
+  },
+  {
+   "description": null,
+   "obj": 56,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 62,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 74,
+   "source": null,
+   "title": "North of Serpent"
+  },
+  {
+   "description": "You are in the Council Chamber of the ancient Guild Hall at Borphee. To the south is the entry of the Guild Hall. There is a meeting of the guildmasters going on. You are standing among a group of about ten sorcerers, each the master of an Enchanters Guild chapter somewhere in the land. Sneffle of the Guild of Bakers is addressing the gathering. \"Do you know what this is doing to our business? Do you know how difficult it is to make those yummy butter pastries by hand? When a simple 'gloth' spell would fold the dough 83 times it was possible to make a profit, but now 'gloth' hardly works, and when it does, it usually folds the dough too often and the butter melts, or it doesn't come out the right size, or...\" He stops, apparently overwhelmed by the prospect of a world where the pastries have to be hand-made. \"Can't you do anything about this? You're supposed to know all about magic!\"",
+   "obj": 76,
+   "source": "runtime",
+   "title": "Council Chamber"
+  },
+  {
+   "description": null,
+   "obj": 79,
+   "source": null,
+   "title": "Mid-Ocean"
+  },
+  {
+   "description": null,
+   "obj": 80,
+   "source": null,
+   "title": "Volcano"
+  },
+  {
+   "description": null,
+   "obj": 83,
+   "source": null,
+   "title": "String Room"
+  },
+  {
+   "description": null,
+   "obj": 87,
+   "source": null,
+   "title": "Fire Room"
+  },
+  {
+   "description": null,
+   "obj": 88,
+   "source": null,
+   "title": "Water Room"
+  },
+  {
+   "description": null,
+   "obj": 89,
+   "source": null,
+   "title": "Open Ocean"
+  },
+  {
+   "description": null,
+   "obj": 90,
+   "source": null,
+   "title": "Wilderness"
+  },
+  {
+   "description": null,
+   "obj": 91,
+   "source": null,
+   "title": "Guard Tower"
+  },
+  {
+   "description": null,
+   "obj": 93,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 97,
+   "source": null,
+   "title": "Oubliette"
+  },
+  {
+   "description": null,
+   "obj": 98,
+   "source": null,
+   "title": "No Place"
+  },
+  {
+   "description": null,
+   "obj": 101,
+   "source": null,
+   "title": "Smooth Room"
+  },
+  {
+   "description": null,
+   "obj": 102,
+   "source": null,
+   "title": "Cave"
+  },
+  {
+   "description": null,
+   "obj": 103,
+   "source": null,
+   "title": "Dark Room"
+  },
+  {
+   "description": null,
+   "obj": 109,
+   "source": null,
+   "title": "Cliff Top"
+  },
+  {
+   "description": null,
+   "obj": 111,
+   "source": null,
+   "title": "Light Pool"
+  },
+  {
+   "description": null,
+   "obj": 114,
+   "source": null,
+   "title": "Ruins Room"
+  },
+  {
+   "description": null,
+   "obj": 115,
+   "source": null,
+   "title": "Bazaar"
+  },
+  {
+   "description": "The current is too strong.",
+   "obj": 116,
+   "source": "static",
+   "title": "Ruined Pipe"
+  },
+  {
+   "description": null,
+   "obj": 118,
+   "source": null,
+   "title": "Light Room"
+  },
+  {
+   "description": null,
+   "obj": 119,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 120,
+   "source": null,
+   "title": "Soft Room"
+  },
+  {
+   "description": null,
+   "obj": 122,
+   "source": null,
+   "title": "Emporium"
+  },
+  {
+   "description": "The current is too strong.",
+   "obj": 127,
+   "source": "static",
+   "title": "In Pipe"
+  },
+  {
+   "description": null,
+   "obj": 132,
+   "source": null,
+   "title": "Boneyard"
+  },
+  {
+   "description": null,
+   "obj": 137,
+   "source": null,
+   "title": "Dungeon"
+  },
+  {
+   "description": null,
+   "obj": 140,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 141,
+   "source": null,
+   "title": "Enchanters' Retreat"
+  },
+  {
+   "description": null,
+   "obj": 142,
+   "source": null,
+   "title": "Dungeon East End"
+  },
+  {
+   "description": null,
+   "obj": 147,
+   "source": null,
+   "title": "Midair"
+  },
+  {
+   "description": null,
+   "obj": 151,
+   "source": null,
+   "title": "Magic Room"
+  },
+  {
+   "description": null,
+   "obj": 152,
+   "source": null,
+   "title": "Plain"
+  },
+  {
+   "description": null,
+   "obj": 156,
+   "source": null,
+   "title": "Packed Earth"
+  },
+  {
+   "description": null,
+   "obj": 157,
+   "source": null,
+   "title": "In Roc Nest"
+  },
+  {
+   "description": null,
+   "obj": 162,
+   "source": null,
+   "title": "On Pillar"
+  },
+  {
+   "description": null,
+   "obj": 164,
+   "source": null,
+   "title": "Inner Vault"
+  },
+  {
+   "description": null,
+   "obj": 166,
+   "source": null,
+   "title": "Glacier"
+  },
+  {
+   "description": null,
+   "obj": 167,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 173,
+   "source": null,
+   "title": "Changing Room"
+  },
+  {
+   "description": null,
+   "obj": 176,
+   "source": null,
+   "title": "Dark Cave"
+  },
+  {
+   "description": null,
+   "obj": 177,
+   "source": null,
+   "title": "In Thick Clouds"
+  },
+  {
+   "description": "There's no path that way.",
+   "obj": 179,
+   "source": "static",
+   "title": "Cliff Bottom"
+  },
+  {
+   "description": "The current is too strong.",
+   "obj": 180,
+   "source": "static",
+   "title": "In Channel"
+  },
+  {
+   "description": null,
+   "obj": 181,
+   "source": null,
+   "title": "Castle"
+  },
+  {
+   "description": null,
+   "obj": 184,
+   "source": null,
+   "title": "Nondescript Room"
+  },
+  {
+   "description": null,
+   "obj": 190,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 194,
+   "source": null,
+   "title": "Outcropping"
+  },
+  {
+   "description": null,
+   "obj": 197,
+   "source": null,
+   "title": "Hall of Stone"
+  },
+  {
+   "description": null,
+   "obj": 199,
+   "source": null,
+   "title": "Stone Hut"
+  },
+  {
+   "description": null,
+   "obj": 200,
+   "source": null,
+   "title": "Ruins Room"
+  },
+  {
+   "description": null,
+   "obj": 211,
+   "source": null,
+   "title": "Ocean Floor"
+  },
+  {
+   "description": null,
+   "obj": 216,
+   "source": null,
+   "title": "Temple"
+  },
+  {
+   "description": null,
+   "obj": 219,
+   "source": null,
+   "title": "Volcano Base"
+  },
+  {
+   "description": null,
+   "obj": 220,
+   "source": null,
+   "title": "Octagonal Room"
+  },
+  {
+   "description": null,
+   "obj": 225,
+   "source": null,
+   "title": "Sand Room"
+  },
+  {
+   "description": null,
+   "obj": 227,
+   "source": null,
+   "title": "Outer Vault"
+  },
+  {
+   "description": "The current is too strong.",
+   "obj": 230,
+   "source": "static",
+   "title": "In Pipe"
+  },
+  {
+   "description": null,
+   "obj": 231,
+   "source": null,
+   "title": "Cave Entrance"
+  },
+  {
+   "description": null,
+   "obj": 242,
+   "source": null,
+   "title": "Mountain Top"
+  },
+  {
+   "description": null,
+   "obj": 246,
+   "source": null,
+   "title": "Dungeon Cell"
   }
  ],
  "serial": "860904",

@@ -44,17 +44,19 @@ typedef struct {
     unsigned short release;
     const char *serial;
     const Presentation *rooms;
+    unsigned char map_bg;
 } GamePresMap;
 
 /*----------------------
- | PRES_FRAME_N / PRES_AREA_N
- | Description: The frame and area-archive counts from game_presentation.inc,
- |   copied here so a caller (or a test) can size against them without pulling
- |   in the table itself. Must equal the .inc's own PRES_FRAME_N/PRES_AREA_N.
+ | PRES_FRAME_N / PRES_AREA_N / PRES_MAP_BG_N
+ | Description: The frame, area-archive and map-sheet counts from
+ |   game_presentation.inc, copied here so a caller (or a test) can size against
+ |   them without pulling in the table itself. Must equal the .inc's own.
  | Author: suinevere
  ----------------------*/
 #define PRES_FRAME_N 74
 #define PRES_AREA_N 11
+#define PRES_MAP_BG_N 4
 #endif /* PRES_FRAME_N */
 
 /*----------------------
@@ -113,6 +115,26 @@ int pres_frame(int image, int *area, unsigned long *offset, unsigned long *lengt
  | Returns: the stem, or NULL when area is out of range
  ----------------------*/
 const char *pres_area_name(int area);
+
+/*----------------------
+ | pres_map_bg
+ | Description: The /TGA filename of the sheet one game's map page is drawn on.
+ |   Which sheet is a property of the game's genre -- a ship's log for the
+ |   science fiction, ruled ledger paper for the mysteries, parchment for the
+ |   fantasies -- decided in tools/game_genre.py and generated into the table
+ |   beside the room rows, because the runtime has no other way to know what
+ |   kind of story it is running.
+ |     Never returns NULL. A story with no table at all, or a row naming a sheet
+ |   that is not there, answers the default parchment: the map page has drawn on
+ |   that since before any of the others existed, so falling back to it cannot
+ |   be a regression for any game.
+ | Author: suinevere
+ | Dependencies: game_presentation.inc
+ | Globals: GAME_PRES_MAP, PRES_MAP_BG
+ | Params: release -- Z-machine release; serial -- 6-char serial
+ | Returns: a bare /TGA filename
+ ----------------------*/
+const char *pres_map_bg(unsigned int release, const char *serial);
 
 #ifdef __cplusplus
 }

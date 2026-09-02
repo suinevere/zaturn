@@ -31,7 +31,7 @@
  |     drawing music from the neutral pool. A row of zeros would mean the same
  |     thing far less legibly, and would cost 768 bytes each to say it.
  | Author: suinevere
- | Dependencies: csv, json, pathlib, re, sys
+ | Dependencies: csv, game_genre, json, pathlib, re, sys
  | Globals: ROOT, CSV, ROOMS, ZIL, ALIASES, OUT, STORE, AREAS, SE_BANKS,
  |     RELEASE, SERIAL
  ----------------------*/"""
@@ -40,6 +40,10 @@ import json
 import pathlib
 import re
 import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import game_genre as genre_vocab
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CSV = ROOT / "analysis" / "zork_bg" / "room_backgrounds.csv"
@@ -346,7 +350,8 @@ def main(argv):
              " |   tools/gen_presentation.py. Every game's per-room picture,",
              " |   CD-DA track and sound-effect bank indexed by object number,",
              " |   the frame offsets inside each archive, and the table that",
-             " |   keys them by release and serial. image is 1-based so 0 means",
+             " |   keys them by release and serial, and which sheet each game's",
+             " |   map page is drawn on. image is 1-based so 0 means",
              " |   unauthored; track 0 means silence, which ten rooms want.",
              " |   Zork I's rows are measured off the original disc; every",
              " |   other game's are assigned by hand and drawn from that same",
@@ -367,13 +372,19 @@ def main(argv):
              "    unsigned short release;",
              "    const char *serial;",
              "    const Presentation *rooms;",
+             "    unsigned char map_bg;",
              "} GamePresMap;",
              f"#define PRES_GAME_N {1 + len(assigned)}",
+             f"#define PRES_MAP_BG_N {len(genre_vocab.MAP_FILES)}",
              f"#define PRES_FRAME_N {len(frames)}",
              f"#define PRES_AREA_N {len(AREAS)}",
              "static const char *const PRES_AREA[PRES_AREA_N] = {"]
     for a in AREAS:
         lines.append(f'    "{a}",')
+    lines.append("};")
+    lines.append("static const char *const PRES_MAP_BG[PRES_MAP_BG_N] = {")
+    for f in genre_vocab.MAP_FILES:
+        lines.append(f'    "{f}",')
     lines.append("};")
     lines.append("static const PresFrame IMAGE_FRAME[PRES_FRAME_N] = {")
     for area, off, ln in frames:
@@ -391,9 +402,11 @@ def main(argv):
             lines.append(f"    {chunk},")
         lines.append("};")
     lines.append("static const GamePresMap GAME_PRES_MAP[PRES_GAME_N] = {")
-    lines.append(f'    {{ {RELEASE}, "{SERIAL}", GAME_PRES_ZORK1 }},')
+    lines.append(f'    {{ {RELEASE}, "{SERIAL}", GAME_PRES_ZORK1, '
+                 f'{genre_vocab.map_bg("ZORK1")} }},')
     for stem, release, serial, _rows in assigned:
-        lines.append(f'    {{ {release}, "{serial}", GAME_PRES_{stem} }},')
+        lines.append(f'    {{ {release}, "{serial}", GAME_PRES_{stem}, '
+                     f'{genre_vocab.map_bg(stem)} }},')
     lines.append("};")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)

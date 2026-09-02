@@ -51,7 +51,8 @@ def static_rooms(story):
     if hub is None:
         return [], 0
     desc_prop, _ = corpus.detect_description_property(story, children)
-    direction_props = corpus.derive_direction_props(children, desc_prop)
+    direction_props = corpus.derive_direction_props(children, desc_prop,
+                                                    story=story)
     rows = []
     for obj in children:
         if not obj.properties.keys() & direction_props:

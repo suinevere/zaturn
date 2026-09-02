@@ -1,5 +1,5 @@
 {
- "count": 60,
+ "count": 62,
  "desc_prop": 16,
  "release": 8,
  "rooms": [
@@ -110,6 +110,12 @@
    "obj": 100,
    "source": null,
    "title": "Top Passage"
+  },
+  {
+   "description": null,
+   "obj": 101,
+   "source": null,
+   "title": "Rising Passage"
   },
   {
    "description": null,
@@ -320,6 +326,12 @@
    "obj": 136,
    "source": null,
    "title": "Middle Supply Room"
+  },
+  {
+   "description": null,
+   "obj": 137,
+   "source": null,
+   "title": "Angling Corridor"
   },
   {
    "description": null,

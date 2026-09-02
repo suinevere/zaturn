@@ -51,8 +51,11 @@ void map_view_show(void);
 
 /*----------------------
  | map_view_preload
- | Description: Reads the map's parchment while the game is still loading, so
- |   opening the map later costs no disc access at all. Call once per game, under
+ | Description: Reads the sheet this game's map is drawn on while the game is
+ |   still loading, so opening the map later costs no disc access at all. Which
+ |   sheet that is comes from pres_map_bg, which answers by the game's genre --
+ |   parchment for the fantasies, ruled ledger paper for the mysteries, a dark
+ |   screen for the science fiction. Call once per game, under
  |   the loading ramp and before the music starts: this is the only thing on the
  |   map's path that touches the drive, and a seek taken with CD-DA playing does
  |   not merely pause it -- an unheld track reads to the music engine as one that
@@ -64,12 +67,13 @@ void map_view_show(void);
  |   draws on its tan back colour instead, and never reaches for the drive.
  |   No-op in the netbin, which has neither a drive nor room art.
  | Author: suinevere
- | Dependencies: title.h (title_bg_hold)
+ | Dependencies: title.h (title_bg_hold), scene/presentation.h (pres_map_bg)
  | Globals: N/A
- | Params: N/A
+ | Params: release -- Z-machine release; serial -- 6-char serial, not
+ |   guaranteed NUL-terminated
  | Returns: N/A
  ----------------------*/
-void map_view_preload(void);
+void map_view_preload(unsigned int release, const char *serial);
 
 #ifdef __cplusplus
 }

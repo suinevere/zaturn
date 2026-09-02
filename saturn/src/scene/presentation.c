@@ -70,6 +70,22 @@ int pres_frame(int image, int *area, unsigned long *offset, unsigned long *lengt
 }
 
 /*----------------------
+ | pres_map_bg
+ | Description: See presentation.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: GAME_PRES_MAP, PRES_MAP_BG
+ | Params: release, serial -- the story identity
+ | Returns: a bare /TGA filename, never NULL
+ ----------------------*/
+const char *pres_map_bg(unsigned int release, const char *serial) {
+    int g = pres_game_index(release, serial);
+    int i = (g < 0) ? 0 : (int) GAME_PRES_MAP[g].map_bg;
+    if (i < 0 || i >= PRES_MAP_BG_N) i = 0;
+    return PRES_MAP_BG[i];
+}
+
+/*----------------------
  | pres_area_name
  | Description: See presentation.h.
  | Author: suinevere

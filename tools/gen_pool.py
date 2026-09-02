@@ -42,33 +42,40 @@ SCENES = ROOT / "tools" / "assets" / "scenes" / "ZORK1.json"
 OUT = ROOT / "tools" / "assets" / "zork1_pool.json"
 
 SCENE_ANALOGUE = {
-    "CORRIDOR":  37,   # BCEL_05 East-West Passage -- worked stone corridor
-    "GARDEN":     1,   # BWOD_01 Clearing -- open ground ringed by trees
-    "DESERT":    61,   # BRIV_06 Sandy Beach -- the only sand in the set
-    "VILLAGE":    8,   # BHUS_00 West of House -- a building seen from outside
-    "CASTLE":    46,   # BTMP_03 Temple -- the only monumental masonry
-    "DOCK":      63,   # BRIV_05 Shore -- water meeting walkable ground
-    "BEDROOM":    9,   # BHUS_05 Attic -- the only domestic upper room
-    "BATHROOM":  10,   # BHUS_03 Kitchen -- the only tiled service room
-    "LIBRARY":   15,   # BCEL_10 Studio -- interior with worked furnishings
-    "OFFICE":    11,   # BHUS_04 Living Room -- furnished interior
-    "LAB":       51,   # BDAM_00 Control Room -- the only instrumented room
-    "STORAGE":   14,   # BCEL_09 Gallery -- interior holding objects
-    "CELL":      12,   # BCEL_07 Cellar -- bare stone enclosure
-    "CRYPT":     41,   # BDED_00 Entrance to Hades -- the funerary image
-    "THEATER":   43,   # BTMP_01 Dome Room -- the only large vaulted space
-    "SHIP_EXT":  60,   # BRIV_02 Frigid River -- open water
-    "SHIP_INT":  70,   # BMIN_08 Machine Room -- enclosed machinery
-    "SPACE":     42,   # BDED_01 Land of the Living Dead -- the void-like frame
+    "CORRIDOR":  (33,  3),   # BMIR_03 -- a brick barrel-vault tunnel receding
+    "GARDEN":    (5,  11),   # BWOD_02 -- a bright track running away through trees
+    "DESERT":    (62,  6),   # BRIV_07 -- rippled sand, the only dunes in the set
+    "VILLAGE":   (8,  10),   # BHUS_00 West of House -- a building seen from outside
+    "CASTLE":    (46,  2),   # BTMP_03 Temple -- the only monumental masonry
+    "DOCK":      (63,  6),   # BRIV_05 Shore -- water meeting walkable ground
+    "BEDROOM":   (9,  10),   # BHUS_05 Attic -- the only domestic upper room
+    "BATHROOM":  (10, 10),   # BHUS_03 Kitchen -- the only tiled service room
+    "LIBRARY":   (14,  4),   # BCEL_09 -- a panelled room, framed pictures, two doors
+    "OFFICE":    (11, 10),   # BHUS_04 Living Room -- furnished interior
+    "LAB":       (51,  8),   # BDAM_00 Control Room -- the only instrumented room
+    "STORAGE":   (15,  4),   # BCEL_10 -- a vaulted brick cellar with a bench
+    "CELL":      (18,  4),   # BCEL_14 -- a bare grey chamber, a grating overhead
+    "CRYPT":     (45,  2),   # BTMP_00 -- a carved stone relief wall
+    "THEATER":   (43,  2),   # BTMP_01 Dome Room -- the only large vaulted space
+    "SHIP_EXT":  (60, 12),   # BRIV_02 Frigid River -- open water, but the river ran
+                             #   silent, so the Stream theme plays
+    "SHIP_INT":  (70, 18),   # BMIN_08 Machine Room -- enclosed machinery
+    "SPACE":     (42,  3),   # BDED_01 Land of the Living Dead -- void-like, but its
+                             #   own track 19 is the death cue, so the Shaft's plays
 }
 """SCENE_ANALOGUE
 
-Description: A stand-in picture for each of the 18 scene tags Zork I never
-    used, so a room in one of them opens on something deliberate instead of
-    blank. Chosen by visual analogue from the 74 available, one line of
-    reasoning each. These are suggestions the review app shows and a human
-    overrides -- they are guesses, and the app marks them as guesses, which is
-    the difference between this and the learned defaults beside them.
+Description: A stand-in picture and track for each of the 18 scene tags Zork I
+    never used, so a room in one of them opens on something deliberate instead
+    of blank and silent. The picture is chosen by LOOKING at the 74 available
+    -- see tools/image_looks.py, and the seven entries this table used to get
+    wrong by reading the name of the room each picture was drawn for instead --
+    and the track is the one Zork I played over that very picture, except where
+    that track is one the cues have spoken for, since a room cannot be handed
+    the death cue as its room theme. These are suggestions the review
+    app shows and a human overrides -- they are guesses, and the app marks them
+    as guesses, which is the difference between this and the learned defaults
+    beside them.
 Author: suinevere
 """
 
@@ -212,10 +219,10 @@ def scene_evidence(name_to_idx):
             "tracks": dict(sorted(d["tracks"].items())),
             "source": "measured",
         }
-    for scene, img in SCENE_ANALOGUE.items():
+    for scene, (img, trk) in SCENE_ANALOGUE.items():
         if scene in out:
             continue
-        out[scene] = {"image": img, "track": 0, "n": 0,
+        out[scene] = {"image": img, "track": trk, "n": 0,
                       "image_support": 0, "track_support": 0,
                       "images": {}, "tracks": {}, "source": "analogue"}
     return out

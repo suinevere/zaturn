@@ -241,7 +241,7 @@ class ImageLooksTest(unittest.TestCase):
     def test_no_picture_is_left_out_of_every_list(self):
         """45 of the 74 had never been used once, which is what one picture per
         scene buys you."""
-        listed = {i for v in self.looks.SCENE_IMAGES.values() for i in v}
+        listed = {i for v in self.looks.scene_images().values() for i in v}
         missing = sorted({i["index"] for i in self.pool["images"]} - listed)
         self.assertEqual(missing, [], f"pictures nothing will ever pick: {missing}")
 

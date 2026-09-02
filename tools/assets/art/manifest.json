@@ -1,0 +1,16 @@
+{
+ "_comment": "Pictures that were never on the original disc. Order is the order they are packed in, and a frame's IMAGE_FRAME index is its position here after the 74 measured ones -- so a plate may be appended, but reordering or removing one silently changes what every room record naming a later frame points at. reference is the IMAGE_FRAME index of the picture this plate is graded against: a plate is put into the house style by measuring the frame it stands beside, never by describing a colour. scenes are the scene tags this picture will genuinely do for, best first, and a plate must name at least one or nothing will ever pick it. shows is what the picture actually depicts, in the same terms tools/image_looks.py records the measured ones in, and is what makes it choosable in the review app.",
+ "prefix": "GEN",
+ "plates": [
+  {
+   "source": "bridge.png",
+   "reference": 51,
+   "grain": 0.0,
+   "shows": "a narrow metal walkway crossing a dark drop, rails on both sides, lit from below",
+   "scenes": [
+    "SHIP_INT",
+    "CORRIDOR"
+   ]
+  }
+ ]
+}

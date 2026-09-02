@@ -3,7 +3,8 @@
 :; #  bg.bat
 :; #  Description: Stages Zork I's twelve BG archives -- the eleven room-background
 :; #    archives (B*.CGL) and the item-picture container (OITEM.CZ) -- into ./BG,
-:; #    ready for games.bat to inject them into /BG on the output disc.
+:; #    ready for games.bat to inject them into /BG on the output disc, then
+:; #    builds the generated archives (GEN*.CGL) beside them.
 :; #    The archives are lifted out of the data track of the original Japanese
 :; #    Saturn disc -- the same disc AUDIO_URL already names and music.bat
 :; #    already downloads and discards ("Skipping Track 1"), so this adds no new
@@ -35,7 +36,8 @@
 :; #    packaging run after a bg.bat would not have that ordering -- build the
 :; #    kit from a clean tree, as CI does.
 :; #  Author: suinevere
-:; #  Dependencies: curl, unzip, python3, ../extract_bg.py, CONFIG.ME
+:; #  Dependencies: curl, unzip, python3, ../extract_bg.py,
+:; #    ../gen_art_archive.py, CONFIG.ME
 :; #  Globals: N/A
 :; #  Params: N/A
 :; #  Returns: 0 when ./BG holds all twelve archives, 1 otherwise
@@ -54,6 +56,18 @@
 :; PY="../.venv/bin/python"
 :; [ -x "$PY" ] || PY=$(command -v python3 || command -v python)
 :;
+:; # generated_art -- build the archives for the pictures that were never on the
+:; # original disc. Runs AFTER the disc's own are staged, because a generated plate
+:; # is graded against the frame it stands beside and there is nothing to grade
+:; # against until they are there. Failing soft: a checkout with no source plates,
+:; # or without numpy and Pillow, still gets a disc with every measured picture on
+:; # it -- what it does not get is the generated ones, and the frame table already
+:; # says which those are.
+:; generated_art() {
+:;   [ -f ../assets/art/manifest.json ] || return 0
+:;   "$PY" ../gen_art_archive.py || echo "WARNING: generated art not built" >&2
+:; }
+:;
 :; # mirror_local <dir> -- copy the staged archives into the SDK's own data tree
 :; # when that tree exists. A checkout has it; the standalone release kit does not.
 :; # The whole staging directory goes across rather than a *.CGL glob: extract_bg.py
@@ -69,6 +83,7 @@
 :; if "$PY" ../extract_bg.py --check -o BG; then
 :;   echo "Room backgrounds already staged -> BG"
 :;   mirror_local
+:;   generated_art
 :;   exit 0
 :; fi
 :;
@@ -98,6 +113,7 @@
 :;
 :; "$PY" ../extract_bg.py "$SRC" -o BG
 :; mirror_local
+:; generated_art
 :; exit
 
 @ECHO OFF
@@ -105,14 +121,16 @@ REM ----------------------
 REM  bg.bat  (Windows Execution Block)
 REM  Description: Stages Zork I's twelve BG archives -- the eleven room-background
 REM    archives (B*.CGL) and the item-picture container (OITEM.CZ) -- into .\BG,
-REM    ready for games.bat to inject them into /BG on the output disc, and
-REM    mirrors them into saturn\cd\data\BG when that tree is present so a plain
-REM    compile-cd.bat produces an ISO that can show room art at all.
+REM    ready for games.bat to inject them into /BG on the output disc, mirrors
+REM    them into saturn\cd\data\BG when that tree is present so a plain
+REM    compile-cd.bat produces an ISO that can show room art at all, and builds
+REM    the generated archives (GEN*.CGL) beside them.
 REM    See the sh block above for the full reasoning; the two halves must agree
 REM    on the staging directory name (BG) and the cache path
 REM    (cache\zork1jp.zip), or a build that switches shells re-downloads.
 REM  Author: suinevere
-REM  Dependencies: curl, powershell, python, ..\extract_bg.py, CONFIG.ME
+REM  Dependencies: curl, powershell, python, ..\extract_bg.py,
+REM    ..\gen_art_archive.py, CONFIG.ME
 REM  Globals: N/A
 REM  Params: N/A
 REM  Returns: 0 when .\BG holds all twelve archives, 1 otherwise
@@ -133,6 +151,7 @@ IF NOT EXIST "%PY%" SET "PY=python"
 IF NOT ERRORLEVEL 1 (
     ECHO Room backgrounds already staged -^> BG
     CALL :mirror
+    CALL :genart
     ENDLOCAL & EXIT /B 0
 )
 
@@ -170,8 +189,22 @@ IF NOT DEFINED SRC (
 IF ERRORLEVEL 1 ( ECHO ERROR: background extraction failed & ENDLOCAL & EXIT /B 1 )
 
 CALL :mirror
+CALL :genart
 
 ENDLOCAL
+GOTO :eof
+
+REM ---------------------------------------------------------------------------
+REM :genart
+REM Builds the archives for the pictures that were never on the original disc.
+REM After the mirror, because a generated plate is graded against the frame it
+REM stands beside. Fails soft for the same reason lib\pvms.bat does: a checkout
+REM with no source plates still gets every measured picture.
+REM ---------------------------------------------------------------------------
+:genart
+IF NOT EXIST "%~dp0art\manifest.json" GOTO :eof
+"%PY%" "%~dp0..\gen_art_archive.py"
+IF ERRORLEVEL 1 ECHO WARNING: generated art not built
 GOTO :eof
 
 REM ---------------------------------------------------------------------------

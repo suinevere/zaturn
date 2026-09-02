@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """/*----------------------
  | image_looks.py
- | Description: What each of the 74 pictures actually SHOWS, written down by
- |     looking at all of them, and which of them will do for each scene.
+ | Description: What each of the 74 measured pictures actually SHOWS, written
+ |     down by looking at all of them, and which of them will do for each
+ |     scene. Generated pictures answer the same question out of
+ |     tools/assets/art/frames.json, where the person who made one said what it
+ |     shows -- one function answers for every picture, because nothing
+ |     downstream knows or should know which supply an index came from.
  |
  |     Everything before this file matched pictures by the name of the Zork I
  |     room they were drawn for, and that name is a caption, not a description.
@@ -25,9 +29,15 @@
  |     spreading is for the scenes where the evidence was thin or absent, which
  |     is exactly where a single repeated picture was least defensible.
  | Author: suinevere
- | Dependencies: N/A
+ | Dependencies: art_frames
  | Globals: IMAGE_LOOKS, SCENE_IMAGES
  ----------------------*/"""
+import pathlib
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import art_frames
 
 IMAGE_LOOKS = {
     1:  "dark wood, close trunks, no sky",
@@ -167,17 +177,80 @@ Author: suinevere
 """
 
 
+def generated_looks():
+    """/*----------------------
+     | generated_looks
+     | Description: Index -> description for every generated picture, cached
+     |     after the first read.
+     | Author: suinevere
+     | Dependencies: art_frames
+     | Globals: _GENERATED
+     | Params: N/A
+     | Returns: {index: description}
+     ----------------------*/"""
+    global _GENERATED
+    if _GENERATED is None:
+        _GENERATED = {int(f["index"]): f.get("shows", "")
+                      for f in art_frames.frames()}
+    return _GENERATED
+
+
+_GENERATED = None
+"""_GENERATED
+
+Description: The cache generated_looks fills on its first call. A module-level
+    None rather than a read at import time so a checkout with no generated art,
+    and a run that generates some and asks afterwards, both behave.
+Author: suinevere
+"""
+
+
 def looks(index):
     """/*----------------------
      | looks
-     | Description: What one picture shows.
+     | Description: What one picture shows, measured or generated.
      | Author: suinevere
-     | Dependencies: N/A
+     | Dependencies: generated_looks
      | Globals: IMAGE_LOOKS
      | Params: index -- the 1-based IMAGE_FRAME index
      | Returns: a one-line description, or an empty string
      ----------------------*/"""
-    return IMAGE_LOOKS.get(index, "")
+    if index in IMAGE_LOOKS:
+        return IMAGE_LOOKS[index]
+    return generated_looks().get(index, "")
+
+
+def scene_images():
+    """/*----------------------
+     | scene_images
+     | Description: Every picture each scene may use, measured and generated
+     |     together. A generated picture goes on the TAIL of the lists it names:
+     |     the measured order is a judgement made by looking at all 74 at once,
+     |     and a new plate has no claim to displace it -- what it does is give
+     |     the spreading somewhere further to go.
+     | Author: suinevere
+     | Dependencies: art_frames
+     | Globals: SCENE_IMAGES, _SCENES
+     | Params: N/A
+     | Returns: {scene: tuple of picture indices}
+     ----------------------*/"""
+    global _SCENES
+    if _SCENES is None:
+        out = {k: tuple(v) for k, v in SCENE_IMAGES.items()}
+        for f in art_frames.frames():
+            for s in f.get("scenes", ()):
+                out[s] = tuple(out.get(s, ())) + (int(f["index"]),)
+        _SCENES = out
+    return _SCENES
+
+
+_SCENES = None
+"""_SCENES
+
+Description: The cache scene_images fills on its first call, for the reason
+    _GENERATED is one.
+Author: suinevere
+"""
 
 
 def images_for(scene, measured=None):
@@ -189,13 +262,13 @@ def images_for(scene, measured=None):
      |     this file is a judgement about pictures and that is a count of what
      |     the original actually did.
      | Author: suinevere
-     | Dependencies: N/A
-     | Globals: SCENE_IMAGES
+     | Dependencies: scene_images
+     | Globals: N/A
      | Params: scene -- the scene name; measured -- the picture Zork I's rooms
      |     of this scene mostly took, or None
      | Returns: a tuple of picture indices, possibly empty
      ----------------------*/"""
-    have = SCENE_IMAGES.get(scene, ())
+    have = scene_images().get(scene, ())
     if not measured:
         return have
     return (measured,) + tuple(i for i in have if i != measured)

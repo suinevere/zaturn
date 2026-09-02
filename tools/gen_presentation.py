@@ -31,7 +31,7 @@
  |     drawing music from the neutral pool. A row of zeros would mean the same
  |     thing far less legibly, and would cost 768 bytes each to say it.
  | Author: suinevere
- | Dependencies: csv, game_genre, json, pathlib, re, sys
+ | Dependencies: art_frames, csv, game_genre, json, pathlib, re, sys
  | Globals: ROOT, CSV, ROOMS, ZIL, ALIASES, OUT, STORE, AREAS, SE_BANKS,
  |     RELEASE, SERIAL
  ----------------------*/"""
@@ -43,6 +43,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import art_frames
 import game_genre as genre_vocab
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -223,15 +224,27 @@ def build_join():
 def frame_table():
     """/*----------------------
      | frame_table
-     | Description: One row per distinct frame a room references: its area, byte
-     |     offset and byte length inside that area's archive, in first-seen
-     |     order. There are 74 of these, not 75 -- BBAR_01 belongs to the barrow
-     |     ending sequence and no room names it.
+     | Description: One row per distinct frame, measured ones first and then
+     |     generated ones: its area, byte offset and byte length inside that
+     |     area's archive.
+     |
+     |     The measured rows are every frame a Zork I room references, in
+     |     first-seen order. There are 74 of these, not 75 -- BBAR_01 belongs to
+     |     the barrow ending sequence and no room names it. The generated rows
+     |     come after them, out of tools/assets/art/frames.json, and are read
+     |     from that file rather than from the archives themselves because the
+     |     archives are derived and are not committed; the placements are.
+     |
+     |     Appended, never interleaved: a room record stores an index, so the
+     |     74 measured frames have to keep the indices they already have, and a
+     |     generated frame that moved would silently become a different picture
+     |     everywhere it was chosen.
      | Author: suinevere
-     | Dependencies: N/A
+     | Dependencies: art_frames
      | Globals: AREAS
      | Params: N/A
-     | Returns: (list of (area index, offset, length), {(archive, frame): index})
+     | Returns: (list of (area index, offset, length), {(archive, frame): index},
+     |     the full area-stem list including the generated archives)
      ----------------------*/"""
     seen = {}
     rows = []
@@ -242,7 +255,21 @@ def frame_table():
         area = AREAS.index(r["area_archive"].replace(".CGL", ""))
         seen[key] = len(rows)
         rows.append((area, int(r["frame_offset"]), int(r["frame_length"])))
-    return rows, seen
+
+    areas = list(AREAS)
+    for f in art_frames.frames():
+        if int(f["index"]) != len(rows) + 1:
+            raise SystemExit(
+                f"gen_presentation: {f['source']} claims index {f['index']} "
+                f"but lands at {len(rows) + 1} -- the measured supply has "
+                "changed size under it. Re-run tools/gen_art_archive.py, and "
+                "check every game's assignments: an index means a different "
+                "picture now.")
+        stem = f["archive"]
+        if stem not in areas:
+            areas.append(stem)
+        rows.append((areas.index(stem), int(f["offset"]), int(f["length"])))
+    return rows, seen, areas
 
 
 def assigned_games():
@@ -330,7 +357,7 @@ def main(argv):
      | Returns: 0
      ----------------------*/"""
     join = build_join()
-    frames, index_of = frame_table()
+    frames, index_of, areas = frame_table()
     assigned = load_assigned(len(frames))
 
     pres = [(0, 0, 0)] * 256
@@ -377,9 +404,9 @@ def main(argv):
              f"#define PRES_GAME_N {1 + len(assigned)}",
              f"#define PRES_MAP_BG_N {len(genre_vocab.MAP_FILES)}",
              f"#define PRES_FRAME_N {len(frames)}",
-             f"#define PRES_AREA_N {len(AREAS)}",
+             f"#define PRES_AREA_N {len(areas)}",
              "static const char *const PRES_AREA[PRES_AREA_N] = {"]
-    for a in AREAS:
+    for a in areas:
         lines.append(f'    "{a}",')
     lines.append("};")
     lines.append("static const char *const PRES_MAP_BG[PRES_MAP_BG_N] = {")

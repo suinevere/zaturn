@@ -228,8 +228,9 @@ def assign(stem, obj, image, track):
      | Author: suinevere
      | Dependencies: N/A
      | Globals: N/A
-     | Params: stem -- the story stem; obj -- object number; image -- 0..74;
-     |     track -- CD-DA track, 0 for silence
+     | Params: stem -- the story stem; obj -- object number; image -- a
+     |     1-based picture index, 0 for none; track -- CD-DA track, 0 for
+     |     silence
      | Returns: the updated record
      ----------------------*/"""
     d = load(stem)

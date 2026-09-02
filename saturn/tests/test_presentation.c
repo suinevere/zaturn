@@ -21,8 +21,10 @@ int main(void) {
     unsigned long off, len;
     unsigned int obj;
 
-    check(PRES_FRAME_N == 74, "rooms reference 74 of the 75 frames");
-    check(PRES_AREA_N == 11, "there are eleven area archives");
+    /* Floors, not equalities: both grow as generated pictures join the supply,
+       and test_presentation_counts.py is what holds the header to the table. */
+    check(PRES_FRAME_N >= 74, "the 74 measured frames are all still in the table");
+    check(PRES_AREA_N >= 11, "the eleven measured archives are all still there");
 
     check(pres_game_index(88, "840726") == 0, "Zork I is the known game");
     check(pres_game_index(88, "999999") == -1, "a wrong serial is unknown");

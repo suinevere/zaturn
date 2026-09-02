@@ -6,6 +6,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "tools"))
 
+import art_frames
 import gen_presentation as g
 
 INC = REPO / "saturn" / "src" / "scene" / "game_presentation.inc"
@@ -30,15 +31,19 @@ def test_the_table_is_keyed_by_release_and_serial():
 
 
 def test_rooms_reference_seventy_four_of_the_seventy_five_frames():
-    frames, index_of = g.frame_table()
-    assert len(frames) == 74
+    """The measured supply is fixed at 74 forever -- BBAR_01 belongs to the
+    barrow ending and no room names it. The table itself is not: it carries the
+    generated pictures after them, and PRES_FRAME_N counts both."""
+    frames, index_of, areas = g.frame_table()
     assert len(index_of) == 74
-    assert "#define PRES_FRAME_N 74" in INC.read_text(encoding="utf-8")
+    assert len(frames) == 74 + len(art_frames.frames())
+    assert len(areas) == len(g.AREAS) + len(art_frames.archives())
+    assert f"#define PRES_FRAME_N {len(frames)}" in INC.read_text(encoding="utf-8")
 
 
 def test_every_room_has_a_picture():
     join = g.build_join()
-    _frames, index_of = g.frame_table()
+    _frames, index_of, _areas = g.frame_table()
     for sat in join.values():
         assert (sat["area_archive"], int(sat["frame"])) in index_of
 

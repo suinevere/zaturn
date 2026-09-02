@@ -9,6 +9,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
+import art_frames
 import game_genre as genre_vocab
 import pres_store as store
 
@@ -18,7 +19,10 @@ class PoolTest(unittest.TestCase):
         self.pool = store.pool()
 
     def test_pool_has_every_picture(self):
-        self.assertEqual(len(self.pool["images"]), 74)
+        """The 74 measured ones and every picture generated since -- the pool is
+        the whole supply, and a picture missing from it is one no game can be
+        given however well it is on the disc."""
+        self.assertEqual(len(self.pool["images"]), 74 + len(art_frames.frames()))
 
     def test_only_neutral_pool_tracks_are_offerable(self):
         """The cues, the fanfares and the ending are the runtime's to issue --
@@ -40,8 +44,10 @@ class PoolTest(unittest.TestCase):
         self.assertEqual([t for t in sorted(store.NEUTRAL_POOL) if t], runtime)
 
     def test_image_indices_are_dense_and_one_based(self):
+        """A gap would mean a room record pointing at a picture the pool cannot
+        show, which the review app renders as a blank rather than an error."""
         idx = sorted(i["index"] for i in self.pool["images"])
-        self.assertEqual(idx, list(range(1, 75)))
+        self.assertEqual(idx, list(range(1, len(idx) + 1)))
 
     def test_every_scene_has_a_default(self):
         import scene_vocab as vocab

@@ -51,11 +51,13 @@ typedef struct {
  | PRES_FRAME_N / PRES_AREA_N / PRES_MAP_BG_N
  | Description: The frame, area-archive and map-sheet counts from
  |   game_presentation.inc, copied here so a caller (or a test) can size against
- |   them without pulling in the table itself. Must equal the .inc's own.
+ |   them without pulling in the table itself. Must equal the .inc's own, which
+ |   saturn/tests/test_presentation_counts.py is what actually holds them to --
+ |   they grow every time a generated picture is added to the supply.
  | Author: suinevere
  ----------------------*/
-#define PRES_FRAME_N 74
-#define PRES_AREA_N 11
+#define PRES_FRAME_N 75
+#define PRES_AREA_N 12
 #define PRES_MAP_BG_N 4
 #endif /* PRES_FRAME_N */
 

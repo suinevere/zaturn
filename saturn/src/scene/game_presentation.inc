@@ -30,8 +30,8 @@ typedef struct {
 } GamePresMap;
 #define PRES_GAME_N 31
 #define PRES_MAP_BG_N 4
-#define PRES_FRAME_N 74
-#define PRES_AREA_N 11
+#define PRES_FRAME_N 75
+#define PRES_AREA_N 12
 static const char *const PRES_AREA[PRES_AREA_N] = {
     "BBAR",
     "BCEL",
@@ -44,6 +44,7 @@ static const char *const PRES_AREA[PRES_AREA_N] = {
     "BRIV",
     "BTMP",
     "BWOD",
+    "GENA",
 };
 static const char *const PRES_MAP_BG[PRES_MAP_BG_N] = {
     "MAP.TGA",
@@ -126,6 +127,7 @@ static const PresFrame IMAGE_FRAME[PRES_FRAME_N] = {
     { 6, 48728UL, 26748UL },
     { 6, 155640UL, 25064UL },
     { 1, 55652UL, 29776UL },
+    { 11, 0UL, 16472UL },
 };
 static const Presentation GAME_PRES_ZORK1[256] = {
     { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 },

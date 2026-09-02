@@ -122,6 +122,14 @@ int choose_device(const char *title) {
  |   Ctrl+C (SATURN_KEY_CLEAR) blanks the field, Backspace/B leaves EDIT back to
  |   PICK, and A/Enter/Start confirms.
  |
+ |   Fade contract, matching choose_dest's: entered black-held and faded up on the
+ |   first composed frame via the g_menu_intro_fade one-shot the caller arms, and
+ |   every exit -- picked or cancelled -- fades back down to black. In game the
+ |   gate is g_menu_page_fade and live, so the save flow steps device -> slots ->
+ |   confirm through the same dark beats the restore flow already had; the two
+ |   used to differ only in that this one had no fades at all and popped from box
+ |   to box.
+ |
  |   The box is sized every frame rather than once, because its shape changes
  |   when `editing` flips. A slot row budgets the reserved "N) " digit columns
  |   (reserved whether or not drawn) and the widest label actually present, with
@@ -147,6 +155,13 @@ int choose_device(const char *title) {
  ----------------------*/
 int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) {
     MenuBacking backing;
+    // The same fade contract choose_dest keeps, so the save flow reads with the
+    // same rhythm the restore flow does: entered black-held, faded up on the
+    // first composed frame through the one-shot the caller arms, and faded back
+    // down to black on every exit -- picked or cancelled -- for whatever the
+    // caller puts on that black next.
+    int intro = g_menu_intro_fade;
+    g_menu_intro_fade = 0;
 
     char slotname[SAVE_SLOTS][12];
     for (int i = 0; i < SAVE_SLOTS; i++) {
@@ -181,7 +196,7 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 if (g_pad->WasPressed(Button::B)) cancel = true;
             }
             last_sel = sel;   // after every move, so no exit path has to remember to
-            if (cancel) return 0;
+            if (cancel) { if (g_menu_page_fade) menu_fade_out(g_menu_page_fade); return 0; }
             if (pick) {
                 keyboard_reset(&k);
                 for (int i = 0; slotname[sel][i] && k.input_len < maxchars; i++)
@@ -220,6 +235,7 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 for (int i = 0; i < n; i++) out_name[i] = k.input[i];
                 out_name[n] = '\0';
                 *out_slot = sel;
+                if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);
                 return 1;
             }
         }
@@ -287,6 +303,7 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
             }
         }
         menu_sync();
+        if (intro) { menu_fade_in(intro); intro = 0; }
     }
 }
 

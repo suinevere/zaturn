@@ -47,6 +47,7 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 #include "map_atlas.h"
 #include "save_ui.h"
 #include "soft_reset.h"
+#include "title.h"   /* title_bg_fade_engaged */
 extern "C" {
 #include "saturn_glue.h"
 #include "console.h"
@@ -460,9 +461,10 @@ static void run_room_transition(void) {
  |   only resets it on its own completed submit, so a turn that ends any other
  |   way (a menu's Save Game row, a quick-save/restore key, toggling to the
  |   keyboard mid-build) would otherwise leave a half-built sentence to prefix
- |   the next turn's pick -- keeps the keyboard picker position across
- |   prompts, and positions the view at the TOP of the turn's output so a long
- |   response reads from its start.
+ |   the next turn's pick, and cp_reset moves nothing the player can see, so this
+ |   keeps the panel's own selection across prompts as it already kept the
+ |   keyboard picker's, and positions the view at the TOP of the turn's output so
+ |   a long response reads from its start.
  |   The frame loop runs the soft-reset chord, the F10/F11/F12 menu shortcuts
  |   (Sound only when there is audio to configure; F10's Options menu can
  |   itself report a Save Game/Load Game pick, submitted the same way as
@@ -579,18 +581,19 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
        that is the first point a whole gameplay frame -- console, strip and all --
        is composed for the ramp to reveal; revealing at the call site would spend
        the ramp on a half-drawn screen and snap the rest in at the end of it. */
-    bool reveal_owed = false;
-    /* The game hand-off ends here. Everything above has run for this turn --
-       run_room_transition has settled the room's picture and track -- so this is
-       the first moment the opening frame is complete and still unseen. Compose it,
-       then let main()'s routine ramp it up out of the black the loading screen
-       left. One shot: every later prompt finds this null. */
-    if (g_intro_reveal) {
-        void (*reveal)(void) = g_intro_reveal;
-        g_intro_reveal = 0;
-        render_console();
-        reveal();
-    }
+    /* Seeded from the debt a save or restore hook left behind: its pickers ran
+       inside the interpreter's turn and ended on black, and this is the first
+       frame on the far side of that turn with a whole gameplay screen composed
+       for the ramp to reveal. */
+    bool reveal_owed = (g_screen_owed != 0);
+    g_screen_owed = 0;
+    /* The game hand-off's ramp, taken off g_intro_reveal here and spent at the
+       bottom of the loop for the same reason reveal_owed is: the opening frame is
+       not complete until the loop has drawn the input strip under the text, and
+       running it here lit the words alone and then popped the panel in on the
+       first frame after the ramp. One shot: every later prompt finds this null. */
+    void (*intro_reveal)(void) = g_intro_reveal;
+    g_intro_reveal = 0;
     for (;;) {
       while (!k.submitted) {
         check_soft_reset();
@@ -601,8 +604,16 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         pad_repeat_update();
         chord_tick();
 
-        if ((pad && g_pad->WasPressed(Button::START)) || ke.kind == SATURN_KEY_ESCAPE
-            || ke.kind == SATURN_KEY_F10) {
+        /* g_menu_reopen is the pause menu coming back after the save or restore
+           it sent, which the interpreter ran in a turn of its own -- so the two
+           entries differ only in what the screen is already doing: a keypress
+           arrives on a lit gameplay frame and has to ramp it down, a re-open
+           arrives on the black the hook left and must not, since menu_fade_out
+           starts at full brightness and would flash the room back on first. */
+        bool menu_back = (g_menu_reopen != 0);
+        if (menu_back || (pad && g_pad->WasPressed(Button::START))
+            || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_F10) {
+            g_menu_reopen = 0;
             // Duck the music for as long as the menu is up rather than stopping it:
             // the game is still underneath, so the track should thin out, not cut.
             // The Sound page lifts it to full itself if the player goes that way --
@@ -615,7 +626,8 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             int verb_was = g_verbosity;
             item_art_hide();
             music_duck();
-            menu_ramp_down();
+            if (!menu_back) menu_ramp_down();
+            else            reveal_owed = false;   // the debt is the menu's now
             int om = options_menu();
             mode_toggle_reset();
             if (om != OM_SAVE && om != OM_RESTORE) music_resume();
@@ -644,6 +656,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
                 if (vcmd != nullptr) menu_ramp_cut();
                 else                 reveal_owed = true;
             }
+            /* Picked from the pause menu, so the pause menu is where the player
+               came from and where they go back to: the hook's own prompt reads
+               this and opens it again. The command panel's Save/Load rows and the
+               function keys submit the same two commands without setting it, and
+               land in the room as they always did. */
+            if (om == OM_SAVE || om == OM_RESTORE) g_menu_reopen = 1;
             if (om == OM_SAVE)    { if (vcmd) g_verb_pending = 1; submit_command(k, "save");    continue; }
             if (om == OM_RESTORE) { if (vcmd) g_verb_pending = 1; submit_command(k, "restore"); continue; }
             if (vcmd) { submit_command(k, vcmd); continue; }
@@ -716,11 +734,18 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         // The frame is composed but not yet pushed, which is exactly what the
         // ramp wants: its own first Synchronize is what carries it to VRAM,
         // under the black the menu left behind. Every other frame just syncs.
-        if (reveal_owed) { reveal_owed = false; menu_ramp_up(); }
-        else             SRL::Core::Synchronize();
+        if (reveal_owed)       { reveal_owed = false; menu_ramp_up(); }
+        else if (intro_reveal) { void (*r)(void) = intro_reveal; intro_reveal = 0; r(); }
+        else                   SRL::Core::Synchronize();
         sound_service();
         music_tick();
       }
+      /* A first prompt the loop never reached the bottom of -- a key genuinely
+         held as the game comes up can take one of the branches above straight
+         out of it -- has no composed frame to ramp, and every one of those exits
+         releases the hold itself. Drop the ramp rather than run it onto a screen
+         somebody else has already lit. */
+      intro_reveal = 0;
       while (k.input_len > 0 && k.input[k.input_len - 1] == ' ') k.input[--k.input_len] = '\0';
       g_scroll = 0;
       history_push(k.input);
@@ -899,6 +924,7 @@ extern "C" void saturn_die(const char *fmt, ...) {
  ----------------------*/
 extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
     int device, slot;
+    int interactive = 0;
     char comment[12];
     char name[12];
     if (g_save_slot >= 0) {
@@ -908,10 +934,28 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
         if (!saturn_bup_info(device, name, comment))
             snprintf(comment, sizeof(comment), "Save %d", slot + 1);
     } else {
+        // The pause menu hands this a screen it has already ramped down; the
+        // command panel's own Save row and a typed "save" hand it a lit one. The
+        // picker below fades in from black either way -- menu_select's one-shot
+        // forces the level whether or not anyone is holding it -- so a lit screen
+        // jumped to black on the picker's first frame instead of falling to it.
+        if (!title_bg_fade_engaged()) menu_ramp_down();
+        interactive = 1;
         device = choose_device("SAVE - device?");
-        if (device < 0) { music_resume(); return 0; }
+        // choose_device is the one picker here that does NOT fade itself out --
+        // choose_dest wraps it and owns that for the restore side -- so the cancel
+        // has to, or the debt below would ramp up a screen already lit and flash
+        // it black first.
+        if (device < 0) {
+            if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);
+            g_screen_owed = 1; music_resume(); return 0;
+        }
 
-        if (!pick_slot_and_name(device, &slot, comment, 8)) { music_resume(); return 0; }
+        // Between the two pickers, as choose_dest does between its own: each
+        // fades itself up from the black the one before it left.
+        if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);
+        g_menu_intro_fade = g_menu_page_fade;
+        if (!pick_slot_and_name(device, &slot, comment, 8)) { g_screen_owed = 1; music_resume(); return 0; }
         if (comment[0] == 0) snprintf(comment, sizeof(comment), "Save %d", slot + 1);
 
         make_slot_name(name, slot);
@@ -919,7 +963,12 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
         if (saturn_bup_info(device, name, existing)) {
             char q[40];
             snprintf(q, sizeof(q), "Overwrite \"%s\"?", existing);
-            if (!menu_confirm(q, "Are you sure?")) { music_resume(); return 0; }
+            // Up out of the picker's black on the same one-shot the pickers
+            // themselves use, and back down to black for the report below.
+            g_menu_intro_fade = g_menu_page_fade;
+            int keep = menu_confirm(q, "Are you sure?") ? 1 : 0;
+            menu_ramp_down();
+            if (!keep) { g_screen_owed = 1; music_resume(); return 0; }
         }
     }
 
@@ -938,11 +987,17 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
     }
     if (ok) { g_last_device = device; g_last_slot = slot; }
     {
+        // menu_message composes without pushing, which is exactly what a ramp
+        // wants: the picker path reveals the composed box on the fade's own first
+        // frame and takes it back down after, and the quick-save path -- which
+        // never left the screen dark -- draws it over the room as it always did.
         MenuBacking backing;
         menu_message("SAVE", ok ? "Saved." : "Save FAILED (no space?).",
                      "(press any key/button)");
+        if (interactive && g_menu_page_fade) menu_fade_in(g_menu_page_fade);
         menu_wait();
     }
+    if (interactive) { menu_ramp_down(); g_screen_owed = 1; }
     music_resume();
     return ok;
 }
@@ -973,20 +1028,23 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
 extern "C" int saturn_load_blob(uint8_t *buf, uint32_t maxlen) {
     (void) maxlen;
     int device, slot;
+    int interactive = 0;
     if (g_restore_slot >= 0) {
         device = g_restore_device; slot = g_restore_slot;
         g_restore_device = -1; g_restore_slot = -1;
     } else {
+        // As in saturn_save_blob: the picker fades in from black, so a caller
+        // that handed over a lit screen owes it a ramp down first.
+        if (!title_bg_fade_engaged()) menu_ramp_down();
         int picked = choose_dest("RESTORE - device?", "RESTORE - slot?", &device, &slot);
-        // choose_dest ends held black on every one of its exits, which is what
-        // the title-menu Load flow it was written for wants -- there the game
-        // load runs under the same black and main's reveal lifts it. Nothing is
-        // loading here: the empty-slot box below, the story's own reply and the
-        // prompt after it all draw at normal brightness, so this is where the
-        // release belongs. Without it the prompt came back to a screen that
-        // stayed black until the player opened a menu, which ramps it up on the
-        // way out and so looked like the fix rather than the symptom.
-        menu_ramp_cut();
+        // choose_dest ends held black on every one of its exits, and the black is
+        // kept rather than released: the room that comes back is not the room on
+        // screen, so the reveal belongs to the prompt that draws the new one --
+        // or to the pause menu, when the pick came from there and is going back.
+        // It used to cut straight back to the outgoing room here, which is the
+        // pop this exists to stop.
+        interactive = 1;
+        g_screen_owed = 1;
         if (!picked) { music_resume(); return 0; }
     }
     char name[12];
@@ -1008,9 +1066,14 @@ extern "C" int saturn_load_blob(uint8_t *buf, uint32_t maxlen) {
     }
     if (ok) { g_last_device = device; g_last_slot = slot; }
     if (!ok) {
+        // Nothing is coming back to reveal, so the failure gets a ramp of its
+        // own out of the picker's black and the black is put back after it for
+        // whatever the debt above hands the screen to.
         MenuBacking backing;
         menu_message("RESTORE", "No save in that slot.", "(press any key/button)");
+        if (interactive && g_menu_page_fade) menu_fade_in(g_menu_page_fade);
         menu_wait();
+        if (interactive) menu_ramp_down();
     }
     music_resume();
     return ok;

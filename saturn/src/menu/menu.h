@@ -378,37 +378,6 @@ void menu_fade_out(int frames);
 void menu_fade_in(int frames);
 
 /*----------------------
- | menu_fade_out_begin / menu_fade_out_tick / menu_fade_out_hold
- | Description: menu_fade_out split into three, so a caller can do slow work --
- |   reading a story off the CD -- while the screen goes down, instead of before
- |   or after it. begin engages the fade and stamps the start; tick sets the level
- |   the field clock says is due and returns at once, doing no Synchronize of its
- |   own; hold spins out whatever ramp is left once the work is done.
- |
- |   The pacing is against elapsed fields, not against calls, and that is the
- |   point: Core::Synchronize waits for the frame boundary, so a read that blocks
- |   the main line for a fifth of a second makes that one frame a fifth of a
- |   second long. A ramp stepping once per call would therefore be stretched by
- |   exactly as much as the reading it was meant to hide, and the wait would be
- |   the sum of the two rather than the longer of them.
- |
- |   Leaves the screen held black with the channels still engaged, exactly as
- |   menu_fade_out does, for whatever fades it back in.
- |
- |   Not built into the netbin image: it has no CD, no story to read and nothing
- |   to hide behind a ramp, and linking it there would drag the field clock in for
- |   no caller.
- | Author: suinevere
- | Dependencies: field_clock.h, title.h (non-netbin), SRL
- | Globals: g_display
- | Params: frames -- ramp length in fields (begin only)
- | Returns: N/A
- ----------------------*/
-void menu_fade_out_begin(int frames);
-void menu_fade_out_tick(void);
-void menu_fade_out_hold(void);
-
-/*----------------------
  | MenuFadeStep / menu_fade_in_ex
  | Description: menu_fade_in with a per-frame callback, handed the same 0..255 the
  |   screen is being lit by, called before that frame's Synchronize so what it sets
@@ -431,11 +400,10 @@ void menu_fade_in_ex(int frames, MenuFadeStep step);
  |   composed text frame (the callers clear and reveal without a Synchronize in
  |   between, so the tilemap would otherwise still hold the outgoing screen),
  |   zeroes colour offset A, releases both channels, restores the backdrop.
- |   main() uses it to
- |   cut into gameplay after the menu faded to black and the story loaded behind
- |   the black (the game screen itself is not faded in -- it appears at full
- |   brightness once the interpreter renders its first frame), and to un-black
- |   an error screen if the load fails.
+ |   The game hand-off no longer uses it -- the first prompt ramps the opening
+ |   frame up instead -- so what is left is the paths that have to un-black a
+ |   screen nobody is going to ramp: a story that ended before it ever reached a
+ |   prompt, and saturn_glue's menu_ramp_cut.
  | Author: suinevere
  | Dependencies: SRL, display.c (display_bg_rgb)
  | Globals: g_display

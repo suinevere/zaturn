@@ -12,7 +12,8 @@
  |   soft_reset.cxx.
  | Author: suinevere
  | Dependencies: app_state.h, console.h, console_view.h, display.h, options.h,
- |   menu.h, menu_pages.h, save_ui.h, title.h, game_catalog.h, online.h,
+ |   menu.h, menu_layout.h, menu_pages.h, save_ui.h, title.h, game_catalog.h,
+ |   online.h,
  |   soft_reset.h, saturn_glue.h, saturn_backup.h, sound.h, music.h,
  |   input.h, SRL/GFS/SGL.
  ----------------------*/
@@ -25,6 +26,7 @@
 extern "C" {
 #include "console.h"
 #include "display.h"
+#include "menu_layout.h"
 #include "saturn_backup.h"
 #include "saturn_glue.h"
 #include "sound.h"
@@ -85,15 +87,17 @@ using namespace SRL::Types;
 
 /*----------------------
  | LOAD_FADE_FRAMES / GAME_REVEAL_FRAMES
- | Description: The two ramps the game-start path spends, and between them the
- |   whole of what the player waits through.
+ | Description: The two ramps the game-start path spends, with the loading screen
+ |   and the whole of what the player waits through between them.
  |
- |   LOAD_FADE_FRAMES (90 = 1.5s) is the menu going down, and the story is read
- |   underneath it rather than after it -- menu_fade_out_begin paces the ramp off
- |   the field clock precisely so the two can share the time. It is a floor, not a
- |   budget: menu_fade_out_hold spends whatever is left if the read finished
- |   early, and a read that outlasts the ramp simply holds on black, which is what
- |   a slower drive than the one this was measured on will do.
+ |   LOAD_FADE_FRAMES (90 = 1.5s) is the loading screen going down, and it is the
+ |   last thing the path does before the story's own screen is composed: the read
+ |   is finished, the drive is idle, and nothing inside the ramp can block. It ran
+ |   under the read once, paced off a field clock so the two could share the time
+ |   -- but a read blocks the main line for whole frames, so the level only
+ |   reached the hardware between two of them and the screen came down in jumps at
+ |   whatever rate the drive returned at. The time is no longer shared; the
+ |   waiting has a screen of its own to be spent on instead.
  |
  |   GAME_REVEAL_FRAMES (30 = 0.5s) is the game coming up, and is deliberately not
  |   TITLE_FADE_FRAMES: the title's 90-field ramp is a title screen presenting
@@ -106,7 +110,7 @@ using namespace SRL::Types;
 /*----------------------
  | STORY_READ_CHUNK
  | Description: How much of the story file is pulled per Cd::File::Read while the
- |   loading screen is held up. Eight 2048-byte sectors: enough that the per-call
+ |   loading screen is up. Eight 2048-byte sectors: enough that the per-call
  |   overhead stays irrelevant next to the transfer, small enough that the gap
  |   between two reads is around a tenth of a second at single speed, which is the
  |   resolution the screen's audio cue needs to be serviced at. Purely a pacing
@@ -277,6 +281,56 @@ static void on_title_fade(int level) { music_fade_volume(level); }
 static void game_intro_reveal(void) { menu_fade_in_ex(GAME_REVEAL_FRAMES, music_fade_volume); }
 
 /*----------------------
+ | LOADING_REVEAL_FRAMES
+ | Description: How long the loading screen takes to come up out of the black the
+ |   picker left. Deliberately shorter than the ramp that takes it back down: this
+ |   end is a word arriving in front of a wait nobody asked for, and the other end
+ |   is the hand-off to the game.
+ | Author: suinevere
+ ----------------------*/
+#define LOADING_REVEAL_FRAMES 20
+
+/*----------------------
+ | loading_screen_show
+ | Description: Puts LOADING centred on the menu's own wallpaper and fades it up
+ |   out of the black every picker leaves behind, so the story read, the sound
+ |   blorb, the typeahead build and the map's parchment all happen under a screen
+ |   that says what the machine is doing.
+ |
+ |   Leaves the screen lit and the offset channels released, which is what the
+ |   single ramp at the far end of the load re-engages. Nothing here touches the
+ |   drive: the fade is the last free moment before the read starts.
+ | Author: suinevere
+ | Dependencies: menu.h, text_map.h, console_view.h, menu_layout.h,
+ |   dash_map.h (dash_clear)
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void loading_screen_show(void) {
+    static const char WORD[] = "LOADING...";
+    // The picker's box is still on the black the ramp left behind. ~MenuBacking
+    // owes its window and its marble to the next frame that CHANGES THE TEXT, and
+    // a fade changes none -- every frame of one holds what is painted rather than
+    // drawing, which is how the box outlived the ramp that was meant to be its
+    // exit. Left alone, the ramp below simply lit it again with the word inside
+    // it, having never been seen to go.
+    //
+    // menu_clear is what ends it, in two halves that both land on that ramp's
+    // first frame, at level 0, where nothing is visible: the cleared rows are
+    // what makes the owed window-off fire, and dash_clear drops the latch that
+    // stops the marble expiring and blanks the layer outright. Deliberately no
+    // text_flush between them and the ramp -- flushing here would empty the dirty
+    // span the window-off is waiting on, and leave the box's rectangle punched
+    // out of the wallpaper for the rest of the load.
+    menu_clear();
+    dash_clear();
+    text_print((MENU_SCREEN_COLS - (int) (sizeof(WORD) - 1)) / 2,
+               console_screen_rows() / 2, WORD);
+    menu_fade_in(LOADING_REVEAL_FRAMES);
+}
+
+/*----------------------
  | title_show_wallpaper
  | Description: Puts TITLE.TGA behind the title screen.
  |
@@ -331,9 +385,8 @@ static void title_show_wallpaper(void) {
  |   re-read of TITLE.TGA and nothing else. The Z3 load retries the flaky
  |   first-access GFS size stat before allocating and reading. Both it and the
  |   sound-blorb read after it run underneath the loading screen, which is
- |   raised before them and not taken down until the game is built -- the
- |   screen's cue is ticked through the retry loop so it lasts as long as the
- |   read does. Anything on this path that steps out of /Z3 has to step back
+ |   raised before them and not taken down until the game is built. Anything on
+ |   this path that steps out of /Z3 has to step back
  |   before it returns: both opens are by bare filename and resolve against
  |   whatever directory is current (cd_restore_z3). Enabling sound
  |   keys off a sibling <base>.BLB, and the music engine is wired to the CD-DA
@@ -404,6 +457,12 @@ int main(void) {
     // a latched layer, and nothing on the title screen ever claims NBG2 to paint
     // over it. The box sat on the logo and the menu for the rest of the session.
     dash_clear();
+    // And the two debts a save or restore leaves for the prompt on the far side
+    // of the interpreter's turn. A reset chord taken inside a picker jumps out
+    // between the two, and a set g_menu_reopen would open the pause menu over the
+    // next game's first prompt.
+    g_menu_reopen = 0;
+    g_screen_owed = 0;
     g_in_game = false;
     display_set_authored(0); // no game is selected at the title/menu, so there is
                              // no room art; a longjmp back here does not otherwise
@@ -430,6 +489,9 @@ int main(void) {
     // the sequence below is meant not to know which boot it is.
     room_art_release();
     item_art_close();
+    // And the plate, if the jump came from a title screen that still had one up:
+    // the splash below draws on NBG0 and would wear the ZATURN over the SUINEVERE.
+    title_logo_hide();
     // And the map's parchment, which is the same claim against the OTHER zone:
     // 78 KB of a 194 KB C heap, held from the first time the player opened the
     // map and kept by a plain static across the longjmp. Left resident it is
@@ -451,6 +513,15 @@ int main(void) {
     title_bg_fade_arm();          // black out first, so the title is composed unseen
 
     title_show_wallpaper();
+    // The plate and the credit under it go up here rather than in
+    // title_and_seed, which runs after the ramp below: composed before the fade
+    // means the whole title screen arrives on it, instead of the wallpaper
+    // arriving and the rest snapping on at the end of it. The "Press any button"
+    // line is deliberately NOT here -- it is a promise that pressing does
+    // something, and it waits for the catalogue scan title_and_seed runs behind
+    // this screen.
+    title_logo_show();
+    title_draw_art();
 
     // The backend goes in here rather than at game start, because the menu track
     // below is the engine's now too -- that is what makes it obey the cycle rule
@@ -482,6 +553,11 @@ int main(void) {
     room_art_release();
     item_art_close();
     title_bg_drop_held();
+    // NBG1 is the title's alone until the first inventory opens, and nothing
+    // between here and there draws to it -- so the plate would sit over the mode
+    // menu, the game list and every page under them until an item picture
+    // happened to overwrite it.
+    title_logo_hide();
     display_apply();              // set the menu's background image/colour + text
     // Subscribed here rather than beside the other music callbacks above, and
     // deliberately after this display_apply: the title screen picks and shows its
@@ -559,13 +635,14 @@ int main(void) {
     // bought was a menu that popped on and, on the way out, left one frame
     // of its own text on a black rectangle before gameplay came back.
 
-    // The menu goes down from here, and everything below happens underneath that
-    // ramp rather than after it: game_select deliberately returns without fading,
-    // so the first thing the read has over it is a screen still going dark. Every
-    // menu_fade_out_tick below sets the level the clock says is due -- missing one
-    // costs nothing but a coarser ramp, since the level is never derived from how
-    // many times it was called.
-    menu_fade_out_begin(LOAD_FADE_FRAMES);
+    // The pickers leave the screen black-held, so the wait gets a screen of its
+    // own: LOADING up out of that black, everything slow underneath it, and one
+    // ramp back down to black at the end with nothing blocking inside it. The
+    // ramp used to run UNDER the read, paced off the field clock -- correct in
+    // level and wrong in motion, because the level only reached the hardware
+    // between two blocking reads and the screen therefore stepped down in whole
+    // jumps at whatever rate the drive happened to return at.
+    loading_screen_show();
 
     uint8_t *story = nullptr;
     uint32_t len = 0;
@@ -577,9 +654,10 @@ int main(void) {
             uint8_t *buf = (uint8_t *) SRL::Memory::HighWorkRam::Malloc((uint32_t) bytes);
             if (buf != nullptr && f.Open()) {
                 // A chunk at a time rather than one Read of the whole story:
-                // the same sectors in the same order at no cost, but with a seam
-                // between each pair for the fade to be stepped in. One whole-file
-                // Read would black the screen in a single jump at the end of it.
+                // the same sectors in the same order at no cost, but with a
+                // Synchronize between each pair, so the loading screen keeps
+                // being pushed and the audio cue keeps being serviced instead of
+                // the machine going away for the length of one whole-file Read.
                 int32_t got = 0;
                 while (got < bytes) {
                     int32_t want = bytes - got;
@@ -587,7 +665,6 @@ int main(void) {
                     int32_t n = f.Read(want, buf + got);
                     if (n <= 0) break;      // short read: fall through to the retry
                     got += n;
-                    menu_fade_out_tick();
                     SRL::Core::Synchronize();
                 }
                 f.Close();
@@ -595,12 +672,13 @@ int main(void) {
             }
             if (buf != nullptr) { SRL::Memory::HighWorkRam::Free(buf); }
         }
-        for (int i = 0; i < 8; i++) { menu_fade_out_tick(); SRL::Core::Synchronize(); }
+        for (int i = 0; i < 8; i++) { SRL::Core::Synchronize(); }
     }
     if (story == nullptr) {
-        // saturn_die's message has to land on an un-held screen, and the fade
-        // above left it held black.
-        menu_fade_clear();
+        // The loading screen is lit, not held, so there is no hold to release --
+        // only its own word to take off before the halt notice is written where
+        // it stood.
+        menu_clear();
         // Which of the two it was, because they need different fixes and the
         // screen is the only place this can be read: "dir LOST" means the /Z3
         // record was never captured, so the open resolved against whatever GFS
@@ -610,23 +688,16 @@ int main(void) {
                    game_file, g_z3_dir_valid ? "ok" : "LOST");
     }
 
-    menu_fade_out_tick();
     mojo_boot(story, len, seed);
-    g_in_game = true;
-    g_cmd_mode = g_cmd_iface;
 
     {
         char blb[16]; int i = 0;
         for (; g_story_filename[i] && g_story_filename[i] != '.' && i < 11; i++) blb[i] = g_story_filename[i];
         blb[i] = '.'; blb[i+1] = 'B'; blb[i+2] = 'L'; blb[i+3] = 'B'; blb[i+4] = '\0';
-        // A second CD read of its own, and it belongs under the ramp like the
-        // first. Stepped either side rather than through the middle -- it is a run
-        // of short index reads rather than one long transfer, so there is no seam
-        // inside it worth reaching into sound.cxx for.
-        menu_fade_out_tick();
+        // A second CD read of its own, and it belongs under the loading screen
+        // like the first.
         sound_init(blb);
         sound_set_level(g_pcm_level);
-        menu_fade_out_tick();
     }
 
     // Every later picture choice resolves against this, so it is read the moment
@@ -640,7 +711,6 @@ int main(void) {
     // anyway -- only because the reading is honest here and the prompt's would not
     // be, with the cache having started to fill by then.
     saturn_typeahead_build();
-    menu_fade_out_tick();
 
     // No art warm. A picture the cache does not hold is read at the bottom of the
     // mood fade, and music.c's commit_pending notifies the picture BEFORE it starts
@@ -650,12 +720,6 @@ int main(void) {
     // where they fall, and guessed at which scenes the player would reach. The cache
     // still fills, on demand, from rooms actually visited: better targeting than the
     // guess, at no cost to the load at all.
-
-    // Whatever ramp the load did not use up. Nothing is charged here that the
-    // reading already covered, and on a drive slow enough to outlast the ramp this
-    // returns immediately. The music engine starts after it, not before:
-    // music_start puts the CD-DA head to work.
-    menu_fade_out_hold();
 
     {
         music_set_level(g_music_level);
@@ -681,10 +745,24 @@ int main(void) {
         // so the opening frames play at 1 and game_intro_reveal has somewhere to
         // ramp up from. Never 0: music_set_volume(0) stops the drive.
         if (g_music_level > 0) music_set_volume(1);
-        music_start();
     }
 
-    // The fade above left the screen held black, and it stays that way through
+    // Everything that moves the drive head is done, so the ramp below has nothing
+    // blocking inside it: LOADING goes down over LOAD_FADE_FRAMES uninterrupted,
+    // which is the whole reason it is here and not spread through the read. The
+    // music engine starts after it and not before -- music_start puts the CD-DA
+    // head to work, and it would be starting under a screen that is still lit.
+    menu_fade_out(LOAD_FADE_FRAMES);
+    // After the ramp, not back at mojo_boot where it reads more naturally: a fade
+    // holds the screen by claiming NBG2 every frame, and dash_hold paints the
+    // gameplay strip the moment this flag says there is a game -- so setting it
+    // any earlier drew the input strip onto the loading screen and took it down
+    // again over the ramp.
+    g_in_game = true;
+    g_cmd_mode = g_cmd_iface;
+    music_start();
+
+    // The ramp above left the screen held black, and it stays that way through
     // mojo_run's opening output. Revealing here would show the title's
     // wallpaper over an empty console, because the story has not run yet and the
     // picture on NBG0 is still the one the title screen put up -- the flash of the

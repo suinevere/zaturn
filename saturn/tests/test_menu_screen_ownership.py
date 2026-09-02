@@ -17,6 +17,9 @@ not fail, it just draws wrong -- so all three of these shipped:
      Load flow, where the game load runs under the same black -- and in game
      nothing released it. The prompt came back to a black screen and stayed
      there until the player opened a menu, which ramps up on the way out.
+     The first answer was to cut back to the outgoing room in the hook, which
+     fixed the black screen and left a pop on the one transition the player
+     asked to see fade. The black is kept now and the debt recorded instead.
 
   3. ~MenuBacking latches the marble and owes the window off to the next text
      flush. The callback dropped the latch without saying who owns NBG2 next,
@@ -102,14 +105,57 @@ def test_save_and_load_do_not_release_the_hold_at_the_prompt():
           "owned for the same reason.")
 
 
-def test_load_hook_releases_what_its_picker_left_black():
-    """(2) The far end of the same hand-off."""
-    lines = code_lines(body("engine/saturn_glue.cxx", "saturn_load_blob"))
-    assert any("menu_ramp_cut" in l for l in lines), (
-        "saturn_load_blob never releases the screen. choose_dest ends held "
-        "black on every exit, and everything past it -- the empty-slot box, the "
-        "story's reply, the prompt -- draws at normal brightness, so the prompt "
-        "comes back to a screen that stays black until a menu ramps it up.")
+def test_the_hooks_hand_back_the_black_they_leave():
+    """(2) The far end of the same hand-off, and the debt that pays for it.
+
+    Both hooks run their pickers inside the interpreter's own turn and end on
+    black, so the screen they leave belongs to the prompt on the far side of that
+    turn -- a different function, reached by returning through the interpreter,
+    with nothing between them but g_screen_owed. Both halves have to hold: the
+    hook recording the debt and the prompt seeding reveal_owed from it. Either
+    one alone is the black screen this file exists to keep out.
+    """
+    for fn in ("saturn_save_blob", "saturn_load_blob"):
+        lines = code_lines(body("engine/saturn_glue.cxx", fn))
+        assert any("g_screen_owed = 1" in l for l in lines), (
+            f"{fn} leaves its picker's black behind without recording the debt. "
+            "Everything past it -- the story's reply, the prompt -- draws at "
+            "normal brightness onto a screen nobody is going to ramp up, so the "
+            "game stays black until the player opens a menu.")
+
+    lines = code_lines(body("engine/saturn_glue.cxx", "saturn_readline"))
+    assert any("reveal_owed" in l and "g_screen_owed" in l for l in lines), (
+        "the prompt never reads g_screen_owed, so the debt the save and restore "
+        "hooks record is never spent and the screen they left black stays that "
+        "way.")
+    assert any(re.fullmatch(r"g_screen_owed = 0;", l) for l in lines), (
+        "the prompt reads g_screen_owed without clearing it, so every later "
+        "prompt this session ramps the screen up again from a debt that was "
+        "paid once.")
+
+
+def test_the_pause_menu_gets_its_save_and_load_back():
+    """Save Game and Load Game picked from the pause menu return to it.
+
+    The pick cannot open its own picker -- that lives inside the interpreter's
+    save/restore hook, a whole turn away -- so the way back is a flag the prompt
+    on the far side reads. The command panel's own Save/Load rows and the
+    F2/F3/F5/F6/F9 quick keys submit the same two commands and deliberately do
+    not set it: they land in the room, which is where they were asked from.
+    """
+    lines = code_lines(body("engine/saturn_glue.cxx", "saturn_readline"))
+    assert any("g_menu_reopen = 1" in l and "OM_SAVE" in l for l in lines), (
+        "the pause menu's Save/Load rows no longer ask for the menu back, so "
+        "they drop the player into the room the way the command panel's do.")
+    assert any("g_menu_reopen = 0;" in l for l in lines), (
+        "nothing clears g_menu_reopen, so the pause menu re-opens on every "
+        "prompt for the rest of the session.")
+
+    body_src = body("engine/saturn_glue.cxx", "saturn_readline")
+    assert re.search(r"if\s*\(!menu_back\)\s*menu_ramp_down\(\);", body_src), (
+        "the re-open ramps the screen down before opening the menu. It arrives "
+        "on the black the hook left, and menu_fade_out starts at full "
+        "brightness -- so that ramp flashes the room back on first.")
 
 
 def test_marble_latch_drop_hands_the_layer_over():

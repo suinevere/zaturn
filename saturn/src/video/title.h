@@ -1,7 +1,8 @@
 /*----------------------
  | title.h
- | Description: Title screen, the NBG0 picture layer and its fades, the boot
- |   logo's TGA load, CD directory juggling, and the boot sequence random seed.
+ | Description: Title screen, the NBG0 picture layer and its fades, the NBG1
+ |   plate over it, the boot screens' TGA loads, CD directory juggling, and the
+ |   boot sequence random seed.
  | Author: suinevere
  | Dependencies: app_state.h, display.h, menu.h, bg_dim.h, SRL
  ----------------------*/
@@ -16,7 +17,8 @@ extern "C" {
 
 /*----------------------
  | title_draw_art
- | Description: Draws the title screen text art (Z-ATURN and copyright).
+ | Description: Draws the title screen's credit line, under the plate
+ |   title_logo_show puts up. The name itself is that plate, not text.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
@@ -108,6 +110,38 @@ bool title_bg_hold(const char *file);
 bool title_bg_held(void);
 bool title_bg_show_held(const char *tag);
 void title_bg_drop_held(void);
+
+/*----------------------
+ | title_logo_show / title_logo_hide
+ | Description: The title screen's ZATURN plate: reads LOGO.TGA off the disc and
+ |   puts it on VDP2 NBG1, over the wallpaper NBG0 is holding and under nothing.
+ |
+ |   A second layer rather than a second picture on NBG0, because NBG0 carries
+ |   one bitmap at a time and the plate has to sit ON the wallpaper, not instead
+ |   of it. NBG1 is the layer item_art.cxx already uses for the same reason and
+ |   in the same way -- one 512x256 8bpp container, a sub-window written straight
+ |   into it at a fixed offset, the rest left at index 0, which VDP2 reads as
+ |   transparent. The two never share a screen (this is the title, that is the
+ |   inventory) and each loads its own palette when it draws, so both may bring
+ |   the layer up: SRL's LoadBitmap allocates the VRAM bank only when the scroll
+ |   has none, so whichever runs first pays and the other reuses it.
+ |
+ |   Reads the disc, so it stops CD audio: the one caller is on the way to the
+ |   title screen, under black, before any track is playing.
+ |
+ |   hide leaves the layer enabled and only blanks the plate's own rows, exactly
+ |   as item_art_hide does -- an enabled layer showing nothing but index 0 is
+ |   what lets the inventory pictures come up later without re-enabling anything.
+ |   Every path off the title owes this call: the plate is on a layer nothing
+ |   else on that path draws to, so nothing else would take it down.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: N/A
+ | Returns: show returns true when the plate is on the layer; hide returns N/A
+ ----------------------*/
+bool title_logo_show(void);
+void title_logo_hide(void);
 
 /*----------------------
  | title_bg_hide
@@ -213,6 +247,27 @@ void title_bg_fade_reset(void);
  ----------------------*/
 void title_bg_fade_engage(void);
 void title_bg_fade_level(int v);
+
+/*----------------------
+ | title_bg_fade_engaged
+ | Description: Whether a screen-wide fade currently owns the picture's
+ |   brightness -- true from title_bg_fade_engage (and from title_bg_fade_arm and
+ |   every menu ramp, which all go through it) until title_bg_fade_reset releases
+ |   it.
+ |
+ |   For a caller that has to know whether the screen it was handed is already
+ |   being held before it ramps one of its own: a second ramp down over a held
+ |   screen starts at full brightness and flashes back what the first one took
+ |   away. The save and restore hooks are the readers -- the pause menu hands them
+ |   a screen already dark, the command panel and a typed command hand them a lit
+ |   one, and the picker that opens next fades in from black either way.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: true while a screen-wide fade is engaged
+ ----------------------*/
+bool title_bg_fade_engaged(void);
 
 /*----------------------
  | TitleFadeStep / title_bg_fade_in_ex

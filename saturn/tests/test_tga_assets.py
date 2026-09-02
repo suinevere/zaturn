@@ -30,7 +30,7 @@ Run as a report: python saturn/tests/test_tga_assets.py
 Run as tests:    pytest saturn/tests/test_tga_assets.py
 """
 import pathlib
-import struct
+import re
 import sys
 
 import pytest
@@ -125,6 +125,49 @@ def test_map_parchment_present():
     map still draws -- it falls back to the flat back colour -- so nothing else
     would report this."""
     assert (TGA_DIR / "MAP.TGA").is_file()
+
+
+def test_title_plate_present():
+    """The title screen's ZATURN plate. Absent, title_logo_show returns false and
+    the title screen is a wallpaper with two lines of text on it and no name."""
+    assert (TGA_DIR / "LOGO.TGA").is_file()
+
+
+def _title_const(name):
+    """One #define out of title.cxx, so the layout below cannot drift from it."""
+    src = (ROOT / "saturn" / "src" / "video" / "title.cxx").read_text()
+    m = re.search(r"^#define\s+%s\s+(\d+)" % name, src, re.M)
+    assert m, f"title.cxx no longer defines {name}"
+    return int(m.group(1))
+
+
+def test_title_plate_fits_its_window():
+    """Two ceilings the plate has to clear, neither of which says anything when
+    it does not.
+
+    title_logo_show writes the picture into NBG1's container by hand at
+    TITLE_LOGO_Y, and refuses outright -- silently, leaving no plate -- if it
+    would run off the container's 512-byte row or past its 256th. And the credit
+    line is printed on the text grid at TITLE_CREDIT_ROW, which nothing stops the
+    plate from growing down into: a taller logo would simply be drawn over it.
+
+    Both are things a redrawn logo would trip, so they are held against the
+    file's own header rather than against a remembered size."""
+    d = (TGA_DIR / "LOGO.TGA").read_bytes()
+    w, h = d[12] | (d[13] << 8), d[14] | (d[15] << 8)
+    top = _title_const("TITLE_LOGO_Y")
+    credit = _title_const("TITLE_CREDIT_ROW") * 8   # 8-pixel rows on the 40x30 grid
+
+    assert w <= 512, (
+        f"the plate is {w} wide and NBG1's container row is 512 -- "
+        "title_logo_show would refuse it and the title screen would have no name")
+    assert top + h <= 256, (
+        f"the plate runs from {top} to {top + h} and the container is 256 rows -- "
+        "title_logo_show would refuse it and the title screen would have no name")
+    assert top + h <= credit, (
+        f"the plate runs from {top} to {top + h} and the credit line starts at "
+        f"{credit} -- the plate would be drawn over it. Move TITLE_LOGO_Y up, or "
+        "TITLE_CREDIT_ROW and TITLE_PROMPT_ROW down.")
 
 
 if __name__ == "__main__":

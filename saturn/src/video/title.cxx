@@ -6,8 +6,9 @@
  |
  |   The Low Work RAM art cache that used to live here is gone with the TGA
  |   backgrounds it held. Room art is CGL now -- room_art.cxx keeps one archive
- |   resident and hands decoded frames to title_bg_show_raw -- so the only file
- |   this reads is SUINE.TGA, once, under a black screen.
+ |   resident and hands decoded frames to title_bg_show_raw -- so the files this
+ |   reads are the three the boot screens are made of: SUINE.TGA, TITLE.TGA and
+ |   the ZATURN plate LOGO.TGA, each once, under a black screen.
  | Author: suinevere
  | Dependencies: app_state.h, display.h,
  |   menu.h, soft_reset.h, game_catalog.h (the Z3 directory record
@@ -60,8 +61,24 @@ static bool       g_root_dir_valid = false;
 extern GfsDirTbl g_z3_tbl;
 
 /*----------------------
+ | TITLE_CREDIT_ROW / TITLE_PROMPT_ROW
+ | Description: The two text rows under the plate, on the 40x30 grid. The plate
+ |   ends at pixel row 139 (TITLE_LOGO_Y + its 76), so row 19 starts thirteen
+ |   pixels below it and row 22 leaves two blank rows under that -- the credit
+ |   reads as the plate's own line and the prompt as a separate invitation. Both
+ |   are named because the prompt is printed from two places in title_and_seed
+ |   and the credit from title_draw_art, and a layout with the plate in it is not
+ |   something to keep in three literals.
+ | Author: suinevere
+ ----------------------*/
+#define TITLE_CREDIT_ROW 19
+#define TITLE_PROMPT_ROW 22
+
+/*----------------------
  | title_draw_art
- | Description: Draws the title screen text art.
+ | Description: Draws the title screen's one line of text art, under the plate
+ |   title_logo_show puts on NBG1. It used to draw the name too, as spaced
+ |   capitals on the text grid; the plate is the name now.
  | Author: suinevere
  | Dependencies: SRL
  | Globals: N/A
@@ -69,8 +86,7 @@ extern GfsDirTbl g_z3_tbl;
  | Returns: N/A
  ----------------------*/
 void title_draw_art(void) {
-    text_print(13, 12, "Z - A T U R N");
-    text_print(4, 15, "Saturn port (c) 2026 by Suinevere");
+    text_print(4, TITLE_CREDIT_ROW, "Saturn port (c) 2026 by Suinevere");
 }
 
 /*----------------------
@@ -495,6 +511,178 @@ bool title_bg_show_raw(const unsigned char *pixels, const unsigned short *clut,
 }
 
 /*----------------------
+ | TITLE_LOGO_FILE / TITLE_LOGO_Y / LOGO_STRIDE / LOGO_ROWS_MAX
+ | Description: The plate, where its top pixel sits, and the container it is
+ |   written into.
+ |
+ |   320 wide, the whole screen, so there is no x to give: it is written at
+ |   column 0. TITLE_LOGO_Y 64 puts a 76-pixel plate's own centre eighteen pixels
+ |   above the screen's -- above centre, but with the credit and the prompt below
+ |   it the block as a whole still sits square on the screen.
+ |
+ |   LOGO_STRIDE and LOGO_ROWS_MAX are that container's real shape, not the
+ |   picture's: SRL sizes the container off thresholds rather than the request, so
+ |   an 8x8 bring-up bitmap and a 320x76 plate both land in the same 512x256
+ |   one-bank container, and every row of a sub-window is 512 bytes on from the
+ |   last.
+ | Author: suinevere
+ ----------------------*/
+#define TITLE_LOGO_FILE "LOGO.TGA"
+#define TITLE_LOGO_Y    64
+#define LOGO_STRIDE     512
+#define LOGO_ROWS_MAX   256
+
+/*----------------------
+ | g_logo_up / g_logo_h
+ | Description: Whether NBG1's VRAM bank and bitmap registers have been claimed,
+ |   and how many rows the plate currently on the layer occupies -- 0 when there
+ |   is none. The height is remembered rather than assumed because hide has to
+ |   blank exactly what show wrote, and what show wrote came off the disc.
+ | Author: suinevere
+ ----------------------*/
+static bool g_logo_up = false;
+static int  g_logo_h  = 0;
+
+/*----------------------
+ | logo_layer_ensure
+ | Description: Claims NBG1's VRAM bank and bitmap registers the first time the
+ |   plate goes up, through a tiny blank bitmap rather than the plate itself:
+ |   LoadBitmap uploads at the container's origin, and the plate does not live
+ |   there. Everything after this writes into the container directly.
+ |
+ |   The two failure checks are item_art.cxx's, for the same reason -- LoadBitmap
+ |   returns silently on both an allocation failure and a CRAM palette-bank
+ |   exhaustion, and a caller that writes through CellAddress or TilePalette
+ |   anyway lands one byte below VRAM bank A0, in NBG0's wallpaper, or DMAs
+ |   through a null CRAM handle.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: g_logo_up
+ | Params: N/A
+ | Returns: true once NBG1 holds a usable VRAM claim
+ ----------------------*/
+static bool logo_layer_ensure(void) {
+    static uint8_t blank[8 * 8];
+
+    if (g_logo_up) return true;
+
+    SRL::Types::HighColor *colors = new SRL::Types::HighColor[256];
+    if (colors == nullptr) return false;
+    for (int i = 0; i < 256; i++) colors[i] = SRL::Types::HighColor((unsigned short) 0);
+
+    RawBitmap bmp;
+    bmp.Pixels = blank;
+    bmp.W      = 8;
+    bmp.H      = 8;
+    bmp.Pal    = new SRL::Bitmap::Palette(colors, 256);
+    if (bmp.Pal == nullptr) { delete[] colors; return false; }
+
+    SRL::VDP2::NBG1::LoadBitmap(&bmp);
+
+    if ((uint32_t) SRL::VDP2::NBG1::CellAddress < VDP2_VRAM_A0) return false;
+    if (SRL::VDP2::NBG1::TilePalette.GetData() == nullptr) return false;
+
+    // AutoAllocateBmp hands back a bank it has not zeroed, and LoadBitmap only
+    // wrote the 8x8 above into the corner of it -- so everything the plate does
+    // not cover is whatever the bank happened to hold, and the moment the scroll
+    // is enabled that is on screen. Blanked once, here, because this is the first
+    // claim on NBG1 in a session and item_art.cxx's own bring-up finds it already
+    // allocated and so never reaches this.
+    if (SRL::VDP2::NBG1::CellAllocSize > 0) {
+        SRL::VDP2::VRAM::Blank(SRL::VDP2::NBG1::CellAddress,
+                               (uint32_t) SRL::VDP2::NBG1::CellAllocSize);
+    }
+
+    slPriorityNbg1(3);
+    SRL::VDP2::NBG1::ScrollEnable();
+    g_logo_up = true;
+    return true;
+}
+
+/*----------------------
+ | logo_blank
+ | Description: Takes `rows` rows of the plate's window in NBG1's container back
+ |   to index 0, which VDP2 reads as transparent, a row at a time at the
+ |   container's stride.
+ | Author: suinevere
+ | Dependencies: SRL
+ | Globals: N/A
+ | Params: rows -- how many rows from TITLE_LOGO_Y down
+ | Returns: N/A
+ ----------------------*/
+static void logo_blank(int rows) {
+    volatile uint8_t *base = (volatile uint8_t *) SRL::VDP2::NBG1::CellAddress;
+    base += (uint32_t) TITLE_LOGO_Y * LOGO_STRIDE;
+    for (int y = 0; y < rows; y++) {
+        for (int x = 0; x < LOGO_STRIDE; x++) base[x] = 0;
+        base += LOGO_STRIDE;
+    }
+}
+
+/*----------------------
+ | title_logo_show
+ | Description: See title.h. Decodes the plate into the C heap, loads its palette
+ |   into NBG1's CRAM bank and writes its pixels into the container at
+ |   TITLE_LOGO_Y, then frees the buffer -- the picture lives in VRAM from there
+ |   on, so nothing is held.
+ |
+ |   A refusal leaves the layer as it was and the title screen without a plate,
+ |   which is the same contract title_show_wallpaper has for the wallpaper: a
+ |   picture that will not read is a picture that is not shown, never a halt.
+ | Author: suinevere
+ | Dependencies: tga_decode, bitmap_read_end, logo_layer_ensure, SRL
+ | Globals: g_logo_h
+ | Params: N/A
+ | Returns: true when the plate is on the layer
+ ----------------------*/
+bool title_logo_show(void) {
+    TgaImage logo = { nullptr, nullptr, 0, 0 };
+    bool decoded = tga_decode(TITLE_LOGO_FILE, &logo, false);
+    bitmap_read_end();
+    if (!decoded) return false;
+
+    // The window is written by hand rather than through LoadBitmap, so nothing
+    // clips it: a plate wider than the container's row or taller than what is
+    // left below TITLE_LOGO_Y would run off the end of one row into the next, or
+    // off the end of the bank.
+    bool fits = logo.W <= LOGO_STRIDE &&
+                (int) logo.H <= LOGO_ROWS_MAX - TITLE_LOGO_Y;
+    if (!fits || !logo_layer_ensure()) { tga_image_free(&logo); return false; }
+
+    SRL::VDP2::NBG1::TilePalette.Load(logo.Colors, 256);
+
+    volatile uint8_t *base = (volatile uint8_t *) SRL::VDP2::NBG1::CellAddress;
+    base += (uint32_t) TITLE_LOGO_Y * LOGO_STRIDE;
+    for (int y = 0; y < (int) logo.H; y++) {
+        const uint8_t *row = logo.Pixels + (uint32_t) y * (uint32_t) logo.W;
+        for (int x = 0; x < (int) logo.W; x++)  base[x] = row[x];
+        for (int x = logo.W; x < LOGO_STRIDE; x++) base[x] = 0;
+        base += LOGO_STRIDE;
+    }
+    g_logo_h = (int) logo.H;
+
+    tga_image_free(&logo);
+    return true;
+}
+
+/*----------------------
+ | title_logo_hide
+ | Description: See title.h. Blanks the plate's rows back to index 0 and leaves
+ |   the layer up and enabled, so the inventory pictures that share it later find
+ |   it already claimed and already showing nothing.
+ | Author: suinevere
+ | Dependencies: logo_blank
+ | Globals: g_logo_h
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void title_logo_hide(void) {
+    if (g_logo_h <= 0) return;
+    logo_blank(g_logo_h);
+    g_logo_h = 0;
+}
+
+/*----------------------
  | g_held
  | Description: One decoded picture kept for the rest of the session, so a
  |   screen that shows the same wallpaper every time it opens pays the disc once
@@ -680,15 +868,17 @@ void title_bg_fade_level(int v) {
 
 /*----------------------
  | title_fade_engage / title_bg_fade_engage
- | Description: Points NBG3 -- the Z-ATURN text art over the title picture, and
- |   the console text under every menu -- at colour offset channel A, takes NBG2
- |   (the input dashboard and the menu borders) onto the same channel, and marks
- |   the screen-wide fade as owning the picture's brightness (see g_screen_fade).
+ | Description: Points NBG3 -- the title's credit line, and the console text
+ |   under every menu -- at colour offset channel A, takes NBG2 (the input
+ |   dashboard and the menu borders) and NBG1 (the title's ZATURN plate, and the
+ |   inventory's item pictures) onto the same channel, and marks the screen-wide
+ |   fade as owning the picture's brightness (see g_screen_fade).
  |
- |   NBG2 rides with the text rather than with the picture because it is chrome,
- |   not scenery: channel B carries the player's held wallpaper dim, and a border
- |   on B would dim whenever the wallpaper did. On A it tracks the text it frames,
- |   which is the only thing that keeps a box and its contents fading as one.
+ |   NBG2 and NBG1 ride with the text rather than with the picture because they
+ |   are chrome, not scenery: channel B carries the player's held wallpaper dim,
+ |   and a border on B would dim whenever the wallpaper did. On A they track the
+ |   text they sit with, which is the only thing that keeps a box and its
+ |   contents, or the plate and the line under it, fading as one.
  |
  |   NBG0 is deliberately not taken. The picture layer stays on channel B with
  |   title_bg_apply for the whole session, because that is the only channel that
@@ -712,10 +902,22 @@ void title_bg_fade_level(int v) {
 static void title_fade_engage(void) {
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
     SRL::VDP2::NBG2::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
+    SRL::VDP2::NBG1::UseColorOffset(SRL::VDP2::OffsetChannel::OffsetA);
     g_screen_fade = true;
 }
 
 void title_bg_fade_engage(void) { title_fade_engage(); }
+
+/*----------------------
+ | title_bg_fade_engaged
+ | Description: See title.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_screen_fade
+ | Params: N/A
+ | Returns: g_screen_fade
+ ----------------------*/
+bool title_bg_fade_engaged(void) { return g_screen_fade; }
 
 /*----------------------
  | title_bg_fade_arm
@@ -776,9 +978,9 @@ void title_bg_fade_out(int frames) {
 
 /*----------------------
  | title_bg_fade_reset
- | Description: See title.h. Instantly restores full brightness, releases NBG3
- |   and NBG2 from channel A, and hands the picture's brightness back to the room
- |   transitions -- the end of every screen-wide fade, whoever ran it. The
+ | Description: See title.h. Instantly restores full brightness, releases NBG3,
+ |   NBG2 and NBG1 from channel A, and hands the picture's brightness back to the
+ |   room transitions -- the end of every screen-wide fade, whoever ran it. The
  |   title_fade_set(0) is what re-lights: it drives the picture to level 255,
  |   which composes to the held wallpaper dim rather than to nothing, so the dim
  |   is still in force the frame after a fade ends. NBG0 is not released here --
@@ -794,6 +996,7 @@ void title_bg_fade_reset(void) {
     title_fade_set(0);
     SRL::VDP2::NBG3::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
     SRL::VDP2::NBG2::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
+    SRL::VDP2::NBG1::UseColorOffset(SRL::VDP2::OffsetChannel::NoOffset);
     g_screen_fade = false;
 }
 
@@ -978,7 +1181,7 @@ int title_and_seed(void) {
     preload_game_catalog();
     title_drain_input();
 
-    text_print(8, 18, "Press any button to begin");
+    text_print(8, TITLE_PROMPT_ROW, "Press any button to begin");
     menu_sync();
 
     for (;;) {
@@ -993,7 +1196,7 @@ int title_and_seed(void) {
             (saturn_keyboard_poll().kind != SATURN_KEY_NONE);
         if (advance) break;
         title_draw_art();
-        text_print(8, 18, "Press any button to begin");
+        text_print(8, TITLE_PROMPT_ROW, "Press any button to begin");
         menu_sync();   // not a bare Synchronize: the title track needs the mixer ticked
         frames++;
     }

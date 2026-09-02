@@ -11,8 +11,7 @@
  | Description: Save the word module's place in the slot being left, and take
  |   back the place held in the slot being entered. Two halves of one rule: each
  |   slot's list keeps its own cursor, so a slot change never drops the player at
- |   the top of a list they were part-way down, and the verb they used last turn
- |   is still under the cursor on the next one. A restored cursor was measured
+ |   the top of a list they were part-way down. A restored cursor was measured
  |   against that slot's previous list and can name a cell a shorter one does not
  |   reach, which is what cp_clamp answers for on the refill that follows.
  |
@@ -35,44 +34,56 @@ static void slot_remember(CommandPanel *p) {
 }
 
 static void slot_restore(CommandPanel *p) {
-    if (p->slot >= 0 && p->slot < CP_SLOT_DONE) {
-        p->cursor = p->slot_cursor[p->slot];
-        p->top    = p->slot_top[p->slot];
-    } else {
-        p->cursor = 0;
-        p->top    = 0;
-    }
+    // DONE has no list, so there is no place to take back and nothing to move
+    // the cursor for: the sentence is going out and the player is staying where
+    // they are. This used to drop the cursor to cell 0, which is the last word of
+    // every finished command yanking the selection to the top of the list.
+    if (p->slot < 0 || p->slot >= CP_SLOT_DONE) return;
+    p->cursor = p->slot_cursor[p->slot];
+    p->top    = p->slot_top[p->slot];
     if (p->cursor < 0 || p->cursor >= CP_WORD_CELLS) p->cursor = 0;
     if (p->top < 0) p->top = 0;
 }
 
 /*----------------------
- | cp_reset
- | Description: Clears the assembled command and returns focus to the word
- |   module at the verb slot, on the row that slot was last left on. The
- |   remembered rows deliberately survive this: it runs once per prompt, and
- |   zeroing them here would put the cursor back at the top of the verb list
- |   every turn, which is the whole thing slot_restore exists to stop.
+ | cp_init / cp_reset
+ | Description: See command_panel.h. cp_init is where the panel's starting place
+ |   is chosen, because cp_reset no longer chooses one: the word module, at the
+ |   top of the verb list, on the one call that has no player to displace.
+ |
+ |   cp_reset clears the sentence and nothing else the player can see. It used to
+ |   put focus back on the word module at the verb slot's remembered row, which
+ |   meant every command sent moved the cursor out from under the player -- a
+ |   direction picked off the rose landed them in the verb list, and a second step
+ |   the same way was two module jumps and an aim away. The slot goes back to VERB
+ |   because a new sentence starts there; where the player is looking is theirs.
+ |
+ |   The verb slot's remembered row is re-pointed at wherever the cursor actually
+ |   is, but only from the word module -- a rose direction or a command row is not
+ |   a cell index, and writing one into the word module's memory would restore a
+ |   cursor that never sat there.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: p -- panel state to clear
+ | Params: p -- panel state
  | Returns: N/A
  ----------------------*/
 void cp_init(CommandPanel *p) {
     int i;
     for (i = 0; i < CP_SLOT_DONE; i++) { p->slot_cursor[i] = 0; p->slot_top[i] = 0; }
+    p->box = CP_BOX_WORD;
+    p->cursor = 0;
+    p->top = 0;
     cp_reset(p);
 }
 
 void cp_reset(CommandPanel *p) {
-    p->box = CP_BOX_WORD;
+    if (p->overlay) cp_overlay_close(p);
     p->slot = CP_SLOT_VERB;
-    slot_restore(p);
+    if (p->box == CP_BOX_WORD) slot_remember(p);
     p->line[0] = '\0';
     p->line_len = 0;
     p->submitted = 0;
-    p->overlay = 0;
 }
 
 /*----------------------
@@ -149,6 +160,12 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
         default: break;
     }
     slot_restore(p);
+    // A pick made from the overlay filled a noun slot, and the sentence carries
+    // on in the word module -- the cursor slot_restore just set is a word cell,
+    // so focus has to be where cells are. Without this the command module stayed
+    // focused with a word-module cursor in it, highlighting whichever of its five
+    // rows that index happened to name.
+    if (p->overlay) p->box = CP_BOX_WORD;
     p->overlay = 0;
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
 }

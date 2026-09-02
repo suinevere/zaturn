@@ -57,8 +57,9 @@ typedef struct {
     int  top;       /* first candidate row showing in the word module */
     /* Where the cursor was left in each slot's own list, so a slot change puts
        it back rather than at the top. One entry per fillable slot; DONE has no
-       list and so no place to remember. Survives cp_reset, which is what makes
-       the verb the player used last turn still be under the cursor this turn. */
+       list and so no place to remember. Survives cp_reset, which re-points the
+       verb slot's entry at wherever the cursor actually is rather than moving the
+       cursor to it. */
     int  slot_cursor[CP_SLOT_DONE];
     int  slot_top[CP_SLOT_DONE];
     char line[CP_LINE_MAX];
@@ -70,9 +71,10 @@ typedef struct {
 /*----------------------
  | cp_init
  | Description: Prepares a panel that has never been used: clears the per-slot
- |   rows, which cp_reset deliberately preserves, then resets it. Call this once
- |   for any panel that is not in static storage -- cp_reset alone would restore
- |   a cursor out of whatever the stack happened to hold.
+ |   rows and puts focus on the word module at the top of the verb list, then
+ |   resets it. This is the only call that chooses where the cursor starts --
+ |   cp_reset leaves it where the player put it -- so a panel that skips this one
+ |   opens on whatever the stack happened to hold.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -83,11 +85,13 @@ void cp_init(CommandPanel *p);
 
 /*----------------------
  | cp_reset
- | Description: Clears the assembled command and returns focus to the word
- |   module at the verb slot, on the row that slot was last left on. The
- |   per-prompt entry: it runs once a turn, so the remembered rows survive it
- |   and the verb the player used last turn is still under the cursor. A panel
- |   that has never been touched wants cp_init first.
+ | Description: Clears the assembled command and returns the slot to VERB, and
+ |   moves nothing the player can see: the module in focus and the cursor in it
+ |   are left exactly where they were. The per-prompt entry, and also what a
+ |   submitted command runs through, which is the same thing said twice -- so a
+ |   direction sent off the rose leaves the cursor on that direction, ready to be
+ |   sent again, instead of dropping the player into the verb list. A panel that
+ |   has never been touched wants cp_init first.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -127,7 +131,9 @@ void cp_move(CommandPanel *p, int d, int count);
  |   slot. wants_prep is consulted only when leaving the noun slot: set, the
  |   preposition slot opens; clear, the command is complete. A pick made from the
  |   travel module completes immediately, since a direction is a whole command.
- |   Marks `submitted` when the command is complete.
+ |   Marks `submitted` when the command is complete. A pick made from the
+ |   inventory overlay hands focus back to the word module on its way out, since
+ |   the cursor it leaves behind is a word cell.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A

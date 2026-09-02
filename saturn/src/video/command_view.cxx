@@ -1255,6 +1255,9 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  |   edge, at the row it left from, so reaching the command list from the rose is
  |   the same gesture as reaching the next word. L and R still jump modules
  |   outright. Type Word picks, Accept sends the line as it stands, Back unwinds.
+ |   Neither send moves the cursor -- cp_reset leaves the player where they were,
+ |   so a direction can be sent twice without re-aiming and a command-module entry
+ |   twice without leaving the module.
  |
  |   Travel is a cursor like the other two rather than a literal compass: with
  |   twelve directions on a five-by-three grid the D-pad cannot both select and
@@ -1319,6 +1322,24 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
         if (p.box == CP_BOX_TRAVEL && was != CP_BOX_TRAVEL &&
             !cv_enter_travel(p, exits, CV_LIST_ROW0)) {
             p.box = was; p.cursor = was_cursor; p.top = was_top;
+        }
+        /* And a rose the player is already standing on can go stale under them
+           now that a sent command leaves focus where it was: the direction they
+           travelled by is a direction of the room they LEFT, and the room they
+           arrived in need not offer it. Re-aimed at the nearest one that room
+           does offer, keeping the row so the cursor lands beside where it was,
+           and handed to the word module when the room offers nothing at all. */
+        if (p.box == CP_BOX_TRAVEL) {
+            int d = p.cursor, row;
+            if (d < 0 || d >= RM_DIR_N ||
+                (exits[d] != RM_EXIT_OPEN && exits[d] != RM_EXIT_MAYBE)) {
+                row = (d >= 0 && d < RM_DIR_N) ? cr_dir_row(d) : -1;
+                if (!cv_enter_travel(p, exits, row < 0 ? CV_LIST_ROW0 : row)) {
+                    p.box = CP_BOX_WORD;
+                    p.cursor = 0;
+                    p.top = 0;
+                }
+            }
         }
 
         ncand = cv_refill_words(p, root, w);

@@ -3,7 +3,8 @@
  | Description: Host test for the command panel's state machine: focus movement
  |   across the three modules, slot progression as a sentence fills, the
  |   preposition slot opening only when the caller says the grammar wants one,
- |   and Back unwinding a word at a time. Asserts the assembled command string,
+ |   Back unwinding a word at a time, and the one rule about where the cursor is
+ |   allowed to go: cp_reset never moves it. Asserts the assembled command string,
  |   which is the panel's only output. No SRL or Saturn code is involved.
  | Author: suinevere
  | Dependencies: ../src/input/command_panel.h and command_panel.c, assert.h,
@@ -60,8 +61,24 @@ int main(void) {
     assert(strcmp(p.line, "put coffin in boat") == 0);
     assert(p.submitted == 1);
 
-    /* Back unwinds one word and one slot at a time. */
+    /* cp_reset leaves the player where they are: same module, same cell. It is
+       what a sent command runs through, so a direction picked off the rose can be
+       picked again without re-aiming. */
     cp_reset(&p);
+    while (p.box != CP_BOX_TRAVEL) cp_focus(&p, -1);   /* reset no longer aims it */
+    p.cursor = 5;
+    cp_pick(&p, "north", 0);
+    assert(p.submitted == 1);
+    cp_reset(&p);
+    assert(p.box == CP_BOX_TRAVEL);
+    assert(p.cursor == 5);
+    assert(p.slot == CP_SLOT_VERB);
+    assert(p.line_len == 0);
+
+    /* Back unwinds one word and one slot at a time, and from an empty command in
+       the word module hands focus to travel. */
+    cp_reset(&p);
+    p.box = CP_BOX_WORD;
     cp_pick(&p, "put", 0);
     cp_pick(&p, "coffin", 1);
     cp_back(&p);
@@ -76,15 +93,16 @@ int main(void) {
 
     /* Travel submits a whole command in one pick, whatever slot was showing. */
     cp_reset(&p);
-    cp_focus(&p, -1);
-    assert(p.box == CP_BOX_TRAVEL);
+    while (p.box != CP_BOX_TRAVEL) cp_focus(&p, -1);
     cp_pick(&p, "north", 0);
     assert(strcmp(p.line, "north") == 0);
     assert(p.slot == CP_SLOT_DONE);
     assert(p.submitted == 1);
 
-    /* The cursor is clamped to the module it is walking, never wrapped. */
+    /* The cursor is clamped to the module it is walking, never wrapped. Placed
+       by hand rather than left to cp_reset, which no longer moves it. */
     cp_reset(&p);
+    p.cursor = 0;
     cp_move(&p, -1, 10);
     assert(p.cursor == 0);
     cp_move(&p, 4, 10);
@@ -94,14 +112,16 @@ int main(void) {
     cp_move(&p, 1, 0);
     assert(p.cursor == 0);
 
-    /* A travel pick submits in one step; Back afterward unwinds to an empty
-       line at the verb slot. */
+    /* A travel pick submits in one step, and the reset that follows it clears
+       the line without disturbing the module it was picked from. */
     cp_reset(&p);
-    cp_focus(&p, -1);
+    while (p.box != CP_BOX_TRAVEL) cp_focus(&p, -1);
     cp_pick(&p, "north", 0);
-    cp_back(&p);
+    assert(strcmp(p.line, "north") == 0);
+    cp_reset(&p);
     assert(p.line_len == 0);
     assert(p.slot == CP_SLOT_VERB);
+    assert(p.box == CP_BOX_TRAVEL);
 
     {
         static char names[32][4];
@@ -292,8 +312,23 @@ int main(void) {
     assert(p.slot == CP_SLOT_VERB);
     assert(p.line_len == 0);
 
+    /* The reset that follows a send clears the submit with the line, and moves
+       neither the module nor the cell. */
+    cp_reset(&p);
+    p.box = CP_BOX_WORD;
+    cp_pick(&p, "read", 0);
+    p.cursor = 3;
+    cp_submit(&p);
+    assert(p.submitted == 1);
+    cp_reset(&p);
+    assert(p.submitted == 0);
+    assert(p.line_len == 0);
+    assert(p.box == CP_BOX_WORD);
+    assert(p.cursor == 3);
+
     /* Backing up after a send takes the submit back with the word. */
     cp_reset(&p);
+    p.box = CP_BOX_WORD;
     cp_pick(&p, "read", 0);
     cp_submit(&p);
     assert(p.submitted == 1);
@@ -337,10 +372,8 @@ int main(void) {
     cp_load_line(&p, 0);
     assert(p.line_len == 0);
 
-    /* Each slot's list keeps its own cursor. Picking a verb from part-way down
-       the list used to drop the cursor at the top of the noun list, and the next
-       prompt at the top of the verb list again -- so a player repeating "take X"
-       walked back down to "take" every single turn. */
+    /* Each slot's list keeps its own cursor, so picking a verb from part-way
+       down the list does not drop the cursor at the top of the noun list. */
     cp_init(&p);                        /* a clean slate: cp_reset keeps the rows */
     p.cursor = 4;                       /* part-way down the verb list */
     p.top    = 1;
@@ -349,21 +382,28 @@ int main(void) {
     assert(p.cursor == 0);              /* the noun list has its own place */
     assert(p.top == 0);
 
-    p.cursor = 3;                       /* and part-way down that one */
-    cp_back(&p);                        /* back to the verb slot... */
-    assert(p.slot == CP_SLOT_VERB);
-    assert(p.cursor == 4);              /* ...where the cursor was left */
-    assert(p.top == 1);
-
-    /* Turn to turn: cp_reset runs once per prompt and must not forget. */
-    cp_pick(&p, "take", 0);
+    /* DONE has no list, so the pick that finishes a sentence leaves the cursor
+       exactly where it found it -- the command goes out, the player stays. */
+    p.cursor = 3;
+    p.top    = 2;
     cp_pick(&p, "lamp", 0);
     assert(p.slot == CP_SLOT_DONE);
     assert(p.submitted == 1);
+    assert(p.cursor == 3);
+    assert(p.top == 2);
+
+    /* And the reset the next prompt runs leaves it there too, re-pointing the
+       verb slot's own memory at where the cursor is rather than moving the
+       cursor to where the memory was. */
     cp_reset(&p);
     assert(p.slot == CP_SLOT_VERB);
-    assert(p.cursor == 4);
-    assert(p.top == 1);
+    assert(p.cursor == 3);
+    assert(p.top == 2);
+    p.cursor = 9;
+    cp_pick(&p, "take", 0);             /* leaving VERB remembers cell 9... */
+    assert(p.slot == CP_SLOT_NOUN);
+    assert(p.cursor == 3);              /* ...and takes back the noun list's 3 */
+    assert(p.top == 2);
 
     /* A restored place can name a cell the new list does not reach -- a noun
        list is the room's, so it shrinks on any move. cp_clamp is what stops it

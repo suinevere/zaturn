@@ -55,6 +55,9 @@ int choose_device(const char *title);
  |   Lists every slot; the player picks one (C/Enter/number), then edits that
  |   slot's name right on its line using the on-screen or physical keyboard.
  |   Backspace/B returns from editing to slot selection; A/Enter/Start confirms.
+ |     Fade contract, matching choose_dest's: entered black-held, faded up on its
+ |   first composed frame through the g_menu_intro_fade one-shot the caller arms,
+ |   and every exit -- picked or cancelled -- faded back down to black.
  | Author: suinevere
  | Dependencies: menu.h, menu_layout.h, keyboard.h, saturn_backup.h,
  |   saturn_keyboard.h, input.h, console_view.h

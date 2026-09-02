@@ -49,12 +49,13 @@ int is_quit_command(const char *line);
 
 /*----------------------
  | soft_reset_to_title
- | Description: Performs the Sega software reset -- drops any live connection,
- |   releases the story image, and longjmps back to the title screen (armed in
- |   main). In-process restart, not an SMPC reset; never returns.
+ | Description: Performs the Sega software reset -- ramps the screen down to
+ |   black, drops any live connection, releases the story image, and longjmps back
+ |   to the title screen (armed in main). In-process restart, not an SMPC reset;
+ |   never returns. The ramp lives here so every way back to the title gets it.
  | Author: suinevere
- | Dependencies: N/A
- | Globals: g_title_jmp, g_title_jmp_armed
+ | Dependencies: menu.h (menu_fade_out)
+ | Globals: g_title_jmp, g_title_jmp_armed, g_menu_page_fade
  | Params: N/A
  | Returns: N/A (does not return)
  ----------------------*/
@@ -77,8 +78,10 @@ bool soft_reset_chord_held(void);
  | Description: Modal Y/N prompt asking `question`. On Yes it soft-resets to the
  |   title screen in-process (the same return-to-title as the A+B+C+Start chord),
  |   retaining the options held in backup RAM; on No it returns false so the
- |   caller resumes. Shared by the reboot and quit commands (local prompt and the
- |   online terminal), both of which discard an unsaved game.
+ |   caller resumes. The screen is cleared behind the box for as long as the
+ |   question is up -- no game text, no input strip. Shared by the reboot and quit
+ |   commands (local prompt and the online terminal), both of which discard an
+ |   unsaved game.
  | Author: suinevere
  | Dependencies: menu.h, N/A
  | Globals: N/A

@@ -15,9 +15,6 @@
 #include "text_map.h"
 
 #include "menu.h"
-#ifndef NETBIN
-#include "field_clock.h"
-#endif
 #include "app_state.h"
 #include "console_view.h"
 #include "input.h"
@@ -300,60 +297,6 @@ void menu_fade_out(int frames) {
     }
 }
 
-#ifndef NETBIN
-/*----------------------
- | g_out_from / g_out_span / g_out_running
- | Description: The clock-paced fade-out's state: the field it started on, how
- |   many fields it runs for, and whether one is in flight.
- | Author: suinevere
- ----------------------*/
-static unsigned int g_out_from    = 0;
-static int          g_out_span    = 0;
-static bool         g_out_running = false;
-
-/*----------------------
- | menu_fade_out_begin / menu_fade_out_tick / menu_fade_out_hold
- | Description: See menu.h. The level comes from how many fields have actually
- |   elapsed rather than from how many times tick was called, which is the whole
- |   difference between this and menu_fade_out: a caller reading the CD blocks the
- |   main line for whole frames at a time, and a ramp that stepped once per call
- |   would simply be stretched by the reading instead of covering it.
- | Author: suinevere
- | Dependencies: field_clock.h, SRL
- | Globals: g_out_from, g_out_span, g_out_running
- | Params: frames -- ramp length in fields
- | Returns: N/A
- ----------------------*/
-void menu_fade_out_begin(int frames) {
-    menu_offset_engage();
-    menu_intro_level(0);
-    field_clock_start();
-    g_out_from    = field_clock_now();
-    g_out_span    = (frames < 1) ? 1 : frames;
-    g_out_running = true;
-}
-
-void menu_fade_out_tick(void) {
-    if (!g_out_running) return;
-    unsigned int done = field_clock_now() - g_out_from;
-    if (done >= (unsigned int) g_out_span) {
-        menu_intro_level(-255);
-        g_out_running = false;
-        return;
-    }
-    menu_intro_level(-(int) ((255u * done) / (unsigned int) g_out_span));
-}
-
-void menu_fade_out_hold(void) {
-    while (g_out_running) {
-        menu_fade_out_tick();
-        if (!g_out_running) break;
-        SRL::Core::Synchronize();
-    }
-    menu_intro_level(-255);
-}
-#endif /* NETBIN: no CD, no story, nothing to fade a load behind */
-
 /*----------------------
  | menu_fade_in / menu_fade_in_ex
  | Description: See menu.h. Ramps a held-black screen back to normal over
@@ -361,9 +304,9 @@ void menu_fade_out_hold(void) {
  |   backdrop colour. "Normal" here is the player's held wallpaper dim, not an
  |   unmodified picture -- the release goes through title_bg_fade_reset, which is
  |   what leaves the dim in force on the far side of the ramp. The caller must
- |   have engaged the channels and held black already (via menu_fade_out,
- |   menu_intro_fade_arm, or menu_fade_out_hold, which deliberately leaves them
- |   engaged) and drawn its first frame, or there is nothing to reveal.
+ |   have engaged the channels and held black already (via menu_fade_out or
+ |   menu_intro_fade_arm, both of which deliberately leave them engaged) and drawn
+ |   its first frame, or there is nothing to reveal.
  |
  |   The _ex form takes a per-frame callback handed the same 0..255 the picture is
  |   being lit by, for anything that has to rise in step with it. Deliberately not
@@ -889,6 +832,12 @@ int menu_select(const char *title, const char *const *items, int count) {
  |   24-column floor already covers it. Each loop iteration checks the keyboard
  |   (Enter/Esc/Backspace/Y/N/1/2) and the gamepad (A/C/Start = yes, B = no)
  |   before redrawing and calling menu_sync.
+ |     Honours the g_menu_intro_fade one-shot the same way menu_select does, so a
+ |   caller that reaches this from a black screen -- the save flow's overwrite
+ |   question, between two pickers that each fade -- can have it arrive on a ramp
+ |   rather than cut in. Every other caller leaves the one-shot at 0 and draws
+ |   instantly, exactly as before. Fades nothing on the way out: this box answers
+ |   a question and the caller decides what the answer costs.
  | Author: suinevere
  | Dependencies: menu_layout.c, console_view.cxx, input.h, saturn_keyboard.h,
  |   SRL
@@ -898,6 +847,8 @@ int menu_select(const char *title, const char *const *items, int count) {
  ----------------------*/
 bool menu_confirm(const char *line1, const char *line2) {
     MenuBacking backing;        // opaque behind the box while the prompt is up
+    int intro = g_menu_intro_fade;  // one-shot: fade this first frame up from black
+    g_menu_intro_fade = 0;
     int l1 = 0, l2 = 0;
     while (line1 && line1[l1]) l1++;
     while (line2 && line2[l2]) l2++;
@@ -932,5 +883,6 @@ bool menu_confirm(const char *line1, const char *line2) {
         menu_text(x0, w, hy + 1, 0,
             hint("A / C = Yes     B = No", "Enter = Yes     Esc = No"));
         menu_sync();
+        if (intro) { menu_fade_in(intro); intro = 0; }
     }
 }

@@ -137,6 +137,18 @@ extern int g_save_device;
 // Save slot pre-picked by quick-save, paired with g_save_device. One-shot.
 extern int g_save_slot;
 
+// Set when Save Game or Load Game is picked from the in-game pause menu, so the
+// prompt after the save or restore opens that menu again instead of dropping the
+// player into the room. One-shot. The command panel's own Save/Load rows and the
+// F2/F3/F5/F6/F9 quick keys leave it clear, and go straight back to the game.
+extern int g_menu_reopen;
+
+// Set by the save/restore hooks when they leave the screen ramped down to black,
+// so the next prompt ramps the composed gameplay frame back up rather than
+// cutting to it -- the same debt reveal_owed carries inside one readline, across
+// the turn the interpreter takes to run the save. One-shot.
+extern int g_screen_owed;
+
 // Soft-reset jump target armed by main() just before the title screen; the
 // input loops longjmp here on the reset chord or the typed "reboot" command.
 extern jmp_buf g_title_jmp;

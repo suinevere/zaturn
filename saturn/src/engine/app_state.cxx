@@ -114,6 +114,19 @@ int g_save_device = -1;
 int g_save_slot   = -1;
 
 /*----------------------
+ | g_menu_reopen / g_screen_owed
+ | Description: The two things a save or a restore has to carry across the turn
+ |   the interpreter spends running it, because the pickers live inside that turn
+ |   and the screen they leave behind belongs to the prompt on the far side.
+ |   g_menu_reopen re-opens the pause menu the pick came from; g_screen_owed says
+ |   the hook left the screen black and the next composed frame owes a ramp up.
+ |   Both one-shot, both cleared by whoever spends them.
+ | Author: suinevere
+ ----------------------*/
+int g_menu_reopen = 0;
+int g_screen_owed = 0;
+
+/*----------------------
  | g_title_jmp / g_title_jmp_armed
  | Description: The setjmp target for the in-process soft reset (return to title),
  |   and whether main has armed it yet.

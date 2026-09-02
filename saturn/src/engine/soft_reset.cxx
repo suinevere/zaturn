@@ -9,7 +9,7 @@
  | Author: suinevere
  | Dependencies: soft_reset.h, app_state.h (g_title_jmp), net/net_connect.h
  |   (drops the modem link), sound.h (stops audio), input.h (g_pad), menu.h +
- |   menu_layout.h (the confirm box), console_view.h (hint/device/render),
+ |   menu_layout.h (the confirm box), console_view.h (hint/device),
  |   saturn_keyboard.h (key events), SRL/SGL.
  ----------------------*/
 
@@ -100,18 +100,32 @@ int is_quit_command(const char *line) {
 
 /*----------------------
  | soft_reset_to_title
- | Description: Drops any live modem link, stops all audio, lifts any music hold,
- |   then longjmps back to the title screen armed in main -- an in-process restart,
- |   so the console never re-reads the CD. If the jump target is not armed yet
- |   (impossible once main is running), falls back to the SMPC reset-button NMI and
- |   spins. Never returns.
+ | Description: Ramps the screen down, drops any live modem link, stops all audio,
+ |   lifts any music hold, then longjmps back to the title screen armed in main --
+ |   an in-process restart, so the console never re-reads the CD. If the jump
+ |   target is not armed yet (impossible once main is running), falls back to the
+ |   SMPC reset-button NMI and spins. Never returns.
+ |
+ |   The ramp is the one thing every way back to the title shares -- the typed q
+ |   and quit, the Options page's Title Screen row, the reset chord, and a story
+ |   that ran to its end -- so it belongs here rather than at four call sites. It
+ |   runs at g_menu_page_fade, the length every other menu transition uses, and is
+ |   inert at 0 (the netbin, and any build that wants the old instant cut). The
+ |   far side is already a ramp: main's re-entry blacks the screen and the splash
+ |   logo fades itself up out of it, so what this adds is the missing half.
+ |
+ |   Nothing is drawn between the ramp and the jump, so the ramp's own hold is
+ |   what the black is made of; main's re-entry re-arms it with title_bg_fade_arm
+ |   before anything is composed on top.
  | Author: suinevere
- | Dependencies: net/net_connect.h, sound.h, music.h, SGL (slNMIRequest)
- | Globals: g_title_jmp, g_title_jmp_armed
+ | Dependencies: menu.h (menu_fade_out, g_menu_page_fade), net/net_connect.h,
+ |   sound.h, music.h, SGL (slNMIRequest)
+ | Globals: g_title_jmp, g_title_jmp_armed, g_menu_page_fade
  | Params: N/A
  | Returns: N/A (does not return)
  ----------------------*/
 void soft_reset_to_title(void) {
+    if (g_menu_page_fade > 0) menu_fade_out(g_menu_page_fade);
     net_connect_close();
     sound_stop_all();
     // Any music hold belongs to the menu that took it, and that menu is gone. It
@@ -184,13 +198,15 @@ void check_soft_reset(void) {
 
 /*----------------------
  | confirm_return_to_title
- | Description: Draws a modal Y/N box over the still-rendered console (no
- |   menu_clear -- the game text staying visible behind the box is the point) and
- |   loops until the player answers. The box width is budgeted unconditionally for
- |   the widest row, the pad hint "(A) (C) (Start) = yes" (21 cols), so it does
- |   not resize when the player switches between pad and keyboard mid-prompt. Yes
- |   soft-resets to the title (never returns); No returns false so the caller
- |   resumes the game.
+ | Description: Clears the screen to the wallpaper, draws a modal Y/N box on it,
+ |   and loops until the player answers. The game text and the input strip both go
+ |   down for as long as the question is up: this is the one confirm that offers to
+ |   end the session, and leaving the turn's words and a live-looking control
+ |   surface behind it read as though the game were still waiting to be typed at.
+ |   The box width is budgeted unconditionally for the widest row, the pad hint
+ |   "(A) (C) (Start) = yes" (21 cols), so it does not resize when the player
+ |   switches between pad and keyboard mid-prompt. Yes soft-resets to the title
+ |   (never returns); No returns false so the caller resumes the game.
  |
  |   menu_sync's own dash_hold_any is the whole of the NBG2 bookkeeping here. This
  |   loop used to call dash_hold as well, to keep the gamepad strip up behind the
@@ -216,6 +232,10 @@ bool confirm_return_to_title(const char *question) {
     int x0, y0, w, h;
     menu_box_fit("RETURN TO TITLE", content_w, 5, &x0, &y0, &w, &h);
 
+    // Before the debounce frame, not after it: the text shadow reaches VRAM on
+    // OnAfterSync, so clearing after this Synchronize would show the turn's words
+    // for the one frame the box is not drawn on yet.
+    menu_clear();
     SRL::Core::Synchronize();
     for (;;) {
         SaturnKeyEvent ke = saturn_keyboard_poll();
@@ -229,7 +249,7 @@ bool confirm_return_to_title(const char *question) {
         if (yes) { soft_reset_to_title(); }
         if (no) { return false; }
 
-        render_console();
+        menu_clear();
         menu_frame(x0, y0, w, h, "RETURN TO TITLE");
         int cx = x0 + 2, cy = y0 + 3;
         text_print(cx, cy, "%s", question);

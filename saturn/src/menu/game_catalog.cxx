@@ -407,13 +407,14 @@ const char* game_select(void) {
 
     // Fade contract (when g_menu_page_fade > 0, i.e. reached from the title
     // menu): entered at normal brightness with the mode-select menu showing.
-    // A cancelled return leaves the screen faded to black for main() to fade the
-    // mode-select back in; a return WITH a game leaves it lit, because main()
-    // fades it out itself with the story read running under the ramp. Each menu_select fades
-    // in from that black via the g_menu_intro_fade one-shot; the transitions
-    // between the category and game lists fade out then in, one continuous
-    // dark beat. In-game the gate is 0 and every fade below is a no-op, so this
-    // reads exactly as it did before.
+    // Every return leaves the screen faded to black: a cancel for main() to fade
+    // the mode-select back in, and a pick for whatever comes next -- the Load
+    // flow's device picker, which fades ITSELF in from black and was ramping a
+    // lit screen for as long as this returned lit, or main's own loading screen.
+    // Each menu_select fades in from that black via the g_menu_intro_fade
+    // one-shot; the transitions between the category and game lists fade out
+    // then in, one continuous dark beat. In-game the gate is 0 and every fade
+    // below is a no-op, so this reads exactly as it did before.
     if (count <= 0) {
         MenuBacking backing;
         menu_message("NO GAMES", (count < 0)
@@ -471,10 +472,7 @@ const char* game_select(void) {
             if (ncat == 1) return nullptr;   // nothing above it: back to the mode menu
             else continue;                    // back up to the category list (fades in)
         }
-        // Deliberately no fade on the way out with a game in hand: main() runs its
-        // own, longer one and reads the story underneath it, which it cannot do if
-        // the screen is already black before it is told what to load. Every other
-        // exit from this function still fades, because nothing follows them.
+        if (g_menu_page_fade) menu_fade_out(g_menu_page_fade);   // game list -> black
         return names[gmap[gs]];
     }
 }

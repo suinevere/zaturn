@@ -395,68 +395,47 @@ static void submit_command(KeyboardState &k, const char *cmd) {
 
 /*----------------------
  | run_room_transition
- | Description: Runs an armed transition to completion before the turn's text is
- |   drawn, so a new room's picture and track come up first and the description
- |   arrives onto them.
+ | Description: Starts an armed picture change at the prompt rather than waiting
+ |   out its settle -- and then leaves, which is the whole of it.
  |
- |   Armed by either half. A mood change arms it, and so does a room whose picture
- |   differs from the one on screen even when the track does not move -- which is
- |   most of a walk through an authored story, and used to be the case where the
- |   new picture simply appeared.
+ |   It used to run the transition to completion here: ninety frames of ramp with
+ |   the game frozen, so that the old screen faded out, the picture swapped at the
+ |   bottom, and the turn's text was drawn onto the new one. That ordering was the
+ |   only thing the wait bought, and it cost the player a second and a half at
+ |   every room boundary that changed a picture.
  |
- |   It works only because of where it sits. The interpreter prints a whole turn
- |   into the console buffer without advancing a frame, so at this point the new
- |   text exists but has never been rendered and the screen still holds the
- |   previous turn. Synchronizing here without calling render_console therefore
- |   fades the OLD screen out, swaps the picture at the bottom, and fades the new
- |   one in against a console that on_text_category cleared -- and the caller's
- |   first render_console after this is what finally puts the new text on it.
+ |   The fade never needed it, because the fade does not touch the text.
+ |   title_bg_dyn_fade drives colour offset channel B, which carries the picture
+ |   and the backdrop; the console and the marble chrome are on channel A and do
+ |   not move -- the split exists precisely so a transition cannot blink the words
+ |   out mid-sentence. So the turn's text is drawn at once and read at full
+ |   brightness while the picture dims out behind it, swaps, and comes back up,
+ |   and the read loop's own per-frame music_tick is what advances the ramp. The
+ |   player types through all of it.
  |
- |   Costs the player the fade before they can type, and only when a picture is
- |   actually moving -- music_transition_art, not music_transition_active, is what
- |   this waits on. A track change needs no screen, so it is left to run under the
- |   read loop's own music_tick. MUSIC_FADE_FRAMES in main.cxx is the number to cut
- |   if the picture's own fade reads sluggish -- except on the opening room, which
- |   skips the ramp entirely (see below).
+ |   Walking on before a ramp finishes does not strand it on the wrong room:
+ |   on_art_commit shows g_art_room, which on_text_room rewrites on every room
+ |   change, so a ramp begun two rooms ago still puts up the room the player is
+ |   standing in now.
  |
- |   The strip is the one thing that must not go with the old screen: its rows
- |   survive on_text_category's wipe, so dash_hold keeps their panel under them
- |   for every frame of the fade.
+ |   Only the picture's half is flushed. A track change is left on its own
+ |   counter deliberately -- committing one at every prompt would restart the
+ |   music in every room of a corridor, which is what the settle exists to
+ |   prevent, and nothing on screen is waiting for it either way.
  |
- |   The opening room takes none of it: main holds the screen black until the first
- |   prompt reveals it, so the ramp would be spent fading black into black.
- |   music_transition_skip_fade commits outright instead -- picture swapped, track
- |   started -- so what the reveal uncovers is the same screen, arrived at without
- |   the wait.
+ |   The opening room commits outright instead: main holds the screen black until
+ |   the first prompt reveals it, so a ramp there would be spent fading black into
+ |   black, and what the reveal uncovers should already be the new room.
  | Author: suinevere
- | Dependencies: music.h, dash_view.h (dash_hold), SRL
- | Globals: N/A
+ | Dependencies: music.h
+ | Globals: g_intro_reveal
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void run_room_transition(void) {
     if (!music_transition_active()) return;
-
-    // Only a picture is worth waiting for. A transition that just changes the
-    // track moves nothing on screen, so there is nothing to put up unseen and
-    // nothing to read off the disc -- its ramp is a volume ramp, and the read
-    // loop below calls music_tick every frame, so it finishes while the player
-    // reads and types. Waiting on music_transition_active alone held the prompt
-    // for those too: ninety frames of frozen game for a change the player could
-    // only hear, and on a story with no pictures at all that was every single
-    // transition it ever made.
-    if (!music_transition_art()) return;
-
     if (g_intro_reveal) { music_transition_skip_fade(); return; }
-
-    music_transition_flush();
-    int guard = 0;
-    while (music_transition_active() && guard < 600) {
-        music_tick();
-        dash_hold();
-        SRL::Core::Synchronize();
-        guard++;
-    }
+    if (music_transition_art()) music_transition_flush();
 }
 
 /*----------------------

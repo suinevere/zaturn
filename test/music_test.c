@@ -321,6 +321,19 @@ int main(void) {
         CHECK(g_fade_art_seen > 0);              /* the screen went dark for it */
         CHECK(g_fade_audio_seen == 0);           /* the track was not re-issued */
 
+        /* The client's own path: flush the picture's settle at the prompt, then
+           walk away and let the read loop's music_tick carry the ramp. Nobody
+           blocks, and it still lands. */
+        music_reset();
+        music_on_turn(850);
+        music_art_change(1);
+        music_transition_flush();
+        fade_watch_reset();
+        CHECK(music_transition_art() != 0);
+        for (i = 0; i < 60 && music_transition_active(); i++) music_tick();
+        CHECK(music_transition_active() == 0);
+        CHECK(g_fade_art_seen > 0);
+
         /* An art change walked back out of arms nothing to wait for. */
         music_reset();
         music_on_turn(900);

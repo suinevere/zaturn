@@ -168,17 +168,36 @@ takes both, and `music_transition_art()` is what the client waits on:
 - **Track only:** screen and sound effects untouched, prompt not held at all. The
   read loop already calls `music_tick()` every frame, so the debounce and the
   volume ramp finish under the player's typing. Nothing is lost by not waiting.
-- **Picture:** exactly as before -- 90 frames, screen dark, swap at the bottom,
-  new text drawn onto the new picture.
+- **Picture:** the ramp still runs, but nobody waits for it either. The wait was
+  only ever buying an ordering -- old screen out, swap at the bottom, new text
+  drawn onto the new picture -- and the fade never needed it, because the fade
+  does not touch the text: `title_bg_dyn_fade` drives colour offset channel B,
+  which carries the picture and the backdrop, while the console and the marble
+  chrome sit on channel A and do not move. So the text is drawn at once and read
+  at full brightness while the picture dims out behind it, swaps and comes back.
+  `run_room_transition` now only flushes the picture's settle so the ramp starts
+  at the prompt rather than after 90 frames of debounce, and returns.
 
-For a story with no authored table that removes the pause outright, because
-every transition it can make is audio-only. For Zork I it removes it from the
-room changes that keep their picture and change their track.
+  Two things make that safe. The read loop renders the interface every frame
+  (`render_game_keyboard` and `render_command_panel` both claim the dash), so the
+  `dash_hold` the old spin needed is already being done. And `on_art_commit`
+  shows `g_art_room`, which `on_text_room` rewrites on every room change, so a
+  ramp begun two rooms ago still puts up the room the player is standing in --
+  walking on during a fade cannot strand it on a stale picture.
+
+**There is no blocking path left at all.** `run_room_transition` runs no loop
+and calls no `Synchronize`; the prompt is never held for music or for art.
 
 The numbers, for whoever tunes this next: `MUSIC_DEBOUNCE_FRAMES` is 90 and
-`MUSIC_FADE_FRAMES` is 45 each way. The blocking path used to *flush* the
-debounce and then spend 90 frames ramping; the non-blocking path spends the full
-90-frame debounce and then 90 ramping, all of it while the player types.
+`MUSIC_FADE_FRAMES` is 45 each way. A picture change flushes the debounce and
+ramps 90; a track change spends the full 90-frame debounce and then ramps 90 --
+and all of it now happens under the player's typing.
+
+What this changes on screen, and has never been seen: for the first frames of a
+picture change the new room's text sits over the *previous* room's picture while
+it dims. That is the ordering the wait used to buy, traded for the wait itself.
+Walking briskly through authored rooms will also pulse the picture -- down, swap,
+up, down again -- where it used to freeze once per room instead.
 
 ## Not touched, then repaired
 

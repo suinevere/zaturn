@@ -146,8 +146,11 @@ Task 2 entry for the full ruling.
 The four sub-projects the spec named out of scope at the top:
 - **Item pictures** (sub-project C)
 - **Sound effects** (sub-project D)
-- **The seven unattributed CD-DA tracks** (sub-project E) — needs the same
-  Mednafen capture that would also settle the maze and river ordering above
+- ~~**The seven unattributed CD-DA tracks** (sub-project E) — needs the same
+  Mednafen capture that would also settle the maze and river ordering~~
+  **CLOSED 2026-09-02 without a capture**: all seven resolved by static trace,
+  see [[zork1-cdda-track-triggers-handoff]]. The maze and river ordering still
+  needs the capture; the tracks no longer do. above
 - **The ending art** (sub-project F)
 
 Plus, from this project itself: the maze and river ordering, dark-room

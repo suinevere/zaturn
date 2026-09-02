@@ -1312,9 +1312,18 @@ static void opcode_read(void)
         // 0 = the current location object) to the engine before we block for the
         // player's command. Scene lookup is by object number, not by title, so
         // nothing here needs to decode the room's name any more.
+        //
+        // The room model is refreshed here rather than in the client's readline,
+        // where it used to be, because the music decision now reads it: the
+        // situational cues ask which villain is standing in this room and what
+        // the player is carrying, and a snapshot taken after the decision would
+        // answer for the room they were in last turn. The readline that follows
+        // does not repeat it.
         extern void music_on_turn(unsigned int room);
+        extern void room_model_refresh(void);
         const uint8 *rmaddr = varAddress(0x10, 0, 0);   /* READUI16 is a statement macro, read by hand */
         const uint16 rmobj = ((uint16) rmaddr[0] << 8) | (uint16) rmaddr[1];
+        room_model_refresh();
         music_on_turn((unsigned int) rmobj);
     }
 #endif
@@ -1480,7 +1489,8 @@ static void opcode_save(void)
         extern int saturn_read_story_prefix(uint8 *buf, uint32 storylen, uint32 want);
         extern void *saturn_scratch_alloc(uint32 size);
         extern void saturn_scratch_free(void *ptr);
-        extern int saturn_save_blob(const uint8 *data, uint32 len);
+        extern int saturn_save_blob(uint8 *data, uint32 len, uint32 cap);
+        extern uint32 saturn_save_tail(void);
 
         const uint32 dynlen   = (uint32) GState->header.staticmem_addr;  /* dynamic-memory size */
         const uint32 storylen = (uint32) GState->story_len;
@@ -1492,7 +1502,12 @@ static void opcode_save(void)
            Only dynamic memory is delta'd, so the pristine copy is dynlen bytes,
            not the whole story. */
         uint8 *orig = (uint8 *) saturn_scratch_alloc(dynlen);
-        uint8 *blob = (uint8 *) saturn_scratch_alloc(32 + dynlen * 2 + spoff * 2);
+        /* Room past the blob for whatever the client appends to it -- the map,
+           today. The client is handed the capacity and writes into the slack
+           itself, which is cheaper than making it allocate and copy a second
+           buffer the size of this one just to add a kilobyte and a half. */
+        const uint32 blobcap = 32 + dynlen * 2 + spoff * 2 + saturn_save_tail();
+        uint8 *blob = (uint8 *) saturn_scratch_alloc(blobcap);
         if ((orig == NULL) || (blob == NULL) || !saturn_read_story_prefix(orig, storylen, dynlen)) {
             saturn_scratch_free(orig);
             saturn_scratch_free(blob);
@@ -1536,7 +1551,7 @@ static void opcode_save(void)
             *p++ = (uint8) ((GState->stack[s] >> 8) & 0xFF);
         }
 
-        int ok = saturn_save_blob(blob, (uint32) (p - blob));
+        int ok = saturn_save_blob(blob, (uint32) (p - blob), blobcap);
         saturn_scratch_free(orig);
         saturn_scratch_free(blob);
         doBranch(ok ? 1 : 0);

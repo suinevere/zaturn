@@ -44,6 +44,7 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 #include "menu_pages.h"
 #include "room_model.h"
 #include "map_model.h"
+#include "save_blob.h"
 #include "map_atlas.h"
 #include "save_ui.h"
 #include "soft_reset.h"
@@ -411,9 +412,12 @@ static void submit_command(KeyboardState &k, const char *cmd) {
  |   one in against a console that on_text_category cleared -- and the caller's
  |   first render_console after this is what finally puts the new text on it.
  |
- |   Costs the player the fade before they can type. That is the ask, and
- |   MUSIC_FADE_FRAMES in main.cxx is the number to cut if it reads sluggish --
- |   except on the opening room, which skips the ramp entirely (see below).
+ |   Costs the player the fade before they can type, and only when a picture is
+ |   actually moving -- music_transition_art, not music_transition_active, is what
+ |   this waits on. A track change needs no screen, so it is left to run under the
+ |   read loop's own music_tick. MUSIC_FADE_FRAMES in main.cxx is the number to cut
+ |   if the picture's own fade reads sluggish -- except on the opening room, which
+ |   skips the ramp entirely (see below).
  |
  |   The strip is the one thing that must not go with the old screen: its rows
  |   survive on_text_category's wipe, so dash_hold keeps their panel under them
@@ -432,6 +436,16 @@ static void submit_command(KeyboardState &k, const char *cmd) {
  ----------------------*/
 static void run_room_transition(void) {
     if (!music_transition_active()) return;
+
+    // Only a picture is worth waiting for. A transition that just changes the
+    // track moves nothing on screen, so there is nothing to put up unseen and
+    // nothing to read off the disc -- its ramp is a volume ramp, and the read
+    // loop below calls music_tick every frame, so it finishes while the player
+    // reads and types. Waiting on music_transition_active alone held the prompt
+    // for those too: ninety frames of frozen game for a change the player could
+    // only hear, and on a story with no pictures at all that was every single
+    // transition it ever made.
+    if (!music_transition_art()) return;
 
     if (g_intro_reveal) { music_transition_skip_fade(); return; }
 
@@ -455,8 +469,9 @@ static void run_room_transition(void) {
  |   g_restore_* before the very readline that submits its "restore"). A queued
  |   one-shot autocommand (the "restore" that applies a pre-picked save) is
  |   returned immediately. Otherwise it rebuilds the typeahead, marks on-screen
- |   words, refreshes the room model from the current room (once per prompt,
- |   not per frame -- it walks the object tree), resets the command panel
+ |   words, enters the room model into the map (the model itself is refreshed by
+ |   mojozork.c before it calls music_on_turn, which reads it -- once per prompt,
+ |   not per frame, because it walks the object tree), resets the command panel
  |   (cp_reset) every turn alongside k's own per-turn clear -- command_edit
  |   only resets it on its own completed submit, so a turn that ends any other
  |   way (a menu's Save Game row, a quick-save/restore key, toggling to the
@@ -541,7 +556,9 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
     run_room_transition();
     ensure_typeahead();
     typeahead_scan_screen(g_typeahead_root);
-    room_model_refresh();
+    /* Not refreshed here: mojozork.c refreshes the model immediately before it
+       calls music_on_turn, which reads it, and a second refresh in the same
+       prompt would feed the player-object inference a duplicate sample. */
     map_model_enter(room_model_get());
 
     static KeyboardState k;
@@ -901,6 +918,37 @@ extern "C" void saturn_die(const char *fmt, ...) {
 }
 
 /*----------------------
+ | saturn_save_tail
+ | Description: See saturn_glue.h. How much room past the story blob a caller
+ |   should leave for what this file appends to it.
+ | Author: suinevere
+ | Dependencies: map_model.h (MAP_BLOB_MAX)
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the byte count
+ ----------------------*/
+extern "C" uint32_t saturn_save_tail(void) { return (uint32_t) MAP_BLOB_MAX; }
+
+/*----------------------
+ | legacy_map_name
+ | Description: The companion record's name under the old two-file scheme: the
+ |   slot's own name with an 'M' appended. Kept so saves written before the two
+ |   were merged still restore their map, and so a save over one of them can
+ |   retire the orphan rather than leave a stale map paired with a fresh save.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: name -- the slot's record name; out -- receives the companion name
+ | Returns: N/A
+ ----------------------*/
+static void legacy_map_name(const char *name, char *out) {
+    int i = 0;
+    while (name[i] && i < 10) { out[i] = name[i]; i++; }
+    out[i++] = 'M';
+    out[i] = 0;
+}
+
+/*----------------------
  | saturn_save_blob
  | Description: The interpreter's save hook. A pre-armed quick-save (F5) goes
  |   straight to the last slot with no device/slot/overwrite prompt -- the whole
@@ -919,10 +967,11 @@ extern "C" void saturn_die(const char *fmt, ...) {
  | Dependencies: save_ui.h (choose_device/pick_slot_and_name/make_slot_name),
  |   saturn_backup.h, map_model.h, menu.h, music.h (music_resume), SRL
  | Globals: g_save_device, g_save_slot, g_last_device, g_last_slot
- | Params: data -- blob to write; len -- its length
+ | Params: data -- the blob to write, appended to in place; len -- its length;
+ |   cap -- how much of data is writable, so the map can go after the blob
  | Returns: 1 on success, 0 on cancel or failure
  ----------------------*/
-extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
+extern "C" int saturn_save_blob(uint8_t *data, uint32_t len, uint32_t cap) {
     int device, slot;
     int interactive = 0;
     char comment[12];
@@ -972,18 +1021,24 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
         }
     }
 
-    int ok = saturn_bup_write(device, name, comment, data, len);
+    // The map goes into the same record, straight after the story blob, in the
+    // slack the caller left for it. A map that will not serialise, or will not
+    // fit, simply is not written -- the save itself is what matters, and a
+    // restore that finds no map resets rather than presenting a stale one.
+    uint32_t total = len;
+    if (data != nullptr && cap > len) {
+        unsigned int mlen = map_model_serialize(data + len, (unsigned int) (cap - len));
+        total = len + (uint32_t) mlen;
+    }
+    int ok = saturn_bup_write(device, name, comment, data, total);
     if (ok) {
+        // Any companion left by the old two-file scheme is an orphan now, and an
+        // orphan is worse than nothing: the record it belonged to has just been
+        // overwritten, so its map is stale, and the loader below would rather
+        // reset the map than hand back a map of somewhere else.
         char mname[12];
-        unsigned char mblob[MAP_BLOB_MAX];
-        unsigned int mlen;
-        int i = 0;
-        while (name[i] && i < 10) { mname[i] = name[i]; i++; }
-        mname[i++] = 'M';
-        mname[i] = 0;
-        mlen = map_model_serialize(mblob, sizeof mblob);
-        if (mlen == 0 || !saturn_bup_write(device, mname, "map", mblob, mlen))
-            saturn_bup_delete(device, mname);
+        legacy_map_name(name, mname);
+        saturn_bup_delete(device, mname);
     }
     if (ok) { g_last_device = device; g_last_slot = slot; }
     {
@@ -1009,24 +1064,25 @@ extern "C" int saturn_save_blob(const uint8_t *data, uint32_t len) {
  |   device and slot. Reads the blob, records the device/slot as the quick-key
  |   target on success, and reports an empty slot to the player.
  |
- |   Then the companion map, which needs two things the save format does not
- |   supply. Its first two bytes are zeroed before the read, because
+ |   Then the map, which now travels in the same record: save_blob_len finds
+ |   where the story blob ends and the map begins after it. A save written before
+ |   the two were merged has no tail, and falls back to reading the old companion
+ |   record -- whose first two bytes are zeroed before the read, because
  |   saturn_bup_read reports success without a length and a shorter record than
  |   asked for would leave the header map_model_serialize_len reads as stack
- |   garbage. And a blob that loads is handed to map_model_rebind_exits, since
- |   it stores positions only and without the story's exits back in place the
- |   restored map draws marks with no trail between them. A companion that is
- |   missing or refused resets the map rather than presenting a stale one.
+ |   garbage. Either way a map that loads is handed to map_model_rebind_exits,
+ |   since it stores positions only and without the story's exits back in place
+ |   the restored map draws marks with no trail between them. A map that is
+ |   missing or refused resets the model rather than presenting a stale one.
  | Author: suinevere
  | Dependencies: save_ui.h (choose_dest/make_slot_name), saturn_backup.h,
  |   map_model.h, menu.h, music.h (music_resume)
  | Globals: g_restore_device, g_restore_slot, g_last_device, g_last_slot
- | Params: buf -- destination for the blob; maxlen -- capacity (unused; the
- |   backup layer knows the record size)
+ | Params: buf -- destination for the blob; maxlen -- its capacity, which is
+ |   cleared before the read and is what bounds the search for the map
  | Returns: 1 on success, 0 on cancel or failure
  ----------------------*/
 extern "C" int saturn_load_blob(uint8_t *buf, uint32_t maxlen) {
-    (void) maxlen;
     int device, slot;
     int interactive = 0;
     if (g_restore_slot >= 0) {
@@ -1049,20 +1105,29 @@ extern "C" int saturn_load_blob(uint8_t *buf, uint32_t maxlen) {
     }
     char name[12];
     make_slot_name(name, slot);
+    // Cleared before the read so a record with no map leaves zeroes where a map
+    // header would be. saturn_bup_read reports success without a length, so what
+    // sits past the story blob is otherwise whatever the scratch allocation held,
+    // and a stray MAP_BLOB_MAGIC in it would be decoded as a map.
+    if (buf != nullptr && maxlen) memset(buf, 0, maxlen);
     int ok = saturn_bup_read(device, name, buf);
     if (ok) {
-        char mname[12];
-        unsigned char mblob[MAP_BLOB_MAX];
-        int i = 0;
-        while (name[i] && i < 10) { mname[i] = name[i]; i++; }
-        mname[i++] = 'M';
-        mname[i] = 0;
-        mblob[0] = 0; mblob[1] = 0;
-        if (!saturn_bup_read(device, mname, mblob) ||
-            !map_model_deserialize(mblob, map_model_serialize_len(mblob)))
-            map_model_reset();
-        else
-            map_model_rebind_exits();
+        uint32_t slen = save_blob_len(buf, maxlen);
+        int have_map = 0;
+        if (slen && slen < maxlen && buf[slen] == MAP_BLOB_MAGIC)
+            have_map = map_model_deserialize(buf + slen,
+                                             map_model_serialize_len(buf + slen));
+        if (!have_map) {
+            // Written before the two were merged: the map is its own record.
+            char mname[12];
+            unsigned char mblob[MAP_BLOB_MAX];
+            legacy_map_name(name, mname);
+            mblob[0] = 0; mblob[1] = 0;
+            if (saturn_bup_read(device, mname, mblob))
+                have_map = map_model_deserialize(mblob, map_model_serialize_len(mblob));
+        }
+        if (have_map) map_model_rebind_exits();
+        else          map_model_reset();
     }
     if (ok) { g_last_device = device; g_last_slot = slot; }
     if (!ok) {

@@ -1,20 +1,25 @@
 /*----------------------
  | music.c
- | Description: The platform-independent music engine: the mix-mode state
- |   machine (Dynamic / Override / Sequential / Random), the loop-end /
+ | Description: The platform-independent music engine: the loop-end and
  |   debounce logic that decides when to change track, and the per-turn
- |   decision that resolves a room's authored scene -- or an in-text danger/
- |   triumph moment -- into a CD-DA track. It owns no hardware -- a backend
- |   play callback (set by the Saturn client, or by the host tests) does the
- |   actual playing, and is_playing / is_short callbacks report drive state --
- |   so this file builds and unit-tests on the host.
+ |   decision that resolves a room -- through its story's authored table, or a
+ |   situational cue, or the death banner -- into a CD-DA track. A story with
+ |   no authored table draws from the neutral pool instead, which is the only
+ |   place a track is picked at random and the only place the reserved list
+ |   applies. It owns no hardware -- a backend play callback (set by the Saturn
+ |   client, or by the host tests) does the actual playing, and is_playing /
+ |   is_short callbacks report drive state -- so this file builds and
+ |   unit-tests on the host.
  | Author: suinevere
- | Dependencies: music.h (mix modes, track bounds, pool accessor),
- |   scene/presentation.h (pres_of_room), event_scan.h (event_scan, EV_*),
- |   string.h
+ | Dependencies: music.h (track bounds, pool accessor, reserved list),
+ |   scene/presentation.h (pres_of_room), scene/cues.h (cue_track and the
+ |   three standalone cues), engine/room_model.h (this prompt's snapshot),
+ |   event_scan.h (event_scan, EV_*), string.h
  ----------------------*/
 #include "music.h"
 #include "scene/presentation.h"
+#include "scene/cues.h"
+#include "room_model.h"
 #include "event_scan.h"
 #include <string.h>
 
@@ -33,12 +38,42 @@
  | Description: What a tracked category actually is. SC_* scene ids and EV_*
  |   event ids are separate vocabularies that both start at 0 -- comparing or
  |   storing them as one bare int would make SC_FOREST indistinguishable from
- |   EV_DANGER, which is exactly the ambiguity TC_* never had. Every place
+ |   EV_LOSE, which is exactly the ambiguity TC_* never had. Every place
  |   that remembers "what is sounding / pending / armed" carries one of these
  |   alongside the numeric id so the two vocabularies can never collide.
  | Author: suinevere
  ----------------------*/
-enum { CAT_KIND_NONE = 0, CAT_KIND_POOL = 1, CAT_KIND_EVENT = 2, CAT_KIND_ROOM = 3 };
+enum { CAT_KIND_NONE = 0, CAT_KIND_POOL = 1, CAT_KIND_EVENT = 2, CAT_KIND_ROOM = 3,
+       CAT_KIND_CUE = 4, CAT_KIND_ONCE = 5 };
+
+/*----------------------
+ | CAT_KIND_CUE / CAT_KIND_ONCE
+ | Description: The two kinds the situational cue table adds. On CAT_KIND_CUE
+ |   the category IS the track, the way it is for CAT_KIND_ROOM -- a cue is a
+ |   named track, not a pool to draw from -- and it outranks the room's own
+ |   theme while it holds. Unlike an event it is re-decided every turn rather
+ |   than latched for the room's stay: the troll's music has to stop when the
+ |   troll does, and the room he was standing in has not changed.
+ |     CAT_KIND_ONCE is the take sting: one pass over whatever was sounding,
+ |   with the kind and category it interrupted parked in g_once_* so the loop
+ |   end can put them back. It is the only kind that is not a steady state.
+ | Author: suinevere
+ ----------------------*/
+static int g_once_kind = CAT_KIND_NONE;
+static int g_once_cat = -1;
+
+/*----------------------
+ | g_prev_player / g_prev_carried
+ | Description: Last turn's player object and how many things it held, which is
+ |   how a successful take is spotted without the interpreter reporting one. The
+ |   player has to match as well as the count grow: room_model infers which
+ |   object the player is, and the turn it first answers, the inventory goes
+ |   from "unknown, so empty" to its real size in one step, which is not a
+ |   pick-up.
+ | Author: suinevere
+ ----------------------*/
+static unsigned short g_prev_player = 0;
+static int g_prev_carried = 0;
 
 /*----------------------
  | CAT_KIND_ROOM / g_base_kind
@@ -90,18 +125,47 @@ static unsigned int rng_next(void) { g_rng = g_rng * 1103515245u + 12345u; retur
 static unsigned int rng_next_pub(void) { return rng_next(); }
 
 /*----------------------
- | music_category_track
- | Description: Picks a uniformly random track from a pool.
+ | pool_allows
+ | Description: Whether a random draw for `cat` may return `track`. Only the
+ |   neutral pool is filtered, and only against music_track_reserved: an ending
+ |   drawing the ending theme is the point, but a room drawn at random must not
+ |   land on a sound the cues have spent meaning on.
+ |
+ |   Filtered here rather than only left out of the pool because a pool is a
+ |   list somebody edits and this is a rule. Leaving a reserved track out of
+ |   P_NEUTRAL and stopping there would have made the rule true today and
+ |   unenforced tomorrow.
  | Author: suinevere
- | Dependencies: music.h (music_track_pool)
+ | Dependencies: music.h (music_track_reserved)
+ | Globals: N/A
+ | Params: cat -- the pool selector; track -- the candidate track
+ | Returns: 1 when the draw may return it, 0 otherwise
+ ----------------------*/
+static int pool_allows(int cat, int track) {
+    if (track <= 0) return 0;
+    return cat != MUSIC_POOL_NEUTRAL || !music_track_reserved(track);
+}
+
+/*----------------------
+ | music_category_track
+ | Description: Picks a uniformly random track from a pool, skipping any the
+ |   pool is not allowed to answer with. Answers 0 when the pool is empty or
+ |   every track in it is filtered out -- which the callers read as "no track",
+ |   the same as an empty pool.
+ | Author: suinevere
+ | Dependencies: music.h (music_track_pool), pool_allows
  | Globals: g_rng (via rng_next)
- | Params: category -- EV_DANGER, EV_TRIUMPH, or MUSIC_POOL_NEUTRAL
- | Returns: a track number from the pool, or 0 if the pool is empty
+ | Params: category -- EV_LOSE, EV_WIN, or MUSIC_POOL_NEUTRAL
+ | Returns: a track number from the pool, or 0
  ----------------------*/
 int music_category_track(int category) {
     const unsigned char* p; int n = music_track_pool(category, &p);
+    unsigned char ok[64]; int m = 0, i;
     if (n <= 0) return 0;
-    return p[rng_next() % (unsigned)n];
+    for (i = 0; i < n && m < 64; i++)
+        if (pool_allows(category, p[i])) ok[m++] = p[i];
+    if (m == 0) return 0;
+    return ok[rng_next() % (unsigned)m];
 }
 
 /*----------------------
@@ -149,7 +213,7 @@ int music_track_from_mask(unsigned long mask, unsigned int r) {
  |   g_release/g_serial identify the loaded game;
  |   g_have_room/g_cur_room track the last room seen; g_base_cat is that
  |   room's authored category (-1 when the room carries
- |   none) and g_event_cat a per-room danger/triumph override (-1 = none) --
+ |   none) and g_event_cat a per-room ending override (-1 = none) --
  |   kept apart from g_base_cat because the two are different vocabularies
  |   (see CAT_KIND_*). g_active_track is what is sounding (0 = nothing yet);
  |   g_turn_text/g_turn_len accumulate the current turn's output for
@@ -242,6 +306,24 @@ void music_set_room_fn(void (*fn)(unsigned int obj)) { g_room_fn = fn; }
 static void (*g_art_fn)(void) = 0;
 static int  g_pending_art = 0;
 void music_set_art_fn(void (*fn)(void)) { g_art_fn = fn; }
+
+/*----------------------
+ | g_audible
+ | Description: Whether the player has music switched on at all. The engine used
+ |   not to know: the level went straight to the CD-DA backend's volume register,
+ |   and everything here went on running -- arming a debounced switch on a room
+ |   change, then ramping down over MUSIC_FADE_FRAMES, committing, and ramping
+ |   back up. run_room_transition blocks the prompt for the whole of that, so
+ |   with the music off the player still paid a second and a half of frozen game
+ |   at every point a track would have changed, for a swap nobody could hear.
+ |
+ |   Defaults to on so a host test, or anything that never sets a level, behaves
+ |   as it always did. Deliberately NOT cleared by music_reset: it is the
+ |   player's setting, not play state, and main calls music_set_level before
+ |   music_reset on every load.
+ | Author: suinevere
+ ----------------------*/
+static int g_audible = 1;
 
 /*----------------------
  | g_same_cat_rooms
@@ -394,6 +476,12 @@ static int g_dyn_pass = 0;
  | Returns: N/A
  ----------------------*/
 static void play_dyn(int track, int pass) {
+    /* Music off: nothing is issued and nothing is left looking like it is
+       sounding. g_active_track has to go to 0 rather than hold the track that
+       would have played -- music_tick's loop-end branch keys off it, and a
+       nonzero track with a stopped drive reads as a track ending on every
+       single frame. */
+    if (!g_audible) { g_active_track = 0; g_dyn_pass = 0; g_await_play = 0; return; }
     g_active_track = track;
     g_dyn_pass = pass;
     g_await_play = 1;
@@ -410,7 +498,7 @@ static void play_dyn(int track, int pass) {
  | Author: suinevere
  | Dependencies: music.h (music_track_pool)
  | Globals: g_active_track (read)
- | Params: cat -- EV_DANGER, EV_TRIUMPH, or MUSIC_POOL_NEUTRAL
+ | Params: cat -- EV_LOSE, EV_WIN, or MUSIC_POOL_NEUTRAL
  | Returns: a track number, or 0 if the pool is empty
  ----------------------*/
 static int pick_prefer_long(int cat) {
@@ -418,9 +506,11 @@ static int pick_prefer_long(int cat) {
     if (n <= 0) return 0;
     int longs[64], m = 0;
     for (int i = 0; i < n && m < 64; i++)
-        if (!trk_is_short(p[i]) && p[i] != g_active_track) longs[m++] = p[i];
+        if (pool_allows(cat, p[i]) && !trk_is_short(p[i]) && p[i] != g_active_track)
+            longs[m++] = p[i];
     if (m == 0)
-        for (int i = 0; i < n && m < 64; i++) if (!trk_is_short(p[i])) longs[m++] = p[i];
+        for (int i = 0; i < n && m < 64; i++)
+            if (pool_allows(cat, p[i]) && !trk_is_short(p[i])) longs[m++] = p[i];
     if (m > 0) return longs[rng_next_pub() % (unsigned)m];
     return music_category_track(cat);
 }
@@ -443,7 +533,14 @@ static int pick_prefer_long(int cat) {
  | Returns: a track number
  ----------------------*/
 static int pick_dynamic_track(int kind, int cat) {
-    if (kind == CAT_KIND_ROOM) return cat;
+    if (kind == CAT_KIND_ROOM || kind == CAT_KIND_CUE || kind == CAT_KIND_ONCE) return cat;
+    if (kind == CAT_KIND_EVENT) {
+        /* A game whose own ending and death tracks are known plays those rather
+           than drawing an approximation out of a pool. */
+        int t = (cat == EV_LOSE) ? cue_death_track(g_release, g_serial)
+              : (cat == EV_WIN)  ? cue_win_track(g_release, g_serial) : 0;
+        if (t > 0) return t;
+    }
     if (kind == CAT_KIND_EVENT || kind == CAT_KIND_POOL) return pick_prefer_long(cat);
     return pick_prefer_long(MUSIC_POOL_NEUTRAL);
 }
@@ -499,16 +596,29 @@ enum { MP_IDLE = 0, MP_FADE_OUT, MP_FADE_IN };
 static int  g_phase = MP_IDLE;
 static int  g_fade_frames = 0;
 static int  g_fade_i = 0;
-static void (*g_fade_fn)(int, int) = 0;
+static void (*g_fade_fn)(int, int, int) = 0;
 /* Whether the transition now ramping will re-issue the track. Latched when the
    ramp starts, because commit_pending clears g_pending_cat at the bottom and the
    ramp back up still has to lift the volume it took down. */
 static int  g_fade_audio = 0;
 
-void music_set_fade_fn(void (*fn)(int level, int audio)) { g_fade_fn = fn; }
+/*----------------------
+ | g_fade_art
+ | Description: g_fade_audio's other half: whether this ramp has a picture in it.
+ |   Both are needed because the two are independent -- a room can change its
+ |   track without changing its picture, and change its picture without changing
+ |   its track -- and the client drives different hardware for each. Without this
+ |   the screen ramped for a swap that was audio only, which cost the player a
+ |   dip and, through run_room_transition, a second and a half of held prompt for
+ |   a change nothing on screen was making.
+ | Author: suinevere
+ ----------------------*/
+static int  g_fade_art = 0;
+
+void music_set_fade_fn(void (*fn)(int level, int audio, int art)) { g_fade_fn = fn; }
 void music_set_fade_frames(int n) { g_fade_frames = (n < 0) ? 0 : n; }
 
-static void fade_emit(int level) { if (g_fade_fn) g_fade_fn(level, g_fade_audio); }
+static void fade_emit(int level) { if (g_fade_fn) g_fade_fn(level, g_fade_audio, g_fade_art); }
 
 /*----------------------
  | commit_pending
@@ -578,6 +688,25 @@ static void fade_out_step(void) {
  ----------------------*/
 int music_transition_active(void) {
     return (g_pending_cat >= 0 || g_pending_art || g_phase != MP_IDLE) ? 1 : 0;
+}
+
+/*----------------------
+ | music_transition_art
+ | Description: Whether the active transition moves the picture -- armed, or
+ |   already ramping. The half a caller has to wait for: a picture cannot be
+ |   swapped under a player who is looking at it, and putting one up can cost an
+ |   area read off the CD. An audio-only transition moves nothing on screen and
+ |   needs no waiting at all; its ramp is a volume ramp, and any loop that calls
+ |   music_tick will finish it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pending_art, g_phase, g_fade_art
+ | Params: N/A
+ | Returns: nonzero when a picture is owed
+ ----------------------*/
+int music_transition_art(void) {
+    if (g_pending_art) return 1;
+    return (g_phase != MP_IDLE && g_fade_art) ? 1 : 0;
 }
 
 /*----------------------
@@ -675,6 +804,8 @@ void music_reset(void) {
     g_pending_rotate = 0; g_same_cat_rooms = 0; g_pending_art = 0;
     g_await_play = 0;
     g_dyn_pass = 0;
+    g_once_kind = CAT_KIND_NONE; g_once_cat = -1;
+    g_prev_player = 0; g_prev_carried = 0;
     g_paused = 0;   // a soft reset can land here with a menu still nominally open
     g_hold_kind = HOLD_NONE;
     // And the backend's own duck latch, which this could not reach by clearing
@@ -686,12 +817,55 @@ void music_reset(void) {
     // the way in and the longjmp skips the resume on the way out. Unconditional
     // and idempotent: unduck clears the flag whether or not a track is playing.
     if (g_unduck_fn) g_unduck_fn();
-    if (g_phase != MP_IDLE) { g_fade_audio = 1; fade_emit(255); }  // mid-ramp: nothing else would lift it
-    g_phase = MP_IDLE; g_fade_i = 0; g_fade_audio = 0;
+    if (g_phase != MP_IDLE) { g_fade_audio = 1; g_fade_art = 1; fade_emit(255); }  // mid-ramp: nothing else would lift it
+    g_phase = MP_IDLE; g_fade_i = 0; g_fade_audio = 0; g_fade_art = 0;
     // Nothing to announce.
     // is no active scene right after a reset, so the subscriber hears nothing
     // and holds whatever picture it is already showing.
     if (g_play) g_play(0, 0);
+}
+
+/*----------------------
+ | music_set_audible
+ | Description: Tells the engine whether the player has music on. Off, the engine
+ |   keeps deciding what *should* sound -- so turning it back on knows where the
+ |   room is rather than where the last audible turn was -- but issues nothing and
+ |   arms no transition, which is what stops run_room_transition holding the
+ |   prompt for a swap nobody can hear.
+ |
+ |   Switching it off drops the audio half of anything already in flight and
+ |   lifts a ramp that was running for audio alone. The picture's half is left
+ |   exactly where it is: a room's art still has to change behind a ramp whether
+ |   or not anything is playing.
+ |
+ |   Switching it back on starts the category that was being tracked, so the
+ |   player hears something without having to walk into another room first.
+ | Author: suinevere
+ | Dependencies: play_dyn, pick_dynamic_track, fade_emit
+ | Globals: g_audible, g_pending_*, g_active_*, g_phase, g_fade_*, g_dyn_pass,
+ |   g_await_play
+ | Params: on -- nonzero when music is switched on
+ | Returns: N/A
+ ----------------------*/
+void music_set_audible(int on) {
+    int was = g_audible;
+    g_audible = on ? 1 : 0;
+    if (g_audible == was) return;
+    if (!g_audible) {
+        g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1;
+        g_pending_track = 0; g_pending_rotate = 0;
+        g_active_track = 0; g_dyn_pass = 0; g_await_play = 0;
+        if (!g_pending_art && g_phase != MP_IDLE) {
+            /* Mid-ramp with nothing else to commit: put the screen back rather
+               than leaving it part-way down for a fade that no longer has a
+               reason to finish. */
+            g_fade_audio = 1; g_fade_art = 1; fade_emit(255);
+            g_phase = MP_IDLE; g_fade_i = 0; g_fade_audio = 0; g_fade_art = 0;
+        }
+        return;
+    }
+    if (g_active_kind != CAT_KIND_NONE && g_active_cat >= 0)
+        play_dyn(pick_dynamic_track(g_active_kind, g_active_cat), 1);
 }
 
 /*----------------------
@@ -737,26 +911,39 @@ void music_start(void) {
  | Description: Begins playback for a screen that has no room to classify -- the
  |   title and the menus. Unlike music_start, which has nothing to key off there
  |   and would sit silent waiting for a music_on_turn a menu never sends, this
- |   picks a track for whatever mood is current and lets the ordinary cycle carry
- |   it: with no room seen yet that is the neutral pool, which means "no
- |   particular mood", exactly what a menu is. It used to open on the track the
- |   player picked in Sound Options; that selector is gone, and the pool is the
- |   honest replacement.
+ |   starts something and lets the ordinary cycle carry it.
  |
- |   Deliberately does NOT clear an established category the way music_start
- |   does: called mid-game, the room the player is standing in still sets the
- |   mood (guarded by g_active_track rather than the category, since "nothing has
- |   played yet this session" is what actually distinguishes a fresh boot from a
- |   mid-game call), and only a screen reached before any room has been seen
- |   falls back to neutral.
+ |   `track` names one outright; 0 means draw. A named track is held as
+ |   CAT_KIND_ROOM, whose contract is that the category IS the track, so the
+ |   loop-end rules replay it rather than cycling off it -- no room named it, but
+ |   a menu track that changed under the player every third pass would be the
+ |   same defect a room's own theme is protected from. The opening names one so
+ |   the first thing the machine ever plays is the same every time; a Return to
+ |   Title passes 0, so a session that goes back to the menu hears a different
+ |   one. See MUSIC_OPENING_TRACK.
+ |
+ |   A drawn track deliberately does NOT clear an established category the way
+ |   music_start does: called mid-game, the room the player is standing in still
+ |   sets the mood (guarded by g_active_track rather than the category, since
+ |   "nothing has played yet this session" is what actually distinguishes a fresh
+ |   boot from a mid-game call), and only a screen reached before any room has
+ |   been seen falls back to the neutral pool -- which means "no particular
+ |   mood", exactly what a menu is.
  | Author: suinevere
  | Dependencies: N/A (plays via g_play)
- | Globals: g_active_kind, g_active_cat, g_pending_*, g_active_track
- | Params: N/A
+ | Globals: g_active_kind, g_active_cat, g_pending_*, g_active_track,
+ |   g_same_cat_rooms
+ | Params: track -- a CD-DA track to hold, or 0 to draw one
  | Returns: N/A
  ----------------------*/
-void music_start_menu(void) {
+void music_start_menu(int track) {
     g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1; g_pending_track = 0;
+    if (track > 0) {
+        g_active_kind = CAT_KIND_ROOM; g_active_cat = track;
+        g_same_cat_rooms = 0;
+        play_dyn(track, 1);
+        return;
+    }
     if (g_active_track == 0) {
         g_active_kind = CAT_KIND_NONE; g_active_cat = -1;
     }
@@ -773,7 +960,7 @@ void music_start_menu(void) {
  |   ignores is_playing() until the just-issued track has actually started (this
  |   clears the CD seek window that would otherwise read as loop-end). On a real
  |   loop-end it advances Sequential (wrapping at MUSIC_TRACK_MAX), re-rolls
- |   Random, and for Dynamic: a danger/triumph sting sounding over a room with its
+ |   Random, and for Dynamic: an ending sounding over a room with its
  |   own authored track (g_base_kind == CAT_KIND_ROOM) returns to that room's track
  |   rather than picking again inside the event pool -- except the win jingle
  |   (EV_WIN), which is excluded from that return because the victory screen holds
@@ -814,6 +1001,7 @@ void music_tick(void) {
             if (g_pending_frames <= 0) {
                 if (g_fade_frames > 0) {
                     g_fade_audio = (g_pending_cat >= 0);
+                    g_fade_art   = g_pending_art;
                     g_phase = MP_FADE_OUT; g_fade_i = g_fade_frames;
                     fade_out_step();   // the ramp starts on this frame, not the next
                 } else {
@@ -828,9 +1016,23 @@ void music_tick(void) {
         return;
     }
     if (g_active_track > 0 && g_isplaying && !g_isplaying()) {
+        // The take sting has had its one pass. Put back whatever it interrupted
+        // -- the room's theme, or a cue that was over it -- rather than letting
+        // the loop-end rules below replay a six-second jingle three times.
+        if (g_active_kind == CAT_KIND_ONCE) {
+            int k = g_once_kind, c = g_once_cat;
+            g_once_kind = CAT_KIND_NONE; g_once_cat = -1;
+            g_active_kind = k; g_active_cat = c;
+            if (k == CAT_KIND_NONE || c < 0) {
+                g_active_track = 0;
+                if (g_play) g_play(0, 0);
+            } else {
+                play_dyn(pick_dynamic_track(k, c), 1);
+            }
+        }
         // Winning holds the win jingle on its own pass loop, never the room's
         // track: the victory screen is still up, and the game does not resume.
-        if (g_active_kind == CAT_KIND_EVENT && g_base_kind == CAT_KIND_ROOM
+        else if (g_active_kind == CAT_KIND_EVENT && g_base_kind == CAT_KIND_ROOM
             && g_active_cat != EV_WIN) {
             g_event_cat = -1;
             g_active_kind = CAT_KIND_ROOM;
@@ -894,17 +1096,33 @@ void music_note_output(const char* str, unsigned int len) {
  |   SC_* value, an EV_* value, and a track number are three vocabularies that all
  |   start at 0.
  |
+ |   Between the two sits the situational cue (CAT_KIND_CUE, scene/cues.h): a
+ |   villain standing in this room, or the sword saying one is next door. It
+ |   outranks the room's own theme and is outranked by an event, and unlike an
+ |   event it is decided fresh every turn -- a villain who dies or wanders off
+ |   takes his music with him without the room having changed.
+ |
  |   Neither lookup finding the room means "hold whatever is showing", so with no
  |   event either the turn changes nothing at all rather than falling back to a
  |   category. If the target already sounds it keeps the stream; on the very first
  |   switch it plays immediately; otherwise it arms a debounced pending switch
  |   (restarting the countdown when the target changes), so brief passes through a
  |   room do not thrash the music.
+ |
+ |   The take sting is the one thing here that is not a steady state: a turn
+ |   whose inventory grew plays cue_take_track once over whatever is sounding
+ |   (CAT_KIND_ONCE) and music_tick puts the interrupted track back when it
+ |   ends. It reads the snapshot, so it needs room_model_refresh to have already
+ |   run for this prompt -- which is why mojozork.c refreshes the model
+ |   immediately before calling this rather than leaving it to the readline that
+ |   follows.
  | Author: suinevere
- | Dependencies: scene/presentation.h (pres_of_room),
+ | Dependencies: scene/presentation.h (pres_of_room), scene/cues.h (cue_track,
+ |   cue_take_track), engine/room_model.h (room_model_get, room_model_player),
  |   event_scan.h (event_scan)
  | Globals: g_turn_text, g_cur_room, g_have_room, g_base_cat,
  |   g_base_kind, g_event_cat, g_active_kind, g_active_cat, g_active_track,
+ |   g_once_kind, g_once_cat, g_prev_player, g_prev_carried,
  |   g_pending_*, g_same_cat_rooms
  | Params: obj -- the current room's Z-machine object number
  | Returns: N/A
@@ -957,10 +1175,64 @@ void music_on_turn(unsigned int obj) {
     }
     if (event_cat >= 0) g_event_cat = event_cat;
 
+    /* The situational cue, re-decided from this prompt's snapshot every turn
+       rather than latched the way an event is: a villain who has left the room
+       has to take his music with him, and the room he was standing in has not
+       changed. */
+    int cue = cue_track(g_release, g_serial, room_model_get());
+
+    /* A successful take, spotted off the inventory rather than reported by the
+       interpreter, arms the one-shot sting over whatever is sounding. Not while
+       anything is pending: a switch already armed is a room change settling,
+       and cutting into that with a six-second sting would strand the room it
+       was moving to. */
+    {
+        const RoomModel *m = room_model_get();
+        unsigned short player = room_model_player();
+        int took = (player != 0 && player == g_prev_player
+                    && m->ncarried > g_prev_carried);
+        int sting = took ? cue_take_track(g_release, g_serial) : 0;
+        g_prev_player = player; g_prev_carried = m->ncarried;
+        if (g_audible && sting > 0 && g_active_track > 0
+            && g_active_kind != CAT_KIND_ONCE
+            && g_pending_cat < 0 && !g_pending_art
+            && g_phase == MP_IDLE && g_hold_kind == HOLD_NONE) {
+            g_once_kind = g_active_kind; g_once_cat = g_active_cat;
+            g_active_kind = CAT_KIND_ONCE; g_active_cat = sting;
+            play_dyn(sting, MUSIC_DYN_LOOPS);
+            g_turn_len = 0; g_turn_text[0] = 0;
+            return;
+        }
+    }
+
+    /* The sting is six seconds and a take does not move anybody: let it finish
+       and put back what it interrupted. Leaving the room is the one thing that
+       supersedes it, and that falls through to the machinery below. */
+    if (g_active_kind == CAT_KIND_ONCE && !room_changed) {
+        g_turn_len = 0; g_turn_text[0] = 0; return;
+    }
+
     int target_kind = (g_event_cat >= 0) ? CAT_KIND_EVENT
+                     : (cue > 0)          ? CAT_KIND_CUE
                      : (g_base_cat  >= 0) ? g_base_kind : CAT_KIND_NONE;
     if (target_kind == CAT_KIND_NONE) { g_turn_len = 0; g_turn_text[0] = 0; return; }
-    int target = (g_event_cat >= 0) ? g_event_cat : g_base_cat;
+    int target = (g_event_cat >= 0) ? g_event_cat
+               : (cue > 0)          ? cue : g_base_cat;
+
+    /* Music off. The target still has to be recorded -- music_set_audible starts
+       whatever it says the moment the player switches music back on -- but there
+       is nothing to settle and nothing to fade, so it is taken now instead of
+       being armed. g_pending_art and g_pending_frames are deliberately left
+       alone: g_room_fn ran above and may have armed a picture, and that ramp is
+       still owed. */
+    if (!g_audible) {
+        g_active_kind = target_kind; g_active_cat = target;
+        g_pending_kind = CAT_KIND_NONE; g_pending_cat = -1;
+        g_pending_track = 0; g_pending_rotate = 0;
+        g_same_cat_rooms = 0;
+        g_turn_len = 0; g_turn_text[0] = 0;
+        return;
+    }
 
     if (target_kind != g_active_kind || target != g_active_cat) {
         /* A real mood change. It supersedes any rotation that was waiting: the

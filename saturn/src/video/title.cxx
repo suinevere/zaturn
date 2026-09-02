@@ -1217,6 +1217,8 @@ int title_and_seed(void) {
     }
     boot_music_stop();
     preload_game_catalog();
-    music_start_menu();
+    // The opening always plays the same track; a Return to Title draws one, so a
+    // session that goes back to the menu does not hear the boot music again.
+    music_start_menu(g_returned_to_title ? 0 : MUSIC_OPENING_TRACK);
     return frames | 1;
 }

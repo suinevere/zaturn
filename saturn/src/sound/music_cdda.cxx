@@ -167,17 +167,25 @@ extern "C" void music_set_volume(int level) {
 
 /*----------------------
  | music_set_level
- | Description: The committing form of music_set_volume. Identical behaviour now
- |   that the unmute restart belongs to the level itself; kept as its own name
- |   because the call sites read as commit points rather than live drags.
+ | Description: The committing form of music_set_volume, and the one place the
+ |   engine is told whether music is on at all.
+ |
+ |   The two are separate calls because they take different kinds of level:
+ |   music_set_volume also carries the fade ramp, which walks to 1 and back many
+ |   times a session without the player having turned anything off, so hooking
+ |   audibility there would switch the engine off on every transition. This name
+ |   is only ever called with the player's own setting -- at boot, at game start,
+ |   and on either way out of the Options sound page -- which is exactly the
+ |   granularity music_set_audible wants.
  | Author: suinevere
- | Dependencies: SRL (via music_set_volume)
+ | Dependencies: SRL (via music_set_volume), music.h (music_set_audible)
  | Globals: g_level, g_track, g_loop, g_vol_stopped
  | Params: level -- requested level
  | Returns: N/A
  ----------------------*/
 extern "C" void music_set_level(int level) {
     music_set_volume(level);
+    music_set_audible(level > 0);
 }
 
 /*----------------------

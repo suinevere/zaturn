@@ -225,6 +225,12 @@ static void music_fade_volume(int level) {
  |   changes, so riding the volume on all of them would leave the score pulsing
  |   for the sixty-one where nothing about it changed.
  |
+ |   The picture and the effects, in turn, only join when the engine says a
+ |   picture is being put up. A track change on its own moves nothing on screen,
+ |   so there is nothing to hide and no reason to dim the room the player is
+ |   reading -- and, since run_room_transition waits only on the picture half, no
+ |   reason to hold the prompt for it either.
+ |
  |   The text deliberately does not go with any of them. It is on channel A with
  |   the marble chrome, and the turn's description is being read while this runs --
  |   a transition that blinked the words out mid-sentence is the thing
@@ -233,12 +239,16 @@ static void music_fade_volume(int level) {
  | Dependencies: title.h, music.h, sound.h
  | Globals: N/A
  | Params: level -- 0 (black/silent) to 255 (normal); audio -- nonzero when the
- |   track is being re-issued and its volume must ride the ramp too
+ |   track is being re-issued and its volume must ride the ramp too; art --
+ |   nonzero when a picture is being put up and the screen must go dark for it
  | Returns: N/A
  ----------------------*/
-static void on_music_fade(int level, int audio) {
-    title_bg_dyn_fade(level);
-    sound_fade_level(level);
+static void on_music_fade(int level, int audio, int art) {
+    // The screen and the sound effects follow the picture; the CD-DA volume
+    // follows the track. A transition that only changes the track has nothing on
+    // screen to hide, and dipping the room the player is reading for it was a
+    // second and a half of dimming for a change they could only hear.
+    if (art) { title_bg_dyn_fade(level); sound_fade_level(level); }
     if (audio) music_fade_volume(level);
 }
 
@@ -365,10 +375,11 @@ static void title_show_wallpaper(void) {
  |   here. music_reset before the menu track clears stale engine
  |   state so a menu-frame music_tick cannot leak a game track. The menu track is
  |   started through the engine (music_start_menu) rather than handed straight to
- |   the CD-DA backend, so it obeys the same play-count-and-cycle rule the in-game
- |   music does instead of repeating one track for as long as the menu is open;
- |   that is also why the backend callbacks are installed here rather than at game
- |   start. Every CD read
+ |   the CD-DA backend, so it obeys the engine's own loop-end rules; that is also
+ |   why the backend callbacks are installed here rather than at game start. On a
+ |   cold boot it is MUSIC_OPENING_TRACK and stays there for as long as the menu
+ |   is open -- the machine introduces itself the same way every session -- and
+ |   only a Return to Title draws one from the pool and lets it cycle. Every CD read
  |   finishes before CD-DA starts, because the single drive head cannot play
  |   CD-DA while reading data. The screen is held black from Core::Initialize
  |   onward and is only ever lifted by an explicit fade-in, so every CD read on
@@ -379,8 +390,9 @@ static void title_show_wallpaper(void) {
  |   covers nothing and is a fixed six seconds. After this the menu never
  |   touches the CD, so the track plays uninterrupted.
  |
- |   A soft-reset re-entry runs exactly the same sequence, deliberately: there is no
- |   cold-boot/return branch anywhere below. The catalogue is a cached static the
+ |   A soft-reset re-entry runs exactly the same sequence, deliberately: the only
+ |   thing below that reads which one it is is the menu track, through
+ |   g_returned_to_title. The catalogue is a cached static the
  |   longjmp did not touch, so a return pays for the logo's six seconds and one
  |   re-read of TITLE.TGA and nothing else. The Z3 load retries the flaky
  |   first-access GFS size stat before allocating and reading. Both it and the
@@ -399,7 +411,8 @@ static void title_show_wallpaper(void) {
  | Dependencies: title.h, splash.h, game_catalog.h, online.h, options.h, menu.h,
  |   menu_pages.h, save_ui.h, soft_reset.h, saturn_glue.h, saturn_backup.h,
  |   display.h, console.h, console_view.h, sound.h, music.h, input.h, SRL/GFS/SGL
- | Globals: g_display, g_pad, g_title_jmp, g_title_jmp_armed, g_z3_dir_valid,
+ | Globals: g_display, g_pad, g_title_jmp, g_title_jmp_armed,
+ |   g_returned_to_title, g_z3_dir_valid,
  |   g_menu_backing_depth, g_music_level, g_pcm_level,
  |   g_story_filename, g_restore_device, g_restore_slot, g_autocmd,
  |   g_output_start, g_in_game, g_cmd_mode, g_cmd_iface
@@ -440,7 +453,12 @@ int main(void) {
     // for the BIOS anyway. Needs the pad, hence its place under it.
     save_space_warn();
 
-    setjmp(g_title_jmp);
+    // setjmp answers 0 on the way in and 1 on a longjmp back, and that answer is
+    // the only thing distinguishing a cold boot from a Return to Title on this
+    // path -- everything below it runs identically, deliberately. Kept because
+    // the menu track is the one place the difference is wanted; see
+    // g_returned_to_title.
+    g_returned_to_title = (setjmp(g_title_jmp) != 0);
     g_title_jmp_armed = true;
     GFS_Reset();
     cd_capture_root();

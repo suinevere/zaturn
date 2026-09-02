@@ -426,6 +426,41 @@ static int collect_children(unsigned short parent, unsigned short *out, int max)
 unsigned short room_model_player(void) { return g_player; }
 
 /*----------------------
+ | room_model_object_parent
+ | Description: What an object is directly inside, straight off byte 4 of its
+ |   object-table entry. Reaches objects the snapshot never collected -- a
+ |   villain standing in the room next door -- which is the whole reason it is
+ |   public.
+ | Author: suinevere
+ | Dependencies: obj_valid, obj_entry
+ | Globals: g_story
+ | Params: obj -- object number, 1-based
+ | Returns: the parent object number, or 0 when obj is unreadable
+ ----------------------*/
+unsigned short room_model_object_parent(unsigned short obj) {
+    if (!obj_valid(obj)) return 0;
+    return (unsigned short) g_story[obj_entry(obj) + 4u];
+}
+
+/*----------------------
+ | room_model_object_attr
+ | Description: Whether one of an object's 32 attributes is set. The attribute
+ |   flags are the first four bytes of the entry, most significant bit first,
+ |   so attribute 0 is bit 7 of byte 0. Which number means what is the story's
+ |   own business -- this only reads the bit.
+ | Author: suinevere
+ | Dependencies: obj_valid, obj_entry
+ | Globals: g_story
+ | Params: obj -- object number, 1-based; attr -- attribute number 0..31
+ | Returns: 1 when set, 0 when clear, out of range, or unreadable
+ ----------------------*/
+int room_model_object_attr(unsigned short obj, int attr) {
+    if (attr < 0 || attr > 31 || !obj_valid(obj)) return 0;
+    return (g_story[obj_entry(obj) + (unsigned int) (attr >> 3)]
+            >> (7 - (attr & 7))) & 1;
+}
+
+/*----------------------
  | room_model_object_word
  | Description: An object's first parser synonym, read straight from its own
  |   property list rather than decoded from a short name. ZILCH stores an

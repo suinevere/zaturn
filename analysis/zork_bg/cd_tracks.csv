@@ -4,29 +4,29 @@ track,length,volume,rooms,role,room_list
 4,1:52,127,12,"room BGM, looped by 12 rooms; script music command 0",16 Cellar; 17 East Of Chasm; 18 Gallery; 19 Studio; 20 Troll Room; 41 Cyclops Room; 42 Narrow Passage; 43 Treasure Room; 58 Chasm; 61 East-West Passage; 63 North-South Passage; 64 Round Room
 5,2:21,127,0,script music command 1,
 6,1:53,127,12,"room BGM, looped by 12 rooms",59 Damp Cave; 76 Aragain Falls; 77 Canyon Bottom; 78 Canyon View; 79 Ledge; 81 End Of Rainbow; 82 On The Rainbow; 88 Sandy Beach; 89 Sandy Cave; 90 Shore; 91 White Cliffs Beach; 92 White Cliffs Beach
-7,1:48,127,0,UNATTRIBUTED - needs a runtime capture,
+7,1:48,127,0,UNUSED - no code path selects it,
 8,2:12,127,5,"room BGM, looped by 5 rooms",60 Deep Canyon; 62 Loud Room; 73 Dam Lobby; 74 Flood Control Dam; 75 Control Room
-9,1:18,127,0,script music command 2,
+9,1:18,127,0,"script music command 2; the rainbow solidifies at End Of Rainbow (room 81), set at 0x06038c6c",
 10,1:15,127,7,"room BGM, looped by 7 rooms; script music command 3",1 Behind House; 7 North Of House; 9 South Of House; 12 West Of House; 13 Attic; 14 Kitchen; 15 Living Room
 11,1:51,127,8,"room BGM, looped by 8 rooms; script music command 4",0 Clearing; 2 Forest; 3 Forest; 4 Forest; 5 Clearing; 6 Forest; 8 Forest Path; 11 Up A Tree
 12,1:58,127,5,"room BGM, looped by 5 rooms; script music command 5",44 Stream; 45 Reservoir; 46 Reservoir North; 47 Reservoir South; 48 Stream View
-13,1:49,127,0,UNATTRIBUTED - needs a runtime capture,
-14,2:38,127,0,UNATTRIBUTED - needs a runtime capture,
-15,1:57,127,0,UNATTRIBUTED - needs a runtime capture,
-16,1:58,127,0,UNATTRIBUTED - needs a runtime capture,
-17,2:18,127,0,UNATTRIBUTED - needs a runtime capture,
+13,1:49,127,0,"danger cue: sword glow drops to level 1 (0x060347a4), sword examined at level 1 (0x06038814), or a troll/cyclops fight ends with the sword still carried (0x06048dc8)",
+14,2:38,127,0,"troll in the Troll Room: room 20 and IN?(188, 20), set at 0x06048c9a",
+15,1:57,127,0,"thief present outside the Treasure Room, set at 0x06048e48",
+16,1:58,127,0,"thief present in the Treasure Room (room 43), set at 0x06048e48",
+17,2:18,127,0,"cyclops in the Cyclops Room: room 41 and IN?(195, 41), set at 0x06048d3a",
 18,2:33,127,15,"room BGM, looped by 15 rooms",94 Dead End; 95 Gas Room; 96 Ladder Bottom; 97 Ladder Top; 98 Drafty Room; 99 Machine Room; 100 Mine Entrance; 101 Shaft Room; 102 Foul Room; 103 Squeaky Room; 104 Timber Room; 105 Coal Mine; 106 Coal Mine; 107 Coal Mine; 108 Coal Mine
-19,2:34,127,2,"room BGM, looped by 2 rooms",65 Entrance To Hades; 66 Land Of The Living Dead
+19,2:34,127,2,"room BGM, looped by 2 rooms; death sequence, set at 0x0603a5dc",65 Entrance To Hades; 66 Land Of The Living Dead
 20,3:01,127,19,"room BGM, looped by 19 rooms",21 Dead End; 22 Dead End; 23 Dead End; 24 Dead End; 26 Maze; 27 Maze; 28 Maze; 29 Maze; 30 Maze; 31 Maze; 32 Maze; 33 Maze; 34 Maze; 35 Maze; 36 Maze; 37 Maze; 38 Maze; 39 Maze; 40 Maze
-21,0:32,127,0,rank screen: (Japanese),
-22,0:33,127,0,script music command 7; rank screen: Amateur Adventurer,
-23,0:28,127,0,rank screen: Novice Adventurer,
-24,0:29,127,0,rank screen: Junior Adventurer,
-25,0:06,127,0,special-cased at 0x06048a7c and 0x06048b92,
-26,0:34,127,0,rank screen: Adventurer,
-27,0:25,127,0,rank screen: Master,
-28,0:31,127,0,rank screen: Wizard,
-29,0:39,127,0,rank screen: Master Adventurer,
-30,4:18,127,0,played once from 0x0600b9f2,
+21,0:32,127,0,rank screen: (placeholder '????') (score <= 25),
+22,0:33,127,0,script music command 7; rank screen: Amateur Adventurer (score > 25),
+23,0:28,127,0,rank screen: Novice Adventurer (score > 50),
+24,0:29,127,0,rank screen: Junior Adventurer (score > 100),
+25,0:06,127,0,one-shot cue armed by a successful TAKE (0x060331d8); the loop player refuses it at 0x06048a7c so only the play-once path at 0x06048b92 sounds it,
+26,0:34,127,0,rank screen: Adventurer (score > 200),
+27,0:25,127,0,rank screen: Master (score > 300),
+28,0:31,127,0,rank screen: Wizard (score > 330),
+29,0:39,127,0,rank screen: Master Adventurer (score = 350),
+30,4:18,127,0,"ending screen (END.CGD/END.COL), played once from 0x0600b9f2",
 31,0:36,127,1,"room BGM, looped by 1 room",93 Bat Room
-32,4:18,0,0,UNATTRIBUTED - needs a runtime capture,
+32,4:18,0,0,UNUSED - the same recording as track 30 (292 differing bytes in 46 MB) with volume-table entry 0,

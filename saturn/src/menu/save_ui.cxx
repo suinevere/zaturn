@@ -472,10 +472,11 @@ static int any_save_present(void) {
  | Description: Boot-time check that backup memory can take a first save at all,
  |   and the modal shown when it cannot.
  |
- |   The cost is two records, not one: the game blob at SAVE_BLOB_MAX and the map
- |   companion at MAP_BLOB_MAX are separate files, each rounded up to whole blocks
- |   and each charged its own header block, so their block costs add rather than
- |   their byte counts. Both devices are asked, because either one alone is enough
+ |   One record, sized for both halves: the game blob at SAVE_BLOB_MAX with the
+ |   map after it at MAP_BLOB_MAX, which is how saturn_save_blob writes it. They
+ |   used to be two files, and the check had to add two block costs rather than
+ |   two byte counts, since each was rounded up to whole blocks and charged its
+ |   own header block. Both devices are asked, because either one alone is enough
  |   to save on and the player is only stuck when neither will do.
  |
  |   A device that is present but unformatted ends the check without a word: it is
@@ -510,14 +511,12 @@ void save_space_warn(void) {
     int measured = 0;
 
     for (int device = SATURN_BUP_CONSOLE; device <= SATURN_BUP_CARTRIDGE; device++) {
-        uint32_t blob_need, blob_free, map_need, map_free;
-        int state = saturn_bup_space(device, SAVE_BLOB_MAX, &blob_need, &blob_free);
+        uint32_t want, blob_free;
+        int state = saturn_bup_space(device, SAVE_BLOB_MAX + MAP_BLOB_MAX,
+                                     &want, &blob_free);
         if (state == SATURN_BUP_UNFORMATTED) return;
         if (state != SATURN_BUP_MEASURED) continue;
-        if (saturn_bup_space(device, MAP_BLOB_MAX, &map_need, &map_free)
-                != SATURN_BUP_MEASURED) continue;
 
-        uint32_t want = blob_need + map_need;
         if (blob_free >= want) return;
         if (!measured || (want - blob_free) < (need - have)) {
             need = want; have = blob_free;

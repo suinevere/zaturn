@@ -221,6 +221,33 @@ void room_model_refresh(void);
 unsigned short room_model_player(void);
 
 /*----------------------
+ | room_model_object_parent
+ | Description: What an object is directly inside. The snapshot only collects
+ |   the room the player stands in, so this is how a caller asks about an object
+ |   somewhere else -- a villain one room away, say.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story
+ | Params: obj -- object number
+ | Returns: the parent object number, or 0 when obj is unreadable
+ ----------------------*/
+unsigned short room_model_object_parent(unsigned short obj);
+
+/*----------------------
+ | room_model_object_attr
+ | Description: Whether one of an object's 32 attribute flags is set. Which
+ |   number means what varies by story and is not discoverable from the image,
+ |   so a caller has to be told the number by something that solved it -- this
+ |   only reads the bit.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_story
+ | Params: obj -- object number; attr -- attribute number 0..31
+ | Returns: 1 when set, 0 when clear or unreadable
+ ----------------------*/
+int room_model_object_attr(unsigned short obj, int attr);
+
+/*----------------------
  | room_model_object_word
  | Description: An object's first parser synonym, read straight from its own
  |   property list rather than decoded from a short name. The synonym property

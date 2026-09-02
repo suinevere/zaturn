@@ -136,6 +136,18 @@ jmp_buf  g_title_jmp;
 bool     g_title_jmp_armed = false;
 
 /*----------------------
+ | g_returned_to_title
+ | Description: Whether this pass through main's title sequence arrived by
+ |   longjmp -- Return to Title, the reset chord, a typed reboot or quit, or a
+ |   story that ran to its end -- rather than by booting. Everything below the
+ |   setjmp runs identically on both paths by design; this is the one place the
+ |   difference is wanted, so the opening always hears the same menu track and
+ |   only a return draws a different one.
+ | Author: suinevere
+ ----------------------*/
+bool     g_returned_to_title = false;
+
+/*----------------------
  | g_story_filename
  | Description: The loaded story's CD filename; drives per-game save-slot names and
  |   is re-read by saturn_read_story_file for save/restart.

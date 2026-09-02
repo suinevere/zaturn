@@ -41,13 +41,19 @@ extern "C" {
 #define MUSIC_TRACK_MAX 33
 
 /*----------------------
- | music_track_pool (music_data.c)
- | Description: Returns a pool's track list (*out) and size. `category` is a
- |   pool selector -- EV_DANGER, EV_TRIUMPH, or the neutral fallback one past
- |   the last EV_* id -- not a room mood; see music_data.c's own comment.
+ | music_track_pool / music_track_reserved (music_data.c)
+ | Description: pool returns a pool's track list (*out) and size. `category` is
+ |   a pool selector -- EV_LOSE, EV_WIN, or the neutral fallback one past the
+ |   last EV_* id -- not a room mood; see music_data.c's own comment.
+ |     reserved says whether a track is spoken for by a cue or an ending. A
+ |   random draw for the neutral pool must not land on one: those tracks mean
+ |   something, and a room that opens on the victory fanfare has announced
+ |   something that did not happen. The ending pools are exempt -- an ending
+ |   playing the ending theme is the point.
  | Author: suinevere
  ----------------------*/
 int music_track_pool(int category, const unsigned char** out);
+int music_track_reserved(int track);
 
 /*----------------------
  | music_play_fn / MUSIC_DYN_LOOPS
@@ -77,6 +83,20 @@ typedef void (*music_play_fn)(int track, int loop);
 #define MUSIC_ROTATE_ROOMS 3
 
 /*----------------------
+ | MUSIC_OPENING_TRACK
+ | Description: The track the title and menu play on a cold boot -- the house
+ |   theme, which is also what Zork I's own above-ground rooms loop, so picking
+ |   Zork I and walking out of the front door carries it straight through
+ |   without a change of music. Fixed rather than drawn because the first thing
+ |   the machine plays is the one piece of music a player hears every session,
+ |   and a different one each boot is not variety, it is the machine failing to
+ |   introduce itself the same way twice. A Return to Title draws from the pool
+ |   instead; see music_start_menu.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_OPENING_TRACK 10
+
+/*----------------------
  | engine (music.c)
  | Description: The platform-independent engine. reset clears state; set_backend/
  |   set_game/note_output/on_turn feed it the backend, loaded game, turn text, and
@@ -88,7 +108,7 @@ typedef void (*music_play_fn)(int track, int loop);
  |   set_category_fn subscribes to the active SCENE, which is how the
  |   background art follows the room without re-deriving the mood on its own
  |   clock. The contract is scene-only: the callback fires with an SC_* value
- |   and nothing else -- an event (danger/triumph) taking over the track never
+ |   and nothing else -- an event (losing or winning) taking over the track never
  |   reaches it, because an event carries no picture and the subscriber is
  |   expected to hold whatever it is already showing while one plays. set_rotate_fn
  |   is set_category_fn's sibling for the case the scene does NOT change: after
@@ -129,15 +149,22 @@ void music_on_win(void);
 int music_track_from_mask(unsigned long mask, unsigned int r);
 
 /*----------------------
- | music_transition_active / music_transition_flush
+ | music_transition_active / music_transition_art / music_transition_flush
  | Description: active reports whether a Dynamic mood change is still owed frames
  |   (armed, or mid-fade); flush drops its remaining settle so it begins at once.
- |   Together they let the client run a room's picture-and-track change to
- |   completion before that room's text is drawn, rather than printing the text and
- |   changing the mood underneath it a second and a half later.
+ |   Together they let the client run a room's picture change to completion before
+ |   that room's text is drawn, rather than printing the text and swapping the
+ |   picture underneath it a second and a half later.
+ |     art is what says whether that is worth waiting for. Only a picture has to
+ |   be put up unseen; a track change moves nothing on screen, so its ramp is a
+ |   volume ramp and any loop that calls music_tick finishes it while the player
+ |   reads and types. A client that waits on active alone holds the prompt for
+ |   every track change too, which on a story with no pictures at all is the only
+ |   kind there is.
  | Author: suinevere
  ----------------------*/
 int  music_transition_active(void);
+int  music_transition_art(void);
 void music_transition_flush(void);
 
 /*----------------------
@@ -179,7 +206,8 @@ void music_refresh(void);   /* re-assert the current room's track (after a previ
 void music_seed(unsigned int s);            /* seed the track-pool RNG */
 int  music_category_track(int category);    /* random track from the category pool; 0 if none */
 void music_start(void);                                /* clear the mix; the first room starts it */
-void music_start_menu(void);                           /* ...for the menus, which have no room */
+void music_start_menu(int track);                      /* ...for the menus, which have no room;
+                                                          track 0 draws from the neutral pool */
 void music_tick(void);                                 /* per frame: commit/advance/re-pick */
 void music_pause(void);                                /* hold the drive where it is */
 void music_duck(void);                                 /* ...or leave it running, just quieter */
@@ -190,6 +218,8 @@ void music_set_isshort(int (*fn)(int track));          /* backend: 1 = track pla
 void music_set_pausefns(void (*pause_fn)(void), void (*resume_fn)(void));
 void music_set_duckfns(void (*duck_fn)(void), void (*unduck_fn)(void));
 void music_set_debounce_frames(int n);                 /* room-switch debounce length */
+void music_set_audible(int on);                        /* music on/off: off arms no transition
+                                                          and issues no track; see music.c */
 
 /*----------------------
  | music_set_room_fn
@@ -205,7 +235,7 @@ void music_set_debounce_frames(int n);                 /* room-switch debounce l
  | Author: suinevere
  ----------------------*/
 void music_set_room_fn(void (*fn)(unsigned int obj));
-void music_set_fade_fn(void (*fn)(int level, int audio)); /* level: 0 = black/quiet, 255 = normal;
+void music_set_fade_fn(void (*fn)(int level, int audio, int art)); /* level: 0 = black/quiet, 255 = normal;
                                                           audio: 1 when the track is being re-issued
                                                           under this ramp and its volume must ride it */
 void music_set_fade_frames(int n);                     /* ramp length; 0 = instant commit */

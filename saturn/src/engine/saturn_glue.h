@@ -63,14 +63,31 @@ void *saturn_scratch_alloc(uint32_t size);
 void saturn_scratch_free(void *ptr);
 
 /*----------------------
- | saturn_save_blob / saturn_load_blob
+ | saturn_save_blob / saturn_load_blob / saturn_save_tail
  | Description: Save/restore the Z-machine state to Saturn backup memory, presenting
  |   the on-screen device/slot menu (in saturn_glue.cxx). Return 1 on success, 0 on
  |   cancel-or-fail.
+ |
+ |   One backup record per slot, holding the story blob and the map after it. They
+ |   used to be two files -- the slot's own name and the same name with an 'M'
+ |   appended -- which cost a second directory entry and a second header block on a
+ |   device that counts both, and gave a restore two ways to half-succeed.
+ |
+ |   No new container was needed to put them in one record: the story blob is
+ |   already self-describing (see SAVE_BLOB_MAX for its layout), so the map simply
+ |   follows it and save_blob_len finds the seam. The interpreter reads from the
+ |   front and stops at its own stack, so it never sees the tail.
+ |
+ |   save is handed a writable buffer and its capacity so it can append in place;
+ |   saturn_save_tail is how the caller knows how much room to leave. load is given
+ |   the buffer's capacity for the same reason -- it clears it before reading, so a
+ |   record with no map leaves zeroes where a map header would be rather than
+ |   whatever the scratch allocation happened to hold.
  | Author: suinevere
  ----------------------*/
-int saturn_save_blob(const uint8_t *data, uint32_t len);
+int saturn_save_blob(uint8_t *data, uint32_t len, uint32_t cap);
 int saturn_load_blob(uint8_t *buf, uint32_t maxlen);
+uint32_t saturn_save_tail(void);
 
 /*----------------------
  | SAVE_DYNAMIC_MAX / SAVE_BLOB_MAX

@@ -156,6 +156,15 @@ extern jmp_buf g_title_jmp;
 // True once g_title_jmp has been armed by setjmp and is safe to longjmp to.
 extern bool g_title_jmp_armed;
 
+/*----------------------
+ | g_returned_to_title
+ | Description: True when this pass through the title arrived by longjmp rather
+ |   than by booting -- see app_state.cxx. Read by title_and_seed to decide
+ |   whether the menu plays the opening's fixed track or draws one.
+ | Author: suinevere
+ ----------------------*/
+extern bool g_returned_to_title;
+
 // Story file currently loaded from CD (set by main after game selection);
 // re-read by saturn_read_story_file for save/restart.
 extern const char *g_story_filename;

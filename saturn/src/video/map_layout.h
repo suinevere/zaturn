@@ -129,4 +129,53 @@ static inline void map_layout_knight(int mx, int my, int w, int *kx, int *ky)
     *ky = my - 1;
 }
 
+/*----------------------
+ | map_layout_cell_free
+ | Description: Whether a cell is on the viewport and nothing has claimed it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: x, y -- the cell; taken -- the accumulated edge layer, nonzero where
+ |   a line or a mark already sits
+ | Returns: 1 when the cell is free, 0 otherwise
+ ----------------------*/
+static inline int map_layout_cell_free(int x, int y,
+    const unsigned short taken[][MAP_ROOMS_W * MAP_CELLS])
+{
+    if (x < 0 || y < 0) return 0;
+    if (x >= MAP_ROOMS_W * MAP_CELLS) return 0;
+    if (y >= MAP_ROOMS_H * MAP_CELLS) return 0;
+    return taken[y][x] == 0;
+}
+
+/*----------------------
+ | map_layout_glyph
+ | Description: Where a glyph annotating a mark goes: two cells out along the
+ |   preferred direction, then one, then a diagonal, then nowhere. Declining is
+ |   a real outcome; the caller must handle it rather than assume placement
+ |   always succeeds.
+ | Author: suinevere
+ | Dependencies: map_layout_cell_free
+ | Globals: N/A
+ | Params: mx, my -- the mark's cell; pdx, pdy -- the preferred direction as a
+ |   unit step; taken -- the accumulated edge layer; gx, gy -- receive the cell
+ | Returns: 1 when a cell was found, 0 when every candidate was occupied
+ ----------------------*/
+static inline int map_layout_glyph(int mx, int my, int pdx, int pdy,
+    const unsigned short taken[][MAP_ROOMS_W * MAP_CELLS], int *gx, int *gy)
+{
+    static const int DIAG[4][2] = { { 1, -1 }, { 1, 1 }, { -1, -1 }, { -1, 1 } };
+    int i, cx = mx + 2 * pdx, cy = my + 2 * pdy;
+
+    if (map_layout_cell_free(cx, cy, taken)) { *gx = cx; *gy = cy; return 1; }
+    cx = mx + pdx; cy = my + pdy;
+    if (map_layout_cell_free(cx, cy, taken)) { *gx = cx; *gy = cy; return 1; }
+    for (i = 0; i < 4; i++) {
+        cx = mx + DIAG[i][0];
+        cy = my + DIAG[i][1];
+        if (map_layout_cell_free(cx, cy, taken)) { *gx = cx; *gy = cy; return 1; }
+    }
+    return 0;
+}
+
 #endif /* MAP_LAYOUT_H */

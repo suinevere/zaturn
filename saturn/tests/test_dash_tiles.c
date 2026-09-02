@@ -5,6 +5,7 @@
 #include "../src/video/dash_tiles.h"
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 /* The frame, outermost pixel first: a rim, two groove entries, the highlight.
    Behind the fourth pixel the marble field carries straight on. */
@@ -16,6 +17,12 @@ static int pixel(int tile, int x, int y) {
 }
 
 static int is_field(int v) { return v >= 5 && v <= 12; }
+
+/* dash_tile_data holds two pixels per byte, the left one in the high nibble. */
+static int px(int t, int x, int y) {
+    unsigned char b = dash_tile_data[t][y * 4 + x / 2];
+    return (x & 1) ? (b & 15) : (b >> 4);
+}
 
 /* How far outside the ground's own index range a map mark has to reach.
    Byte inequality proves nothing here: dash_view's half-tint compresses the
@@ -198,15 +205,15 @@ int main(void) {
        a hole in the map. dash_tile_data is [DT_N][32]: 8x8 pixels at 4bpp, two
        pixels to the byte.
 
-       DT_LINK0 is the exception and is skipped everywhere below: it is the link
-       tile for a cell no line leaves through any side, so it is empty by
-       construction and the renderer never paints it. Every other mask draws at
-       least one arm. */
+       DT_LINK0 and DT_DASH0 are the exceptions and are skipped everywhere
+       below: each is the link tile for a cell no line leaves through any
+       side, so it is empty by construction and the renderer never paints it.
+       Every other mask draws at least one arm. */
     {
         int t;
         for (t = DT_GROUND; t < DT_N; t++) {
             int i, nonzero = 0;
-            if (t == DT_LINK0) continue;
+            if (t == DT_LINK0 || t == DT_DASH0) continue;
             for (i = 0; i < 32; i++)
                 if (dash_tile_data[t][i] != 0) { nonzero = 1; break; }
             assert(nonzero);
@@ -272,6 +279,77 @@ int main(void) {
         /* And the two straight masks are what the H/V names claim. */
         assert(DT_LINK_H == DT_LINK0 + (DT_EDGE_E | DT_EDGE_W));
         assert(DT_LINK_V == DT_LINK0 + (DT_EDGE_N | DT_EDGE_S));
+    }
+
+    /* The set grew by exactly the 27 new tiles and nothing before them moved.
+       Every index after DT_KNIGHT0 is a literal in dash_tiles.c, so a renumber
+       here silently repaints the whole map with the wrong glyphs. */
+    {
+        int mask, lit, x, y;
+
+        assert(DT_KNIGHT0 == 109);
+        assert(DT_DASH0 == 115);
+        assert(DT_ARROW_N == 131);
+        assert(DT_ARROW_DASH_N == 135);
+        assert(DT_GLYPH_U == 139);
+        assert(DT_GLYPH_D == 140);
+        assert(DT_LOOP == 141);
+        assert(DT_N == 142);
+
+        /* Mask 0 is never painted and stays blank in both sets. */
+        for (y = 0; y < 8; y++)
+            for (x = 0; x < 8; x++) assert(px(DT_DASH0, x, y) == 0);
+
+        /* A dashed cell lights both centre rows and both centre columns
+           wherever the solid one does, which is what lets a dashed elbow,
+           T and crossing join at the middle of the cell. */
+        for (mask = 1; mask < 16; mask++) {
+            assert(px(DT_DASH0 + mask, 3, 3) == px(DT_LINK0 + mask, 3, 3));
+            assert(px(DT_DASH0 + mask, 4, 4) == px(DT_LINK0 + mask, 4, 4));
+        }
+
+        /* And it is genuinely dashed: a vertical run lights rows 0, 3, 4 and 7
+           and leaves 1, 2, 5 and 6 dark, a two-on two-off stipple whose period
+           divides the tile so a long run stays in phase across cell edges. */
+        lit = DT_DASH0 + (DT_EDGE_N | DT_EDGE_S);
+        assert(px(lit, 3, 0) != 0);
+        assert(px(lit, 3, 1) == 0);
+        assert(px(lit, 3, 2) == 0);
+        assert(px(lit, 3, 3) != 0);
+        assert(px(lit, 3, 4) != 0);
+        assert(px(lit, 3, 5) == 0);
+        assert(px(lit, 3, 6) == 0);
+        assert(px(lit, 3, 7) != 0);
+
+        /* The solid run it mirrors is lit all the way down. */
+        for (y = 0; y < 8; y++)
+            assert(px(DT_LINK0 + (DT_EDGE_N | DT_EDGE_S), 3, y) != 0);
+
+        /* Each arrowhead reaches the edge it points at and not the opposite
+           one, which is the whole content of "which way does this go". */
+        assert(px(DT_ARROW_E, 7, 3) != 0 && px(DT_ARROW_E, 0, 0) == 0);
+        assert(px(DT_ARROW_W, 0, 3) != 0 && px(DT_ARROW_W, 7, 0) == 0);
+        assert(px(DT_ARROW_S, 3, 7) != 0 && px(DT_ARROW_S, 0, 0) == 0);
+        assert(px(DT_ARROW_N, 3, 0) != 0 && px(DT_ARROW_N, 0, 7) == 0);
+
+        /* The dashed arrowheads keep the head solid and dash only the shaft,
+           so a conditional one-way passage still reads as pointing somewhere. */
+        assert(px(DT_ARROW_DASH_E, 7, 3) == px(DT_ARROW_E, 7, 3));
+        assert(px(DT_ARROW_DASH_E, 1, 3) == 0);
+
+        /* The glyphs and the loop are drawn at all, and differ from each other. */
+        {
+            int nu = 0, nd = 0, nl = 0;
+            for (y = 0; y < 8; y++)
+                for (x = 0; x < 8; x++) {
+                    if (px(DT_GLYPH_U, x, y)) nu++;
+                    if (px(DT_GLYPH_D, x, y)) nd++;
+                    if (px(DT_LOOP, x, y))    nl++;
+                }
+            assert(nu > 4 && nd > 4 && nl > 4);
+            assert(memcmp(dash_tile_data[DT_GLYPH_U],
+                          dash_tile_data[DT_GLYPH_D], 32) != 0);
+        }
     }
 
     printf("test_dash_tiles: ok\n");

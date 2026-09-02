@@ -94,6 +94,7 @@ SOURCES = src/main_netbin.cxx \
           src/engine/room_model.c \
           src/engine/map_model.c \
           src/engine/map_atlas.c \
+          src/video/map_edges.c \
           src/video/map_view.cxx \
           src/input/command_panel.c \
           src/video/command_view.cxx \

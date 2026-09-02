@@ -164,6 +164,54 @@ int map_model_room_at(int index, unsigned short *room);
 #define MAP_LINK_VERT 2
 
 /*----------------------
+ | MAP_EXIT_COND / MAP_EXIT_ONEWAY / MAP_EXIT_SELF
+ | Description: What the exit graph already implies about a passage, beside
+ |   which way it runs. COND is RM_EXIT_MAYBE and draws dashed; ONEWAY is an
+ |   exit with no way back and draws an arrowhead; SELF is an exit whose
+ |   destination is the room it left.
+ |
+ |   A blocked exit back counts as a way back, so a shut door is not one-way.
+ |   Counting it would make the arrowhead appear and vanish as the player
+ |   opens and closes things, and a mark that flickers teaches nothing.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_EXIT_COND   1
+#define MAP_EXIT_ONEWAY 2
+#define MAP_EXIT_SELF   4
+
+/*----------------------
+ | MapExit
+ | Description: One exit out of one room, as the map needs to draw it. The
+ |   direction is kept rather than collapsed because a caller has to say U or D,
+ |   which map_model_link's three-value answer cannot carry.
+ | Author: suinevere
+ ----------------------*/
+typedef struct {
+    unsigned short dest;
+    unsigned char  dir;
+    unsigned char  kind;
+    unsigned char  flags;
+} MapExit;
+
+/*----------------------
+ | map_model_exits
+ | Description: Every exit out of a placed room, with the flags the graph
+ |   implies. This is the shape the map draws from: a pairwise question cannot
+ |   reach a self-loop or an exit whose far end is on another floor, because
+ |   neither has a second room on this one to be a pair with.
+ |
+ |   ONEWAY is set only when the destination is itself placed. An unplaced room
+ |   has no exits on record, so reading its silence as "no way back" would
+ |   arrow every passage the moment it was first walked.
+ | Author: suinevere
+ | Dependencies: map_model_visited
+ | Globals: g_dest, g_kind, g_cond
+ | Params: room -- object number; out -- receives the exits; max -- its length
+ | Returns: how many exits were written, 0 when the room is not placed
+ ----------------------*/
+int map_model_exits(unsigned short room, MapExit *out, int max);
+
+/*----------------------
  | map_model_link
  | Description: How room a is joined to room b, if at all. Asked of the story's
  |   exits rather than of the route walked, so a link shows as soon as both
@@ -175,6 +223,24 @@ int map_model_room_at(int index, unsigned short *room);
  | Returns: MAP_LINK_VERT, MAP_LINK_FLAT, or MAP_LINK_NONE
  ----------------------*/
 int map_model_link(unsigned short a, unsigned short b);
+
+/*----------------------
+ | map_model_step
+ | Description: The unit step a direction moves in, for a caller working in
+ |   cells rather than in rooms. Not DX/DY themselves: those are placement
+ |   steps in room units and the vertical four are two apart, which is the
+ |   spacing the layout wants and not a direction.
+ |
+ |   Up, down, in and out have no direction on a flat drawing and answer with
+ |   the step for north, so a mark annotating one of them lands above the room
+ |   rather than nowhere.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: DX, DY
+ | Params: dir -- an RM_* index; dx, dy -- receive the step, each -1, 0 or 1
+ | Returns: N/A
+ ----------------------*/
+void map_model_step(int dir, int *dx, int *dy);
 
 /*----------------------
  | map_model_rebind_exits

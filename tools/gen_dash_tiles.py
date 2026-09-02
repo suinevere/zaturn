@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 115 8x8 4bpp tiles
+"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 142 8x8 4bpp tiles
 and its 16-entry RGB555 palette. Deterministic -- the marble is seeded noise and
 the one imported bitmap is a file in the tree, so re-running reproduces the same
 file byte for byte.
@@ -13,7 +13,7 @@ import random
 
 from PIL import Image
 
-N = 115
+N = 142
 SEED = 20260828
 
 # Palette index by role. The blue channel runs two steps above red and green
@@ -166,6 +166,61 @@ def solid(idx, x0, y0, x1, y1, base=None):
     t = base if base is not None else blank()
     return [[idx if (x0 <= x <= x1 and y0 <= y <= y1) else t[y][x]
              for x in range(8)] for y in range(8)]
+
+
+def dash_ok(v):
+    """Whether a run's pixel at coordinate v is lit. Two on, two off, on a
+    period of four -- which divides the 8-pixel tile, so a long run stays in
+    phase across tile boundaries -- and phased so that both centre pixels, 3
+    and 4, are lit and a dashed elbow joins at the middle of the cell."""
+    return ((v + 1) & 3) < 2
+
+
+def dashed(idx, x0, y0, x1, y1, axis, base=None):
+    """solid(), stippled along 'v' for a vertical arm or 'h' for a horizontal."""
+    t = base if base is not None else blank()
+    return [[idx if (x0 <= x <= x1 and y0 <= y <= y1
+                     and dash_ok(y if axis == "v" else x))
+             else t[y][x] for x in range(8)] for y in range(8)]
+
+
+def rot_cw(t):
+    """An 8x8 grid turned a quarter turn clockwise, so one drawn arrowhead
+    yields all four without four hand-placed copies to drift apart."""
+    return [[t[7 - x][y] for x in range(8)] for y in range(8)]
+
+
+def bitmap(rows, idx):
+    """An 8x8 grid from eight strings of eight characters, '#' for ink."""
+    return [[idx if rows[y][x] == "#" else 0 for x in range(8)] for y in range(8)]
+
+
+GLYPH_U = ["........",
+           ".#....#.",
+           ".#....#.",
+           ".#....#.",
+           ".#....#.",
+           ".#....#.",
+           "..####..",
+           "........"]
+
+GLYPH_D = ["........",
+           ".####...",
+           ".#...#..",
+           ".#....#.",
+           ".#....#.",
+           ".#...#..",
+           ".####...",
+           "........"]
+
+LOOP = ["..####..",
+        ".#....#.",
+        "#......#",
+        "#......#",
+        "#......#",
+        ".#....#.",
+        "..####..",
+        "...##..."]
 
 
 def build():
@@ -344,6 +399,38 @@ def build():
                     if knight.getpixel((tx * 8 + x, ty * 8 + y))[3] > 128:
                         t[y][x] = KNIGHT_INK
             tiles.append(t)                                     # DT_KNIGHT0+i
+
+    # The dashed set, index for index with DT_LINK0. Same arms, stippled along
+    # each arm's own axis, so a dashed run and a solid one meet cleanly where
+    # one crosses the other.
+    for mask in range(16):
+        t = blank()
+        if mask & 1: t = dashed(MARK_DARK, 3, 0, 4, 4, "v", base=t)
+        if mask & 2: t = dashed(MARK_DARK, 3, 3, 7, 4, "h", base=t)
+        if mask & 4: t = dashed(MARK_DARK, 3, 3, 4, 7, "v", base=t)
+        if mask & 8: t = dashed(MARK_DARK, 0, 3, 4, 4, "h", base=t)
+        tiles.append(t)                                         # DT_DASH0+mask
+
+    # One arrowhead is drawn pointing east and turned for the other three. The
+    # head stays solid in the dashed variant: a conditional passage still has
+    # to say which way it runs.
+    def arrowhead(base):
+        t = solid(MARK_DARK, 5, 1, 5, 6, base=base)
+        t = solid(MARK_DARK, 6, 2, 6, 5, base=t)
+        return solid(MARK_DARK, 7, 3, 7, 4, base=t)
+
+    for shaft in (solid(MARK_DARK, 0, 3, 4, 4),
+                  dashed(MARK_DARK, 0, 3, 4, 4, "h")):
+        east  = arrowhead(shaft)
+        south = rot_cw(east)
+        west  = rot_cw(south)
+        north = rot_cw(west)
+        for t in (north, east, south, west):        # DT_ARROW_N, E, S, W
+            tiles.append(t)
+
+    tiles.append(bitmap(GLYPH_U, MARK_DARK))                    # DT_GLYPH_U
+    tiles.append(bitmap(GLYPH_D, MARK_DARK))                    # DT_GLYPH_D
+    tiles.append(bitmap(LOOP, MARK_DARK))                       # DT_LOOP
 
     assert len(tiles) == N, len(tiles)
     return tiles

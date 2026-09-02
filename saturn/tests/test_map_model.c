@@ -45,6 +45,13 @@ static void link1(RoomModel *m, int dir, unsigned short dest) {
     m->dest[dir]  = dest;
 }
 
+/* link1 always opens an exit. Three of the four exit states matter to the
+   flags map_model_exits derives, so this is the general form. */
+static void link_kind(RoomModel *m, int dir, unsigned short dest, int state) {
+    m->exits[dir] = (unsigned char) state;
+    m->dest[dir]  = dest;
+}
+
 /* Chebyshev distance, which is the metric the placement search works in: the
    ring at radius r is every cell whose distance is exactly r. */
 static int chebyshev(int dx, int dy) {
@@ -715,6 +722,122 @@ int main(void) {
             map_model_enter(&only);
         }
         assert(map_model_page(12) == 0);
+    }
+
+    /* One-way, conditional, self-loop and the reverse-blocked exception. */
+    {
+        MapExit ex[RM_DIR_N];
+        int n, i, seen;
+
+        map_model_reset();
+
+        /* 20 leads east to 21 and 21 leads back west: two-way. */
+        { RoomModel a = mk(20); link1(&a, RM_E, 21); map_model_enter(&a); }
+        { RoomModel b = mk(21); link1(&b, RM_W, 20); map_model_enter(&b); }
+
+        n = map_model_exits(20, ex, RM_DIR_N);
+        assert(n == 1);
+        assert(ex[0].dest == 21);
+        assert(ex[0].dir == RM_E);
+        assert(ex[0].kind == MAP_LINK_FLAT);
+        assert((ex[0].flags & MAP_EXIT_ONEWAY) == 0);
+
+        /* 30 leads east to 31, and 31 leads nowhere: one-way. */
+        map_model_reset();
+        { RoomModel a = mk(30); link1(&a, RM_E, 31); map_model_enter(&a); }
+        { RoomModel b = mk(31); map_model_enter(&b); }
+        n = map_model_exits(30, ex, RM_DIR_N);
+        assert(n == 1);
+        assert(ex[0].flags & MAP_EXIT_ONEWAY);
+
+        /* A shut door back is still a way back, so this is not one-way. The
+           arrow must not appear and vanish as the player opens things. */
+        map_model_reset();
+        { RoomModel a = mk(40); link1(&a, RM_E, 41); map_model_enter(&a); }
+        { RoomModel b = mk(41);
+          link_kind(&b, RM_W, 40, RM_EXIT_BLOCKED); map_model_enter(&b); }
+        n = map_model_exits(40, ex, RM_DIR_N);
+        assert(n == 1);
+        assert((ex[0].flags & MAP_EXIT_ONEWAY) == 0);
+
+        /* RM_EXIT_MAYBE survives record_exits and shows as COND. */
+        map_model_reset();
+        { RoomModel a = mk(50);
+          link_kind(&a, RM_E, 51, RM_EXIT_MAYBE); map_model_enter(&a); }
+        { RoomModel b = mk(51); link1(&b, RM_W, 50); map_model_enter(&b); }
+        n = map_model_exits(50, ex, RM_DIR_N);
+        assert(n == 1);
+        assert(ex[0].flags & MAP_EXIT_COND);
+
+        /* An open exit is not conditional. */
+        map_model_reset();
+        { RoomModel a = mk(52); link1(&a, RM_E, 53); map_model_enter(&a); }
+        { RoomModel b = mk(53); link1(&b, RM_W, 52); map_model_enter(&b); }
+        n = map_model_exits(52, ex, RM_DIR_N);
+        assert((ex[0].flags & MAP_EXIT_COND) == 0);
+
+        /* An exit leading back to its own room is a self-loop, and is never
+           also reported as one-way. */
+        map_model_reset();
+        { RoomModel a = mk(60); link1(&a, RM_N, 60); map_model_enter(&a); }
+        n = map_model_exits(60, ex, RM_DIR_N);
+        assert(n == 1);
+        assert(ex[0].dest == 60);
+        assert(ex[0].flags & MAP_EXIT_SELF);
+        assert((ex[0].flags & MAP_EXIT_ONEWAY) == 0);
+
+        /* A destination nobody has placed has no exits on record, so it must
+           not be read as having no way back. Guessing one-way from absent
+           evidence would arrow half the map on the first move. */
+        map_model_reset();
+        { RoomModel a = mk(70); link1(&a, RM_E, 71); map_model_enter(&a); }
+        n = map_model_exits(70, ex, RM_DIR_N);
+        assert(n == 1);
+        assert((ex[0].flags & MAP_EXIT_ONEWAY) == 0);
+
+        /* A vertical exit keeps its kind and its direction, which is what
+           lets a caller say U rather than D. */
+        map_model_reset();
+        { RoomModel a = mk(80); link1(&a, RM_DOWN, 81); map_model_enter(&a); }
+        { RoomModel b = mk(81); link1(&b, RM_UP, 80); map_model_enter(&b); }
+        n = map_model_exits(80, ex, RM_DIR_N);
+        assert(n == 1);
+        assert(ex[0].kind == MAP_LINK_VERT);
+        assert(ex[0].dir == RM_DOWN);
+
+        /* Every exit is reported, and max is honoured. */
+        map_model_reset();
+        { RoomModel a = mk(90);
+          link1(&a, RM_N, 91); link1(&a, RM_E, 92); link1(&a, RM_S, 93);
+          map_model_enter(&a); }
+        assert(map_model_exits(90, ex, RM_DIR_N) == 3);
+        assert(map_model_exits(90, ex, 2) == 2);
+
+        /* An unvisited room reports nothing rather than reading a stale row. */
+        assert(map_model_exits(200, ex, RM_DIR_N) == 0);
+
+        seen = 0;
+        n = map_model_exits(90, ex, RM_DIR_N);
+        for (i = 0; i < n; i++) if (ex[i].dest == 92) seen = 1;
+        assert(seen);
+
+        /* map_model_link is unchanged by any of this. It answers NONE for an
+           endpoint nobody has entered, so 91 has to be placed before the pair
+           is a pair at all. */
+        { RoomModel b = mk(91); link1(&b, RM_S, 90); map_model_enter(&b); }
+        assert(map_model_link(90, 91) == MAP_LINK_FLAT);
+        assert(map_model_link(90, 200) == MAP_LINK_NONE);
+    }
+
+    /* Unit steps, and the four with no direction on a flat drawing take north
+       so a glyph annotating one of them lands somewhere. */
+    {
+        int dx, dy;
+        map_model_step(RM_E, &dx, &dy);    assert(dx == 1 && dy == 0);
+        map_model_step(RM_NE, &dx, &dy);   assert(dx == 1 && dy == -1);
+        map_model_step(RM_UP, &dx, &dy);   assert(dx == 0 && dy == -1);
+        map_model_step(RM_IN, &dx, &dy);   assert(dx == 0 && dy == -1);
+        map_model_step(99, &dx, &dy);      assert(dx == 0 && dy == -1);
     }
 
     printf("test_map_model: ok\n");

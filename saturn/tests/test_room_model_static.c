@@ -17,6 +17,19 @@
  |   The three ids are not invented. They were captured from a live multizorkd
  |   telling a client where it was as it walked north, north, south from the
  |   start: 180 is West of House, 81 North of House, 75 the Forest Path.
+ |
+ |   Five more cases pin the conditional-exit destination decode, each a real
+ |   passage read out of the same trimmed story: Behind House's five-byte door
+ |   exit west resolves to the Kitchen and stays RM_EXIT_MAYBE; the Kitchen's
+ |   four-byte flag exit down resolves to the Studio the same way; the Living
+ |   Room's three-byte routine exit down has no room to recover and stays at
+ |   dest 0; and West of House's two-byte message exit east is re-asserted with
+ |   dest 0 explicitly, where it used to skip the check. A sixth, hand-built
+ |   image -- following the header/dictionary layout the synthetic fixtures in
+ |   test_room_model.c already establish, not a new fixture style -- covers the
+ |   one case no real Zork I exit exhibits: a five-byte exit whose byte 0 names
+ |   an object with no direction property of its own, which must leave dest 0
+ |   rather than trust a non-room.
  | Author: suinevere
  | Build: gcc -std=c11 -Wall -o /tmp/trms.exe saturn/tests/test_room_model_static.c \
  |          saturn/src/engine/room_model.c -I saturn/src/engine \
@@ -30,6 +43,10 @@
 #define WEST_OF_HOUSE   180
 #define NORTH_OF_HOUSE   81
 #define FOREST_PATH      75
+#define BEHIND_HOUSE     79
+#define KITCHEN         203
+#define LIVING_ROOM     193
+#define STUDIO           94
 
 static int failures = 0;
 
@@ -82,7 +99,7 @@ int main(int argc, char **argv) {
     room_model_refresh_room(WEST_OF_HOUSE);
     check("a room is known after a refresh", room_model_has_room(), "");
     check_exit("West of House", RM_N,  "north", RM_EXIT_OPEN,    NORTH_OF_HOUSE);
-    check_exit("West of House", RM_E,  "east",  RM_EXIT_BLOCKED, -1);
+    check_exit("West of House", RM_E,  "east",  RM_EXIT_BLOCKED, 0);
     check_exit("West of House", RM_W,  "west",  RM_EXIT_OPEN,    78);
     check_exit("West of House", RM_S,  "south", RM_EXIT_OPEN,    80);
 
@@ -114,6 +131,61 @@ int main(int argc, char **argv) {
         char detail[96];
         snprintf(detail, sizeof detail, "nhere=%d with exits-only off", m->nhere);
         check("with the mode off, contents do come back", m->nhere > 0, detail);
+    }
+
+    room_model_set_exits_only(1);
+
+    /* Conditional exits, whose destination byte the two-byte-message and
+       routine forms do not carry and the flag and door forms do. */
+    room_model_refresh_room(BEHIND_HOUSE);
+    check_exit("Behind House", RM_W, "west", RM_EXIT_MAYBE, KITCHEN);
+
+    room_model_refresh_room(KITCHEN);
+    check_exit("Kitchen", RM_DOWN, "down", RM_EXIT_MAYBE, STUDIO);
+
+    room_model_refresh_room(LIVING_ROOM);
+    check_exit("Living Room", RM_DOWN, "down", RM_EXIT_MAYBE, 0);
+
+    /* A hand-built image whose sole room's north exit is the five-byte door
+       form, but whose byte 0 names an object with no direction property of
+       its own -- not a room, so no destination may be taken from it. */
+    {
+        unsigned char img[200];
+        int i;
+        for (i = 0; i < 200; i++) img[i] = 0;
+
+        img[0x08] = 0x00; img[0x09] = 16;
+        img[0x0a] = 0x00; img[0x0b] = 64;
+        img[0x0c] = 0x00; img[0x0d] = 48;
+
+        img[16] = 0;
+        img[17] = 6;
+        img[18] = 0; img[19] = 4;
+
+        img[20] = 0x4E; img[21] = 0x97; img[22] = 0x65; img[23] = 0xA0;
+        img[24] = 0x10; img[25] = 31;
+        img[26] = 0x28; img[27] = 0xD8; img[28] = 0x64; img[29] = 0x00;
+        img[30] = 0x10; img[31] = 30;
+        img[32] = 0x71; img[33] = 0x58; img[34] = 0x64; img[35] = 0x00;
+        img[36] = 0x10; img[37] = 29;
+        img[38] = 0x62; img[39] = 0x9A; img[40] = 0x65; img[41] = 0xA0;
+        img[42] = 0x10; img[43] = 28;
+
+        img[133] = 0x00; img[134] = 150;   /* object 1's property table   */
+        img[142] = 0x00; img[143] = 160;   /* object 2's property table   */
+
+        img[150] = 0;                      /* object 1's short name: none */
+        img[151] = 0x9F;                   /* prop 31 (north), 5 bytes    */
+        img[152] = 2;                      /* byte 0: object 2, not a room */
+        img[153] = 0; img[154] = 0; img[155] = 0; img[156] = 0;
+
+        img[160] = 0;                      /* object 2's short name: none */
+        img[161] = 0;                      /* object 2 has no properties  */
+
+        check("synthetic image binds",
+              room_model_bind(img, sizeof img) == 1, "");
+        room_model_refresh_room(1);
+        check_exit("synthetic room", RM_N, "north", RM_EXIT_MAYBE, 0);
     }
 
     printf("\n");

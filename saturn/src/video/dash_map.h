@@ -60,6 +60,20 @@ extern "C" {
  |   drawing, row-major two wide by three tall, painted beside the player's own
  |   room; they are on the ground field rather than on transparency, since NBG2
  |   is one layer and a transparent pixel is a hole through the map.
+ |
+ |   DT_DASH0 mirrors DT_LINK0 exactly -- sixteen tiles on the same four-bit
+ |   mask -- but stippled two pixels on and two off. It is a full set rather
+ |   than a straight pair because a conditional passage doglegs like any other,
+ |   and a conditional link drawing solid at its corners is the one fault a
+ |   player cannot tell from a bug. The stipple's period divides the tile, so a
+ |   run stays in phase across cell edges and both centre pixels stay lit,
+ |   which is what lets a dashed elbow join.
+ |
+ |   DT_ARROW_* go in the last cell before the mark a one-way passage leads to,
+ |   carrying the incoming groove as well as the head so the run does not break
+ |   where the arrow starts; the DASH set is the same head over a dashed shaft.
+ |   DT_GLYPH_U and DT_GLYPH_D end a stub whose far end is on another floor,
+ |   and DT_LOOP marks an exit that returns to the room it left.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -89,7 +103,12 @@ enum {
     DT_ROOM_SEL, DT_ROOM_PEER,
     DT_XHAIR_TL, DT_XHAIR_TR, DT_XHAIR_BL, DT_XHAIR_BR,
     DT_KNIGHT0,
-    DT_N = DT_KNIGHT0 + 6
+    DT_DASH0 = DT_KNIGHT0 + 6,
+    DT_ARROW_N = DT_DASH0 + 16, DT_ARROW_E, DT_ARROW_S, DT_ARROW_W,
+    DT_ARROW_DASH_N, DT_ARROW_DASH_E, DT_ARROW_DASH_S, DT_ARROW_DASH_W,
+    DT_GLYPH_U, DT_GLYPH_D,
+    DT_LOOP,
+    DT_N
 };
 
 /*----------------------

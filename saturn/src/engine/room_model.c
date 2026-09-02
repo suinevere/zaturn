@@ -349,6 +349,31 @@ static int dir_of_prop(int prop) {
 }
 
 /*----------------------
+ | is_room
+ | Description: Whether an object is itself a room -- carries at least one
+ |   property whose number is a resolved direction property. Guards a
+ |   conditional or door exit's destination byte, which only names a room when
+ |   the object it points at is one.
+ | Author: suinevere
+ | Dependencies: obj_props, dir_of_prop
+ | Globals: g_story, g_len
+ | Params: id -- object number, 1-based
+ | Returns: 1 when id is a room, 0 otherwise
+ ----------------------*/
+static int is_room(unsigned short id) {
+    unsigned int a = obj_props(id);
+    if (a == 0u) return 0;
+    while (a < g_len && g_story[a] != 0) {
+        int size = (int) g_story[a];
+        int plen = (size >> 5) + 1;
+        if (a + 1u + (unsigned int) plen > g_len) break;
+        if (dir_of_prop(size & 31) >= 0) return 1;
+        a += 1u + (unsigned int) plen;
+    }
+    return 0;
+}
+
+/*----------------------
  | obj_child / obj_sibling
  | Description: An object's first child and next sibling, from bytes 6 and 5 of
  |   its table entry.
@@ -873,6 +898,8 @@ void room_model_refresh_room(unsigned short room) {
                 g_model.exits[dir] = RM_EXIT_BLOCKED;
             } else {
                 g_model.exits[dir] = RM_EXIT_MAYBE;
+                if ((plen == 4 || plen == 5) && is_room(g_story[a + 1u]))
+                    g_model.dest[dir] = g_story[a + 1u];
             }
         }
         a += 1u + (unsigned int) plen;

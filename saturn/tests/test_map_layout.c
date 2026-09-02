@@ -128,6 +128,51 @@ int main(void) {
         }
     }
 
+    /* Glyph placement: two cells out along the preferred direction, then one,
+       then a diagonal, then decline. */
+    {
+        static unsigned short taken[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
+        int gx = -1, gy = -1, i, c;
+
+        for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++)
+            for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++) taken[i][c] = 0;
+
+        /* Clear board: the far cell wins, so the stub runs its full length and
+           stops one cell short of where a neighbouring room would sit. */
+        assert(map_layout_glyph(20, 12, 0, -1, taken, &gx, &gy) == 1);
+        assert(gx == 20 && gy == 10);
+
+        /* Far cell occupied: fall back to the near one. */
+        taken[10][20] = 1;
+        assert(map_layout_glyph(20, 12, 0, -1, taken, &gx, &gy) == 1);
+        assert(gx == 20 && gy == 11);
+
+        /* Both occupied: fall back to a diagonal, which an orthogonal run
+           reaches only by passing through one of the two cells just tried. */
+        taken[11][20] = 1;
+        assert(map_layout_glyph(20, 12, 0, -1, taken, &gx, &gy) == 1);
+        assert(gx == 21 && gy == 11);
+
+        /* Every candidate occupied: decline rather than overwrite a line. A
+           missing mark is what gather already does with an off-floor far end. */
+        taken[11][21] = 1; taken[13][21] = 1;
+        taken[11][19] = 1; taken[13][19] = 1;
+        assert(map_layout_glyph(20, 12, 0, -1, taken, &gx, &gy) == 0);
+
+        /* The preferred direction is honoured, not assumed to be north. */
+        for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++)
+            for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++) taken[i][c] = 0;
+        assert(map_layout_glyph(20, 12, 0, 1, taken, &gx, &gy) == 1);
+        assert(gx == 20 && gy == 14);
+        assert(map_layout_glyph(20, 12, 1, 0, taken, &gx, &gy) == 1);
+        assert(gx == 22 && gy == 12);
+
+        /* A candidate off the viewport is not free. A mark on the top row has
+           no room above it and takes a diagonal instead. */
+        assert(map_layout_glyph(20, 0, 0, -1, taken, &gx, &gy) == 1);
+        assert(gy >= 0);
+    }
+
     printf("test_map_layout: ok\n");
     return 0;
 }

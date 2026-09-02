@@ -107,6 +107,16 @@ static unsigned short g_dest[MAP_ROOM_MAX][RM_DIR_N];
 static unsigned char  g_kind[MAP_ROOM_MAX][RM_DIR_N];
 
 /*----------------------
+ | g_cond
+ | Description: Which of each placed room's exits are conditional, one bit per
+ |   direction. Kept beside g_kind rather than folded into it because g_kind is
+ |   the value map_model_link returns and widening it would change that
+ |   function's contract. A short and not a char because RM_DIR_N is twelve.
+ | Author: suinevere
+ ----------------------*/
+static unsigned short g_cond[MAP_ROOM_MAX];
+
+/*----------------------
  | map_model_reset
  | Description: See map_model.h.
  | Author: suinevere
@@ -117,7 +127,7 @@ static unsigned char  g_kind[MAP_ROOM_MAX][RM_DIR_N];
  ----------------------*/
 void map_model_reset(void) {
     int i;
-    for (i = 0; i < MAP_ROOM_MAX; i++) { g_vis[i] = 0; g_revealed[i] = 0; g_x[i] = 0; g_y[i] = 0; { int d; for (d = 0; d < RM_DIR_N; d++) { g_dest[i][d] = 0; g_kind[i][d] = 0; } } }
+    for (i = 0; i < MAP_ROOM_MAX; i++) { g_vis[i] = 0; g_revealed[i] = 0; g_x[i] = 0; g_y[i] = 0; g_cond[i] = 0; { int d; for (d = 0; d < RM_DIR_N; d++) { g_dest[i][d] = 0; g_kind[i][d] = 0; } } }
     g_cur = 0;
     g_have_cur = 0;
     g_have_prev = 0;
@@ -317,17 +327,20 @@ static int atlas_target(unsigned short room, int wx, int wy, int anchored,
  |   about what counts as a vertical exit.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_dest, g_kind
+ | Globals: g_dest, g_kind, g_cond
  | Params: room -- an in-range object number; m -- the snapshot to read
  | Returns: N/A
  ----------------------*/
 static void record_exits(unsigned short room, const RoomModel *m) {
     int d;
+    g_cond[room] = 0;
     for (d = 0; d < RM_DIR_N; d++) {
         g_dest[room][d] = m->dest[d];
         g_kind[room][d] = (unsigned char)
             (m->exits[d] == RM_EXIT_NONE ? MAP_LINK_NONE
              : (d >= RM_UP ? MAP_LINK_VERT : MAP_LINK_FLAT));
+        if (m->exits[d] == RM_EXIT_MAYBE)
+            g_cond[room] |= (unsigned short) (1u << d);
     }
 }
 
@@ -485,6 +498,70 @@ int map_model_link(unsigned short a, unsigned short b) {
         }
     }
     return best;
+}
+
+/*----------------------
+ | map_model_step
+ | Description: See map_model.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: DX, DY
+ | Params: dir -- an RM_* index; dx, dy -- receive the step
+ | Returns: N/A
+ ----------------------*/
+void map_model_step(int dir, int *dx, int *dy) {
+    if (dir < 0 || dir >= RM_DIR_N || dir >= RM_UP) { *dx = 0; *dy = -1; return; }
+    *dx = DX[dir];
+    *dy = DY[dir];
+}
+
+/*----------------------
+ | has_reverse
+ | Description: Whether b has any exit at all leading to a, in any state but
+ |   RM_EXIT_NONE. g_kind is already RM_EXIT_NONE-filtered, so a blocked exit
+ |   answers yes, which is what keeps a shut door off the one-way arrow.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_dest, g_kind
+ | Params: a, b -- object numbers
+ | Returns: 1 when b leads back to a, 0 otherwise
+ ----------------------*/
+static int has_reverse(unsigned short a, unsigned short b) {
+    int d;
+    for (d = 0; d < RM_DIR_N; d++)
+        if (g_kind[b][d] != MAP_LINK_NONE && g_dest[b][d] == a) return 1;
+    return 0;
+}
+
+/*----------------------
+ | map_model_exits
+ | Description: See map_model.h.
+ | Author: suinevere
+ | Dependencies: map_model_visited, has_reverse
+ | Globals: g_dest, g_kind, g_cond
+ | Params: room -- object number; out -- receives the exits; max -- its length
+ | Returns: how many exits were written
+ ----------------------*/
+int map_model_exits(unsigned short room, MapExit *out, int max) {
+    int d, n = 0;
+    if (room >= MAP_ROOM_MAX || !map_model_visited(room)) return 0;
+    for (d = 0; d < RM_DIR_N && n < max; d++) {
+        unsigned short dest = g_dest[room][d];
+        if (g_kind[room][d] == MAP_LINK_NONE) continue;
+        if (dest == 0 || dest >= MAP_ROOM_MAX) continue;
+        out[n].dest  = dest;
+        out[n].dir   = (unsigned char) d;
+        out[n].kind  = g_kind[room][d];
+        out[n].flags = 0;
+        if (g_cond[room] & (unsigned short) (1u << d))
+            out[n].flags |= MAP_EXIT_COND;
+        if (dest == room)
+            out[n].flags |= MAP_EXIT_SELF;
+        else if (map_model_visited(dest) && !has_reverse(room, dest))
+            out[n].flags |= MAP_EXIT_ONEWAY;
+        n++;
+    }
+    return n;
 }
 
 /*----------------------

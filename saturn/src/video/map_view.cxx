@@ -2,9 +2,10 @@
  | map_view.cxx
  | Description: Implements map_view.h.
  | Author: suinevere
- | Dependencies: map_model.h, map_atlas.h, map_layout.h, dash_map.h, room_model.h,
- |   text_map.h, dash_view.h, title.h, room_art.h, display.h, app_state.h,
- |   input.h, saturn_keyboard.h, soft_reset.h, console_view.h, party.h, menu.h
+ | Dependencies: map_model.h, map_atlas.h, map_layout.h, map_edges.h, dash_map.h,
+ |   room_model.h, text_map.h, dash_view.h, title.h, room_art.h, display.h,
+ |   app_state.h, input.h, saturn_keyboard.h, soft_reset.h, console_view.h,
+ |   party.h, menu.h
  ----------------------*/
 #include <srl.hpp>
 #include "map_model.h"
@@ -24,6 +25,7 @@
 #include "menu.h"
 #include "party.h"
 #include "map_layout.h"
+#include "map_edges.h"
 #include "map_view.h"
 
 /*----------------------
@@ -118,6 +120,16 @@ static short          g_dxs[MAP_VIS_MAX];
 static short          g_dys[MAP_VIS_MAX];
 
 /*----------------------
+ | g_slot
+ | Description: Which gathered entry each object number landed in, or -1. The
+ |   exit walk asks this once per exit; a scan of g_ids instead would put an
+ |   O(n) search inside a loop that already runs n times, which is the shape
+ |   that cost this screen a dozen frames a redraw once before.
+ | Author: suinevere
+ ----------------------*/
+static short g_slot[MAP_ROOM_MAX];
+
+/*----------------------
  | g_flash_x / g_flash_y / g_flash_tile / g_flash_n
  | Description: The cells holding a player's mark, gathered by draw_once so the
  |   frame loop can pulse them without repeating the room and link walk. Each
@@ -135,215 +147,6 @@ static unsigned char g_flash_tile[MAP_FLASH_MAX];
 static int           g_flash_n;
 
 /*----------------------
- | occupied
- | Description: Whether one of the gathered rooms sits at a viewport offset.
- |   Asking the gathered set rather than the model is complete for the question
- |   a link needs to ask, because gather() takes every placed room whose offset
- |   falls inside the viewport and a link between two of them runs entirely
- |   inside it.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_dxs, g_dys
- | Params: n -- how many rooms gather() returned; dx, dy -- the offset to test
- | Returns: 1 when a room holds that cell, 0 otherwise
- ----------------------*/
-static int occupied(int n, int dx, int dy)
-{
-    int i;
-    for (i = 0; i < n; i++)
-        if (g_dxs[i] == (short) dx && g_dys[i] == (short) dy) return 1;
-    return 0;
-}
-
-/*----------------------
- | cell_is_mark
- | Description: Whether a text cell is the one a room's mark occupies. Only
- |   cells on the four-cell grid can be, so the two divisions are guarded by the
- |   remainders rather than performed on every cell of a link.
- | Author: suinevere
- | Dependencies: occupied
- | Globals: N/A
- | Params: cx, cy -- the cell; n -- how many rooms gather() returned
- | Returns: 1 when a room mark holds the cell, 0 otherwise
- ----------------------*/
-static int cell_is_mark(int cx, int cy, int n)
-{
-    int gy = cy - MAP_TOP;
-    if (cx % MAP_CELLS != 0 || gy % MAP_CELLS != 0) return 0;
-    return occupied(n, cx / MAP_CELLS - MAP_CX, gy / MAP_CELLS - MAP_CY);
-}
-
-/*----------------------
- | MAP_EDGE_STAIR
- | Description: The fifth bit of an edge cell, beside the four DT_EDGE_* sides:
- |   set when a vertical exit -- a staircase rather than a walk -- laid the line.
- |   Kept out of the low nibble so the nibble still indexes the tile set.
- | Author: suinevere
- ----------------------*/
-#define MAP_EDGE_STAIR 16
-
-/*----------------------
- | g_edge
- | Description: Which sides of each cell a link leaves through, accumulated over
- |   every link before anything is painted. Two lines crossing a cell leave five
- |   or six bits between them and the cell draws as a T or a crossing, which a
- |   renderer painting each link as it walked could not do: it would only ever
- |   see one line at a time and would overwrite the first with the second.
- |
- |   A whole viewport of bytes rather than a sparse list because the render pass
- |   then costs one sweep with no lookup, and 1120 bytes is nothing beside the
- |   story image the heap is already carrying.
- | Author: suinevere
- ----------------------*/
-static unsigned char g_edge[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
-
-/*----------------------
- | mark_step
- | Description: Records one cell-to-cell step of a route, setting the side it
- |   leaves the first cell by and the facing side it enters the second by, so the
- |   two tiles meet. Ignores a step either end of which is off the viewport,
- |   which no candidate route should produce but which would corrupt the
- |   neighbouring static if one ever did.
- | Author: suinevere
- | Dependencies: dash_map.h
- | Globals: g_edge
- | Params: x, y -- the cell stepped from; nx, ny -- the cell stepped to, always
- |   one cell away in exactly one axis; stair -- nonzero for a vertical exit
- | Returns: N/A
- ----------------------*/
-static void mark_step(int x, int y, int nx, int ny, int stair)
-{
-    int out, in;
-    if (x < 0 || y < 0 || nx < 0 || ny < 0) return;
-    if (x >= MAP_ROOMS_W * MAP_CELLS || nx >= MAP_ROOMS_W * MAP_CELLS) return;
-    if (y >= MAP_ROOMS_H * MAP_CELLS || ny >= MAP_ROOMS_H * MAP_CELLS) return;
-
-    if      (nx > x) { out = DT_EDGE_E; in = DT_EDGE_W; }
-    else if (nx < x) { out = DT_EDGE_W; in = DT_EDGE_E; }
-    else if (ny > y) { out = DT_EDGE_S; in = DT_EDGE_N; }
-    else             { out = DT_EDGE_N; in = DT_EDGE_S; }
-
-    if (stair) { out |= MAP_EDGE_STAIR; in |= MAP_EDGE_STAIR; }
-    g_edge[y][x]   |= (unsigned char) out;
-    g_edge[ny][nx] |= (unsigned char) in;
-}
-
-/*----------------------
- | trace
- | Description: Walks an orthogonal route through a list of corner points,
- |   either recording it or only testing it. In test mode it stops at the first
- |   cell short of the far end that a room mark holds and answers 0; in record
- |   mode it marks every step and answers 1.
- |
- |   The two modes share one body deliberately: the route that gets drawn has to
- |   be the one that was checked, and two separate walkers would eventually
- |   disagree about which cells that is.
- | Author: suinevere
- | Dependencies: mark_step, cell_is_mark
- | Globals: N/A
- | Params: pts -- corner points as x, y pairs; npts -- how many points; n -- how
- |   many rooms gather() returned; stair -- nonzero for a vertical exit; record
- |   -- nonzero to mark, zero to only test
- | Returns: 1 when the route touches no room mark between its ends, 0 otherwise
- ----------------------*/
-static int trace(const short *pts, int npts, int n, int stair, int record)
-{
-    int ex = pts[(npts - 1) * 2], ey = pts[(npts - 1) * 2 + 1];
-    int i, x = pts[0], y = pts[1];
-    for (i = 1; i < npts; i++) {
-        int tx = pts[i * 2], ty = pts[i * 2 + 1];
-        while (x != tx || y != ty) {
-            int px = x, py = y;
-            if      (x < tx) x++;
-            else if (x > tx) x--;
-            else if (y < ty) y++;
-            else             y--;
-            if (record) mark_step(px, py, x, y, stair);
-            else if (!(x == ex && y == ey) && cell_is_mark(x, y, n)) return 0;
-        }
-    }
-    return 1;
-}
-
-/*----------------------
- | paint_link
- | Description: Records the route joining two room marks, choosing one that
- |   passes through no other room.
- |
- |   That choice is the point of this function, and it is what the previous
- |   version got wrong. It routed every pair the same way -- half the horizontal,
- |   then the vertical, then the rest -- and where a third room happened to sit
- |   on that path the line ran in one side of it and out the other, which reads
- |   as two links rather than as one passing by. Against the shipped table that
- |   happened to fourteen of Zork I's links: North of House to Behind House ran
- |   straight through the Kitchen, and Forest (3) to Forest (1) through four
- |   rooms in a row. Skipping the paint on the mark itself, which is what it did,
- |   does not help at all -- the line still arrives and leaves.
- |
- |   Four routes are tried in order and the first clean one is taken: the two L
- |   shapes, then a dogleg bending at the midpoint of whichever axis is long
- |   enough to have one. Every candidate stays inside the rectangle spanned by
- |   the two rooms, so none can wander off the viewport. Over the twenty rooms of
- |   the shipped table the two L shapes alone answer all twenty-nine links and
- |   the doglegs have never been needed; they are there because a table drawn for
- |   another story will not have that property. If nothing is clean the first
- |   candidate is drawn anyway, on the grounds that a map missing a link is worse
- |   than one drawing an ambiguous link.
- |
- |   Nothing is painted here. The route is accumulated into g_edge and draw_once
- |   paints the layer in one sweep afterwards, which is what lets a cell two
- |   lines cross come out as a crossing rather than as whichever was drawn last.
- | Author: suinevere
- | Dependencies: trace
- | Globals: g_edge
- | Params: ax, ay -- the source mark's cell; bx, by -- the destination mark's;
- |   n -- how many rooms gather() returned; kind -- MAP_LINK_FLAT or
- |   MAP_LINK_VERT
- | Returns: N/A
- ----------------------*/
-static void paint_link(int ax, int ay, int bx, int by, int n, int kind)
-{
-    int stair = (kind == MAP_LINK_VERT);
-    int mx = (ax + bx) / 2, my = (ay + by) / 2;
-    short cand[4][8];
-    int len[4], i, ncand = 2;
-
-    cand[0][0] = (short) ax; cand[0][1] = (short) ay;
-    cand[0][2] = (short) bx; cand[0][3] = (short) ay;
-    cand[0][4] = (short) bx; cand[0][5] = (short) by;
-    len[0] = 3;
-
-    cand[1][0] = (short) ax; cand[1][1] = (short) ay;
-    cand[1][2] = (short) ax; cand[1][3] = (short) by;
-    cand[1][4] = (short) bx; cand[1][5] = (short) by;
-    len[1] = 3;
-
-    if (mx != ax && mx != bx) {
-        cand[ncand][0] = (short) ax; cand[ncand][1] = (short) ay;
-        cand[ncand][2] = (short) mx; cand[ncand][3] = (short) ay;
-        cand[ncand][4] = (short) mx; cand[ncand][5] = (short) by;
-        cand[ncand][6] = (short) bx; cand[ncand][7] = (short) by;
-        len[ncand] = 4;
-        ncand++;
-    }
-    if (my != ay && my != by) {
-        cand[ncand][0] = (short) ax; cand[ncand][1] = (short) ay;
-        cand[ncand][2] = (short) ax; cand[ncand][3] = (short) my;
-        cand[ncand][4] = (short) bx; cand[ncand][5] = (short) my;
-        cand[ncand][6] = (short) bx; cand[ncand][7] = (short) by;
-        len[ncand] = 4;
-        ncand++;
-    }
-
-    for (i = 0; i < ncand; i++) {
-        if (!trace(cand[i], len[i], n, stair, 0)) continue;
-        trace(cand[i], len[i], n, stair, 1);
-        return;
-    }
-    trace(cand[0], len[0], n, stair, 1);
-}
-
-/*----------------------
  | gather
  | Description: Fills g_ids/g_dxs/g_dys with every placed room inside the
  |   viewport, in one pass over the object-number space. map_model_offset is
@@ -358,13 +161,14 @@ static void paint_link(int ax, int ay, int bx, int by, int n, int kind)
  |   and no line is invented for it.
  | Author: suinevere
  | Dependencies: map_model.h
- | Globals: g_ids, g_dxs, g_dys
+ | Globals: g_ids, g_dxs, g_dys, g_slot
  | Params: sx, sy -- the scroll offset in rooms; page -- the floor being shown
  | Returns: how many rooms were gathered
  ----------------------*/
 static int gather(int sx, int sy, int page)
 {
     int r, n = 0;
+    for (r = 0; r < MAP_ROOM_MAX; r++) g_slot[r] = -1;
     for (r = 1; r < MAP_ROOM_MAX && n < MAP_VIS_MAX; r++) {
         int dx = 0, dy = 0;
         if (!map_model_offset((unsigned short) r, &dx, &dy)) continue;
@@ -375,6 +179,7 @@ static int gather(int sx, int sy, int page)
         g_ids[n] = (unsigned short) r;
         g_dxs[n] = (short) dx;
         g_dys[n] = (short) dy;
+        g_slot[r] = (short) n;
         n++;
     }
     return n;
@@ -547,17 +352,18 @@ static void draw_players(void)
  |   border dash_map_begin has just blanked.
  |
  |   Every pair of gathered rooms the story links is joined, at whatever
- |   distance -- paint_link's header has why that is not the rule it used to be.
- |   Links are routed into g_edge first and the whole layer painted from it
- |   afterwards, so a cell two links cross knows about both and draws as a
- |   crossing; painting each link as it was routed would have left whichever came
- |   last. Marks go down after that again, so a mark always wins its own cell.
+ |   distance -- map_edges_link's header (map_edges.h) has why that is not the
+ |   rule it used to be. Links are routed into map_edges first and the whole
+ |   layer swept from it afterwards, so a cell two links cross knows about both
+ |   and draws as a crossing; painting each link as it was routed would have
+ |   left whichever came last. Marks go down after that again, so a mark always
+ |   wins its own cell.
  |
- |   The walk is gather() and then a pairwise pass over what it returned, both
- |   bounded by the viewport rather than by the placed set, which is what keeps
- |   this inside one frame; it used to nest the scan inside the pairwise loop and
- |   spent about a dozen frames between one menu_sync and the next, long enough
- |   to starve the looping PCM hand-off.
+ |   The walk is gather() and then a per-room enumeration of what it returned,
+ |   both bounded by the viewport rather than by the placed set, which is what
+ |   keeps this inside one frame; it used to nest a pairwise scan inside a
+ |   pairwise loop and spent about a dozen frames between one menu_sync and the
+ |   next, long enough to starve the looping PCM hand-off.
  |
  |   Only one floor is drawn. The floors of an authored table are separate
  |   drawings the publisher split because the geography did, and the table
@@ -566,12 +372,25 @@ static void draw_players(void)
  |   between the parts. A story with no authored table has exactly one floor,
  |   so nothing is hidden from one.
  |
- |   Paint order is links, then marks, then the figure, then the crosshair, and
- |   each step is allowed to cover the one before it. That ordering is the whole
- |   priority rule: a mark wins its own cell over a groove crossing it, the
- |   figure wins over a groove running under it -- a link drawn through it would
- |   read as part of the map -- and the cursor wins over everything, because a
- |   cursor showing the map through itself is harder to find than the room it is
+ |   A second walk runs after the links are in, placing the self-loop, U/D and
+ |   arrowhead glyphs map_layout_glyph finds room for. A vertical exit whose
+ |   destination is on this floor now also labels its own mark from this same
+ |   walk, preferring the step toward that destination; one leaving the floor
+ |   lays a dashed stub first, since its own run is not already drawn. It has
+ |   to come after: the glyph pass reads map_edges_layer to see which cells the
+ |   lines already claimed, and asks first before the stub is laid so laying it
+ |   cannot push its own letter onto a diagonal by marking its own two cells
+ |   occupied. Where the search finds nothing free, this draws neither the stub
+ |   nor the letter -- the same declining-is-honest rule the rest of the
+ |   placement follows.
+ |
+ |   Paint order is links (including the arrows and dashes map_edges_tile now
+ |   folds in), then marks, then the figure, then the crosshair, and each step
+ |   is allowed to cover the one before it. That ordering is the whole priority
+ |   rule: a mark wins its own cell over a groove crossing it, the figure wins
+ |   over a groove running under it -- a link drawn through it would read as
+ |   part of the map -- and the cursor wins over everything, because a cursor
+ |   showing the map through itself is harder to find than the room it is
  |   pointing at.
  |
  |   Called on open, on each cursor step that moves the view, and on each floor
@@ -581,7 +400,8 @@ static void draw_players(void)
  |   no per-frame expiry.
  | Author: suinevere
  | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, party.h,
- |   menu.h, gather, paint_link, paint_knight, draw_players, peer_seat, put_uint
+ |   menu.h, map_edges.h, map_layout.h, gather, paint_knight, draw_players,
+ |   peer_seat, put_uint
  | Globals: g_ids, g_dxs, g_dys, g_flash_x, g_flash_y, g_flash_tile, g_flash_n
  | Params: sx, sy -- the scroll offset in rooms, zero with the player centred;
  |   page -- the floor to draw; hx, hy -- the crosshair, in the same offsets
@@ -589,7 +409,7 @@ static void draw_players(void)
  | Returns: N/A
  ----------------------*/
 static void draw_once(int sx, int sy, int page, int hx, int hy) {
-    int n, i, j;
+    int n, i;
     int hvx = hx - sx, hvy = hy - sy;
     int hcx = map_layout_cell(hx, sx, MAP_CX, 0);
     int hcy = map_layout_cell(hy, sy, MAP_CY, MAP_TOP);
@@ -606,33 +426,78 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
     // hide whichever of the two is behind it.
     n = gather(sx, sy, page);
 
-    for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
-        int c;
-        for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++) g_edge[i][c] = 0;
+    map_edges_reset();
+    for (i = 0; i < n; i++)
+        map_edges_mark(map_layout_cell(g_dxs[i], 0, MAP_CX, 0),
+                       map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP));
+
+    for (i = 0; i < n; i++) {
+        MapExit ex[RM_DIR_N];
+        int k, ne = map_model_exits(g_ids[i], ex, RM_DIR_N);
+        for (k = 0; k < ne; k++) {
+            int j, lo, hi, arrow;
+            if (ex[k].flags & MAP_EXIT_SELF) continue;
+            j = g_slot[ex[k].dest];
+            if (j < 0) continue;
+            if (!(ex[k].flags & MAP_EXIT_ONEWAY) && ex[k].dest < g_ids[i])
+                continue;
+            if (g_ids[i] < ex[k].dest) { lo = i; hi = j; } else { lo = j; hi = i; }
+            arrow = !(ex[k].flags & MAP_EXIT_ONEWAY) ? 0
+                    : (ex[k].dest == g_ids[hi]) ? 1 : 2;
+            map_edges_link(map_layout_cell(g_dxs[lo], 0, MAP_CX, 0),
+                           map_layout_cell(g_dys[lo], 0, MAP_CY, MAP_TOP),
+                           map_layout_cell(g_dxs[hi], 0, MAP_CX, 0),
+                           map_layout_cell(g_dys[hi], 0, MAP_CY, MAP_TOP),
+                           map_model_link(g_ids[i], ex[k].dest),
+                           ex[k].flags, arrow);
+        }
     }
 
     for (i = 0; i < n; i++) {
-        for (j = i + 1; j < n; j++) {
-            int kind = map_model_link(g_ids[i], g_ids[j]);
-            if (kind == MAP_LINK_NONE) continue;
-            paint_link(map_layout_cell(g_dxs[i], 0, MAP_CX, 0),
-                       map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP),
-                       map_layout_cell(g_dxs[j], 0, MAP_CX, 0),
-                       map_layout_cell(g_dys[j], 0, MAP_CY, MAP_TOP),
-                       n, kind);
+        MapExit ex[RM_DIR_N];
+        int cx = map_layout_cell(g_dxs[i], 0, MAP_CX, 0);
+        int cy = map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP);
+        int k, gx, gy, ne = map_model_exits(g_ids[i], ex, RM_DIR_N);
+        const unsigned short (*layer)[MAP_ROOMS_W * MAP_CELLS] =
+            (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
+
+        for (k = 0; k < ne; k++) {
+            int up, dy;
+            if (ex[k].flags & MAP_EXIT_SELF) {
+                int sdx, sdy;
+                map_model_step(ex[k].dir, &sdx, &sdy);
+                if (map_layout_glyph(cx, cy, sdx, sdy, layer, &gx, &gy))
+                    map_edges_glyph(gx, gy, MAP_EDGE_LOOP);
+                continue;
+            }
+            if (ex[k].kind != MAP_LINK_VERT) continue;
+            up = (ex[k].dir & 1) == 0;
+            if (g_slot[ex[k].dest] >= 0) {
+                int j = g_slot[ex[k].dest];
+                int pdx = g_dxs[j] - g_dxs[i];
+                int pdy = g_dys[j] - g_dys[i];
+                pdx = (pdx > 0) - (pdx < 0);
+                pdy = (pdy > 0) - (pdy < 0);
+                if (map_layout_glyph(cx, cy, pdx, pdy, layer, &gx, &gy))
+                    map_edges_glyph(gx, gy, up ? MAP_EDGE_UP : MAP_EDGE_DOWN);
+                continue;
+            }
+            if (map_model_visited(ex[k].dest) &&
+                map_model_page(ex[k].dest) == page) continue;
+            dy = up ? -1 : 1;
+            if (!map_layout_glyph(cx, cy, 0, dy, layer, &gx, &gy)) continue;
+            if (gx == cx && gy == cy + 2 * dy &&
+                map_layout_cell_free(cx, cy + dy, layer))
+                map_edges_stub(cx, cy, 0, dy);
+            map_edges_glyph(gx, gy, up ? MAP_EDGE_UP : MAP_EDGE_DOWN);
         }
     }
 
     for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
         int c;
         for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++) {
-            int e = g_edge[i][c], mask = e & 15;
-            if (mask == 0) continue;
-            if (cell_is_mark(c, i, n)) continue;
-            if ((e & MAP_EDGE_STAIR) && mask == (DT_EDGE_N | DT_EDGE_S))
-                dash_map_paint(c, i, DT_LINK_STAIR);
-            else
-                dash_map_paint(c, i, (unsigned char) (DT_LINK0 + mask));
+            unsigned char t = map_edges_tile(c, i);
+            if (t) dash_map_paint(c, i, t);
         }
     }
 

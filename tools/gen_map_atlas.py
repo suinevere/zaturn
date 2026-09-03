@@ -593,6 +593,41 @@ def free_cell(taken, x, y):
     return x, y
 
 
+def unresolvable(graph):
+    """The rooms no layout may place: every member of a same-name group larger
+    than AMBIG_MAX.
+
+    `assign()` already refuses these when reading a scan -- it cannot say which
+    drawn box is which, and trying every permutation of fifteen is not a
+    computation anybody wants. What was missed is that the refusal is not an
+    OCR limitation to be worked around. A maze is an arbitrary embedding: its
+    drawn positions carry no information, its exits contradict each other in
+    every direction, and Infocom printed those pages schematically or not at
+    all for exactly that reason.
+
+    So a layout that walks them in from the exit graph does not recover
+    something the scan lost; it invents a knot. The Lurking Horror's twelve Wet
+    Tunnels landed in a tangle around the origin, five to eleven cells from the
+    floor's measured rooms, with links running off the viewport in every
+    direction -- lines to nowhere, on a floor that read correctly before.
+
+    One name is a room and fifteen are a maze, so this counts the group and not
+    the room. Left out of the table, these rooms fall back to what they had
+    before: the runtime places each one as the player walks into it, which is
+    the honest answer for geography that has no plan.
+    """
+    seen = {}
+    for r, v in graph.items():
+        key = norm(v["name"])
+        if key:
+            seen.setdefault(key, []).append(r)
+    out = set()
+    for members in seen.values():
+        if len(members) > AMBIG_MAX:
+            out.update(members)
+    return out
+
+
 def walk_seed(graph, floors):
     """Lay every room out by walking the story's own exits.
 
@@ -611,9 +646,11 @@ def walk_seed(graph, floors):
     outward search for a free cell is free to put a room on the wrong side of
     the one it was reached from, and nothing here notices.
     """
+    skip = unresolvable(graph)
     by_floor = {}
     for r, f in floors.items():
-        by_floor.setdefault(f, []).append(r)
+        if r not in skip:
+            by_floor.setdefault(f, []).append(r)
 
     pos = {}
     for f, rooms in sorted(by_floor.items()):
@@ -634,6 +671,8 @@ def walk_seed(graph, floors):
                         continue
                     if dest not in members or dest in seen or dest not in graph:
                         continue
+                    if dest in skip:
+                        continue
                     dx, dy = STEP[d]
                     pos[dest] = free_cell(taken, ax + dx, ay + dy)
                     taken.add(pos[dest])
@@ -642,7 +681,7 @@ def walk_seed(graph, floors):
     return pos
 
 
-def fill_seed(graph, placed, page):
+def fill_seed(graph, placed, page, skip=frozenset()):
     """Place every room the scan missed, without moving one it found.
 
     A missing room hangs off a placed neighbour, one cell along the exit that
@@ -667,7 +706,7 @@ def fill_seed(graph, placed, page):
             for d, (kind, dest) in sorted(graph[a]["exits"].items()):
                 if kind != "OPEN" or d not in STEP or dest in pos:
                     continue
-                if dest not in graph:
+                if dest not in graph or dest in skip:
                     continue
                 dx, dy = STEP[d]
                 p = page[dest]
@@ -678,7 +717,7 @@ def fill_seed(graph, placed, page):
                 grew = True
         if grew:
             continue
-        rest = [r for r in sorted(graph) if r not in pos]
+        rest = [r for r in sorted(graph) if r not in pos and r not in skip]
         if not rest:
             return pos
         r = rest[0]
@@ -1105,7 +1144,11 @@ def build_merged(story, entry):
         return None, {"reason": "no carried cell names a room in this story"}
 
     page, by_level, fallback = merge_pages(graph, apage)
-    pos = fill_seed(graph, anchors, page)
+    # A room the scan declined rather than missed stays declined. See
+    # unresolvable(): a maze walked in from the exit graph is a knot, not a
+    # recovery, and it is the one thing a fill can do that makes a map worse.
+    skip = unresolvable(graph) - set(anchors)
+    pos = fill_seed(graph, anchors, page, skip=skip)
     frozen = set(anchors)
     repaired = repair(pos, page, graph, frozen=frozen)
     nudged = nudge(pos, page, graph, frozen=frozen)
@@ -1132,6 +1175,7 @@ def build_merged(story, entry):
         "arate": aligned / atested if atested else 0.0,
         "page": page, "names": {r: graph[r]["name"] for r in pos},
         "added": sorted(set(pos) - set(anchors)), "measured": len(anchors),
+        "declined": len(skip),
         "by_level": by_level, "fallback": fallback,
         "repaired": repaired, "nudged": nudged,
         "bad": bad, "abad": abad, "release": release, "serial": serial,
@@ -1229,6 +1273,12 @@ def emit_merged(w, t, st):
     w(f" |   then repaired and nudged against them. Every measured coordinate and\n")
     w(f" |   page above is unchanged and asserted so on each regeneration; the added\n")
     w(f" |   cells are marked '{ADDED_MARK}' in the list below.\n")
+    if st["declined"]:
+        w(f" |   {st['declined']} room(s) are left out on purpose: they belong to a group of\n")
+        w(f" |   more than {AMBIG_MAX} rooms sharing one name, which the scan declined for\n")
+        w(f" |   being unable to tell apart, and which a walk cannot place either --\n")
+        w(f" |   a maze's drawn positions are an arbitrary embedding. They keep the\n")
+        w(f" |   runtime's own placement, a room at a time as the player walks in.\n")
     w(f" |   No floor was created: {st['by_level']} added room(s) took the page of a placed\n")
     w(f" |   room on their own level, which is the same sheet and storey by\n")
     w(f" |   definition, and {st['fallback']} took the page of the nearest placed room\n")

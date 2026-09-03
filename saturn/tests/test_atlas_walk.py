@@ -42,16 +42,31 @@ import gen_map_atlas as G  # noqa: E402
 # its own: a derived table that quietly got worse would otherwise ship behind a
 # suite that still passes.
 WALKED = {
-    "HITCHHKR": 0.93, "INFOSAM5": 0.96, "INFOSAM7": 0.85, "MZORKI": 0.85,
-    "MZORKI2": 0.85, "MZORKII": 0.96, "PLNTFALL": 0.92, "SEASTLKR": 1.00,
-    "STARCROS": 0.87, "SUSPECT": 0.98,
+    "ADVENT": 0.94,
+    "HITCHHKR": 0.93,
+    "INFOSAM5": 0.98,
+    "INFOSAM7": 0.85,
+    "MZORKI": 0.92,
+    "MZORKI2": 0.91,
+    "MZORKII": 0.96,
+    "PLNTFALL": 0.92,
+    "SEASTLKR": 1.00,
+    "STARCROS": 0.87,
+    "SUSPECT": 0.98,
 }
 
 # Stories whose exits contradict a plane badly enough that the walk misses the
 # generator's own PASS_RATE. They ship no table and stay on the explored map,
 # which is what they do today -- listed so that a change making one of them
 # passable is a decision somebody takes rather than a diff nobody reads.
-WALK_REJECTED = {"ADVENT", "DEADLINE", "HYPOCOND"}
+#
+# Adventure used to be here at 78%. It left when the layout stopped placing
+# rooms from a group the scan would have declined: its own maze was most of what
+# it disagreed with, and without those it reaches 94%. Mini-Zork I went 85% to
+# 92% and Mini-Zork II 85% to 91% the same way. Refusing to draw a maze does not
+# merely avoid a knot, it stops the knot dragging the rest of the map down with
+# it.
+WALK_REJECTED = {"DEADLINE", "HYPOCOND"}
 
 
 def grid_graph(w, h, joins=("north", "south", "east", "west")):
@@ -222,6 +237,63 @@ def test_the_rejected_stories_still_ship_nothing(stem):
         f"{stem} now has a table; it was rejected for missing PASS_RATE, so "
         "either the layout improved and this test should record that, or "
         "something started shipping tables it should not")
+
+
+def test_nothing_lays_out_a_room_the_scan_could_not_tell_apart():
+    """The rule both paths owe to `assign()`, which refuses to place a group of
+    more than AMBIG_MAX identically-named rooms because it cannot say which
+    drawn box is which.
+
+    A layout read "unplaced" as "the OCR missed it" and walked those rooms in
+    anyway. Some were not missed -- they were declined, and the reason has not
+    gone away. The Lurking Horror's twelve Wet Tunnels went in as a knot around
+    the origin with exits contradicting each other in every direction, five to
+    eleven cells from the floor's measured rooms, which is what a maze is: an
+    arbitrary embedding whose drawn positions carry no information. Infocom
+    printed those schematically or not at all for the same reason.
+
+    Zork I's Maze x15, Zork III's Narrow Room x10 and Land of Shadow x8,
+    Infidel's Desert x10 and Cube x8, Spellbreaker's Octagonal Room x9, Zork
+    II's Oddly-angled Room x9, Enchanter's Courtyard x7, and the Mini-Zork
+    mazes are all the same case.
+    """
+    import collections
+    from mapscan import room_graph
+
+    z3 = ROOT / "saturn" / "cd" / "data" / "Z3"
+    text = INC.read_text(encoding="utf-8")
+    offenders = []
+    for m in re.finditer(r"MAP_ATLAS_(\w+)\[\] = \{(.*?)\n\};", text, re.S):
+        story = z3 / (m.group(1) + ".Z3")
+        if not story.exists():
+            continue
+        graph, _, _ = room_graph(str(story))
+        names = collections.Counter(
+            G.norm(r["name"]) for r in graph.values() if G.norm(r["name"]))
+        for line in m.group(2).splitlines():
+            c = re.match(r"\s*\{\s*(\d+),", line)
+            if not c:
+                continue
+            room = int(c.group(1))
+            if room in graph and names.get(G.norm(graph[room]["name"]), 0) > G.AMBIG_MAX:
+                offenders.append((m.group(1), graph[room]["name"]))
+    assert not offenders, (
+        "%d cell(s) place a room from a group the scan declined, e.g. %s"
+        % (len(offenders), offenders[:6]))
+
+
+def test_the_unresolvable_rule_is_about_the_group_not_the_room():
+    """One room called Maze is a room; fifteen are a maze. The predicate has to
+    count the group, or it would refuse a story that happens to name two rooms
+    alike and accept a fifteen-room labyrinth one name at a time."""
+    small = {i: {"name": "Twin", "exits": {}} for i in range(1, 3)}
+    small[3] = {"name": "Hall", "exits": {}}
+    assert G.unresolvable(small) == set()
+
+    big = {i: {"name": "Maze", "exits": {}} for i in range(1, G.AMBIG_MAX + 2)}
+    big[99] = {"name": "Hall", "exits": {}}
+    assert G.unresolvable(big) == set(range(1, G.AMBIG_MAX + 2))
+    assert 99 not in G.unresolvable(big)
 
 
 def test_no_walked_table_reaches_past_the_cell_room_field():

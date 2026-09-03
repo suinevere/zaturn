@@ -1,11 +1,12 @@
 ---
 name: 2026-09-03-map-party-colours-handoff
-description: "The map's ink now follows the sheet it is drawn on rather than the player's font colour, every seat stands on it as a figure of its own colour, a shared room draws a quartered mark, the roster moved to the bottom corner beside the floor number and the pad legend is gone. Three palette slots are borrowed from the stone ramp for the seat colours and given back when the screen closes. Never on a screen."
+description: "The map's ink now follows the sheet it is drawn on rather than the player's font colour, every seat stands on it as a figure of its own colour, a shared room draws a quartered mark, the crosshair stays red on all four sheets, the labels moved to the top and bottom edges and the pad legend is gone. Four palette slots are borrowed from the stone ramp for the seat colours and given back when the screen closes. Also: the gamepad's marble strip stopped outstaying a switch to a real keyboard. Never on a screen."
 metadata:
   type: project
 ---
 
-Branch `map-baggage-marks`, commit `1c9d95f` on top of 82dbbd2. Continues
+Branch `map-baggage-marks`, commits `1c9d95f` and `83a28f4` on top of 82dbbd2 --
+the second is the owner's four corrections after reading the first. Continues
 [[2026-09-03-map-inset-to-parchment-handoff]] and
 [[2026-09-01-map-floors-crosshair-and-party-handoff]]. One wave, all of it from
 the owner's list.
@@ -24,18 +25,24 @@ the owner's list.
 
 ## The palette is the whole difficulty
 
-The map needs **four** colours on NBG2 at once -- the player's and one per other
-seat -- and there is exactly **one** entry nothing on the stone reaches
-(`DASH_PAL_ACCENT` 14, the crosshair's). The other three are **borrowed**:
-`DASH_PAL_PEER0..2` are 4, 5 and 6, which are shadow-face and marble body in
-`dash_palette`, and `dash_map_ink` writes colours over them for as long as the
-map is up. `dash_tint` on the way out rewrites all sixteen from the ramp and
-calls the loan in.
+The map needs **five** colours on NBG2 at once -- the crosshair, the player's,
+and one per other seat -- and there is exactly **one** entry nothing on the
+stone reaches. That one, `DASH_PAL_ACCENT` 14, is spent on the crosshair and
+nothing else: it is the one mark a player looks for rather than reads, so it is
+red on every sheet and in every party and `dash_map_ink` does not write it. The
+first pass had the player's figure sharing it, which made the cursor change
+colour with the sheet.
 
-That is safe for one measured reason and not for a comfortable one: the map's
-own tiles reach palette entries **0, 1, 2, 12, 13, 14 and 15 and nothing else**
--- `dash_map_begin` clears every other cell to `DT_BLANK` and this screen draws
-no box -- so 3..11 are unreachable while it is drawn. Both halves are held by
+The other four are **borrowed**: `DASH_PAL_PARTY0..3` are 3, 4, 5 and 6 -- a
+groove, a shadow face and two steps of marble body in `dash_palette` -- and
+`dash_map_ink` writes colours over them for as long as the map is up.
+`dash_tint` on the way out rewrites all sixteen from the ramp and calls the loan
+in.
+
+That is safe for one measured reason and not for a comfortable one: outside the
+four, the map's own tiles reach palette entries **0, 1, 2, 12, 13, 14 and 15 and
+nothing else** -- `dash_map_begin` clears every other cell to `DT_BLANK` and this
+screen draws no box -- so 3..11 are unreachable while it is drawn. Both halves are held by
 `saturn/tests/test_dash_accent.py`: only the peer figures may name those
 entries, and `write_palette` must **not** grow an exemption arm for them, since
 an exemption would leave a player's colour on the marble for the rest of the
@@ -45,7 +52,9 @@ session.
 for the same reason and it should be read as a real weakening: that check says a
 mark must be four palette steps clear of the tinted ground, and a figure drawn
 wholly in entry 5 is *inside* it. The claim that replaces it is that entry 5 is
-not on the ramp while the map is drawn. If anything ever paints marble on the
+not on the ramp while the map is drawn. The shield is not exempted -- its ring is
+still on the ramp, so only its quartered core is borrowed and the tile clears the
+band on its own. If anything ever paints marble on the
 map screen, three seat colours appear in the stone and the exemption is what let
 it through.
 
@@ -56,6 +65,9 @@ it through.
   previous session's accent already was), 3 takes `display_text_rgb` -- the
   player's own font colour, because that sheet has nothing of its own to read
   against.
+- **The crosshair is not part of the ink.** It keeps the accent on all four
+  sheets. Everything else the map draws in a colour -- the labels, the figures,
+  the shield -- follows the sheet or the seat.
 - **The map's labels stop taking the player's font colour on the other three
   sheets.** A bright green chosen to be read on black is barely there on tan.
   `map_view_show` now calls `text_set_color(ink, MAP_GROUND_555)` where it used
@@ -83,15 +95,47 @@ it through.
   bargain `DT_LINK0`'s mask 0 makes. Mask 0 is asserted byte-identical to
   `DT_ROOM_HERE`, which is what makes the four quadrant comparisons mean
   anything.
+- **The picked room's name is on the drawing's own top row** (`MAP_ROW_ROOM`,
+  row 3, the top gutter). It is the label a player reads while moving the cursor
+  and the cursor is somewhere in the grid below it, so it belongs where the eye
+  is not. It shares the gutter with the edge stubs, which is the cost.
 - **The roster sits at the bottom** on the floor number's own row
-  (`MAP_ROW_ROSTER`, row 23) with the others climbing above it, and the picked
-  room name stays on row 24. The local player's line is the one that is always
-  there, so it is the one that never moves. `MAP_ROW_TOP` bounds the climb at
-  four rows, which is one short if the server has sent four seats and not yet
-  said which is ours.
+  (`MAP_ROW_ROSTER`, row 24 -- the last solid row of the sheet) with the others
+  climbing above it. The local player's line is the one that is always there, so
+  it is the one that never moves. `MAP_ROW_TOP` bounds the climb at four rows,
+  which is one short if the server has sent four seats and not yet said which is
+  ours. The floor number ends three columns in from the drawing's right edge.
 - 34 tiles added at the end of the set (18 figures, 16 shields), so nothing
   before them renumbered: `DT_N` 144 -> 178, 1,088 more bytes of VDP2 VRAM in
   bank B0. The three pinned indices in `test_dash_tiles.c` are updated.
+
+## The gamepad's marble outstayed the keyboard
+
+Reported separately and fixed in the same commit. Switching to a real Saturn
+keyboard left the controller's marble strip on screen.
+
+It is **not** the input aggregate reading the keyboard as a pad -- that was the
+first theory and it is wrong. SRL screens the keyboard out by peripheral family
+(`0x30` against `Digital`'s `0x00`), so `d0.IsConnected()` is already false on a
+port holding one.
+
+The real shape is two rules disagreeing about the same silence.
+`dash_frame_end` drops the layer on any frame no renderer claimed it, reading
+"nobody drew" as "nobody wants it". `dash_hold_any` -- which `menu_sync` runs,
+and every loop that ends in `menu_sync` therefore runs every frame -- reads the
+same silence as "keep whatever is painted", because it exists for fades and
+modal waits that hold a composed screen for many frames. `render_keyboard`'s
+real-keyboard branch dropped the image window and then said nothing at all about
+the strip, so the two rules met and the second won.
+
+The fix is that the branch now says it: `dash_input_hide()` in `dash_map.c`
+clears the layer only when what is painted is one of the four input-strip
+variants, leaving a menu box, the map and the hold latch alone. A renderer that
+has decided there is no strip states it rather than declining to speak.
+
+`online.cxx`'s terminal loop is where this is worst -- it ends every frame in
+`menu_sync` -- but the fix is in `render_keyboard`, which every loop that can be
+in keyboard mode goes through, so it covers all of them.
 
 ## State
 
@@ -105,10 +149,11 @@ suite passes at 98 passed, 1 skipped.
 
 **Never seen on a screen.** The colours were checked by compositing the real
 tiles through `write_palette`'s own arithmetic and `dash_map_ink`'s overrides in
-a scratch script -- black/red/green/blue figures and the sixteen shields on the
-map's tan, and the same again with the player red to confirm the first seat
-falls back to black. That proves the tiles and the palette agree; it proves
-nothing about the sheet, the text rows or the roster on a television.
+a scratch script -- black/red/green/blue figures, the sixteen shields and the
+reticle on the map's tan, and the same again with the player red to confirm the
+first seat falls back to black and the cursor does not. That proves the tiles and
+the palette agree; it proves nothing about the sheet, the text rows, the roster
+or the marble fix on a television.
 
 ## Open for the owner
 
@@ -121,3 +166,6 @@ nothing about the sheet, the text rows or the roster on a television.
   now there can be four.
 - **The netbin draws on no sheet**, so `g_sheet` stays 0 and its ink is black on
   flat tan. That is the readable choice, but nobody has looked at it.
+- **The room name now shares the top gutter with the edge stubs.** A passage
+  running off the top edge under a long room name will cross it. The gutter is
+  two cells and the stubs are short, so it should be rare rather than never.

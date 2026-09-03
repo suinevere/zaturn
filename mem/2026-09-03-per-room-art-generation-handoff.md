@@ -1,15 +1,15 @@
 ---
 name: per-room-art-generation-handoff
-description: Every room of the thirty non-Zork games is getting a picture drawn from its own title and prose, one per room with none shared; the byte-wide picture index, the 26-archive stem ceiling and three separate causes of people appearing in the art are all fixed, brightness now aims at the disc's own 24 rather than 40, and archives are resident again but ordered by a depth-first walk of each game's exit graph, which beats every other key tried. 625 of 1,931 rooms are drawn; the owner runs the generator, not the agent.
+description: Every room of the thirty non-Zork games is getting a picture drawn from its own title and prose, one per room with none shared; the byte-wide picture index, the 26-archive stem ceiling and three separate causes of people appearing in the art are all fixed, brightness now aims at the disc's own 24 rather than 40, and archives are resident again but ordered by a depth-first walk of each game's exit graph, which beats every other key tried. Pushed as three commits on art-v2; 725 of 1,931 rooms drawn with generation still running, and the owner runs the generator, not the agent.
 metadata:
   type: project
 ---
 
 ## Where this got to
 
-Twenty commits, `9bfc0a6` through `06a3c08`, on `input-dashboard`. `git log
-6673a78..HEAD` is the narrative and the reasoning is in the messages; this
-records only what a diff cannot say.
+Pushed as **three commits on `art-v2`**, `ea61d83` / `685efd3` / `40c7b37`,
+based on `origin/main` at `0f1bc12`. The reasoning is in those messages and in
+the twenty commits they squash; this records only what a diff cannot say.
 
 **The owner runs the long jobs. The agent does not.** This was said explicitly
 and violated twice — a background `gen_art_archive` was started after the
@@ -17,16 +17,22 @@ instruction, and earlier a stale one was left in flight. See Traps.
 
 ## State on disk right now
 
-- `tools/assets/art/manifest.json` — **734 plates**, of which **625 are
-  room-specific** out of 1,931 (32%). 736 raw generations on disk.
-- **Styled plates and generated archives are deliberately flushed.**
-  `git status --short analysis/zork_bg/png` shows **109 deletions** — committed
-  scene plates removed so they rebuild at the new brightness. Recover with
-  `gen_art_archive.py`, *not* `git checkout`, which restores the old grade.
-- `saturn/tests/test_lwram_budget.py::test_every_frame_lies_inside_its_archive`
-  is **red** until the rebuild runs. That is the flush, not a defect.
+- `tools/assets/art/manifest.json` — **834 plates**, of which **725 are
+  room-specific** out of 1,931 (38%), 852 raw generations. **Generation is
+  running**, so this file moves; it is deliberately left uncommitted.
+- **Styled plates and generated archives are flushed** so they rebuild at the
+  new brightness. The committed styled plates were restored before the squash,
+  so nothing is lost from git — but they are still at the OLD target of 40
+  until `gen_art_archive.py` runs. Rebuild; do not `git checkout` them.
+- Two known reds, neither from this work:
+  `test_every_frame_lies_inside_its_archive` (the frame table names GEN
+  archives that were flushed — the rebuild clears it), and three of
+  `origin/main`'s own test files that fail to collect because `cv2` is not in
+  `tools/.venv`: `test_trace_edges.py`, `test_gen_map_marks.py`,
+  `test_map_scan_audit.py`. 275 pass otherwise.
 - Forge is up on `127.0.0.1:7860`, GPU verified working (torch 2.13.0+cu126,
-  sm_61 present, 1070 Ti). Nothing is generating.
+  sm_61 present, 1070 Ti).
+- `SaturnRingLib` is modified in the working tree and was left alone throughout.
 
 ## The command sequence
 
@@ -85,20 +91,33 @@ for torch, not `tools/.venv`.
   happened three times: `\b` became a literal backspace inside a test, `\n`
   became a real newline inside a string. Use the Edit tool for anything
   containing backslashes.
+- **`origin/main` moves under you.** It advanced to `0f1bc12` mid-session with
+  the owner's own work, including *their own fix to the same map-parchment
+  test* this session had fixed. Fetch before rebasing, and when both sides
+  changed a file the owner's version on main wins — mine was dropped. The same
+  applies to `MEMORY.md`, where both sides append and both entries are kept.
+- **Never checkout or switch branches while generation is running** — git
+  refuses over a live `manifest.json`, and forcing it loses drawn plates. Back
+  it up, do the git work, restore it.
 - Run everything with `tools/.venv/Scripts/python.exe`, except `check_plates.py`
   which needs Forge's venv.
 
 ## What is not done
 
-- 1,306 rooms still undrawn (~2 hours GPU).
+- 1,206 rooms still undrawn (~2 hours GPU); generation is in flight.
 - Nothing has been built or run on hardware. `room_art.cxx` passes SH-2
   `-fsyntax-only` only.
 - `music_pause`/`music_resume` around the archive read is identified and
-  untried — see `c87ef7f`. Whether the two extra drive commands are worth it is
-  a question about a real drive.
+  untried: they already exist to bracket a seek so the engine does not hear it
+  as a track ending. Whether two extra drive commands are worth it is a
+  question about a real drive.
 - Per-game packing would remove archive crossings almost entirely but a game
-  needs ~425 KB against a 256 KB cap; unresolved, see `6f161ee` for the
-  measurements.
+  needs ~425 KB against a 256 KB cap; unresolved. The four orderings measured
+  are in `ea61d83`.
+- Reading one record per room instead of a resident archive was built, measured
+  and reverted: nine times less data and 371 KB of LWRAM back, but the seek
+  moved from 33% of moves to 42%, and the count matters more than the size
+  because each one is what the music hears as a track ending.
 
 ## Suggested skills
 

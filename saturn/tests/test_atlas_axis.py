@@ -22,7 +22,13 @@ repo does.
 Nothing here enforces alignment. A plan drawn square to a building rather than
 to the compass is Infocom's and not an error, and refusing those would drop
 Zork I, The Lurking Horror and The Witness from the atlas entirely and fall all
-three back to the graph walk. What this holds is that no regeneration quietly
+three back to the explored map.
+
+Ten of the tables measured here were never drawn by anybody: the stories with no
+scannable map are laid out from their own exit graphs, and this file measures
+them alongside the rest because the regression question is the same one. It is
+not the same NUMBER, though, and the two blocks of BASELINE should not be
+compared or totalled. What this holds is that no regeneration quietly
 makes a table worse -- which is the whole value of a number nobody can see on
 screen.
 """
@@ -46,6 +52,14 @@ CARD = {W.index("north"): (0, -1), W.index("south"): (0, 1),
 # ">= this rate", so a regeneration that improves a table passes and one that
 # loses ground fails. Raise a number here only alongside the table that earned
 # it.
+#
+# The second block is the stories with no map to scan, laid out from their own
+# exit graphs instead (see test_atlas_walk.py). They are held to the same rule
+# for the same reason -- a table nobody measures can get worse without anybody
+# hearing -- but they are NOT comparable to the block above them and were never
+# meant to be: one is how well a reading of Infocom's drawing agrees with the
+# story, the other is how well an inference from the story agrees with itself.
+# Which kind a table is, is recorded in the .inc, not here.
 BASELINE = {
     "BALLYHOO": (15, 19),
     "CUTHROAT": (33, 35),
@@ -65,6 +79,18 @@ BASELINE = {
     "ZORK1": (75, 113),
     "ZORK2": (17, 20),
     "ZORK3": (40, 44),
+
+    # Walked, not measured.
+    "HITCHHKR": (18, 20),
+    "INFOSAM5": (109, 147),
+    "INFOSAM7": (35, 69),
+    "MZORKI": (46, 84),
+    "MZORKI2": (56, 94),
+    "MZORKII": (40, 53),
+    "PLNTFALL": (115, 138),
+    "SEASTLKR": (25, 38),
+    "STARCROS": (131, 170),
+    "SUSPECT": (70, 98),
 }
 
 

@@ -69,6 +69,7 @@ import argparse
 import itertools
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -81,6 +82,19 @@ from mapscan import (DPI, DIRW, FL_DIR, PROP_MAX, Z3DIR, MIN_BOXES, MIN_NAMED,
                      read_labels, norm, base_and_index, match_name, page_items)
 
 BASE_URL = "https://infodoc.plover.net/maps/"
+
+# Where the emitted table lives, so a walk-only run can carry the measured
+# tables forward without rebuilding them -- see carried().
+INC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        os.pardir, "saturn", "src", "engine",
+                        "map_atlas_data.inc")
+
+# The sentence a walked table's header carries and a measured one does not.
+# Provenance is recorded rather than implied: these rooms were never on a
+# printed map, and a reader who assumed otherwise would trust a coordinate that
+# is an inference from the exit graph. tests/test_atlas_walk.py holds the set of
+# tables carrying it, so neither kind can quietly turn into the other.
+DERIVED_MARK = "DERIVED, not measured:"
 
 # page_items' memo, at module scope rather than per build_game. The sweep below
 # lays one game out dozens of ways and OCR is far and away the slowest thing
@@ -181,6 +195,26 @@ CELL_MIN, CELL_MAX = -128, 127
 # of a left-of or above-of relation.
 NUDGE_SPAN = 2
 NUDGE_ROUNDS = 6
+
+# The walk's own three numbers. REPAIR_SPAN is wider than NUDGE_SPAN because the
+# fault it fixes is bigger: a nudge tidies a room a lane off true, a repair
+# retrieves one the free-cell search pushed to the wrong side entirely. Three
+# cells covers what an outward ring search can do before it gives up, and the
+# square is 48 trials a room rather than the nudge's 8 -- affordable offline and
+# nowhere near the runtime.
+REPAIR_SPAN = 3
+REPAIR_ROUNDS = 8
+
+# How far free_cell will look for somewhere to put a room before it gives up and
+# stacks. Reached by nothing on the disc; it is a bound on a search, not a
+# tuning knob.
+FILL_SPAN = 64
+
+# One cell per compass direction. The step a walked layout takes when it follows
+# an exit -- up, down, in and out have no planar step and are left out, which is
+# the same set LEVEL_DIRS splits floors on.
+STEP = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0),
+        "ne": (1, -1), "nw": (-1, -1), "se": (1, 1), "sw": (-1, 1)}
 
 HALF = {
     "north": lambda dx, dy: dy < 0, "south": lambda dx, dy: dy > 0,
@@ -519,6 +553,140 @@ def nudge(pos, page, graph):
     return moved
 
 
+def free_cell(taken, x, y):
+    """The nearest unclaimed cell to (x, y), searched outward in rings.
+
+    The same bargain map_model.c's place() makes at runtime and for the same
+    reason: two rooms in one cell draw one mark and lose the other, which is a
+    worse fault than a room a step off where its exit points.
+    """
+    if (x, y) not in taken:
+        return x, y
+    r = 1
+    while r <= FILL_SPAN:
+        for dx in range(-r, r + 1):
+            for dy in (-r, r):
+                if (x + dx, y + dy) not in taken:
+                    return x + dx, y + dy
+        for dy in range(-r + 1, r):
+            for dx in (-r, r):
+                if (x + dx, y + dy) not in taken:
+                    return x + dx, y + dy
+        r += 1
+    return x, y
+
+
+def walk_seed(graph, floors):
+    """Lay every room out by walking the story's own exits.
+
+    The seed a story with no printed map gets. Breadth-first from the
+    lowest-numbered room of each floor, one cell per compass direction, with a
+    taken cell resolved by free_cell. One floor at a time, because floors stand
+    on each other's footprint and a cell is only owed to be unique within one.
+
+    Every room is placed, including one nothing walks to -- a room reachable
+    only through a conditional exit is its own island, and an island is exactly
+    what a player most wants found for them. Islands are seeded at the origin of
+    their own floor and grown from there.
+
+    This is a seed and not a layout. On its own it reaches 80% of the half-plane
+    agreement a scan gets, against 94% once repair() has been over it: an
+    outward search for a free cell is free to put a room on the wrong side of
+    the one it was reached from, and nothing here notices.
+    """
+    by_floor = {}
+    for r, f in floors.items():
+        by_floor.setdefault(f, []).append(r)
+
+    pos = {}
+    for f, rooms in sorted(by_floor.items()):
+        members = set(rooms)
+        taken, seen = set(), set()
+        for start in sorted(rooms):
+            if start in seen:
+                continue
+            pos[start] = free_cell(taken, 0, 0)
+            taken.add(pos[start])
+            seen.add(start)
+            queue = [start]
+            while queue:
+                a = queue.pop(0)
+                ax, ay = pos[a]
+                for d, (kind, dest) in sorted(graph[a]["exits"].items()):
+                    if kind != "OPEN" or d not in STEP:
+                        continue
+                    if dest not in members or dest in seen or dest not in graph:
+                        continue
+                    dx, dy = STEP[d]
+                    pos[dest] = free_cell(taken, ax + dx, ay + dy)
+                    taken.add(pos[dest])
+                    seen.add(dest)
+                    queue.append(dest)
+    return pos
+
+
+def repair(pos, page, graph):
+    """Move rooms onto the correct SIDE of their neighbours.
+
+    The counterpart nudge() cannot be. nudge may only ever raise the number of
+    exits on their own axis and is forbidden from losing a half-plane
+    agreement -- that guard is what makes it safe to run on a measured table --
+    so by construction it cannot repair a half-plane the seed got wrong. A seed
+    that resolves a taken cell by searching outward gets plenty wrong: a room
+    displaced two cells the wrong way is still placed, still unique, and now
+    contradicts the exit that reached it.
+
+    Same greedy shape as nudge, scored the other way round: half-plane first,
+    axis as the tie-break. It carries nudge's vertical guard for the reason
+    nudge carries it -- without it this pass turned a canyon over, putting the
+    bottom above the top to straighten something else.
+
+    Ordering is object order and the search is a square rather than two axes,
+    since a room on the wrong side is usually wrong in both.
+    """
+    idx = incident(graph, pos)
+    taken = {(page[r], x, y) for r, (x, y) in pos.items()}
+    moved = 0
+    for _ in range(REPAIR_ROUNDS):
+        gained = 0
+        for room in sorted(pos):
+            edges = idx[room]
+            if not edges:
+                continue
+            base_axis, base_half, base_vert = score_edges(edges, pos, page)
+            ox, oy = pos[room]
+            best = None
+            for dx in range(-REPAIR_SPAN, REPAIR_SPAN + 1):
+                for dy in range(-REPAIR_SPAN, REPAIR_SPAN + 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx, ny = ox + dx, oy + dy
+                    if not (CELL_MIN <= nx <= CELL_MAX and
+                            CELL_MIN <= ny <= CELL_MAX):
+                        continue
+                    if (page[room], nx, ny) in taken:
+                        continue
+                    pos[room] = (nx, ny)
+                    a2, h2, v2 = score_edges(edges, pos, page)
+                    pos[room] = (ox, oy)
+                    if v2 < base_vert or (h2, a2) <= (base_half, base_axis):
+                        continue
+                    key = (h2 - base_half, a2 - base_axis, -abs(dx) - abs(dy))
+                    if best is None or key > best[0]:
+                        best = (key, nx, ny)
+            if best is None:
+                continue
+            _, nx, ny = best
+            taken.discard((page[room], ox, oy))
+            taken.add((page[room], nx, ny))
+            pos[room] = (nx, ny)
+            gained += 1
+            moved += 1
+        if gained == 0:
+            break
+    return moved
+
+
 def storeys(graph, sheet):
     """{room: floor index} -- one floor per vertical step of the story's own
     routes, within one drawn sheet.
@@ -721,6 +889,146 @@ def build_game(story, pdf, verbose=False, tol=LANE_TOLS[0],
     return pos, release, serial, stats
 
 
+def build_walked(story):
+    """(pos, release, serial, stats) for a story with no printed map.
+
+    The same pipeline the scanned games take, with the seed swapped: the exit
+    graph in place of the drawing, then repair, then the same nudge and the same
+    scoring. Floors come from storeys() over a single sheet, since there is no
+    book to have been bound into sheets -- which is why a walked table's floors
+    are the story's own levels and nothing else.
+
+    Returns pos None when the layout misses PASS_RATE, so the caller drops it
+    exactly as it drops a scan that cannot be read. A story dropped here keeps
+    the behaviour it has today: the map shows what the player has walked.
+    """
+    graph, release, serial = room_graph(os.path.join(Z3DIR, story + ".Z3"))
+    floors, npages, unhonoured = storeys(graph, {r: 0 for r in graph})
+    pos = walk_seed(graph, floors)
+    pos = {k: v for k, v in pos.items()
+           if CELL_MIN <= v[0] <= CELL_MAX and CELL_MIN <= v[1] <= CELL_MAX}
+    page = {k: floors[k] for k in pos}
+    repaired = repair(pos, page, graph)
+    nudged = nudge(pos, page, graph)
+
+    agreed, tested, bad = agreement(pos, graph)
+    aligned, atested, abad = alignment(pos, graph)
+    rate = agreed / tested if tested else 0.0
+    stats = {
+        "rooms": len(pos), "npages": len(set(page.values())),
+        "agreed": agreed, "tested": tested, "rate": rate,
+        "aligned": aligned, "atested": atested,
+        "arate": aligned / atested if atested else 0.0,
+        "unhonoured": unhonoured, "page": page,
+        "names": {r: graph[r]["name"] for r in pos},
+        "bad": bad, "abad": abad,
+        "repaired": repaired, "nudged": nudged, "derived": True,
+    }
+    if tested and rate < PASS_RATE:
+        stats["reason"] = f"walked layout agrees with only {rate:.0%} of its exits"
+        return None, release, serial, stats
+    if not tested:
+        stats["reason"] = "no compass exit between two placed rooms to score"
+        return None, release, serial, stats
+    return pos, release, serial, stats
+
+
+def carried(path):
+    """Every table already in an emitted .inc, as the verbatim text of its block.
+
+    A run that adds walked tables must not rebuild the measured ones: doing so
+    needs the map scans, which are not in the repo and must not be, and it would
+    put eighteen tables measured off paper at the mercy of a code change aimed
+    at the ten that were not. Carrying the block as TEXT rather than as
+    coordinates is what makes that guarantee cheap -- the emitted bytes are
+    reproduced, headers and stats and all, so a diff of a walk run shows
+    insertions and nothing else.
+
+    Returns {} when the file does not exist yet, which is what a first
+    generation from scratch sees.
+    """
+    if not os.path.exists(path):
+        return {}
+    text = open(path, encoding="utf-8").read()
+    out = {}
+    for m in re.finditer(
+            r"(/\*-{10,}\n \| MAP_ATLAS_(\w+)\n.*?\nstatic const MapAtlasCell "
+            r"MAP_ATLAS_\2\[\] = \{.*?\n\};\n)", text, re.S):
+        out[m.group(2)] = {"story": m.group(2), "block": m.group(1)}
+    for m in re.finditer(
+            r"\{ (\d+)u, \"([^\"]+)\", MAP_ATLAS_(\w+),.*?\n\s+(\d+) \},",
+            text, re.S):
+        t = out.get(m.group(3))
+        if t is not None:
+            t["release"] = int(m.group(1))
+            t["serial"] = m.group(2)
+            t["npages"] = int(m.group(4))
+    return {k: v for k, v in out.items() if "release" in v}
+
+
+def emit_cells(w, t, st):
+    """One table's cells. Shared by both kinds, so a walked table cannot come
+    out in a different shape from a measured one."""
+    w(f"static const MapAtlasCell MAP_ATLAS_{t['story']}[] = {{\n")
+    for room in sorted(t["pos"]):
+        x, y = t["pos"][room]
+        assert CELL_MIN <= x <= CELL_MAX and CELL_MIN <= y <= CELL_MAX, (
+            f"{t['story']} room {room} at ({x},{y}) will not fit a signed char")
+        # MapAtlasCell.room is an unsigned char. A story numbering its rooms
+        # past 255 cannot be tabled at all, and would truncate in silence --
+        # Seastalker and Suspect both reach 254, which is why this is asserted
+        # rather than assumed.
+        assert 0 <= room <= 255, (
+            f"{t['story']} room {room} will not fit MapAtlasCell.room")
+        nm = st["names"].get(room, "")
+        w(f"    {{ {room:3d}, {st['page'][room]:2d}, {x:4d}, {y:4d} }},"
+          f"   /* {nm} */\n")
+    w("};\n")
+
+
+def emit_walked(w, t, st):
+    """One table laid out from the story's exit graph, and its header.
+
+    A separate header rather than the measured one with fields left blank: a
+    walked table has no lane tolerance, no drawn sheet and no page of a book to
+    cite, and printing those as zero would read as a measurement of zero.
+    """
+    w("\n/*----------------------\n")
+    w(f" | MAP_ATLAS_{t['story']}\n")
+    w(f" | Description: {t['story']}, release {t['release']} serial {t['serial']}.\n")
+    w(f" |   {DERIVED_MARK} Infocom printed no map for this story that could be\n")
+    w(f" |   scanned, so these {st['rooms']} rooms are laid out by walking the story's own\n")
+    w(f" |   exits -- one cell per compass direction, breadth first, a taken cell\n")
+    w(f" |   resolved by the nearest free one -- and then repaired and nudged by the\n")
+    w(f" |   same passes a measured table gets. The coordinates are an inference from\n")
+    w(f" |   the exit graph and evidence of nothing else: where two exits cannot both\n")
+    w(f" |   be satisfied on a plane, which one gives way was decided here and not by\n")
+    w(f" |   a draughtsman who had seen the game.\n")
+    w(f" |   {st['agreed']} of {st['tested']} compass exits between two placed rooms land in the\n")
+    w(f" |   half-plane their direction names ({st['rate']:.0%}), which is the test this was\n")
+    w(f" |   accepted on, at the same PASS_RATE a scan has to clear. Of the cardinal\n")
+    w(f" |   ones, {st['aligned']} of {st['atested']} are on their own axis ({st['arate']:.0%}).\n")
+    w(f" |   {st['npages']} floor(s), one per vertical step of the story's own routes -- there\n")
+    w(f" |   is no drawn sheet to pair them with, so a floor here is a level and\n")
+    w(f" |   nothing else.\n")
+    if st["unhonoured"]:
+        w(f" |   {st['unhonoured']} vertical exit(s) do not fit one ordering of the levels,\n")
+        w(f" |   which is a real loop in the geography rather than a fault.\n")
+    w(f" |   {st['repaired']} room(s) moved onto the right side of a neighbour, then\n")
+    w(f" |   {st['nudged']} moved onto an exit's own axis.\n")
+    if st["bad"]:
+        w(" |\n |   Exits the layout contradicts. On a measured table these are the\n")
+        w(" |   drawing's exceptions; here they are rooms whose exits no plane can\n")
+        w(" |   satisfy at once, which is the same fact with nobody to blame:\n")
+        for a, d, b in st["bad"][:8]:
+            w(f" |     {a} --{d}--> {b}\n")
+        if len(st["bad"]) > 8:
+            w(f" |     ... and {len(st['bad']) - 8} more\n")
+    w(" | Author: suinevere\n")
+    w(" ----------------------*/\n")
+    emit_cells(w, t, st)
+
+
 def emit(tables, out):
     w = out.write
     w("/*----------------------\n")
@@ -729,10 +1037,25 @@ def emit(tables, out):
     w(" |   room positions measured off Infocom's own maps and validated against each\n")
     w(" |   story's exit graph. See that script for the derivation and map_atlas.h\n")
     w(" |   for why an authored table exists.\n")
+    w(" |     Not every table here was measured. A story Infocom printed no map for --\n")
+    w(" |   or none that survives to be scanned -- is laid out from its own exit\n")
+    w(" |   graph instead, and its header says so. Both kinds are the same bytes to\n")
+    w(" |   the runtime and are held to the same PASS_RATE; what differs is what the\n")
+    w(" |   coordinates are evidence of, which is why the distinction is written down\n")
+    w(" |   rather than left to whoever reads the file next.\n")
     w(" | Author: suinevere\n")
     w(" ----------------------*/\n")
     for t in tables:
+        # A table carried forward from the previous emit, reproduced byte for
+        # byte. See carried(): a walk run must not put the measured tables at
+        # the mercy of a change aimed at the walked ones.
+        if "block" in t:
+            w("\n" + t["block"])
+            continue
         st = t["stats"]
+        if st.get("derived"):
+            emit_walked(w, t, st)
+            continue
         w("\n/*----------------------\n")
         w(f" | MAP_ATLAS_{t['story']}\n")
         w(f" | Description: {t['story']}, release {t['release']} serial {t['serial']}.\n")
@@ -768,16 +1091,7 @@ def emit(tables, out):
                 w(f" |     ... and {len(st['bad']) - 8} more\n")
         w(" | Author: suinevere\n")
         w(" ----------------------*/\n")
-        w(f"static const MapAtlasCell MAP_ATLAS_{t['story']}[] = {{\n")
-        for room in sorted(t["pos"]):
-            x, y = t["pos"][room]
-            assert CELL_MIN <= x <= CELL_MAX and CELL_MIN <= y <= CELL_MAX, (
-                f"{t['story']} room {room} at ({x},{y}) will not fit a "
-                "signed char")
-            nm = st["names"].get(room, "")
-            w(f"    {{ {room:3d}, {st['page'][room]:2d}, {x:4d}, {y:4d} }},"
-              f"   /* {nm} */\n")
-        w("};\n")
+        emit_cells(w, t, st)
     w("\n/*----------------------\n")
     w(" | MAP_ATLAS_STORIES / MAP_ATLAS_STORY_N\n")
     w(" | Description: Every story with an authored table, keyed by the release and\n")
@@ -790,10 +1104,11 @@ def emit(tables, out):
     w(" ----------------------*/\n")
     w("static const MapAtlasStory MAP_ATLAS_STORIES[] = {\n")
     for t in tables:
+        npages = t["npages"] if "block" in t else t["stats"]["npages"]
         w(f'    {{ {t["release"]}u, "{t["serial"]}", MAP_ATLAS_{t["story"]},\n')
         w(f'      (unsigned short) (sizeof MAP_ATLAS_{t["story"]} /\n')
         w(f'                        sizeof MAP_ATLAS_{t["story"]}[0]),\n')
-        w(f'      {t["stats"]["npages"]} }},\n')
+        w(f'      {npages} }},\n')
     w("};\n\n")
     w("#define MAP_ATLAS_STORY_N \\\n")
     w("    ((int) (sizeof MAP_ATLAS_STORIES / sizeof MAP_ATLAS_STORIES[0]))\n")
@@ -801,8 +1116,16 @@ def emit(tables, out):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cache", required=True,
-                    help="directory for downloaded map PDFs; not part of the repo")
+    ap.add_argument("--cache",
+                    help="directory for downloaded map PDFs; not part of the "
+                         "repo. Required unless --walk is the whole run")
+    ap.add_argument("--walk", action="store_true",
+                    help="lay out the stories that have no map to scan from "
+                         "their own exit graphs, carrying every table already "
+                         "emitted forward untouched. Needs no --cache: the "
+                         "measured tables are reproduced from the shipped .inc "
+                         "rather than rebuilt, which is what lets this run "
+                         "anywhere the repo does")
     ap.add_argument("--only", nargs="*", help="limit to these story stems")
     ap.add_argument("--report", action="store_true",
                     help="write the per-game report to stderr and emit nothing")
@@ -811,6 +1134,11 @@ def main():
                          "moving any onto its exits' axes; for measuring what "
                          "the nudge pass is worth")
     args = ap.parse_args()
+
+    if args.walk:
+        return main_walk(args)
+    if not args.cache:
+        ap.error("--cache is required unless --walk is given")
 
     os.makedirs(args.cache, exist_ok=True)
     wanted = args.only or sorted(MAPS)
@@ -872,6 +1200,57 @@ def main():
     if not tables:
         print("nothing to emit", file=sys.stderr)
         sys.exit(1)
+    emit(tables, sys.stdout)
+
+
+def main_walk(args):
+    """Add a table for every story on the disc that has no map to scan.
+
+    The measured tables are carried forward as text, so this run touches
+    nothing that was read off paper and needs neither the scans nor the cache
+    they live in. Stories are emitted in stem order, which -- because the
+    eighteen are already in that order -- makes the diff of a walk run a set of
+    insertions and nothing else.
+
+    Usage: python tools/gen_map_atlas.py --walk > saturn/src/engine/map_atlas_data.inc
+    """
+    keep = carried(INC_PATH)
+    on_disc = sorted(f[:-3] for f in os.listdir(Z3DIR) if f.endswith(".Z3"))
+    # Every story with no TABLE, which is not the same as every story with no
+    # map. Four of the disc's stories have a scan that was read and then
+    # rejected for disagreeing with their own exits -- Starcross among them, and
+    # it is the one this was asked for. Keying off MAPS would skip exactly the
+    # games whose drawing has already been tried and found wanting.
+    wanted = args.only or [s for s in on_disc if s not in keep]
+
+    tables = [dict(t) for t in keep.values()]
+    dropped = []
+    for story in wanted:
+        if story in keep:
+            print(f"  keep {story:9s} already tabled", file=sys.stderr)
+            continue
+        if not os.path.exists(os.path.join(Z3DIR, story + ".Z3")):
+            print(f"{story}: not on the disc", file=sys.stderr)
+            continue
+        pos, release, serial, st = build_walked(story)
+        if pos is None:
+            dropped.append(story)
+            print(f"  DROP {story:9s} {st.get('reason','?')}", file=sys.stderr)
+            continue
+        tables.append({"story": story, "pos": pos, "release": release,
+                       "serial": serial, "stats": st})
+        print(f"  WALK {story:9s} {st['rooms']:4d} rooms  "
+              f"{st['agreed']:4d}/{st['tested']:<4d} half ({st['rate']:.0%})  "
+              f"{st['aligned']:4d}/{st['atested']:<4d} on axis ({st['arate']:.0%})  "
+              f"repaired {st['repaired']:3d}  nudged {st['nudged']:3d}  "
+              f"{st['npages']:2d} floors", file=sys.stderr)
+
+    tables.sort(key=lambda t: t["story"])
+    print(f"\n{len(tables)} tables ({len(keep)} carried, "
+          f"{len(tables) - len(keep)} walked), {len(dropped)} dropped",
+          file=sys.stderr)
+    if args.report:
+        return
     emit(tables, sys.stdout)
 
 

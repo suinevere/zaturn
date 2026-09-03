@@ -25,6 +25,9 @@ static void header(unsigned char *h, unsigned int release, const char *serial) {
     memcpy(h + 0x12, serial, 6);
 }
 
+/* Starcross's walked table, as the generator accepted it. */
+#define STARCROS_ROOMS 85
+
 int main(void) {
     unsigned char h[0x18];
     int x = 99, y = 99;
@@ -33,6 +36,33 @@ int main(void) {
        reading off the end of a null table. */
     assert(map_atlas_count() == 0);
     assert(!map_atlas_pos(180, &x, &y));
+
+    /* Starcross release 17, which is the build under saturn/cd/data/Z3. It has
+       no printed map anybody could scan, so its table is laid out from its own
+       exit graph -- and the point of this assertion is that the runtime cannot
+       tell, and does not have to: a walked table binds, counts and reads back
+       exactly as a measured one does. Before it existed this bind returned 0
+       and the game had no map on any difficulty.
+
+       The number is the room count the generator accepted, so it fails if a
+       regeneration silently ships fewer rooms. */
+    header(h, 17, "821021");
+    assert(map_atlas_bind(h, sizeof h) == STARCROS_ROOMS);
+    assert(map_atlas_count() == STARCROS_ROOMS);
+    assert(map_atlas_pages() >= 1);
+    {
+        /* Every cell reads back inside the signed-char range the table stores,
+           on a floor the reader can reach. */
+        int i;
+        for (i = 0; i < map_atlas_count(); i++) {
+            unsigned short room = 0;
+            int cx = 999, cy = 999;
+            assert(map_atlas_room_at(i, &room));
+            assert(room > 0 && room <= 255);
+            assert(map_atlas_pos(room, &cx, &cy));
+            assert(cx >= -128 && cx <= 127 && cy >= -128 && cy <= 127);
+        }
+    }
 
     /* Zork I release 88, which is the build under saturn/cd/data/Z3. */
     header(h, 88, "840726");

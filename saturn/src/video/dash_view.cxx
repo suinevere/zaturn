@@ -209,8 +209,15 @@ unsigned short dash_tint_current(void)
     return g_tint_bg;
 }
 
-void dash_map_ink(unsigned short self, unsigned short p0,
-                  unsigned short p1, unsigned short p2)
+void dash_map_ink(unsigned short line, unsigned short fill)
+{
+    volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
+    cram[DASH_PAL_NO * 16 + DASH_PAL_LINE] = (unsigned short) (0x8000 | line);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_FILL] = (unsigned short) (0x8000 | fill);
+}
+
+void dash_map_party(unsigned short self, unsigned short p0,
+                    unsigned short p1, unsigned short p2)
 {
     volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
     cram[DASH_PAL_NO * 16 + DASH_PAL_PARTY0] = (unsigned short) (0x8000 | self);

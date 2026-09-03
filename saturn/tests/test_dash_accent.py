@@ -107,7 +107,7 @@ def accent_tiles():
 def map_paints(e, t):
     """Whether the map screen can put this tile on the layer. Everything else is
     chrome the map never draws -- it clears the layer to DT_BLANK and paints no
-    box -- which is exactly what makes four of the chrome's own palette entries
+    box -- which is exactly what makes five of the chrome's own palette entries
     borrowable while it is up. The two ranges are the ones is_map_ink names in
     test_dash_tiles.c; DT_GROUND is left out of both because nothing paints it
     any more."""
@@ -158,6 +158,59 @@ def test_only_the_cursor_uses_the_accent():
             assert used, "tile %d is not drawn in the accent" % i
         else:
             assert not used, "tile %d uses the accent slot %d" % (i, a)
+
+
+def named_index(gen_name, hdr_name):
+    """One palette index the generator and the header both name, checked to be
+    the same number in both."""
+    gen = re.search(r"^%s\s*=\s*(\d+|MARK_[A-Z_]+)\s*$" % gen_name,
+                    GEN.read_text(encoding="utf-8"), re.M)
+    assert gen is not None, "tools/gen_dash_tiles.py defines no %s" % gen_name
+    want = gen.group(1)
+    if not want.isdigit():
+        alias = re.search(r"^%s\s*=\s*(\d+)\s*$" % want,
+                          GEN.read_text(encoding="utf-8"), re.M)
+        assert alias is not None, "%s is %s, which is not a number" % (gen_name, want)
+        want = alias.group(1)
+    hdr = re.search(r"^#define\s+%s\s+(\d+)\s*$" % hdr_name,
+                    HDR.read_text(encoding="utf-8"), re.M)
+    assert hdr is not None, "dash_tiles.h defines no %s" % hdr_name
+    assert int(want) == int(hdr.group(1)), \
+        "%s %s and %s %s disagree" % (gen_name, want, hdr_name, hdr.group(1))
+    return int(want)
+
+
+def test_generator_and_header_name_the_same_line_and_fill():
+    """The map sets these two per sheet. A drift would build and link and paint
+    the passages in whatever the header happened to point at."""
+    line = named_index("PAL_LINE", "DASH_PAL_LINE")
+    fill = named_index("PAL_FILL", "DASH_PAL_FILL")
+    assert line != fill, (
+        "the passages and the locations' fill share an entry, so a sheet cannot "
+        "colour them differently -- which is the whole reason there are two")
+    assert fill not in party_indices() + [accent_index()], \
+        "the fill holds a slot something else on the map is drawn in"
+
+
+def test_only_the_room_mark_is_filled():
+    """DASH_PAL_FILL is borrowed from the marble the same way the party slots
+    are, so the same thing has to be true of it: nothing else the map paints may
+    reach it, or that mark would silently take the locations' fill colour.
+
+    And the ordinary room mark must not reach the LINE entry, which is the
+    separation the two entries exist for -- it is what stops "the passages are
+    brown" from also meaning "the rooms are brown"."""
+    e = enum_values()
+    line = named_index("PAL_LINE", "DASH_PAL_LINE")
+    fill = named_index("PAL_FILL", "DASH_PAL_FILL")
+    px = tiles()
+    room = e["DT_ROOM"]
+    assert fill in px[room], "the room mark is not drawn in the fill entry"
+    assert line not in px[room], "the room mark still reaches the line entry"
+    for i, t in enumerate(px):
+        if i == room or not map_paints(e, i):
+            continue
+        assert fill not in t, "map tile %d reaches the fill slot %d" % (i, fill)
 
 
 def test_generator_and_header_name_the_same_party_slots():

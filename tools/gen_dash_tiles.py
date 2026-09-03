@@ -59,16 +59,16 @@ PAL_ACCENT = 14
 #
 # All four are BORROWED rather than reserved. They stay ordinary points of the
 # ramp in dash_palette and are only ever a colour for as long as the map screen
-# is up: map_view calls dash_map_ink after dash_tint, and the dash_tint on the
+# is up: map_view calls dash_map_party after dash_tint, and the dash_tint on the
 # way out puts the ramp back.
 #
-# The borrow is safe because the map paints no stone. Outside these four its own
-# tiles reach only entries 0, 1, 2, 12, 13, 14 and 15 -- dash_map_begin clears
-# every other cell to DT_BLANK and the screen draws no box -- so 3..11 are
-# unreachable for as long as it is drawn, and these are four of them. Entry 4 is
-# reachable by nothing at all, anywhere; 3 is a groove and 5 and 6 are marble
-# body, which is why the restore on the way out is part of the design and not
-# tidiness.
+# The borrow is safe because the map paints no stone. Outside these four and
+# PAL_FILL its own tiles reach only entries 0, 1, 2, 12, 13, 14 and 15 --
+# dash_map_begin clears every other cell to DT_BLANK and the screen draws no box
+# -- so 3..11 are unreachable for as long as it is drawn, and these are four of
+# them. Entry 4 is reachable by nothing at all, anywhere; 3 is a groove and 5 and
+# 6 are marble body, which is why the restore on the way out is part of the
+# design and not tidiness.
 PAL_PARTY = (3, 4, 5, 6)
 
 FRAME = [7, 3, 2, 13]
@@ -128,6 +128,26 @@ MARK_DARK = 1
 MARK_RING = 13
 MARK_HERE_RING = 15
 MARK_HERE_CORE = 12
+
+# The map names two of its own entries and sets them per sheet, the way it sets
+# the party colours: the ink every line, arrow, glyph and stub is drawn in, and
+# the fill in the middle of an ordinary location mark.
+#
+# They have to be two entries and not one. Infocom's sheets are paper of four
+# different colours -- tan, cream, white, black -- and what reads as a drawing
+# on one does not on the next, so the passages take dark brown on the two
+# parchments, grey on the white sheet and the player's own font colour on the
+# black one; the locations stay filled solid whatever the passages do. Sharing
+# MARK_DARK, which is what DT_ROOM's core used to be, made the two the same
+# colour by construction.
+#
+# PAL_LINE is a genuine map entry -- the grooves are drawn in it and always
+# were -- and is merely written per sheet instead of taken off the tinted ramp.
+# PAL_FILL is borrowed like the party slots: entry 7 is the marble's frame rim,
+# which the map never paints, and dash_tint puts it back on the way out.
+PAL_LINE = MARK_DARK
+PAL_FILL = 7
+MARK_FILL = PAL_FILL
 
 # The map now has four kinds of mark to tell apart on one greyscale ramp bent to
 # a single tan, which is one more than lightness alone carries, so the two new
@@ -381,7 +401,7 @@ def build():
     tiles.append(ground)
 
     room = solid(MARK_RING, 1, 1, 6, 6)
-    room = solid(MARK_DARK, 2, 2, 5, 5, base=room)
+    room = solid(MARK_FILL, 2, 2, 5, 5, base=room)
     tiles.append(room)                                          # DT_ROOM
 
     here = solid(MARK_HERE_RING, 1, 1, 6, 6)

@@ -403,6 +403,21 @@ int main(void) {
                 assert(px(DT_BAGGAGE_V, x, y) == px(DT_BAGGAGE_H, y, 7 - x));
     }
 
+    /* The ordinary location mark is filled in an entry of its own, not in the
+       one the passages are drawn in. Two entries is what lets a sheet say
+       "brown passages, black rooms"; one entry made those the same sentence.
+       The ring is left on the ramp, which is what carries the mark clear of the
+       ground band above -- the fill is inside it. */
+    {
+        int fill = px(DT_ROOM, 3, 3), link = px(DT_LINK_H, 3, 3);
+        assert(fill != 0);
+        assert(link != 0);
+        assert(fill != link);
+        assert(px(DT_ROOM, 1, 1) != fill && px(DT_ROOM, 1, 1) != link);
+        for (y = 2; y <= 5; y++)
+            for (x = 2; x <= 5; x++) assert(px(DT_ROOM, x, y) == fill);
+    }
+
     /* The party colours: one figure per seat and the shield they share when
        two of them stand in one room. */
     {

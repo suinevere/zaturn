@@ -79,13 +79,18 @@
 #define MAP_BACK_555 ((unsigned short) (MAP_GROUND_555 | 0x8000u))
 
 /*----------------------
- | MAP_INK_BLACK / MAP_INK_RED / MAP_INK_GREEN / MAP_INK_BLUE
- | Description: The colours the map draws itself in. The first is the ink of a
- |   drawing on paper and the other three are the seat colours, saturated
- |   because they have to be told apart at one cell across on a television.
+ | MAP_INK_BLACK / MAP_INK_BROWN / MAP_INK_GRAY / MAP_INK_RED /
+ | MAP_INK_GREEN / MAP_INK_BLUE
+ | Description: The colours the map draws itself in. Black is the ink of a
+ |   drawing on paper; brown and grey are the two pencils the passages are drawn
+ |   with, one for the warm sheets and one for the white; and the last three are
+ |   the seat colours, saturated because they have to be told apart at one cell
+ |   across on a television.
  | Author: suinevere
  ----------------------*/
 #define MAP_INK_BLACK DISP_RGB555(0x00, 0x00, 0x00)
+#define MAP_INK_BROWN DISP_RGB555(0x4A, 0x2E, 0x18)
+#define MAP_INK_GRAY  DISP_RGB555(0x78, 0x78, 0x80)
 #define MAP_INK_RED   DISP_RGB555(0xE0, 0x10, 0x20)
 #define MAP_INK_GREEN DISP_RGB555(0x10, 0xB0, 0x30)
 #define MAP_INK_BLUE  DISP_RGB555(0x20, 0x50, 0xE0)
@@ -103,29 +108,57 @@
 static int g_sheet = 0;
 
 /*----------------------
+ | MapInk
+ | Description: The four colours one sheet gives the map: its labels, the ink
+ |   its passages and glyphs are drawn in, the fill in the middle of a location
+ |   mark, and the local player's own colour for their figure and their quadrant
+ |   of a shared room. The crosshair is not among them -- it keeps the accent
+ |   and is red on all four sheets.
+ | Author: suinevere
+ ----------------------*/
+typedef struct {
+    unsigned short text;
+    unsigned short line;
+    unsigned short fill;
+    unsigned short party;
+} MapInk;
+
+/*----------------------
  | map_ink
- | Description: The colour the map's text and the local player's figure take on
- |   the sheet this game was given. The two pale papers get the ink a drawing on
- |   paper is made of; the dark sheet gets red, which is what it was found to
- |   need on screen; and the fourth is drawn on the player's own font colour,
- |   because that sheet is the one with nothing of its own to read against.
+ | Description: What the sheet this game was given asks for. The four sheets are
+ |   paper of four different colours -- MAP.TGA is tan parchment, MAP2 cream
+ |   ledger, MAP3 white, MAP4 solid black -- and that, not the genre printed on
+ |   them, is the whole of what decides these: a mark has to be found on the
+ |   paper it is drawn on, and two genres sharing a sheet share that problem.
  |
- |   Not the crosshair, which keeps the accent and is red on all four.
- |
- |   The choice is by sheet and not by genre. What matters is the paper a mark
- |   has to be found on, and two genres sharing a sheet share that problem.
+ |   The two warm papers take a drawing in dark brown with black-filled
+ |   locations and black labels, which is what an Infocom map on parchment is.
+ |   The white sheet keeps the black fill but takes grey passages, so the
+ |   drawing does not read as heavier than it does on tan, and red for the
+ |   labels and the player. The black sheet has no ink of its own to borrow, so
+ |   it takes the player's own two terminal colours -- their letters for the
+ |   passages and labels, their background for the fill -- and reads as their
+ |   console rather than as paper.
  | Author: suinevere
  | Dependencies: scene/presentation.h (PRES_MAP_BG order), display.h
  | Globals: g_display, g_sheet
- | Params: N/A
- | Returns: a packed RGB555 colour
+ | Params: ink -- receives the four colours
+ | Returns: N/A
  ----------------------*/
-static unsigned short map_ink(void)
+static void map_ink(MapInk *ink)
 {
-    switch (g_sheet) {
-    case 2:  return MAP_INK_RED;
-    case 3:  return (unsigned short) display_text_rgb(g_display.text);
-    default: return MAP_INK_BLACK;
+    ink->text  = MAP_INK_BLACK;
+    ink->line  = MAP_INK_BROWN;
+    ink->fill  = MAP_INK_BLACK;
+    ink->party = MAP_INK_BLACK;
+    if (g_sheet == 2) {
+        ink->text  = MAP_INK_RED;
+        ink->line  = MAP_INK_GRAY;
+        ink->party = MAP_INK_RED;
+    } else if (g_sheet == 3) {
+        ink->text  = (unsigned short) display_text_rgb(g_display.text);
+        ink->line  = ink->text;
+        ink->fill  = (unsigned short) display_bg_rgb(g_display.bg);
     }
 }
 
@@ -1006,16 +1039,23 @@ extern "C" void map_view_show(void) {
     // changed colour with the paper would have to be found before it could be
     // used.
     //
+    // Two calls rather than one because they answer different questions. What
+    // the drawing is made of is a property of the paper; what colour a seat is
+    // is a property of the party, and the paper has no say in it beyond the one
+    // clash rule below.
+    //
     // The map's labels do not take the player's font colour. It is chosen to be
     // read on their own background and this screen is not on it: a bright green
     // that is right on black is barely there on tan paper. The one sheet where
     // it IS the ink is the one with nothing of its own to be read against.
     {
-        unsigned short ink = map_ink();
-        text_set_color(ink, MAP_GROUND_555);
-        dash_map_ink(ink,
-                     map_ink_is_red(ink) ? MAP_INK_BLACK : MAP_INK_RED,
-                     MAP_INK_GREEN, MAP_INK_BLUE);
+        MapInk ink;
+        map_ink(&ink);
+        text_set_color(ink.text, MAP_GROUND_555);
+        dash_map_ink(ink.line, ink.fill);
+        dash_map_party(ink.party,
+                       map_ink_is_red(ink.party) ? MAP_INK_BLACK : MAP_INK_RED,
+                       MAP_INK_GREEN, MAP_INK_BLUE);
     }
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
     else                           map_model_clear_reveal();

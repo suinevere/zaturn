@@ -70,6 +70,32 @@ extern const unsigned short dash_palette[16];
 #define DASH_PAL_PARTY2 5
 #define DASH_PAL_PARTY3 6
 
+/*----------------------
+ | DASH_PAL_LINE / DASH_PAL_FILL
+ | Description: The map's own two colours: the ink every passage, arrow, glyph
+ |   and stub is drawn in, and the fill in the middle of an ordinary location
+ |   mark. Set per sheet by dash_map_ink, because Infocom's four sheets are
+ |   paper of four different colours and what reads as a drawing on tan does not
+ |   on white or on black.
+ |
+ |   They are two entries and not one on purpose. The location's fill used to BE
+ |   the line entry, which made "the passages are brown" and "the rooms are
+ |   filled black" the same sentence; they are now separate and a sheet may
+ |   answer them differently.
+ |
+ |   DASH_PAL_LINE is a real map entry -- the grooves have always been drawn in
+ |   it -- and is merely written rather than taken off the tinted ramp while the
+ |   map is up. DASH_PAL_FILL is borrowed the way the party slots are: entry 7
+ |   is the marble's frame rim, which the map never paints. Both go back to the
+ |   ramp on the dash_tint that closes the screen.
+ |
+ |   Kept in step with PAL_LINE and PAL_FILL in tools/gen_dash_tiles.py by
+ |   tests/test_dash_accent.py.
+ | Author: suinevere
+ ----------------------*/
+#define DASH_PAL_LINE 1
+#define DASH_PAL_FILL 7
+
 #ifdef __cplusplus
 }
 #endif

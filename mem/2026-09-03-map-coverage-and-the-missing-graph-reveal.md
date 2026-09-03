@@ -179,6 +179,48 @@ and a table that did would keep its measured cells alone.
   changed is a reading that was wrong once), and a separate `WHOLE` holds the
   filled table to a floor. The suite is stronger than before the change.
 
+## The regression stage two shipped, and its root cause (`178058f`)
+
+The owner: "Lurking Horror worked great before this change, now seeing lines to
+no where." It did, and it was.
+
+**Root cause: unplaced does not mean missed.** `assign()` refuses to place a
+group of more than `AMBIG_MAX` identically-named rooms, because it cannot say
+which drawn box is which -- that is what excludes Zork I's fifteen Maze rooms
+and it is written in the generator's own header. The fill read every unplaced
+room as an OCR failure to repair. Some were not failures, they were **refusals**,
+and the reason had not gone away: a maze's drawn positions are an arbitrary
+embedding, its exits contradict each other on any plane, and Infocom printed
+those pages schematically or not at all for exactly that reason.
+
+The evidence, in order: link spans were fine (only 3 over four cells) and no two
+rooms shared a cell, so the first two hypotheses died. Drawing every floor
+showed it -- floor 5 went from 6 rooms to 19 and the added thirteen were a knot
+around the origin, five to eleven cells from the floor's measured rooms. Dumping
+the floor named them: **all thirteen are called "Wet Tunnel"**, with exits
+reading `east (+1,-3)`, `west (+3,-2)`, `north (+3,-5)`.
+
+Across the atlas it was 88 of 431 added rooms and 29 of the walked ones: Zork I's
+Maze x15, Zork III's Narrow Room x10 and Land of Shadow x8, Infidel's Desert x10
+and Cube x8, Spellbreaker's Octagonal Room x9, Zork II's Oddly-angled Room x9,
+Enchanter's Courtyard x7, the Mini-Zork mazes.
+
+`unresolvable()` states the rule once and both the walk and the fill honour it.
+Those 117 cells go back to the runtime's own placement, a room at a time as the
+player walks in, which is the honest answer for geography that has no plan.
+
+**Refusing to draw a maze also stops it dragging the rest of the map down.**
+Adventure went 78% -> **94%** and now ships a table where it had none; Mini-Zork
+I 85% -> 92%, Mini-Zork II 85% -> 91%, Sampler 5 96% -> 98%. Lurking's
+off-viewport runs are back to the five it had before the fill -- the same five.
+
+**What the suite got right and what it missed.** The exact-equality guard on
+measured rooms held through the whole regression and the whole fix: not one
+scanned baseline moved, which is why the fix could be made confidently. What no
+test asked was whether a table places rooms it has no business placing, because
+half-plane and axis agreement say nothing about it -- a maze room can satisfy
+"east of" perfectly and still be nonsense. That check exists now.
+
 `test_atlas_merge.py` holds the frozen set (a frozen room never moves; freezing
 nothing is bit-for-bit the old behaviour; a frozen room is still an anchor its
 neighbours score against), the paging rule, and the shipped file's own

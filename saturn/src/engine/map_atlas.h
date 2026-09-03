@@ -36,14 +36,23 @@ extern "C" {
 /*----------------------
  | MAP_ATLAS_PAGE_MAX
  | Description: The most floors one table may declare, and so the size of the
- |   cached bounding boxes. Eight against the four the deepest of the shipped
- |   drawings actually uses; a table past this is bound with its extra floors
+ |   cached bounding boxes. Sixteen against the twelve the deepest of the
+ |   shipped tables uses; a table past this is bound with its extra floors
  |   folded onto the last, which is wrong in a visible way rather than a silent
- |   one. tools/gen_map_atlas.py has no page cap of its own -- pages come from
- |   however many sheets the publisher printed -- so this is the only bound.
+ |   one.
+ |
+ |   It was eight, chosen against a floor being a drawn sheet and no publisher
+ |   printing more than four. A floor is now one vertical step of the story's
+ |   own routes inside one sheet, which took Stationfall to twelve and The
+ |   Lurking Horror to ten, and the eight silently folded the rest onto the top
+ |   floor -- the map paged to eight and stopped.
+ |
+ |   tools/gen_map_atlas.py has no cap of its own, so this is the only bound;
+ |   saturn/tests/test_atlas_floors.py holds the shipped tables under it, since
+ |   nothing here can fail to compile when a table outgrows it.
  | Author: suinevere
  ----------------------*/
-#define MAP_ATLAS_PAGE_MAX 8
+#define MAP_ATLAS_PAGE_MAX 16
 
 /*----------------------
  | map_atlas_bind
@@ -142,11 +151,17 @@ int map_atlas_page_box(int page, int *x0, int *y0, int *x1, int *y1);
 
 /*----------------------
  | map_atlas_pages_overlap
- | Description: Whether any two floors' boxes intersect. They do not in any
- |   table the generator produces -- it gives each drawn page its own band of
- |   rows below the last -- so this exists to catch a table that stops being
- |   true of, rather than to handle one that already is: a caller may draw every
- |   floor at once only while this answers no.
+ | Description: Whether any two floors' boxes intersect. They now do, and by
+ |   design: a floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, so the storeys of a building stand on the footprint of the
+ |   building. It used to answer no for every table, back when a floor was a
+ |   whole drawn sheet and the generator gave each its own band of rows.
+ |
+ |   So this is no longer an invariant to hold; it is the question a caller must
+ |   ask before drawing more than one floor at once, and the answer is now
+ |   normally yes. Nothing in the port draws more than one -- the map screen
+ |   shows the floor the player is on and pages with L and R -- which is why the
+ |   change costs nothing.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_box, g_pages

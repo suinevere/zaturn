@@ -10,9 +10,26 @@
 /*----------------------
  | MAP_ATLAS_BALLYHOO
  | Description: BALLYHOO, release 97 serial 851218.
- |   25 rooms on 1 floor(s), ascending by object
+ |   25 rooms on 1 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 21 of 23 compass exits
- |   between two placed rooms leave in the direction drawn (91%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (91%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 15 of 19 are drawn on their own axis
+ |   with no sideways component (79%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Connection --north--> In the Wings at (-9,+4)
+ |     Connection --west--> Beside the Big Top at (-11,+5)
+ |     In the Wings --south--> Connection at (+9,-4)
+ |     Beside the Big Top --east--> Connection at (+11,-5)
  |
  |   The exceptions, which are rooms whose exits contradict any planar
  |   layout rather than misplacements:
@@ -51,9 +68,24 @@ static const MapAtlasCell MAP_ATLAS_BALLYHOO[] = {
 /*----------------------
  | MAP_ATLAS_CUTHROAT
  | Description: CUTHROAT, release 23 serial 840809.
- |   28 rooms on 2 floor(s), ascending by object
+ |   28 rooms on 3 floor(s) off 2 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 39 of 41 compass exits
- |   between two placed rooms leave in the direction drawn (95%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (95%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 33 of 35 are drawn on their own axis
+ |   with no sideways component (94%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Upstairs Hallway --north--> Red Boar Inn at (-1,+1)
+ |     Red Boar Inn --south--> Upstairs Hallway at (+1,-1)
  |
  |   The exceptions, which are rooms whose exits contradict any planar
  |   layout rather than misplacements:
@@ -63,50 +95,66 @@ static const MapAtlasCell MAP_ATLAS_BALLYHOO[] = {
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_CUTHROAT[] = {
     {  61,  0,    1,   -9 },   /* Crew's Quarters */
-    {  69,  0,   -2,   -8 },   /* Starboard Deck */
-    {  97,  1,    2,    0 },   /* Wharf */
-    {  98,  1,    2,    8 },   /* Ferry Landing */
-    {  99,  1,    5,    9 },   /* Point Lookout */
-    { 101,  1,    4,    7 },   /* Mariners' Trust */
-    { 112,  1,    4,    4 },   /* The Shanty */
-    { 131,  1,    3,    4 },   /* Outfitters Int'l */
-    { 132,  1,    2,    4 },   /* Vacant Lot */
-    { 135,  1,    1,    4 },   /* McGinty Salvage */
-    { 147,  1,    0,    3 },   /* Upstairs Hallway */
-    { 148,  1,    4,    6 },   /* Back Alley */
-    { 149,  1,    3,    6 },   /* Back Alley */
-    { 150,  1,    2,    6 },   /* Back Alley */
-    { 152,  1,    1,    6 },   /* Back Alley */
-    { 153,  1,   -1,    6 },   /* Back Alley */
-    { 154,  1,    4,    8 },   /* Shore Road */
-    { 156,  1,    3,    8 },   /* Shore Road */
-    { 160,  1,    4,    1 },   /* Wharf Road */
-    { 161,  1,    3,    1 },   /* Wharf Road */
-    { 162,  1,    2,    1 },   /* Wharf Road */
-    { 163,  1,    1,    1 },   /* Wharf Road */
-    { 165,  1,   -1,    1 },   /* Wharf Road */
-    { 166,  1,   -2,    2 },   /* Winding Road */
-    { 167,  1,   -3,    3 },   /* Winding Road */
-    { 169,  1,   -4,    1 },   /* Winding Road */
-    { 183,  1,    0,    5 },   /* Your Room */
-    { 190,  1,   -1,    4 },   /* Red Boar Inn */
+    {  69,  1,   -2,   -8 },   /* Starboard Deck */
+    {  97,  2,    2,    0 },   /* Wharf */
+    {  98,  2,    2,    8 },   /* Ferry Landing */
+    {  99,  2,    5,    9 },   /* Point Lookout */
+    { 101,  2,    4,    7 },   /* Mariners' Trust */
+    { 112,  2,    4,    4 },   /* The Shanty */
+    { 131,  2,    3,    4 },   /* Outfitters Int'l */
+    { 132,  2,    2,    4 },   /* Vacant Lot */
+    { 135,  2,    1,    4 },   /* McGinty Salvage */
+    { 147,  2,    0,    3 },   /* Upstairs Hallway */
+    { 148,  2,    4,    6 },   /* Back Alley */
+    { 149,  2,    3,    6 },   /* Back Alley */
+    { 150,  2,    2,    6 },   /* Back Alley */
+    { 152,  2,    1,    6 },   /* Back Alley */
+    { 153,  2,   -1,    6 },   /* Back Alley */
+    { 154,  2,    4,    8 },   /* Shore Road */
+    { 156,  2,    3,    8 },   /* Shore Road */
+    { 160,  2,    4,    1 },   /* Wharf Road */
+    { 161,  2,    3,    1 },   /* Wharf Road */
+    { 162,  2,    2,    1 },   /* Wharf Road */
+    { 163,  2,    1,    1 },   /* Wharf Road */
+    { 165,  2,   -1,    1 },   /* Wharf Road */
+    { 166,  2,   -2,    2 },   /* Winding Road */
+    { 167,  2,   -3,    3 },   /* Winding Road */
+    { 169,  2,   -4,    1 },   /* Winding Road */
+    { 183,  2,    0,    5 },   /* Your Room */
+    { 190,  2,   -1,    4 },   /* Red Boar Inn */
 };
 
 /*----------------------
  | MAP_ATLAS_ENCHANTR
  | Description: ENCHANTR, release 29 serial 860820.
- |   52 rooms on 1 floor(s), ascending by object
+ |   52 rooms on 2 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 79 of 79 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 58 of 61 are drawn on their own axis
+ |   with no sideways component (95%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 2 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Mountain Trail --south--> Deserted Village at (+2,+2)
+ |     Deserted Village --north--> Mountain Trail at (-2,-2)
+ |     Outside of Shack --west--> Fork at (-1,+2)
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_ENCHANTR[] = {
-    {   2,  0,    2,    6 },   /* Dungeon */
-    {   9,  0,   -7,    1 },   /* Mountain Trail */
+    {   2,  0,    1,    6 },   /* Dungeon */
+    {   9,  0,   -8,    1 },   /* Mountain Trail */
     {  23,  0,   10,   -4 },   /* Map Room */
     {  27,  0,    9,    1 },   /* Kitchen */
     {  32,  0,    9,   -5 },   /* Swamp */
-    {  35,  0,    5,   -1 },   /* Sacrificial Altar */
+    {  35,  1,    5,   -1 },   /* Sacrificial Altar */
     {  42,  0,  -10,    0 },   /* Fork */
     {  43,  0,    8,    3 },   /* East Hall */
     {  45,  0,  -11,    0 },   /* Long Road */
@@ -124,17 +172,17 @@ static const MapAtlasCell MAP_ATLAS_ENCHANTR[] = {
     { 102,  0,   -5,   -2 },   /* Trail Head */
     { 103,  0,    1,    2 },   /* Closet */
     { 105,  0,    9,    0 },   /* Landing */
-    { 123,  0,   -1,   -5 },   /* Jewel Room */
+    { 123,  1,   -1,   -5 },   /* Jewel Room */
     { 125,  0,    4,   -3 },   /* Hall of Mirrors Two */
     { 129,  0,    5,    4 },   /* Gallery */
     { 137,  0,    8,    1 },   /* Banquet Hall */
     { 140,  0,   -8,    4 },   /* Loop */
     { 143,  0,    8,    5 },   /* Meadow */
-    { 145,  0,   10,    3 },   /* Engine Room */
+    { 145,  1,   10,    3 },   /* Engine Room */
     { 146,  0,    8,   -2 },   /* Library */
     { 156,  0,   11,    0 },   /* Warlock's Tower */
     { 161,  0,    9,   -3 },   /* Guarded Door */
-    { 164,  0,   -1,    2 },   /* Bedroom */
+    { 164,  1,   -1,    2 },   /* Bedroom */
     { 171,  0,   11,    4 },   /* Control Room */
     { 172,  0,    2,   -3 },   /* Hall of Mirrors One */
     { 173,  0,   -2,    0 },   /* Western Road */
@@ -158,85 +206,107 @@ static const MapAtlasCell MAP_ATLAS_ENCHANTR[] = {
 /*----------------------
  | MAP_ATLAS_HOLYWOOD
  | Description: HOLYWOOD, release 37 serial 861215.
- |   55 rooms on 3 floor(s), ascending by object
+ |   55 rooms on 5 floor(s) off 3 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 50 of 50 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 42 of 42 are drawn on their own axis
+ |   with no sideways component (100%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 1 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_HOLYWOOD[] = {
     {   2,  0,   -4,   -5 },   /* South Junction */
-    {   5,  1,    4,    5 },   /* Parlor */
-    {  10,  2,   -4,   10 },   /* Inlet */
+    {   5,  2,    4,    5 },   /* Parlor */
+    {  10,  3,   -4,   10 },   /* Inlet */
     {  18,  1,   -1,    3 },   /* Shaft Bottom */
-    {  24,  1,   -5,   -1 },   /* In the Chimney */
-    {  30,  1,   -4,    2 },   /* Kitchen */
-    {  35,  1,   -2,    2 },   /* Dining Room */
+    {  24,  2,   -5,   -1 },   /* In the Chimney */
+    {  30,  2,   -4,    2 },   /* Kitchen */
+    {  35,  2,   -2,    2 },   /* Dining Room */
     {  36,  1,   -3,    3 },   /* Cellar */
-    {  39,  2,   -5,   12 },   /* Ledge */
-    {  45,  2,   -5,   15 },   /* Underwater Passage */
-    {  50,  1,    5,   -1 },   /* In the Chimney */
+    {  39,  3,   -5,   12 },   /* Ledge */
+    {  45,  3,   -5,   15 },   /* Underwater Passage */
+    {  50,  2,    5,   -1 },   /* In the Chimney */
     {  60,  0,   -4,   -7 },   /* Patio */
-    {  70,  1,    3,    3 },   /* Projection Booth */
+    {  70,  2,    3,    3 },   /* Projection Booth */
     {  73,  0,   -3,   -9 },   /* Garden, East */
-    {  78,  0,   -2,  -11 },   /* Top Landing */
+    {  78,  0,   -1,  -11 },   /* Top Landing */
     {  79,  0,   -1,  -12 },   /* Middle of Beach Stairs */
-    {  80,  1,   -2,    5 },   /* Living Room */
-    {  84,  1,    1,    1 },   /* Ladies' Room */
+    {  80,  2,   -2,    5 },   /* Living Room */
+    {  84,  2,    1,    1 },   /* Ladies' Room */
     {  86,  0,   -4,  -10 },   /* Garden, North */
-    {  88,  2,   -2,   10 },   /* Beach */
-    {  90,  2,   -5,    9 },   /* Bomb Shelter */
-    {  91,  1,   -5,    1 },   /* In the Chimney */
+    {  88,  3,   -2,   10 },   /* Beach */
+    {  90,  3,   -5,    9 },   /* Bomb Shelter */
+    {  91,  2,   -5,    1 },   /* In the Chimney */
     {  95,  0,   -5,   -9 },   /* Garden, West */
-    {  97,  1,    0,    2 },   /* Game Room */
-    { 101,  2,   -1,   11 },   /* Middle of Beach Stairs */
+    {  97,  2,    0,    2 },   /* Game Room */
+    { 101,  4,   -1,   11 },   /* Middle of Beach Stairs */
     { 105,  1,    5,    6 },   /* Crawl Space, South */
     { 119,  0,   -4,  -14 },   /* Cliff */
-    { 122,  1,    0,    5 },   /* Foyer */
-    { 125,  2,   -5,   13 },   /* Surface of Pool */
-    { 147,  2,   -4,   13 },   /* Surface of Grotto Pool */
-    { 153,  1,   -3,   -2 },   /* Master Bedroom */
+    { 122,  2,    0,    5 },   /* Foyer */
+    { 125,  3,   -5,   13 },   /* Surface of Pool */
+    { 147,  3,   -4,   13 },   /* Surface of Grotto Pool */
+    { 153,  2,   -3,   -2 },   /* Master Bedroom */
     { 160,  0,   -4,  -11 },   /* Entrance to Hedge Maze */
-    { 166,  1,   -1,    0 },   /* Closet */
-    { 169,  1,    1,    3 },   /* Men's Room */
-    { 178,  1,    0,   -2 },   /* Attic */
+    { 166,  2,   -1,    0 },   /* Closet */
+    { 169,  2,    1,    3 },   /* Men's Room */
+    { 178,  2,    0,   -2 },   /* Attic */
     { 182,  0,   -4,   -8 },   /* Garden, South */
     { 185,  0,   -4,   -6 },   /* Front Porch */
-    { 189,  1,    3,    0 },   /* Guest Room */
+    { 189,  2,    3,    0 },   /* Guest Room */
     { 192,  1,    5,    5 },   /* Crawl Space, North */
-    { 200,  2,   -4,   15 },   /* Underwater Passage */
+    { 200,  3,   -4,   15 },   /* Underwater Passage */
     { 202,  1,    5,    4 },   /* Small Passage */
-    { 204,  2,   -5,   14 },   /* Underwater */
-    { 205,  2,   -2,   12 },   /* Bottom Landing */
-    { 209,  1,    3,   -2 },   /* Bedroom */
-    { 213,  2,   -5,   10 },   /* Tunnel */
+    { 204,  4,   -5,   14 },   /* Underwater */
+    { 205,  3,   -2,   12 },   /* Bottom Landing */
+    { 209,  2,    3,   -2 },   /* Bedroom */
+    { 213,  3,   -5,   10 },   /* Tunnel */
     { 219,  0,   -4,  -13 },   /* Cannon Emplacement */
-    { 223,  1,   -5,    5 },   /* Fireplace */
-    { 230,  1,   -1,   -2 },   /* Top of Closet */
-    { 231,  1,    2,    5 },   /* Hallway */
-    { 232,  1,    0,   -1 },   /* Upstairs Hall, Middle */
-    { 233,  2,   -4,   14 },   /* Grotto, Underwater */
-    { 234,  1,    1,    2 },   /* Short Hall */
-    { 238,  1,    3,    2 },   /* Screening Room */
-    { 239,  2,   -3,   13 },   /* Grotto */
-    { 244,  1,   -3,    0 },   /* Upstairs Bathroom */
+    { 223,  2,   -5,    5 },   /* Fireplace */
+    { 230,  2,   -1,   -2 },   /* Top of Closet */
+    { 231,  2,    2,    5 },   /* Hallway */
+    { 232,  2,    0,   -1 },   /* Upstairs Hall, Middle */
+    { 233,  4,   -4,   14 },   /* Grotto, Underwater */
+    { 234,  2,    1,    2 },   /* Short Hall */
+    { 238,  2,    3,    2 },   /* Screening Room */
+    { 239,  3,   -3,   13 },   /* Grotto */
+    { 244,  2,   -3,    0 },   /* Upstairs Bathroom */
 };
 
 /*----------------------
  | MAP_ATLAS_INFIDEL
  | Description: INFIDEL, release 22 serial 830916.
- |   51 rooms on 2 floor(s), ascending by object
+ |   51 rooms on 3 floor(s) off 2 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 100 of 100 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 80 of 80 are drawn on their own axis
+ |   with no sideways component (100%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_INFIDEL[] = {
-    {  10,  1,    6,   -3 },   /* Silver Alcove */
-    {  13,  1,    3,   -3 },   /* Golden Alcove */
-    {  16,  1,    4,   -4 },   /* Inner Chamber */
-    {  17,  1,    4,   -3 },   /* Temple Chamber */
-    {  18,  1,    4,   -2 },   /* Steep Passageway */
-    {  19,  1,    4,   -1 },   /* Steep Passageway */
-    {  20,  1,    4,    0 },   /* Steep Passageway */
+    {  10,  2,    6,   -3 },   /* Silver Alcove */
+    {  13,  2,    3,   -3 },   /* Golden Alcove */
+    {  16,  2,    4,   -4 },   /* Inner Chamber */
+    {  17,  2,    4,   -3 },   /* Temple Chamber */
+    {  18,  2,    4,   -2 },   /* Steep Passageway */
+    {  19,  2,    4,   -1 },   /* Steep Passageway */
+    {  20,  2,    4,    0 },   /* Steep Passageway */
     {  62,  0,   -5,   -7 },   /* Work Tent */
     {  63,  0,   -4,   -8 },   /* Southern Path */
     {  64,  0,   -5,   -8 },   /* Outside Work Tent */
@@ -250,160 +320,193 @@ static const MapAtlasCell MAP_ATLAS_INFIDEL[] = {
     {  73,  0,   -6,  -10 },   /* Near the Nile */
     {  78,  0,   -5,   -9 },   /* Fire Pit */
     {  82,  0,   -7,  -10 },   /* River Bank */
-    {  94,  1,    1,   12 },   /* Turning Passage */
-    { 110,  1,    5,    3 },   /* West End of Hold */
-    { 111,  1,    7,    3 },   /* Below Deck */
-    { 112,  1,    7,    2 },   /* Aft Cabin */
-    { 113,  1,    3,    2 },   /* Fore Cabin */
-    { 114,  1,    4,    2 },   /* Center of Barge */
-    { 115,  1,    4,    1 },   /* Barge Chamber */
-    { 116,  1,    2,    1 },   /* Barge Chamber */
-    { 117,  1,    2,    4 },   /* Barge Chamber */
-    { 118,  1,    8,    1 },   /* Barge Chamber */
-    { 119,  1,    8,    4 },   /* Barge Chamber */
-    { 120,  1,    4,    4 },   /* Barge Chamber */
-    { 121,  1,    6,    5 },   /* Narrow Hallway */
-    { 122,  1,   -2,    6 },   /* Narrow Hallway */
-    { 123,  1,   -2,    5 },   /* South Landing */
+    {  94,  2,    1,   12 },   /* Turning Passage */
+    { 110,  2,    5,    3 },   /* West End of Hold */
+    { 111,  2,    7,    3 },   /* Below Deck */
+    { 112,  2,    7,    2 },   /* Aft Cabin */
+    { 113,  2,    3,    2 },   /* Fore Cabin */
+    { 114,  2,    4,    2 },   /* Center of Barge */
+    { 115,  2,    4,    1 },   /* Barge Chamber */
+    { 116,  2,    2,    1 },   /* Barge Chamber */
+    { 117,  2,    2,    4 },   /* Barge Chamber */
+    { 118,  2,    8,    1 },   /* Barge Chamber */
+    { 119,  2,    8,    4 },   /* Barge Chamber */
+    { 120,  2,    4,    4 },   /* Barge Chamber */
+    { 121,  2,    6,    5 },   /* Narrow Hallway */
+    { 122,  2,   -2,    6 },   /* Narrow Hallway */
+    { 123,  2,   -2,    5 },   /* South Landing */
     { 135,  1,    0,    3 },   /* Room of Neith */
     { 137,  1,   -5,    3 },   /* Room of Isis */
     { 139,  1,    0,   -1 },   /* Room of Selkis */
     { 145,  1,   -5,   -1 },   /* Room of Nephthys */
-    { 165,  1,   -3,    9 },   /* Narrow Passageway */
-    { 166,  1,   -2,    9 },   /* Narrow Passageway */
-    { 167,  1,   -1,    9 },   /* Bottom of Stairs */
-    { 168,  1,    1,    9 },   /* Top of Stairway */
-    { 173,  1,   -5,    7 },   /* Treasury */
-    { 174,  1,   -6,    7 },   /* Burial Chamber */
-    { 181,  1,   -7,   10 },   /* Annex */
-    { 186,  1,   -6,   10 },   /* Antechamber */
-    { 187,  1,   -4,    9 },   /* Narrow Passageway */
-    { 192,  1,   -6,    9 },   /* Antechamber */
-    { 195,  1,   -6,    8 },   /* Antechamber */
-    { 206,  1,   -2,    3 },   /* Chamber of Ra */
+    { 165,  2,   -3,    9 },   /* Narrow Passageway */
+    { 166,  2,   -2,    9 },   /* Narrow Passageway */
+    { 167,  2,   -1,    9 },   /* Bottom of Stairs */
+    { 168,  2,    1,    9 },   /* Top of Stairway */
+    { 173,  2,   -5,    7 },   /* Treasury */
+    { 174,  2,   -6,    7 },   /* Burial Chamber */
+    { 181,  2,   -7,   10 },   /* Annex */
+    { 186,  2,   -6,   10 },   /* Antechamber */
+    { 187,  2,   -4,    9 },   /* Narrow Passageway */
+    { 192,  2,   -6,    9 },   /* Antechamber */
+    { 195,  2,   -6,    8 },   /* Antechamber */
+    { 206,  2,   -2,    3 },   /* Chamber of Ra */
 };
 
 /*----------------------
  | MAP_ATLAS_LEATHERG
  | Description: LEATHERG, release 59 serial 860730.
- |   42 rooms on 3 floor(s), ascending by object
+ |   42 rooms on 7 floor(s) off 3 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 22 of 22 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 15 of 15 are drawn on their own axis
+ |   with no sideways component (100%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_LEATHERG[] = {
-    {   7,  1,   -3,   -7 },   /* Looks Can Be Deceiving */
-    {  29,  1,   -7,   -1 },   /* Lawn */
-    {  32,  1,   -7,   -2 },   /* Cleveland */
-    {  37,  2,    5,    6 },   /* Laundry Room */
-    {  42,  2,    6,   11 },   /* Inside the Tent */
+    {   7,  3,   -3,   -7 },   /* Looks Can Be Deceiving */
+    {  29,  3,   -7,   -1 },   /* Lawn */
+    {  32,  3,   -7,   -2 },   /* Cleveland */
+    {  37,  5,    5,    6 },   /* Laundry Room */
+    {  42,  5,    6,   11 },   /* Inside the Tent */
     {  50,  0,   -6,  -11 },   /* Cell */
-    {  62,  2,   -7,   13 },   /* In Space */
-    {  65,  1,   -7,   -5 },   /* Spawning Ground */
+    {  62,  5,   -7,   13 },   /* In Space */
+    {  65,  3,   -7,   -5 },   /* Spawning Ground */
     {  68,  0,   -4,  -13 },   /* Ladies' Room */
-    {  70,  1,   -6,   -3 },   /* Teensy-Weensy House */
-    {  82,  1,   -6,   -5 },   /* Jungle */
-    {  89,  2,    6,    5 },   /* Oriental Garden */
-    {  92,  0,   -4,  -12 },   /* Roof */
-    {  93,  2,    7,    6 },   /* Base of Tower */
-    { 102,  1,   -1,   -6 },   /* Rocky Clifftop */
-    { 111,  1,   -4,   -5 },   /* Clearing */
-    { 112,  2,   -7,   14 },   /* At Main Hatch */
-    { 120,  0,   -5,  -11 },   /* Observation Room */
-    { 124,  2,    2,    8 },   /* Oasis */
-    { 126,  2,    2,    6 },   /* Exit Shop */
-    { 130,  1,   -2,   -7 },   /* Laboratory */
-    { 145,  1,   -5,   -5 },   /* Fork, Of Sorts */
-    { 147,  1,   -6,   -4 },   /* Bedroom */
-    { 159,  0,   -5,  -12 },   /* Closet */
+    {  70,  3,   -6,   -3 },   /* Teensy-Weensy House */
+    {  82,  3,   -6,   -5 },   /* Jungle */
+    {  89,  5,    6,    5 },   /* Oriental Garden */
+    {  92,  1,   -4,  -12 },   /* Roof */
+    {  93,  5,    7,    6 },   /* Base of Tower */
+    { 102,  3,   -1,   -6 },   /* Rocky Clifftop */
+    { 111,  3,   -4,   -5 },   /* Clearing */
+    { 112,  5,   -7,   14 },   /* At Main Hatch */
+    { 120,  1,   -5,  -11 },   /* Observation Room */
+    { 124,  5,    2,    8 },   /* Oasis */
+    { 126,  5,    2,    6 },   /* Exit Shop */
+    { 130,  2,   -2,   -7 },   /* Laboratory */
+    { 145,  3,   -5,   -5 },   /* Fork, Of Sorts */
+    { 147,  4,   -6,   -4 },   /* Bedroom */
+    { 159,  1,   -5,  -12 },   /* Closet */
     { 160,  0,   -6,  -13 },   /* Gents' Room */
-    { 163,  2,    1,    5 },   /* Dunetop */
-    { 169,  2,    7,    5 },   /* Minaret */
-    { 188,  2,   -5,    6 },   /* Ruined Castle */
-    { 189,  2,    4,   11 },   /* Penguin Park */
-    { 194,  2,   -6,    7 },   /* Ruined Castle */
-    { 197,  2,    6,   12 },   /* Gypsy Camp */
-    { 198,  2,   -4,    7 },   /* Ruined Castle */
-    { 199,  0,   -6,  -12 },   /* Cramped Space */
-    { 201,  2,   -5,    4 },   /* Royal Docks */
-    { 204,  2,   -3,    3 },   /* Martian Canal */
-    { 211,  2,    3,   14 },   /* Stable */
-    { 215,  2,    0,    2 },   /* Among the Dunes */
-    { 216,  2,    3,   10 },   /* Edge of Polar Ice Cap */
-    { 217,  2,   -5,    5 },   /* Throne Room */
+    { 163,  5,    1,    5 },   /* Dunetop */
+    { 169,  6,    7,    5 },   /* Minaret */
+    { 188,  5,   -5,    6 },   /* Ruined Castle */
+    { 189,  5,    4,   11 },   /* Penguin Park */
+    { 194,  5,   -6,    7 },   /* Ruined Castle */
+    { 197,  5,    6,   12 },   /* Gypsy Camp */
+    { 198,  5,   -4,    7 },   /* Ruined Castle */
+    { 199,  1,   -6,  -12 },   /* Cramped Space */
+    { 201,  5,   -5,    4 },   /* Royal Docks */
+    { 204,  5,   -3,    3 },   /* Martian Canal */
+    { 211,  5,    3,   14 },   /* Stable */
+    { 215,  5,    0,    2 },   /* Among the Dunes */
+    { 216,  5,    3,   10 },   /* Edge of Polar Ice Cap */
+    { 217,  5,   -5,    5 },   /* Throne Room */
     { 221,  0,   -7,  -10 },   /* Basement */
-    { 223,  2,    5,    4 },   /* Harem */
-    { 227,  1,   -5,   -3 },   /* Garden */
+    { 223,  5,    5,    4 },   /* Harem */
+    { 227,  3,   -5,   -3 },   /* Garden */
 };
 
 /*----------------------
  | MAP_ATLAS_LURKING
  | Description: LURKING, release 219 serial 870912.
- |   51 rooms on 2 floor(s), ascending by object
+ |   51 rooms on 10 floor(s) off 2 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 34 of 34 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 32 of 32 are drawn on their own axis
+ |   with no sideways component (100%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 7 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_LURKING[] = {
-    {   9,  1,   -3,    8 },   /* Tomb */
-    {  16,  0,    8,   -4 },   /* Small Courtyard */
-    {  25,  1,    6,    9 },   /* Brick Tunnel */
-    {  33,  1,    1,    5 },   /* Kitchen */
-    {  34,  1,   -5,   10 },   /* Tunnel Entrance */
-    {  35,  1,   -1,    8 },   /* Stairway */
-    {  38,  0,   -4,   -3 },   /* Engineering Building */
-    {  39,  1,   -6,   10 },   /* Muddy Tunnel */
-    {  42,  1,    7,   11 },   /* Lab */
-    {  47,  1,    5,    8 },   /* Dead Storage */
-    {  65,  0,   -3,  -11 },   /* Computer Center */
-    {  66,  1,   -4,   10 },   /* Steam Tunnel */
-    {  69,  1,   -5,   13 },   /* Inner Lair */
-    {  78,  1,   -3,   10 },   /* Steam Tunnel */
-    {  98,  0,   -1,  -12 },   /* Smith Street */
-    {  99,  1,   -6,   11 },   /* Large Chamber */
-    { 109,  0,    7,  -10 },   /* Inside Dome */
-    { 121,  0,   -1,   -9 },   /* Roof of Great Dome */
-    { 124,  0,   -2,  -10 },   /* Elevator */
-    { 127,  1,    3,    2 },   /* Roof */
-    { 134,  1,   -2,    3 },   /* Basalt Bowl */
-    { 136,  0,   -6,   -7 },   /* Aero Lobby */
-    { 137,  1,    3,    5 },   /* Second Floor */
-    { 138,  1,   -1,   10 },   /* Steam Tunnel */
-    { 140,  0,    0,  -11 },   /* Temporary Lab */
-    { 142,  1,   -1,    9 },   /* Subbasement */
-    { 145,  0,    0,   -9 },   /* On the Great Dome */
-    { 150,  0,    2,   -7 },   /* Fruits and Nuts */
-    { 152,  1,   -2,    2 },   /* Place */
-    { 158,  1,    0,    8 },   /* Aero Basement */
-    { 171,  1,    6,    8 },   /* Ancient Storage */
-    { 174,  0,    5,   -2 },   /* Department of Alchemy */
-    { 176,  1,    1,    4 },   /* Terminal Room */
+    {   9,  9,   -3,    8 },   /* Tomb */
+    {  16,  1,    7,   -4 },   /* Small Courtyard */
+    {  25,  6,    5,    9 },   /* Brick Tunnel */
+    {  33,  7,    1,    5 },   /* Kitchen */
+    {  34,  8,   -5,   10 },   /* Tunnel Entrance */
+    {  35,  5,   -1,    8 },   /* Stairway */
+    {  38,  1,   -5,   -3 },   /* Engineering Building */
+    {  39,  8,   -6,   10 },   /* Muddy Tunnel */
+    {  42,  6,    7,   11 },   /* Lab */
+    {  47,  5,    5,    8 },   /* Dead Storage */
+    {  65,  1,   -4,  -11 },   /* Computer Center */
+    {  66,  6,   -4,   10 },   /* Steam Tunnel */
+    {  69,  5,   -5,   13 },   /* Inner Lair */
+    {  78,  6,   -3,   10 },   /* Steam Tunnel */
+    {  98,  1,    0,  -12 },   /* Smith Street */
+    {  99,  7,   -6,   11 },   /* Large Chamber */
+    { 109,  3,    7,  -10 },   /* Inside Dome */
+    { 121,  1,   -1,   -9 },   /* Roof of Great Dome */
+    { 124,  1,   -2,  -10 },   /* Elevator */
+    { 127,  8,    3,    2 },   /* Roof */
+    { 134,  6,   -2,    3 },   /* Basalt Bowl */
+    { 136,  1,   -5,   -7 },   /* Aero Lobby */
+    { 137,  7,    3,    5 },   /* Second Floor */
+    { 138,  6,   -1,   10 },   /* Steam Tunnel */
+    { 140,  1,    0,  -11 },   /* Temporary Lab */
+    { 142,  4,   -1,    9 },   /* Subbasement */
+    { 145,  2,    0,   -9 },   /* On the Great Dome */
+    { 150,  1,    2,   -7 },   /* Fruits and Nuts */
+    { 152,  7,   -2,    2 },   /* Place */
+    { 158,  5,    0,    8 },   /* Aero Basement */
+    { 171,  5,    6,    8 },   /* Ancient Storage */
+    { 174,  1,    5,   -2 },   /* Department of Alchemy */
+    { 176,  7,    3,    4 },   /* Terminal Room */
     { 179,  0,    6,   -7 },   /* Cluttered Passage */
-    { 180,  0,    1,   -2 },   /* Great Court */
-    { 185,  0,   -4,  -12 },   /* Smith Street */
-    { 190,  0,   -7,   -5 },   /* Mass. Ave. */
-    { 195,  0,    7,   -8 },   /* Top Floor */
+    { 180,  1,    1,   -2 },   /* Great Court */
+    { 185,  1,   -4,  -12 },   /* Smith Street */
+    { 190,  1,   -7,   -5 },   /* Mass. Ave. */
+    { 195,  2,    7,   -8 },   /* Top Floor */
     { 200,  0,    7,   -5 },   /* Brown Basement */
-    { 201,  1,    5,    5 },   /* Renovated Cave */
-    { 202,  1,    4,    8 },   /* Temporary Basement */
-    { 208,  0,    3,   -5 },   /* Infinite Corridor */
-    { 210,  0,    0,   -5 },   /* Infinite Corridor */
-    { 213,  0,    0,   -8 },   /* Top of Dome */
-    { 214,  0,   -3,   -5 },   /* Infinite Corridor */
-    { 218,  0,   -5,   -5 },   /* Infinite Corridor */
-    { 221,  1,    0,   10 },   /* Steam Tunnel */
-    { 222,  0,    6,   -8 },   /* Skyscraper Roof */
-    { 240,  0,    7,   -7 },   /* Brown Building */
-    { 248,  0,    4,   -4 },   /* Chemistry Building */
-    { 249,  0,    0,   -6 },   /* Great Dome */
+    { 201,  6,    5,    5 },   /* Renovated Cave */
+    { 202,  5,    4,    8 },   /* Temporary Basement */
+    { 208,  1,    3,   -5 },   /* Infinite Corridor */
+    { 210,  1,    0,   -5 },   /* Infinite Corridor */
+    { 213,  1,    0,   -8 },   /* Top of Dome */
+    { 214,  1,   -3,   -5 },   /* Infinite Corridor */
+    { 218,  1,   -5,   -5 },   /* Infinite Corridor */
+    { 221,  8,    0,   10 },   /* Steam Tunnel */
+    { 222,  2,    6,   -8 },   /* Skyscraper Roof */
+    { 240,  1,    7,   -7 },   /* Brown Building */
+    { 248,  1,    4,   -4 },   /* Chemistry Building */
+    { 249,  2,    0,   -6 },   /* Great Dome */
 };
 
 /*----------------------
  | MAP_ATLAS_MOONMIST
  | Description: MOONMIST, release 9 serial 861022.
- |   19 rooms on 1 floor(s), ascending by object
+ |   19 rooms on 1 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 4 of 4 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 4 of 4 are drawn on their own axis
+ |   with no sideways component (100%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_MOONMIST[] = {
@@ -431,9 +534,24 @@ static const MapAtlasCell MAP_ATLAS_MOONMIST[] = {
 /*----------------------
  | MAP_ATLAS_PLNDHRTS
  | Description: PLNDHRTS, release 26 serial 870730.
- |   52 rooms on 2 floor(s), ascending by object
+ |   52 rooms on 5 floor(s) off 2 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 53 of 53 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 48 of 50 are drawn on their own axis
+ |   with no sideways component (96%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Lawn --south--> Beach at (+1,+1)
+ |     Clearing --west--> Forest at (-1,+2)
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_PLNDHRTS[] = {
@@ -443,50 +561,50 @@ static const MapAtlasCell MAP_ATLAS_PLNDHRTS[] = {
     {  21,  0,   -1,   -7 },   /* Kitchen */
     {  24,  0,    0,   -2 },   /* Lawn */
     {  26,  0,    3,   -5 },   /* Cell */
-    {  28,  0,   -5,   -6 },   /* Stair Landing */
-    {  30,  0,   -4,   -6 },   /* Upstairs Hall */
+    {  28,  1,   -5,   -6 },   /* Stair Landing */
+    {  30,  1,   -4,   -6 },   /* Upstairs Hall */
     {  34,  0,    5,   -6 },   /* North Passage */
-    {  46,  1,   -2,    7 },   /* Aft Hold */
+    {  46,  3,   -2,    7 },   /* Aft Hold */
     {  48,  0,    4,   -5 },   /* Anteroom */
     {  62,  0,    5,   -5 },   /* South Passage */
     {  65,  0,   -1,   -5 },   /* Orchestra */
     {  67,  0,    1,   -2 },   /* Folly */
     {  68,  0,    0,   -8 },   /* Main Entrance */
     {  73,  0,    1,   -1 },   /* Beach */
-    {  77,  1,    0,    3 },   /* Deck */
-    {  80,  1,   -1,    4 },   /* Cabin */
+    {  77,  3,    0,    3 },   /* Deck */
+    {  80,  3,   -1,    4 },   /* Cabin */
     {  83,  0,    1,   -5 },   /* Supper Room */
-    {  85,  1,   -6,    2 },   /* Crow's Nest */
-    {  89,  1,   -4,   11 },   /* By the Ship */
-    {  92,  1,   -3,    7 },   /* Landing */
-    {  94,  0,   -6,   -7 },   /* Parlour */
+    {  85,  3,   -6,    2 },   /* Crow's Nest */
+    {  89,  3,   -4,   11 },   /* By the Ship */
+    {  92,  4,   -3,    7 },   /* Landing */
+    {  94,  1,   -6,   -7 },   /* Parlour */
     {  99,  0,    2,   -1 },   /* Shallows */
-    { 101,  1,   -2,    4 },   /* Hold */
+    { 101,  3,   -2,    4 },   /* Hold */
     { 112,  0,    0,   -6 },   /* Foyer */
     { 113,  0,   -2,   -4 },   /* Clearing */
-    { 114,  1,   -4,    3 },   /* Forecastle */
+    { 114,  3,   -4,    3 },   /* Forecastle */
     { 123,  0,    1,   -7 },   /* Library */
-    { 127,  1,   -3,    5 },   /* Sleeping Cupboard */
+    { 127,  3,   -3,    5 },   /* Sleeping Cupboard */
     { 142,  0,    2,   -2 },   /* In the Hedge */
-    { 146,  0,   -6,   -5 },   /* Bedroom */
-    { 151,  1,   -4,    4 },   /* Main Deck */
+    { 146,  1,   -6,   -5 },   /* Bedroom */
+    { 151,  3,   -4,    4 },   /* Main Deck */
     { 153,  0,    1,   -6 },   /* East Hallway */
     { 155,  0,    6,   -6 },   /* Guard's Bunkroom */
     { 159,  0,   -1,   -6 },   /* Hall */
     { 165,  0,    0,   -5 },   /* Ballroom */
-    { 169,  1,   -3,    9 },   /* Captain's Quarters */
+    { 169,  3,   -3,    9 },   /* Captain's Quarters */
     { 171,  0,    0,   -4 },   /* Veranda */
     { 173,  0,    3,   -3 },   /* Corner */
-    { 176,  0,   -4,   -7 },   /* Lafond's Bedroom */
-    { 178,  1,   -3,   10 },   /* On the Ladder */
+    { 176,  1,   -4,   -7 },   /* Lafond's Bedroom */
+    { 178,  3,   -3,   10 },   /* On the Ladder */
     { 179,  0,   -3,   -7 },   /* Trade Entrance */
     { 180,  0,    6,   -5 },   /* Cell */
-    { 183,  0,    1,   -9 },   /* Stairwell */
-    { 185,  1,   -4,    8 },   /* Poop */
-    { 189,  1,   -4,    6 },   /* Quarterdeck */
-    { 193,  1,   -2,    3 },   /* Crew's Quarters */
-    { 207,  1,   -5,    2 },   /* In the Rigging */
-    { 208,  0,   -6,   -6 },   /* Upstairs Hall */
+    { 183,  1,    1,   -9 },   /* Stairwell */
+    { 185,  3,   -4,    8 },   /* Poop */
+    { 189,  3,   -4,    6 },   /* Quarterdeck */
+    { 193,  3,   -2,    3 },   /* Crew's Quarters */
+    { 207,  2,   -5,    2 },   /* In the Rigging */
+    { 208,  1,   -6,   -6 },   /* Upstairs Hall */
     { 212,  0,    4,   -6 },   /* Bottom of Stairwell */
     { 216,  0,    2,   -7 },   /* By the House */
 };
@@ -494,9 +612,31 @@ static const MapAtlasCell MAP_ATLAS_PLNDHRTS[] = {
 /*----------------------
  | MAP_ATLAS_SORCERER
  | Description: SORCERER, release 15 serial 851108.
- |   78 rooms on 1 floor(s), ascending by object
+ |   78 rooms on 3 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 123 of 140 compass exits
- |   between two placed rooms leave in the direction drawn (88%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (88%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 77 of 95 are drawn on their own axis
+ |   with no sideways component (81%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Shaft Top --east--> Shaft Top at (+0,+0)
+ |     Coal Mine --east--> Shaft Top at (+2,+1)
+ |     Coal Mine --south--> Shaft Top at (+2,+1)
+ |     Meadow --north--> River Bank at (+2,-3)
+ |     River Bank --south--> Meadow at (-2,+3)
+ |     Forest Edge --west--> Twisted Forest at (-1,+1)
+ |     Coal Mine --north--> Coal Mine at (+0,+0)
+ |     Coal Mine --east--> Coal Mine at (+2,+1)
+ |     ... and 10 more
  |
  |   The exceptions, which are rooms whose exits contradict any planar
  |   layout rather than misplacements:
@@ -512,7 +652,7 @@ static const MapAtlasCell MAP_ATLAS_PLNDHRTS[] = {
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_SORCERER[] = {
-    {   3,  0,    0,   -8 },   /* River Bed */
+    {   3,  1,    0,   -8 },   /* River Bed */
     {   5,  0,   -1,   -2 },   /* Dungeon */
     {   8,  0,   -4,    1 },   /* Crater */
     {   9,  0,    2,    6 },   /* Grue Lair */
@@ -521,23 +661,23 @@ static const MapAtlasCell MAP_ATLAS_SORCERER[] = {
     {  18,  0,   -5,    9 },   /* Lobby */
     {  21,  0,   -3,    2 },   /* Slanted Room */
     {  25,  0,    1,    5 },   /* Shaft Bottom */
-    {  36,  0,   -5,   -3 },   /* Twisted Forest */
+    {  36,  1,   -5,   -3 },   /* Twisted Forest */
     {  39,  0,    5,   -4 },   /* Outside Glass Arch */
     {  43,  0,   -4,   10 },   /* Cellar */
-    {  44,  0,   -2,    1 },   /* Top of Chute */
+    {  44,  1,   -2,    1 },   /* Top of Chute */
     {  46,  0,    7,   -1 },   /* Stone Hut */
-    {  47,  0,   -1,   -5 },   /* Turret */
+    {  47,  2,   -1,   -5 },   /* Turret */
     {  48,  0,    0,    6 },   /* Mammoth Cavern */
     {  50,  0,   -5,    7 },   /* Hallway */
     {  52,  0,   -1,   -1 },   /* Highway */
     {  59,  0,    4,    9 },   /* Ocean Shore South */
     {  67,  0,   -5,    6 },   /* Hallway */
     {  80,  0,   -6,    1 },   /* Bare Passage */
-    {  85,  0,   -4,   -5 },   /* Mine Field */
+    {  85,  1,   -4,   -5 },   /* Mine Field */
     {  86,  0,    2,    8 },   /* Lagoon Shore */
     {  92,  0,    3,    0 },   /* Store */
-    { 103,  0,    5,   -5 },   /* Armory */
-    { 105,  0,    7,   -6 },   /* Gun Emplacement */
+    { 103,  1,    5,   -5 },   /* Armory */
+    { 105,  1,    7,   -6 },   /* Gun Emplacement */
     { 108,  0,   -7,    1 },   /* Elbow Room */
     { 110,  0,   -4,    7 },   /* Frobar's Quarters */
     { 114,  0,   -2,   -1 },   /* Bend */
@@ -545,13 +685,13 @@ static const MapAtlasCell MAP_ATLAS_SORCERER[] = {
     { 116,  0,   -7,    5 },   /* Arcade */
     { 117,  0,    5,   -1 },   /* End of Highway */
     { 119,  0,   -6,    5 },   /* Flume */
-    { 121,  0,    1,    4 },   /* Shaft Top */
-    { 124,  0,   -4,   -2 },   /* Snake Pit */
-    { 125,  0,    2,   -7 },   /* Top of Falls */
+    { 121,  1,    1,    4 },   /* Shaft Top */
+    { 124,  1,   -4,   -2 },   /* Snake Pit */
+    { 125,  1,    2,   -7 },   /* Top of Falls */
     { 132,  0,   -6,    8 },   /* Apprentice Quarters */
-    { 133,  0,   -1,    3 },   /* Coal Mine */
-    { 135,  0,   -1,   -9 },   /* Near Stagnant Pool */
-    { 137,  0,   -3,   -4 },   /* Meadow */
+    { 133,  1,   -1,    3 },   /* Coal Mine */
+    { 135,  1,   -1,   -9 },   /* Near Stagnant Pool */
+    { 137,  1,   -3,   -4 },   /* Meadow */
     { 141,  0,   -1,    5 },   /* Dial Room */
     { 142,  0,   -4,    9 },   /* Library */
     { 148,  0,    0,   -2 },   /* Torture Chamber */
@@ -559,27 +699,27 @@ static const MapAtlasCell MAP_ATLAS_SORCERER[] = {
     { 154,  0,    0,   -4 },   /* Pit of Bones */
     { 155,  0,    4,    6 },   /* Mouth of River */
     { 157,  0,    8,   -4 },   /* Hollow */
-    { 159,  0,    3,   -6 },   /* Fort Entrance */
+    { 159,  1,    3,   -6 },   /* Fort Entrance */
     { 160,  0,   -7,    0 },   /* Tree Room */
-    { 163,  0,   -1,   -7 },   /* River Bank */
-    { 166,  0,    5,   -7 },   /* Barracks */
-    { 168,  0,   -4,   -4 },   /* Forest Edge */
+    { 163,  1,   -1,   -7 },   /* River Bank */
+    { 166,  1,    5,   -7 },   /* Barracks */
+    { 168,  1,   -4,   -4 },   /* Forest Edge */
     { 172,  0,    4,    8 },   /* Surface of Lagoon */
-    { 181,  0,    5,   -6 },   /* Parade Ground */
+    { 181,  1,    5,   -6 },   /* Parade Ground */
     { 186,  0,   -4,    8 },   /* Servants' Quarters */
     { 187,  0,   -5,    4 },   /* Park Entrance */
     { 191,  0,    4,    7 },   /* Ocean Shore North */
-    { 193,  0,   -1,   -4 },   /* Ruins */
+    { 193,  1,   -1,   -4 },   /* Ruins */
     { 197,  0,   -4,   -1 },   /* Slimy Room */
     { 198,  0,    1,   -1 },   /* Toll Gate */
-    { 202,  0,    0,    1 },   /* Coal Mine */
-    { 203,  0,    2,   -9 },   /* Hidden Cave */
+    { 202,  1,    0,    1 },   /* Coal Mine */
+    { 203,  1,    2,   -9 },   /* Hidden Cave */
     { 208,  0,    5,   -2 },   /* Entrance Hall */
     { 212,  0,   -4,    5 },   /* Sooty Room */
     { 218,  0,   -7,    2 },   /* Roller Coaster */
-    { 219,  0,   -2,   -4 },   /* Drawbridge */
-    { 222,  0,   -5,   -5 },   /* Tree Branch */
-    { 224,  0,    2,    2 },   /* Coal Mine */
+    { 219,  1,   -2,   -4 },   /* Drawbridge */
+    { 222,  2,   -5,   -5 },   /* Tree Branch */
+    { 224,  1,    2,    2 },   /* Coal Mine */
     { 231,  0,   -6,    9 },   /* Store Room */
     { 237,  0,   -8,    4 },   /* Casino */
     { 239,  0,   -2,    5 },   /* Coal Bin Room */
@@ -595,176 +735,217 @@ static const MapAtlasCell MAP_ATLAS_SORCERER[] = {
 /*----------------------
  | MAP_ATLAS_SPLBRKR
  | Description: SPLBRKR, release 87 serial 860904.
- |   50 rooms on 1 floor(s), ascending by object
+ |   50 rooms on 4 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 24 of 24 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 23 of 24 are drawn on their own axis
+ |   with no sideways component (96%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 75, chosen by sweep; 5 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Packed Earth --west--> Cave Entrance at (-3,+2)
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_SPLBRKR[] = {
     {   6,  0,   -4,    4 },   /* Carving Room */
-    {   7,  0,   -7,   -3 },   /* Ogre Lair */
-    {  18,  0,    1,    0 },   /* Belwit Square */
-    {  29,  0,   -4,   -4 },   /* Cliff Middle */
-    {  38,  0,   -2,   11 },   /* Dungeon Cell */
-    {  39,  0,    2,    5 },   /* Air Room */
-    {  45,  0,    1,   -1 },   /* Guild Hall */
-    {  51,  0,    5,    2 },   /* Grue Cave */
-    {  74,  0,    1,   -7 },   /* North of Serpent */
-    {  76,  0,    1,   -2 },   /* Council Chamber */
-    {  83,  0,    6,    9 },   /* String Room */
-    {  87,  0,   -3,   -8 },   /* Fire Room */
-    {  88,  0,    6,   -3 },   /* Water Room */
-    {  91,  0,    5,   -6 },   /* Guard Tower */
-    {  97,  0,    5,   -4 },   /* Oubliette */
-    {  98,  0,    3,    7 },   /* No Place */
-    { 101,  0,    1,   -6 },   /* Smooth Room */
+    {   7,  0,   -6,   -3 },   /* Ogre Lair */
+    {  18,  0,    0,    0 },   /* Belwit Square */
+    {  29,  0,   -2,   -4 },   /* Cliff Middle */
+    {  38,  0,   -2,   10 },   /* Dungeon Cell */
+    {  39,  0,    1,    4 },   /* Air Room */
+    {  45,  0,    0,   -1 },   /* Guild Hall */
+    {  51,  0,    4,    2 },   /* Grue Cave */
+    {  74,  0,    0,   -7 },   /* North of Serpent */
+    {  76,  0,    0,   -2 },   /* Council Chamber */
+    {  83,  0,    5,    8 },   /* String Room */
+    {  87,  1,   -4,   -8 },   /* Fire Room */
+    {  88,  1,    5,   -3 },   /* Water Room */
+    {  91,  1,    4,   -6 },   /* Guard Tower */
+    {  97,  1,    5,   -4 },   /* Oubliette */
+    {  98,  0,    2,    6 },   /* No Place */
+    { 101,  0,    0,   -6 },   /* Smooth Room */
     { 102,  0,   -5,   -4 },   /* Cave */
-    { 103,  0,    4,    0 },   /* Dark Room */
-    { 109,  0,   -4,   -5 },   /* Cliff Top */
-    { 111,  0,    6,    3 },   /* Light Pool */
-    { 114,  0,    1,   -4 },   /* Ruins Room */
-    { 115,  0,    0,    6 },   /* Bazaar */
-    { 116,  0,    1,   -3 },   /* Ruined Pipe */
-    { 118,  0,   -1,  -10 },   /* Light Room */
-    { 120,  0,   -5,    7 },   /* Soft Room */
-    { 122,  0,    2,    6 },   /* Emporium */
-    { 127,  0,    2,   -3 },   /* In Pipe */
-    { 132,  0,    1,    1 },   /* Boneyard */
-    { 137,  0,    6,   -6 },   /* Dungeon */
-    { 151,  0,   -5,   10 },   /* Magic Room */
+    { 103,  2,    3,    0 },   /* Dark Room */
+    { 109,  1,   -4,   -5 },   /* Cliff Top */
+    { 111,  0,    5,    3 },   /* Light Pool */
+    { 114,  2,    0,   -4 },   /* Ruins Room */
+    { 115,  0,   -1,    4 },   /* Bazaar */
+    { 116,  0,    0,   -3 },   /* Ruined Pipe */
+    { 118,  0,   -1,   -9 },   /* Light Room */
+    { 120,  0,   -5,    6 },   /* Soft Room */
+    { 122,  0,    1,    5 },   /* Emporium */
+    { 127,  0,    1,   -3 },   /* In Pipe */
+    { 132,  0,    0,    1 },   /* Boneyard */
+    { 137,  0,    5,   -6 },   /* Dungeon */
+    { 151,  0,   -5,    9 },   /* Magic Room */
     { 156,  0,   -2,   -5 },   /* Packed Earth */
-    { 157,  0,    3,   -9 },   /* In Roc Nest */
-    { 162,  0,    8,    2 },   /* On Pillar */
-    { 164,  0,    5,    7 },   /* Inner Vault */
+    { 157,  0,    2,   -8 },   /* In Roc Nest */
+    { 162,  1,    7,    2 },   /* On Pillar */
+    { 164,  0,    4,    6 },   /* Inner Vault */
     { 173,  0,   -2,    4 },   /* Changing Room */
-    { 176,  0,    4,    1 },   /* Dark Cave */
+    { 176,  1,    3,    1 },   /* Dark Cave */
     { 179,  0,   -4,   -3 },   /* Cliff Bottom */
-    { 180,  0,    5,   -3 },   /* In Channel */
-    { 184,  0,   -6,  -10 },   /* Nondescript Room */
-    { 197,  0,    1,   -5 },   /* Hall of Stone */
-    { 199,  0,   -7,   -7 },   /* Stone Hut */
-    { 200,  0,   -2,    8 },   /* Ruins Room */
-    { 211,  0,    7,   -1 },   /* Ocean Floor */
-    { 216,  0,    1,   -9 },   /* Temple */
-    { 225,  0,   -2,   10 },   /* Sand Room */
-    { 227,  0,    5,    6 },   /* Outer Vault */
+    { 180,  0,    4,   -3 },   /* In Channel */
+    { 184,  0,   -6,   -9 },   /* Nondescript Room */
+    { 197,  0,    0,   -5 },   /* Hall of Stone */
+    { 199,  0,   -6,   -7 },   /* Stone Hut */
+    { 200,  0,    0,    7 },   /* Ruins Room */
+    { 211,  0,    6,   -1 },   /* Ocean Floor */
+    { 216,  0,    0,   -8 },   /* Temple */
+    { 225,  1,   -2,    9 },   /* Sand Room */
+    { 227,  0,    4,    5 },   /* Outer Vault */
     { 230,  0,   -1,   -3 },   /* In Pipe */
     { 231,  0,   -5,   -3 },   /* Cave Entrance */
-    { 242,  0,   -5,   -7 },   /* Mountain Top */
+    { 242,  3,   -5,   -7 },   /* Mountain Top */
 };
 
 /*----------------------
  | MAP_ATLAS_STATFALL
  | Description: STATFALL, release 107 serial 870430.
- |   90 rooms on 3 floor(s), ascending by object
+ |   90 rooms on 12 floor(s) off 3 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 106 of 108 compass exits
- |   between two placed rooms leave in the direction drawn (98%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (98%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 63 of 66 are drawn on their own axis
+ |   with no sideways component (95%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 160, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Auxiliary SanFac --north--> Auxiliary Barracks at (-1,+0)
+ |     Library --west--> Mess Hall at (-2,-1)
+ |     End of Corridor --west--> Level Six at (-2,-1)
  |
  |   The exceptions, which are rooms whose exits contradict any planar
  |   layout rather than misplacements:
- |     Level Six --se--> End of Corridor
- |     End of Corridor --nw--> Level Six
+ |     Level Three --sw--> Chapel
+ |     Auxiliary SanFac --north--> Auxiliary Barracks
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_STATFALL[] = {
-    {   5,  1,    2,   -7 },   /* Auxiliary Barracks */
-    {   6,  2,    2,    7 },   /* Rec Shop */
-    {   7,  2,   -3,    9 },   /* South Junction */
-    {  11,  1,    2,   -1 },   /* Paper Recycling Plant */
-    {  12,  1,   -3,   -5 },   /* Level Three */
-    {  18,  2,   -2,    7 },   /* Sick Bay */
-    {  20,  1,   -3,   -3 },   /* Theatre */
-    {  22,  2,   -4,   13 },   /* Mayor's Office */
-    {  27,  2,   -4,   10 },   /* File Room */
-    {  30,  2,   -2,   18 },   /* Loan Shark */
-    {  31,  2,    0,    9 },   /* Pet Store */
-    {  33,  2,   -4,    6 },   /* Storage */
-    {  37,  2,   -3,    3 },   /* Engineering Office */
-    {  39,  2,   -5,    4 },   /* Scientists' Quarters */
-    {  43,  1,    3,   -6 },   /* Auxiliary SanFac */
-    {  44,  2,   -3,   13 },   /* Grimy Passage */
-    {  47,  2,   -3,   11 },   /* South Connection */
-    {  49,  2,   -1,    7 },   /* Brig */
-    {  51,  2,   -4,    8 },   /* Level Five */
-    {  53,  0,    1,  -11 },   /* Factory */
-    {  54,  0,   -4,  -17 },   /* Cargo Bay Entrance */
-    {  56,  2,   -3,   18 },   /* Pawn Shop */
-    {  59,  2,   -2,   11 },   /* Briefing Room */
-    {  64,  2,    5,    9 },   /* Flophouse */
-    {  67,  2,   -2,    9 },   /* Station Control */
-    {  71,  2,   -4,    3 },   /* Astro Office */
-    {  72,  2,    3,   17 },   /* Junk Yard */
-    {  86,  2,   -4,    7 },   /* Workshop */
-    {  87,  2,   -2,   10 },   /* Commander's Office */
-    {  92,  1,    3,    0 },   /* Printing Plant */
-    {  94,  2,    1,    7 },   /* Recruitment Office */
-    {  95,  2,    2,   10 },   /* Saloon */
-    {  97,  2,    2,    8 },   /* Field Office */
-    {  99,  1,    4,   -5 },   /* Armory */
-    { 100,  1,   -5,   -4 },   /* Chapel */
-    { 101,  2,   -2,    4 },   /* Bio Lab */
-    { 104,  2,   -3,    7 },   /* North Junction */
-    { 106,  0,   -4,  -18 },   /* Robot Pool */
-    { 108,  0,   -3,  -17 },   /* Cargo Bay */
-    { 109,  2,   -2,   15 },   /* Missionary */
-    { 113,  0,   -1,  -18 },   /* Top of Air Shaft */
-    { 114,  2,    2,    9 },   /* Barbershop */
-    { 115,  2,    3,   13 },   /* Shady Dan's */
-    { 116,  0,   -1,  -17 },   /* Air Shaft */
-    { 118,  2,   -1,    9 },   /* Comm Center */
-    { 124,  0,   -5,  -12 },   /* Mess Hall */
-    { 125,  2,   -2,    6 },   /* The PX */
-    { 126,  0,    0,  -18 },   /* Dome */
-    { 127,  2,    0,    8 },   /* Makeshift Connector */
-    { 130,  0,   -3,  -11 },   /* Library */
-    { 137,  0,   -5,  -16 },   /* Forms Storage Room */
-    { 143,  2,    1,   14 },   /* Airlock */
-    { 144,  2,   -2,    8 },   /* East Junction */
-    { 146,  2,    4,    9 },   /* Opium Den */
-    { 148,  2,   -1,   18 },   /* "Doc" Schuster's */
-    { 152,  1,    2,   -4 },   /* Level Six */
-    { 157,  1,    1,   -7 },   /* Alien Ship */
-    { 162,  2,   -1,    8 },   /* East Connection */
-    { 163,  0,    0,  -10 },   /* Computer Control */
-    { 165,  2,   -4,    4 },   /* Astro Lab */
-    { 168,  1,    5,   -4 },   /* Shipping Room */
-    { 171,  2,    0,    7 },   /* Fortune Teller */
-    { 174,  2,    1,    9 },   /* Grocery */
-    { 177,  1,    3,   -2 },   /* Officers SanFac */
-    { 178,  2,   -3,    4 },   /* Engineering Lab */
-    { 179,  2,   -1,   13 },   /* Greasy Straw */
-    { 180,  2,   -1,   10 },   /* Commander's Quarters */
-    { 181,  2,    1,   16 },   /* In Space */
-    { 186,  2,   -3,    5 },   /* Tube */
-    { 192,  2,   -1,    4 },   /* Holding Tank Level */
-    { 193,  1,    0,   -1 },   /* Barracks SanFac */
-    { 198,  0,   -5,  -17 },   /* Deck Twelve */
-    { 201,  2,    1,   12 },   /* Warehouse */
-    { 204,  2,   -2,    3 },   /* Bio Office */
-    { 207,  2,   -3,   17 },   /* Bank */
-    { 208,  2,   -4,   15 },   /* Travel Agency */
-    { 214,  1,   -4,   -1 },   /* Level Four */
-    { 215,  2,   -2,   17 },   /* Alley */
-    { 216,  2,   -4,   11 },   /* Robot Shop */
-    { 220,  0,    0,  -11 },   /* Shaft at Level Nine */
-    { 221,  2,    0,   10 },   /* Studio */
-    { 224,  2,   -3,   15 },   /* Main Street */
-    { 227,  1,   -3,   -7 },   /* Gym */
-    { 230,  0,   -2,  -17 },   /* Spacetruck */
-    { 231,  2,   -3,    6 },   /* North Connection */
-    { 232,  2,    4,   10 },   /* Casino */
-    { 238,  2,    1,    8 },   /* Broadway */
-    { 245,  1,    4,   -4 },   /* End of Corridor */
-    { 253,  0,   -1,  -11 },   /* Bottom of Air Shaft */
-    { 255,  1,   -5,   -6 },   /* Laundry */
+    {   5,  6,    0,   -4 },   /* Auxiliary Barracks */
+    {   6, 10,    3,    8 },   /* Rec Shop */
+    {   7, 10,   -2,   10 },   /* South Junction */
+    {  11,  5,    0,    0 },   /* Paper Recycling Plant */
+    {  12,  8,   -3,   -3 },   /* Level Three */
+    {  18, 10,   -1,    8 },   /* Sick Bay */
+    {  20,  8,   -3,   -2 },   /* Theatre */
+    {  22, 10,   -3,   13 },   /* Mayor's Office */
+    {  27, 10,   -3,   11 },   /* File Room */
+    {  30, 10,   -1,   16 },   /* Loan Shark */
+    {  31, 10,    1,   10 },   /* Pet Store */
+    {  33, 10,   -3,    7 },   /* Storage */
+    {  37, 10,   -2,    4 },   /* Engineering Office */
+    {  39, 11,   -4,    5 },   /* Scientists' Quarters */
+    {  43,  6,    1,   -4 },   /* Auxiliary SanFac */
+    {  44, 10,   -2,   13 },   /* Grimy Passage */
+    {  47, 10,   -2,   12 },   /* South Connection */
+    {  49, 10,    0,    8 },   /* Brig */
+    {  51, 10,   -3,    9 },   /* Level Five */
+    {  53,  1,    2,   -8 },   /* Factory */
+    {  54,  0,   -3,  -14 },   /* Cargo Bay Entrance */
+    {  56, 10,   -2,   16 },   /* Pawn Shop */
+    {  59, 10,   -1,   12 },   /* Briefing Room */
+    {  64, 10,    5,   10 },   /* Flophouse */
+    {  67, 10,   -1,   10 },   /* Station Control */
+    {  71, 11,   -3,    4 },   /* Astro Office */
+    {  72, 10,    3,   15 },   /* Junk Yard */
+    {  86, 10,   -3,    8 },   /* Workshop */
+    {  87, 10,   -1,   11 },   /* Commander's Office */
+    {  92,  5,    1,    1 },   /* Printing Plant */
+    {  94, 10,    2,    8 },   /* Recruitment Office */
+    {  95, 10,    3,   11 },   /* Saloon */
+    {  97, 10,    3,    9 },   /* Field Office */
+    {  99,  6,    2,   -3 },   /* Armory */
+    { 100,  8,   -4,   -3 },   /* Chapel */
+    { 101,  9,   -1,    5 },   /* Bio Lab */
+    { 104, 10,   -2,    8 },   /* North Junction */
+    { 106,  0,   -3,  -15 },   /* Robot Pool */
+    { 108,  0,   -2,  -14 },   /* Cargo Bay */
+    { 109, 10,   -1,   14 },   /* Missionary */
+    { 113,  4,    0,  -15 },   /* Top of Air Shaft */
+    { 114, 10,    3,   10 },   /* Barbershop */
+    { 115, 10,    3,   13 },   /* Shady Dan's */
+    { 116,  3,    0,  -14 },   /* Air Shaft */
+    { 118, 10,    0,   10 },   /* Comm Center */
+    { 124,  3,   -4,   -9 },   /* Mess Hall */
+    { 125, 10,   -1,    7 },   /* The PX */
+    { 126,  4,    1,  -15 },   /* Dome */
+    { 127, 10,    1,    9 },   /* Makeshift Connector */
+    { 130,  3,   -2,   -8 },   /* Library */
+    { 137,  0,   -4,  -13 },   /* Forms Storage Room */
+    { 143, 10,    2,   13 },   /* Airlock */
+    { 144, 10,   -1,    9 },   /* East Junction */
+    { 146, 10,    4,   10 },   /* Opium Den */
+    { 148, 10,    0,   16 },   /* "Doc" Schuster's */
+    { 152,  6,    0,   -3 },   /* Level Six */
+    { 157,  6,   -1,   -4 },   /* Alien Ship */
+    { 162, 10,    0,    9 },   /* East Connection */
+    { 163,  0,    1,   -7 },   /* Computer Control */
+    { 165, 11,   -3,    5 },   /* Astro Lab */
+    { 168,  6,    3,   -2 },   /* Shipping Room */
+    { 171, 10,    1,    8 },   /* Fortune Teller */
+    { 174, 10,    2,   10 },   /* Grocery */
+    { 177,  6,    1,   -1 },   /* Officers SanFac */
+    { 178, 10,   -2,    5 },   /* Engineering Lab */
+    { 179, 10,    0,   13 },   /* Greasy Straw */
+    { 180, 10,    0,   11 },   /* Commander's Quarters */
+    { 181, 10,    2,   14 },   /* In Space */
+    { 186, 10,   -2,    6 },   /* Tube */
+    { 192,  9,    0,    5 },   /* Holding Tank Level */
+    { 193,  7,   -2,    0 },   /* Barracks SanFac */
+    { 198,  0,   -4,  -14 },   /* Deck Twelve */
+    { 201, 10,    2,   12 },   /* Warehouse */
+    { 204,  9,   -1,    4 },   /* Bio Office */
+    { 207, 10,   -2,   15 },   /* Bank */
+    { 208, 10,   -3,   14 },   /* Travel Agency */
+    { 214,  7,   -4,    0 },   /* Level Four */
+    { 215, 10,   -1,   15 },   /* Alley */
+    { 216, 10,   -3,   12 },   /* Robot Shop */
+    { 220,  0,    1,   -8 },   /* Shaft at Level Nine */
+    { 221, 10,    1,   11 },   /* Studio */
+    { 224, 10,   -2,   14 },   /* Main Street */
+    { 227,  8,   -3,   -4 },   /* Gym */
+    { 230,  0,   -1,  -14 },   /* Spacetruck */
+    { 231, 10,   -2,    7 },   /* North Connection */
+    { 232, 10,    4,   11 },   /* Casino */
+    { 238, 10,    2,    9 },   /* Broadway */
+    { 245,  6,    2,   -2 },   /* End of Corridor */
+    { 253,  2,    0,   -8 },   /* Bottom of Air Shaft */
+    { 255,  8,   -4,   -4 },   /* Laundry */
 };
 
 /*----------------------
  | MAP_ATLAS_SUSPENDD
  | Description: SUSPENDD, release 8 serial 840521.
- |   31 rooms on 1 floor(s), ascending by object
+ |   31 rooms on 1 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 50 of 52 compass exits
- |   between two placed rooms leave in the direction drawn (96%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (96%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 48 of 48 are drawn on their own axis
+ |   with no sideways component (100%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
  |
  |   The exceptions, which are rooms whose exits contradict any planar
  |   layout rather than misplacements:
@@ -809,9 +990,26 @@ static const MapAtlasCell MAP_ATLAS_SUSPENDD[] = {
 /*----------------------
  | MAP_ATLAS_WISHBRNG
  | Description: WISHBRNG, release 69 serial 850920.
- |   41 rooms on 2 floor(s), ascending by object
+ |   41 rooms on 3 floor(s) off 2 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 23 of 23 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 19 of 23 are drawn on their own axis
+ |   with no sideways component (83%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Rotary North --east--> Rotary East at (+1,+1)
+ |     Rotary North --west--> Rotary West at (-1,+1)
+ |     Rotary East --north--> Rotary North at (-1,-1)
+ |     Rotary West --north--> Rotary North at (+1,-1)
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_WISHBRNG[] = {
@@ -832,7 +1030,7 @@ static const MapAtlasCell MAP_ATLAS_WISHBRNG[] = {
     { 102,  1,   -5,    0 },   /* River Outlet */
     { 116,  1,    2,   -1 },   /* Bridge */
     { 132,  0,   -3,   -5 },   /* Misty Island */
-    { 134,  1,   -3,    2 },   /* Lookout Hill */
+    { 134,  2,   -3,    2 },   /* Lookout Hill */
     { 138,  0,   -2,  -12 },   /* Laboratory */
     { 141,  0,   -6,   -8 },   /* Torture Chamber */
     { 144,  1,    3,    6 },   /* Rotary East */
@@ -861,9 +1059,20 @@ static const MapAtlasCell MAP_ATLAS_WISHBRNG[] = {
 /*----------------------
  | MAP_ATLAS_WITNESS
  | Description: WITNESS, release 22 serial 840924.
- |   19 rooms on 1 floor(s), ascending by object
+ |   19 rooms on 1 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 8 of 8 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 8 of 8 are drawn on their own axis
+ |   with no sideways component (100%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 2 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_WITNESS[] = {
@@ -881,8 +1090,8 @@ static const MapAtlasCell MAP_ATLAS_WITNESS[] = {
     { 203,  0,    5,   -4 },   /* rock garden */
     { 207,  0,    2,    1 },   /* office */
     { 214,  0,    4,    1 },   /* office porch */
-    { 219,  0,   -1,    4 },   /* side yard */
-    { 224,  0,   -4,    5 },   /* driveway entrance */
+    { 219,  0,   -1,    5 },   /* side yard */
+    { 224,  0,   -5,    5 },   /* driveway entrance */
     { 225,  0,   -5,    3 },   /* driveway */
     { 228,  0,   -5,    1 },   /* front porch */
     { 237,  0,   -4,   -1 },   /* front yard */
@@ -891,9 +1100,33 @@ static const MapAtlasCell MAP_ATLAS_WITNESS[] = {
 /*----------------------
  | MAP_ATLAS_ZORK1
  | Description: ZORK1, release 88 serial 840726.
- |   84 rooms on 3 floor(s), ascending by object
+ |   84 rooms on 9 floor(s) off 3 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 134 of 141 compass exits
- |   between two placed rooms leave in the direction drawn (95%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (95%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 73 of 117 are drawn on their own axis
+ |   with no sideways component (62%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   2 vertical exit(s) do not fit one ordering of the levels,
+ |   which is a real loop in the geography rather than a fault.
+ |   Read at a lane tolerance of 60, chosen by sweep; 4 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Coal Mine --north--> Coal Mine at (+1,-1)
+ |     Coal Mine --west--> Coal Mine at (+0,+0)
+ |     Coal Mine --south--> Coal Mine at (+0,+0)
+ |     Coal Mine --north--> Coal Mine at (+0,+0)
+ |     Coal Mine --south--> Coal Mine at (-1,+2)
+ |     Coal Mine --north--> Gas Room at (-2,-3)
+ |     Coal Mine --east--> Coal Mine at (+0,+0)
+ |     Ladder Bottom --south--> Dead End at (-9,+30)
+ |     ... and 36 more
  |
  |   The exceptions, which are rooms whose exits contradict any planar
  |   layout rather than misplacements:
@@ -907,46 +1140,46 @@ static const MapAtlasCell MAP_ATLAS_WITNESS[] = {
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_ZORK1[] = {
-    {  15,  1,   -2,   -5 },   /* Slide Room */
-    {  16,  1,    7,  -10 },   /* Coal Mine */
-    {  17,  1,    8,  -13 },   /* Coal Mine */
-    {  18,  1,    9,  -11 },   /* Coal Mine */
-    {  19,  1,    8,   -9 },   /* Coal Mine */
-    {  20,  1,    8,   -6 },   /* Ladder Bottom */
-    {  21,  1,    8,   -7 },   /* Ladder Top */
-    {  22,  1,    6,  -10 },   /* Smelly Room */
-    {  23,  1,   -4,   -7 },   /* Squeaky Room */
-    {  24,  1,   -2,   -7 },   /* Mine Entrance */
+    {  15,  5,   -2,   -5 },   /* Slide Room */
+    {  16,  4,    7,  -10 },   /* Coal Mine */
+    {  17,  4,    8,  -11 },   /* Coal Mine */
+    {  18,  4,    9,  -11 },   /* Coal Mine */
+    {  19,  4,    8,   -9 },   /* Coal Mine */
+    {  20,  2,    8,   -6 },   /* Ladder Bottom */
+    {  21,  3,    8,   -7 },   /* Ladder Top */
+    {  22,  5,    6,  -10 },   /* Smelly Room */
+    {  23,  5,   -4,   -7 },   /* Squeaky Room */
+    {  24,  5,   -2,   -7 },   /* Mine Entrance */
     {  25,  0,   -2,  -18 },   /* Canyon View */
     {  26,  0,   -1,  -17 },   /* Rocky Ledge */
     {  27,  0,    0,  -16 },   /* Canyon Bottom */
-    {  28,  1,    8,   12 },   /* On the Rainbow */
-    {  29,  1,    9,   12 },   /* Aragain Falls */
-    {  30,  1,    8,    8 },   /* Shore */
-    {  32,  1,    5,    5 },   /* White Cliffs Beach */
-    {  33,  1,    5,    6 },   /* White Cliffs Beach */
-    {  37,  1,    0,    2 },   /* Chasm */
-    {  38,  1,    0,    3 },   /* North-South Passage */
-    {  39,  1,    4,    5 },   /* Damp Cave */
-    {  40,  1,    3,    2 },   /* Deep Canyon */
-    {  41,  1,   -3,    5 },   /* East-West Passage */
-    {  42,  1,   -1,   -3 },   /* Twisting Passage */
-    {  43,  1,   -1,   10 },   /* Winding Passage */
-    {  44,  1,    0,    6 },   /* Narrow Passage */
-    {  45,  1,    0,   -5 },   /* Cold Passage */
-    {  46,  1,    1,   10 },   /* Cave */
-    {  47,  1,    1,   -3 },   /* Cave */
-    {  48,  1,   -3,    0 },   /* Stream */
-    {  49,  1,   -2,    1 },   /* Stream View */
-    {  50,  1,    1,    1 },   /* Reservoir South */
-    {  51,  1,   -7,    7 },   /* Strange Passage */
-    {  55,  1,    8,   -5 },   /* Dead End */
-    {  57,  1,   -6,    2 },   /* Grating Room */
-    {  61,  2,   -4,   16 },   /* Dead End */
-    {  65,  2,   -5,   19 },   /* Dead End */
-    {  66,  2,   -9,   21 },   /* Dead End */
-    {  71,  1,   -5,    9 },   /* East of Chasm */
-    {  72,  1,   -5,    7 },   /* Cellar */
+    {  28,  5,    8,   12 },   /* On the Rainbow */
+    {  29,  5,    9,   12 },   /* Aragain Falls */
+    {  30,  5,    8,    8 },   /* Shore */
+    {  32,  5,    5,    5 },   /* White Cliffs Beach */
+    {  33,  5,    5,    4 },   /* White Cliffs Beach */
+    {  37,  5,    0,    2 },   /* Chasm */
+    {  38,  5,    0,    3 },   /* North-South Passage */
+    {  39,  5,    4,    4 },   /* Damp Cave */
+    {  40,  5,    3,    2 },   /* Deep Canyon */
+    {  41,  5,   -3,    5 },   /* East-West Passage */
+    {  42,  5,   -1,   -3 },   /* Twisting Passage */
+    {  43,  5,   -1,   10 },   /* Winding Passage */
+    {  44,  5,    0,    6 },   /* Narrow Passage */
+    {  45,  5,    0,   -5 },   /* Cold Passage */
+    {  46,  5,    1,   10 },   /* Cave */
+    {  47,  5,    1,   -3 },   /* Cave */
+    {  48,  5,   -3,    0 },   /* Stream */
+    {  49,  5,   -2,    1 },   /* Stream View */
+    {  50,  5,    1,    1 },   /* Reservoir South */
+    {  51,  5,   -7,    7 },   /* Strange Passage */
+    {  55,  5,    8,   -5 },   /* Dead End */
+    {  57,  5,   -6,    2 },   /* Grating Room */
+    {  61,  8,   -4,   16 },   /* Dead End */
+    {  65,  8,   -5,   19 },   /* Dead End */
+    {  66,  8,   -9,   21 },   /* Dead End */
+    {  71,  5,   -5,    9 },   /* East of Chasm */
+    {  72,  5,   -5,    7 },   /* Cellar */
     {  74,  0,   -3,  -19 },   /* Clearing */
     {  75,  0,   -6,  -22 },   /* Forest Path */
     {  76,  0,   -3,  -16 },   /* Forest */
@@ -955,93 +1188,130 @@ static const MapAtlasCell MAP_ATLAS_ZORK1[] = {
     {  79,  0,   -4,  -19 },   /* Behind House */
     {  80,  0,   -6,  -17 },   /* South of House */
     {  81,  0,   -6,  -21 },   /* North of House */
-    {  88,  0,   -5,  -23 },   /* Up a Tree */
-    {  94,  1,   -3,    7 },   /* Studio */
-    {  96,  1,    2,    6 },   /* Engravings Cave */
-    { 100,  1,    1,    0 },   /* Reservoir */
-    { 105,  1,    4,    8 },   /* Torch Room */
-    { 118,  2,   -1,   24 },   /* Dead End */
-    { 120,  1,    8,    6 },   /* Sandy Beach */
-    { 124,  1,    6,  -12 },   /* Gas Room */
-    { 126,  1,    9,    5 },   /* Sandy Cave */
+    {  88,  1,   -5,  -23 },   /* Up a Tree */
+    {  94,  5,   -3,    7 },   /* Studio */
+    {  96,  5,    2,    6 },   /* Engravings Cave */
+    { 100,  5,    1,    0 },   /* Reservoir */
+    { 105,  6,    4,    8 },   /* Torch Room */
+    { 118,  7,   -1,   24 },   /* Dead End */
+    { 120,  5,    8,    6 },   /* Sandy Beach */
+    { 124,  4,    6,  -12 },   /* Gas Room */
+    { 126,  5,    9,    5 },   /* Sandy Cave */
     { 136,  0,    1,  -17 },   /* End of Rainbow */
-    { 138,  1,    2,    4 },   /* Loud Room */
-    { 140,  1,    5,    2 },   /* Dam Base */
+    { 138,  5,    2,    4 },   /* Loud Room */
+    { 140,  5,    5,    2 },   /* Dam Base */
     { 143,  0,   -6,  -24 },   /* Clearing */
-    { 148,  1,   -3,    9 },   /* Gallery */
-    { 150,  1,    0,   -4 },   /* Mirror Room */
-    { 152,  1,    0,    8 },   /* Mirror Room */
-    { 154,  1,    6,   -1 },   /* Dam Lobby */
-    { 157,  1,    6,   -5 },   /* Machine Room */
-    { 172,  1,    1,   -1 },   /* Reservoir North */
-    { 175,  1,    5,   10 },   /* Egyptian Room */
+    { 148,  5,   -3,    9 },   /* Gallery */
+    { 150,  5,    0,   -4 },   /* Mirror Room */
+    { 152,  5,    0,    8 },   /* Mirror Room */
+    { 154,  5,    6,   -1 },   /* Dam Lobby */
+    { 157,  2,    6,   -5 },   /* Machine Room */
+    { 172,  5,    1,   -1 },   /* Reservoir North */
+    { 175,  6,    5,   10 },   /* Egyptian Room */
     { 178,  0,   -8,  -18 },   /* Stone Barrow */
     { 180,  0,   -7,  -19 },   /* West of House */
-    { 185,  1,   -9,    7 },   /* Cyclops Room */
-    { 187,  1,    1,   -2 },   /* Atlantis Room */
-    { 190,  1,   -9,    9 },   /* Treasure Room */
+    { 185,  5,   -9,    7 },   /* Cyclops Room */
+    { 187,  5,    1,   -2 },   /* Atlantis Room */
+    { 190,  6,   -9,    9 },   /* Treasure Room */
     { 193,  0,   -6,  -19 },   /* Living Room */
-    { 201,  0,   -5,  -20 },   /* Attic */
+    { 201,  1,   -5,  -20 },   /* Attic */
     { 203,  0,   -5,  -19 },   /* Kitchen */
-    { 206,  1,    7,   -6 },   /* Timber Room */
-    { 212,  1,    4,   11 },   /* Altar */
-    { 220,  1,    4,   10 },   /* Temple */
-    { 222,  1,   -4,   -9 },   /* Bat Room */
-    { 226,  1,    6,   -8 },   /* Shaft Room */
-    { 228,  1,    6,   -6 },   /* Drafty Room */
-    { 230,  1,    1,   12 },   /* Land of the Dead */
+    { 206,  2,    7,   -6 },   /* Timber Room */
+    { 212,  6,    4,   11 },   /* Altar */
+    { 220,  6,    4,   10 },   /* Temple */
+    { 222,  5,   -4,   -8 },   /* Bat Room */
+    { 226,  5,    6,   -8 },   /* Shaft Room */
+    { 228,  2,    6,   -6 },   /* Drafty Room */
+    { 230,  4,    1,   12 },   /* Land of the Dead */
     { 239,  0,   -2,  -22 },   /* Forest */
 };
 
 /*----------------------
  | MAP_ATLAS_ZORK2
  | Description: ZORK2, release 48 serial 840904.
- |   32 rooms on 1 floor(s), ascending by object
+ |   32 rooms on 3 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 23 of 23 compass exits
- |   between two placed rooms leave in the direction drawn (100%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (100%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 17 of 20 are drawn on their own axis
+ |   with no sideways component (85%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   Read at a lane tolerance of 60, chosen by sweep; 1 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Guarded Room --north--> Cobwebby Corridor at (+3,-2)
+ |     Dragon Room --east--> End of Ledge at (+1,+1)
+ |     End of Ledge --north--> Dragon Room at (-1,-1)
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_ZORK2[] = {
-    { 103,  0,    1,   -5 },   /* Dreary Room */
-    { 106,  0,   -4,   -6 },   /* Chairman's Office */
-    { 114,  0,   -4,   -4 },   /* Bank Entrance */
-    { 115,  0,    6,    5 },   /* Pool Room */
-    { 122,  0,    6,    3 },   /* Machine Room */
-    { 123,  0,    5,    3 },   /* Low Room */
-    { 125,  0,   -5,   -1 },   /* Dusty Room */
-    { 126,  0,   -5,   -2 },   /* Wide Ledge */
-    { 128,  0,   -5,    1 },   /* Library */
-    { 137,  0,    2,    3 },   /* Riddle Room */
-    { 145,  0,   -5,    6 },   /* Aquarium Room */
-    { 156,  0,   -3,    7 },   /* Trophy Room */
-    { 165,  0,   -3,    6 },   /* Wizard's Workshop */
-    { 167,  0,   -3,    5 },   /* Guarded Room */
+    { 103,  2,    1,   -5 },   /* Dreary Room */
+    { 106,  1,   -4,   -6 },   /* Chairman's Office */
+    { 114,  1,   -4,   -4 },   /* Bank Entrance */
+    { 115,  1,    6,    5 },   /* Pool Room */
+    { 122,  1,    6,    3 },   /* Machine Room */
+    { 123,  1,    5,    3 },   /* Low Room */
+    { 125,  1,   -5,   -1 },   /* Dusty Room */
+    { 126,  1,   -5,   -2 },   /* Wide Ledge */
+    { 128,  1,   -5,    1 },   /* Library */
+    { 137,  1,    2,    3 },   /* Riddle Room */
+    { 145,  1,   -5,    6 },   /* Aquarium Room */
+    { 156,  1,   -3,    7 },   /* Trophy Room */
+    { 165,  1,   -3,    6 },   /* Wizard's Workshop */
+    { 167,  1,   -3,    5 },   /* Guarded Room */
     { 172,  0,    1,    7 },   /* Crypt */
     { 174,  0,    1,    6 },   /* Crypt Anteroom */
     { 177,  0,    0,    6 },   /* Cerberus Room */
-    { 192,  0,    0,    4 },   /* Kennel */
-    { 195,  0,    1,    3 },   /* Menhir Room */
-    { 196,  0,   -2,   -4 },   /* Room 8 */
-    { 198,  0,    0,    3 },   /* Cobwebby Corridor */
-    { 202,  0,   -1,   -1 },   /* Stone Bridge */
-    { 210,  0,   -1,   -5 },   /* Dragon's Lair */
-    { 211,  0,   -1,   -4 },   /* Dragon Room */
-    { 212,  0,    0,   -3 },   /* End of Ledge */
-    { 213,  0,    1,   -3 },   /* Ledge in Ravine */
-    { 214,  0,    1,   -1 },   /* Deep Ford */
-    { 216,  0,    2,    0 },   /* Path Near Stream */
-    { 218,  0,    3,    2 },   /* Topiary */
-    { 219,  0,    4,    0 },   /* Formal Garden */
-    { 225,  0,    3,   -3 },   /* Dark Tunnel */
-    { 231,  0,    5,   -7 },   /* Inside the Barrow */
+    { 192,  1,    0,    4 },   /* Kennel */
+    { 195,  1,    1,    3 },   /* Menhir Room */
+    { 196,  1,   -2,   -4 },   /* Room 8 */
+    { 198,  1,    0,    3 },   /* Cobwebby Corridor */
+    { 202,  1,   -1,   -1 },   /* Stone Bridge */
+    { 210,  1,   -1,   -5 },   /* Dragon's Lair */
+    { 211,  1,   -1,   -4 },   /* Dragon Room */
+    { 212,  1,    0,   -3 },   /* End of Ledge */
+    { 213,  1,    1,   -3 },   /* Ledge in Ravine */
+    { 214,  1,    1,   -1 },   /* Deep Ford */
+    { 216,  1,    2,    0 },   /* Path Near Stream */
+    { 218,  1,    4,    2 },   /* Topiary */
+    { 219,  1,    4,    0 },   /* Formal Garden */
+    { 225,  1,    3,   -3 },   /* Dark Tunnel */
+    { 231,  1,    5,   -7 },   /* Inside the Barrow */
 };
 
 /*----------------------
  | MAP_ATLAS_ZORK3
  | Description: ZORK3, release 17 serial 840727.
- |   43 rooms on 1 floor(s), ascending by object
+ |   43 rooms on 3 floor(s) off 1 drawn
+ |   sheet(s), ascending by object
  |   number so map_atlas_pos can bisect. 48 of 56 compass exits
- |   between two placed rooms leave in the direction drawn (86%).
+ |   between two placed rooms land in the half-plane their direction names
+ |   (86%), which is the test the layout was scored and accepted on.
+ |   Of the cardinal ones, 38 of 44 are drawn on their own axis
+ |   with no sideways component (86%) -- the stricter thing a player
+ |   reads off the screen, reported rather than enforced because a plan drawn
+ |   square to a building is the publisher's and not an error.
+ |   A floor is one vertical step of the story's own routes inside one
+ |   drawn sheet, not a sheet -- see storeys().
+ |   1 vertical exit(s) do not fit one ordering of the levels,
+ |   which is a real loop in the geography rather than a fault.
+ |   Read at a lane tolerance of 60, chosen by sweep; 0 room(s)
+ |   then moved a lane or two onto an exit's axis without losing any exit
+ |   from the half-plane its direction names.
+ |
+ |   Cardinal exits drawn off their axis:
+ |     Underwater --north--> Underwater at (+0,+0)
+ |     Underwater --east--> Underwater at (+0,+0)
+ |     Underwater --west--> Underwater at (+0,+0)
+ |     Underwater --south--> Underwater at (+0,+0)
+ |     Side Room --north--> Royal Puzzle Entrance at (+2,-4)
+ |     Royal Puzzle Entrance --west--> Side Room at (-2,+4)
  |
  |   The exceptions, which are rooms whose exits contradict any planar
  |   layout rather than misplacements:
@@ -1056,49 +1326,49 @@ static const MapAtlasCell MAP_ATLAS_ZORK2[] = {
  | Author: suinevere
  ----------------------*/
 static const MapAtlasCell MAP_ATLAS_ZORK3[] = {
-    {   9,  0,    2,    2 },   /* Water Slide */
-    {  10,  0,    2,    7 },   /* High Arch */
-    {  11,  0,    2,   11 },   /* Aqueduct */
-    {  12,  0,    1,   11 },   /* Key Room */
-    {  13,  0,    0,   11 },   /* Dark Place */
-    {  14,  0,    0,    9 },   /* Dark Place */
-    {  15,  0,    0,    8 },   /* Southern Shore */
-    {  20,  0,   -6,   -7 },   /* Drafty Room */
-    {  21,  0,   -3,   -6 },   /* Dead End */
-    {  22,  0,   -3,   -7 },   /* Ladder Bottom */
-    {  24,  0,   -3,   -8 },   /* Ladder Top */
-    {  45,  0,   -1,    7 },   /* Western Shore */
+    {   9,  1,    2,    2 },   /* Water Slide */
+    {  10,  1,    2,    7 },   /* High Arch */
+    {  11,  1,    2,   11 },   /* Aqueduct */
+    {  12,  1,    1,   11 },   /* Key Room */
+    {  13,  1,    0,   11 },   /* Dark Place */
+    {  14,  1,    0,    9 },   /* Dark Place */
+    {  15,  1,    0,    8 },   /* Southern Shore */
+    {  20,  1,   -6,   -7 },   /* Drafty Room */
+    {  21,  1,   -3,   -6 },   /* Dead End */
+    {  22,  1,   -3,   -7 },   /* Ladder Bottom */
+    {  24,  2,   -3,   -8 },   /* Ladder Top */
+    {  45,  1,   -1,    7 },   /* Western Shore */
     {  46,  0,    1,    8 },   /* Underwater */
-    {  50,  0,    1,    7 },   /* Aqueduct View */
-    {  52,  0,    0,    6 },   /* Lake Shore */
-    {  53,  0,    0,    2 },   /* Foggy Room */
-    {  55,  0,   -5,   -2 },   /* Cliff Ledge */
-    {  58,  0,   -3,   -2 },   /* Cliff */
-    {  60,  0,   -6,   -2 },   /* Cliff Base */
-    {  61,  0,   -4,   -4 },   /* Hairpin Loop */
-    {  62,  0,   -1,   -2 },   /* Barren Area */
-    {  63,  0,    0,   -2 },   /* Junction */
-    {  64,  0,    0,   -4 },   /* Endless Stair */
-    {  68,  0,   -6,    1 },   /* Flathead Ocean */
-    {  78,  0,    0,    0 },   /* Creepy Crawl */
-    {  92,  0,    5,    4 },   /* Museum Entrance */
-    {  93,  0,    6,    4 },   /* Jewel Room */
-    {  95,  0,    5,    2 },   /* Technology Museum */
-    {  99,  0,    3,   10 },   /* Side Room */
-    { 100,  0,    5,    6 },   /* Royal Puzzle Entrance */
-    { 108,  0,    3,    4 },   /* Great Door */
-    { 110,  0,    3,    2 },   /* Royal Hall */
-    { 112,  0,    3,    0 },   /* Crystal Grotto */
-    { 113,  0,    1,    0 },   /* Tight Squeeze */
-    { 135,  0,    3,   -9 },   /* Prison Cell */
-    { 139,  0,    3,  -11 },   /* Parapet */
-    { 143,  0,    3,  -10 },   /* North Corridor */
-    { 147,  0,    3,   -7 },   /* South Corridor */
-    { 153,  0,    4,   -2 },   /* Dead End */
-    { 154,  0,    3,   -3 },   /* Engravings Room */
-    { 155,  0,    3,   -5 },   /* Beam Room */
-    { 157,  0,    3,   -4 },   /* Button Room */
-    { 178,  0,    3,   -6 },   /* Narrow Corridor */
+    {  50,  1,    1,    7 },   /* Aqueduct View */
+    {  52,  1,    0,    6 },   /* Lake Shore */
+    {  53,  1,    0,    2 },   /* Foggy Room */
+    {  55,  2,   -5,   -2 },   /* Cliff Ledge */
+    {  58,  1,   -3,   -2 },   /* Cliff */
+    {  60,  1,   -6,   -2 },   /* Cliff Base */
+    {  61,  1,   -4,   -4 },   /* Hairpin Loop */
+    {  62,  1,   -1,   -2 },   /* Barren Area */
+    {  63,  1,    0,   -2 },   /* Junction */
+    {  64,  1,    0,   -4 },   /* Endless Stair */
+    {  68,  1,   -6,    1 },   /* Flathead Ocean */
+    {  78,  1,    0,    0 },   /* Creepy Crawl */
+    {  92,  1,    5,    4 },   /* Museum Entrance */
+    {  93,  1,    6,    4 },   /* Jewel Room */
+    {  95,  1,    5,    2 },   /* Technology Museum */
+    {  99,  1,    3,   10 },   /* Side Room */
+    { 100,  1,    5,    6 },   /* Royal Puzzle Entrance */
+    { 108,  1,    3,    4 },   /* Great Door */
+    { 110,  1,    3,    2 },   /* Royal Hall */
+    { 112,  1,    3,    0 },   /* Crystal Grotto */
+    { 113,  1,    1,    0 },   /* Tight Squeeze */
+    { 135,  1,    3,   -9 },   /* Prison Cell */
+    { 139,  1,    3,  -11 },   /* Parapet */
+    { 143,  1,    3,  -10 },   /* North Corridor */
+    { 147,  1,    3,   -7 },   /* South Corridor */
+    { 153,  1,    4,   -2 },   /* Dead End */
+    { 154,  1,    3,   -3 },   /* Engravings Room */
+    { 155,  1,    3,   -5 },   /* Beam Room */
+    { 157,  1,    3,   -4 },   /* Button Room */
+    { 178,  1,    3,   -6 },   /* Narrow Corridor */
 };
 
 /*----------------------
@@ -1119,27 +1389,27 @@ static const MapAtlasStory MAP_ATLAS_STORIES[] = {
     { 23u, "840809", MAP_ATLAS_CUTHROAT,
       (unsigned short) (sizeof MAP_ATLAS_CUTHROAT /
                         sizeof MAP_ATLAS_CUTHROAT[0]),
-      2 },
+      3 },
     { 29u, "860820", MAP_ATLAS_ENCHANTR,
       (unsigned short) (sizeof MAP_ATLAS_ENCHANTR /
                         sizeof MAP_ATLAS_ENCHANTR[0]),
-      1 },
+      2 },
     { 37u, "861215", MAP_ATLAS_HOLYWOOD,
       (unsigned short) (sizeof MAP_ATLAS_HOLYWOOD /
                         sizeof MAP_ATLAS_HOLYWOOD[0]),
-      3 },
+      5 },
     { 22u, "830916", MAP_ATLAS_INFIDEL,
       (unsigned short) (sizeof MAP_ATLAS_INFIDEL /
                         sizeof MAP_ATLAS_INFIDEL[0]),
-      2 },
+      3 },
     { 59u, "860730", MAP_ATLAS_LEATHERG,
       (unsigned short) (sizeof MAP_ATLAS_LEATHERG /
                         sizeof MAP_ATLAS_LEATHERG[0]),
-      3 },
+      7 },
     { 219u, "870912", MAP_ATLAS_LURKING,
       (unsigned short) (sizeof MAP_ATLAS_LURKING /
                         sizeof MAP_ATLAS_LURKING[0]),
-      2 },
+      10 },
     { 9u, "861022", MAP_ATLAS_MOONMIST,
       (unsigned short) (sizeof MAP_ATLAS_MOONMIST /
                         sizeof MAP_ATLAS_MOONMIST[0]),
@@ -1147,19 +1417,19 @@ static const MapAtlasStory MAP_ATLAS_STORIES[] = {
     { 26u, "870730", MAP_ATLAS_PLNDHRTS,
       (unsigned short) (sizeof MAP_ATLAS_PLNDHRTS /
                         sizeof MAP_ATLAS_PLNDHRTS[0]),
-      2 },
+      5 },
     { 15u, "851108", MAP_ATLAS_SORCERER,
       (unsigned short) (sizeof MAP_ATLAS_SORCERER /
                         sizeof MAP_ATLAS_SORCERER[0]),
-      1 },
+      3 },
     { 87u, "860904", MAP_ATLAS_SPLBRKR,
       (unsigned short) (sizeof MAP_ATLAS_SPLBRKR /
                         sizeof MAP_ATLAS_SPLBRKR[0]),
-      1 },
+      4 },
     { 107u, "870430", MAP_ATLAS_STATFALL,
       (unsigned short) (sizeof MAP_ATLAS_STATFALL /
                         sizeof MAP_ATLAS_STATFALL[0]),
-      3 },
+      12 },
     { 8u, "840521", MAP_ATLAS_SUSPENDD,
       (unsigned short) (sizeof MAP_ATLAS_SUSPENDD /
                         sizeof MAP_ATLAS_SUSPENDD[0]),
@@ -1167,7 +1437,7 @@ static const MapAtlasStory MAP_ATLAS_STORIES[] = {
     { 69u, "850920", MAP_ATLAS_WISHBRNG,
       (unsigned short) (sizeof MAP_ATLAS_WISHBRNG /
                         sizeof MAP_ATLAS_WISHBRNG[0]),
-      2 },
+      3 },
     { 22u, "840924", MAP_ATLAS_WITNESS,
       (unsigned short) (sizeof MAP_ATLAS_WITNESS /
                         sizeof MAP_ATLAS_WITNESS[0]),
@@ -1175,15 +1445,15 @@ static const MapAtlasStory MAP_ATLAS_STORIES[] = {
     { 88u, "840726", MAP_ATLAS_ZORK1,
       (unsigned short) (sizeof MAP_ATLAS_ZORK1 /
                         sizeof MAP_ATLAS_ZORK1[0]),
-      3 },
+      9 },
     { 48u, "840904", MAP_ATLAS_ZORK2,
       (unsigned short) (sizeof MAP_ATLAS_ZORK2 /
                         sizeof MAP_ATLAS_ZORK2[0]),
-      1 },
+      3 },
     { 17u, "840727", MAP_ATLAS_ZORK3,
       (unsigned short) (sizeof MAP_ATLAS_ZORK3 /
                         sizeof MAP_ATLAS_ZORK3[0]),
-      1 },
+      3 },
 };
 
 #define MAP_ATLAS_STORY_N \

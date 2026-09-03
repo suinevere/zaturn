@@ -157,23 +157,27 @@ int main(void) {
             }
             assert(!map_atlas_page_box(pages, &x, &y, &x, &y));
             assert(!map_atlas_page_box(-1, &x, &y, &x, &y));
-            /* No two floors share ground. The generator gives each drawn page
-               its own band of rows below the last, so this holds today; it is
-               asserted because a table that stopped being true of it would put
-               two floors' rooms in the same cells and the renderer would have
-               to choose between them silently. */
-            assert(!map_atlas_pages_overlap());
+            /* Floors may share ground, and mostly do: a floor is one vertical
+               step of the story's routes inside one drawn sheet, so the storeys
+               of a building sit on the building's own footprint. What is
+               asserted is only that the question can be asked and answered --
+               a caller that drew two floors at once would have to consult it,
+               and nothing in the port does. */
+            (void) map_atlas_pages_overlap();
         }
     }
 
     /* Zork I is drawn on three sheets -- above ground, the dungeon, and the
-       coal mine -- so a table that lost its page column would report one floor
-       here and still pass every check above. */
+       coal mine -- and its routes cut those into nine floors, so a table that
+       lost its page column would report one floor here and still pass every
+       check above. The count is pinned rather than derived because the whole
+       point of the column is that it cannot be recomputed from the
+       coordinates. */
     {
         int page = -1;
         header(h, 88, "840726");
         assert(map_atlas_bind(h, sizeof h) > 0);
-        assert(map_atlas_pages() == 3);
+        assert(map_atlas_pages() == 9);
         /* West of House is object 180 and stands on the first sheet. */
         assert(map_atlas_page(180, &page));
         assert(page == 0);

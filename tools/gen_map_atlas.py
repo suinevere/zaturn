@@ -82,6 +82,12 @@ from mapscan import (DPI, DIRW, FL_DIR, PROP_MAX, Z3DIR, MIN_BOXES, MIN_NAMED,
 
 BASE_URL = "https://infodoc.plover.net/maps/"
 
+# page_items' memo, at module scope rather than per build_game. The sweep below
+# lays one game out dozens of ways and OCR is far and away the slowest thing
+# here; keyed by (pdf, page), so re-reading is free and the sweep costs what one
+# pass used to.
+_PAGE_CACHE = {}
+
 # story file stem -> the map PDF on the Documentation Project
 MAPS = {
     "BALLYHOO": "ballyhoo.pdf", "CUTHROAT": "cutthroa.pdf", "DEADLINE": "deadline.pdf",
@@ -111,6 +117,71 @@ ORIENT_MIN = 6
 # reported and dropped rather than shipped.
 PASS_RATE = 0.85
 
+# How far apart two drawn box centres may be, in points at DPI, and still be
+# read as the same column or the same row.
+#
+# snap() is single-linkage: a lane spans at most this much, so two rooms Infocom
+# drew in one column but printed a few points apart land in different lanes and
+# every north exit between them acquires a sideways step.
+#
+# Swept per game rather than fixed, because the maps are printed at different
+# scales and one number cannot serve all of them: LANE_TOLS is tried in order
+# and the reading that puts the most cardinal exits on their own axis wins, ties
+# going to the tightest tolerance so a game gains nothing from a looser reading
+# it did not need. Too loose is not free -- merging two columns Infocom really
+# did draw apart destroys the east-west relation between them -- which is why
+# the sweep is scored on alignment AND required not to lose half-plane
+# agreement.
+#
+# Worth little, and kept for what little it is worth. Sixteen of the eighteen
+# games hold at 60; Spellbreaker takes 75 and Stationfall 160, for two exits and
+# one. The reason the tolerance was reached for -- that of the cardinal exits
+# missing their axis, 57% missed by exactly one lane and 78% by one or two,
+# which reads like a clustering artefact -- turned out not to be the cause of
+# most of them. What straightens those is the nudge below, which repairs a room
+# the reading placed off true instead of re-reading the whole page around it.
+LANE_TOLS = (60, 75, 90, 110, 130, 160)
+
+# Not corrected here: the oblique drawings.
+#
+# Several of these maps are drawn in projection rather than in plan. The Lurking
+# Horror's compass rose is a parallelogram -- north straight up, the ground's
+# north-south axis leaning right -- and every room box on its sheets is sheared
+# to match, so a room due south of another is printed down AND across. No
+# rotation fixes that; the four the layout tries are all right angles, and a
+# sheared drawing is not a turned one.
+#
+# Un-shearing the centres before the columns are read was tried, swept over nine
+# leans from -0.6 to +0.6. Every one of the eighteen games chose zero: the nudge
+# below reaches the same placements directly and reaches them further, taking
+# The Lurking Horror to 32 of 32 cardinal exits on axis where the best shear
+# managed no better than leaving it alone. The sweep is gone rather than kept at
+# a setting nothing selects.
+
+# What a coordinate must fit in. map_atlas.c stores x and y as signed chars, and
+# the layout's own clamp to this range runs before the nudge below, so the nudge
+# has to keep to it itself; nothing else would catch a room pushed past 127 but
+# the silent wrap on the console. No shipped table comes anywhere near -- the
+# widest is 24 rooms from the centre -- which is exactly why this is asserted
+# rather than trusted to stay true.
+CELL_MIN, CELL_MAX = -128, 127
+
+# How far a single room may be moved off its measured lane to put an exit on its
+# axis, and how many passes the search gets. Two lanes covers the 78% of misses
+# that are within two of true; beyond that a miss is more likely to be real
+# geography, and moving a room further starts redrawing the map rather than
+# tidying it.
+#
+# This is what actually straightened the maps: 24 moves across eight games took
+# the atlas from 664 of 779 cardinal exits on axis to 702, The Lurking Horror
+# from 19 of 32 to all of them and The Witness from 4 of 8 to all of them, with
+# no game losing a single half-plane agreement. It moves a room off where the
+# scan measured it, which is the trade: at most two lanes, only where the
+# story's own compass says the drawing disagrees with it, and never at the cost
+# of a left-of or above-of relation.
+NUDGE_SPAN = 2
+NUDGE_ROUNDS = 6
+
 HALF = {
     "north": lambda dx, dy: dy < 0, "south": lambda dx, dy: dy > 0,
     "east": lambda dx, dy: dx > 0, "west": lambda dx, dy: dx < 0,
@@ -128,6 +199,30 @@ Description: Whether a drawn delta falls in the half-plane a direction names.
     It is NOT a test that a north exit is drawn due north, and the emitted
     header used to report its result as "leave in the direction drawn", which
     reads as though it were. AXIS below is that test, reported beside it.
+Author: suinevere
+"""
+
+LEVEL_DIRS = ("north", "east", "west", "south", "ne", "nw", "se", "sw",
+              "in", "out")
+"""LEVEL_DIRS
+
+Description: The exits that do not change floor. Everything except up and down,
+    including in and out -- walking into a building puts you on its ground
+    floor, not above or below it.
+Author: suinevere
+"""
+
+VERT = {
+    "up": lambda dx, dy: dy < 0,
+    "down": lambda dx, dy: dy > 0,
+}
+"""VERT
+
+Description: Which way up and down are normally drawn. Not an axis test -- a
+    staircase is often drawn off to one side -- only a sense, so that a nudge
+    cannot put the bottom of a canyon above its top while straightening
+    something else. Held, never improved: a map that draws a descent upward was
+    drawn that way and is not this pass's business to argue with.
 Author: suinevere
 """
 
@@ -309,7 +404,212 @@ def assign(cells, graph):
     return pos, chosen, dropped
 
 
-def build_game(story, pdf, verbose=False):
+def incident(graph, pos):
+    """{room: [(a, dirn, b)]} -- every exit either end of which is this room, so
+    a move can be scored against exactly the edges it changes.
+
+    Up and down are in the list as well as the compass. They have no axis to be
+    on, but they do have a sense on the drawing -- a down exit is normally drawn
+    downward -- and a move that reverses one is a move that redraws the map.
+    Leaving them out is what let the nudge turn Zork I's canyon upside down:
+    Canyon View, Rocky Ledge and Canyon Bottom descend by three down exits and
+    nothing in the cardinal score knew it."""
+    idx = {r: [] for r in pos}
+    for a in pos:
+        for dirn, (kind, dest) in graph[a]["exits"].items():
+            if kind != "OPEN" or dest not in pos:
+                continue
+            if dirn not in HALF and dirn not in VERT:
+                continue
+            idx[a].append((a, dirn, dest))
+            if dest != a:
+                idx[dest].append((a, dirn, dest))
+    return idx
+
+
+def score_edges(edges, pos, sheet=None):
+    """(on axis, in half-plane, vertical sense kept) at these positions.
+
+    The third term counts up and down exits drawn the way they read, and only
+    between two rooms on one sheet -- across sheets the two coordinates share no
+    frame and the sign means nothing."""
+    axis = half = vert = 0
+    for a, dirn, b in edges:
+        ax, ay = pos[a]
+        bx, by = pos[b]
+        dx, dy = bx - ax, by - ay
+        if dirn in VERT:
+            if sheet is not None and sheet[a] != sheet[b]:
+                continue
+            if VERT[dirn](dx, dy):
+                vert += 1
+            continue
+        if HALF[dirn](dx, dy):
+            half += 1
+        if dirn in AXIS and AXIS[dirn](dx, dy):
+            axis += 1
+    return axis, half, vert
+
+
+def nudge(pos, page, graph):
+    """Move rooms onto their exits' axes, one lane at a time.
+
+    The lanes come off a drawing, and a drawing is not a lattice: a room printed
+    a few points out of true acquires a sideways step on every straight corridor
+    through it. This walks the rooms in object order and tries each one at up to
+    NUDGE_SPAN lanes either side along each axis, keeping a move only when it
+    puts MORE cardinal exits on their own axis, takes NONE out of the half-plane
+    their direction names, and reverses NO up or down exit drawn between two
+    rooms of one sheet. Those last two are what stop it trading a real relation
+    for a cosmetic straight line: the half-plane term is why the drop rule
+    downstream cannot be made worse by running this, and the vertical one was
+    added after it turned Zork I's canyon upside down, putting Canyon Bottom
+    above Rocky Ledge in order to straighten something else.
+
+    Only edges touching the moved room change, so each trial is scored on those
+    rather than on the whole graph. Cells are kept unique per page: two rooms in
+    one cell would draw one mark and lose the other, which is a worse fault than
+    a bent corridor.
+
+    Greedy and deterministic. It is not looking for the best layout -- that is a
+    placement problem with the drawing as its evidence, and the drawing has
+    already been read -- only for the moves that are obviously right.
+    """
+    idx = incident(graph, pos)
+    taken = {(page[r], x, y) for r, (x, y) in pos.items()}
+    moved = 0
+    for _ in range(NUDGE_ROUNDS):
+        gained = 0
+        for room in sorted(pos):
+            edges = idx[room]
+            if not edges:
+                continue
+            base_axis, base_half, base_vert = score_edges(edges, pos, page)
+            ox, oy = pos[room]
+            best = None
+            for axis_i in (0, 1):
+                for step in range(-NUDGE_SPAN, NUDGE_SPAN + 1):
+                    if step == 0:
+                        continue
+                    nx = ox + (step if axis_i == 0 else 0)
+                    ny = oy + (step if axis_i == 1 else 0)
+                    if not (CELL_MIN <= nx <= CELL_MAX and
+                            CELL_MIN <= ny <= CELL_MAX):
+                        continue
+                    if (page[room], nx, ny) in taken:
+                        continue
+                    pos[room] = (nx, ny)
+                    a2, h2, v2 = score_edges(edges, pos, page)
+                    pos[room] = (ox, oy)
+                    if h2 < base_half or v2 < base_vert or a2 <= base_axis:
+                        continue
+                    key = (a2 - base_axis, h2 - base_half, -abs(step))
+                    if best is None or key > best[0]:
+                        best = (key, nx, ny)
+            if best is None:
+                continue
+            _, nx, ny = best
+            taken.discard((page[room], ox, oy))
+            taken.add((page[room], nx, ny))
+            pos[room] = (nx, ny)
+            gained += 1
+            moved += 1
+        if gained == 0:
+            break
+    return moved
+
+
+def storeys(graph, sheet):
+    """{room: floor index} -- one floor per vertical step of the story's own
+    routes, within one drawn sheet.
+
+    A page of the published map is not a floor. Infocom drew The Lurking
+    Horror's seven-odd levels on two sheets, in oblique projection so the
+    stacking reads on paper, and marked the underground ones by shading them; a
+    port that pages by sheet offers two floors for a building you climb. What
+    says which level a room is on is the story: rooms joined by a LEVEL_DIRS
+    exit are on one floor and up and down are the only exits that leave it.
+
+    So the floors are the connected components of the level-exit graph -- taken
+    over the whole story, since two placed rooms joined through an unplaced one
+    are still on one floor -- ordered by the vertical exits between them.
+
+    Paired with the sheet rather than replacing it, and that is the whole
+    subtlety. Coordinates were measured per sheet and each sheet was then
+    dropped into its own band of rows, so two rooms off different sheets share
+    no frame; re-paging by level alone put eleven floors across two or three
+    sheets at once, Zork I's largest spanning all three with forty-five rows of
+    nothing in the middle. (sheet, level) keeps every floor inside the one
+    drawing it was read from.
+
+    Ordering is by sheet then by height, so paging left and right walks the book
+    the way it was bound and then climbs. Levels are numbered from the largest
+    component outward by breadth, not by longest path: a vertical cycle -- Zork
+    I's coal mine has two the ordering cannot honour -- inflates a longest path
+    without bound, and put Zork I on a level twenty-five.
+    """
+    parent = {r: r for r in graph}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for a in graph:
+        for d, (kind, dest) in graph[a]["exits"].items():
+            if d in LEVEL_DIRS and kind != "BLOCKED" and dest in parent:
+                ra, rb = find(a), find(dest)
+                if ra != rb:
+                    parent[rb] = ra
+    comp = {r: find(r) for r in graph}
+
+    above, below = {}, {}
+    for a in graph:
+        for d, (kind, dest) in graph[a]["exits"].items():
+            if kind == "BLOCKED" or dest not in comp:
+                continue
+            ca, cb = comp[a], comp[dest]
+            if ca == cb:
+                continue
+            hi, lo = (cb, ca) if d == "up" else (ca, cb) if d == "down" else (None, None)
+            if hi is None:
+                continue
+            above.setdefault(lo, set()).add(hi)
+            below.setdefault(hi, set()).add(lo)
+
+    size = {}
+    for r in comp:
+        size[comp[r]] = size.get(comp[r], 0) + 1
+    height = {}
+    for seed in sorted(size, key=lambda c: (-size[c], c)):
+        if seed in height:
+            continue
+        height[seed] = 0
+        queue = [seed]
+        while queue:
+            c = queue.pop(0)
+            for hi in sorted(above.get(c, ())):
+                if hi not in height:
+                    height[hi] = height[c] + 1
+                    queue.append(hi)
+            for lo in sorted(below.get(c, ())):
+                if lo not in height:
+                    height[lo] = height[c] - 1
+                    queue.append(lo)
+
+    floor = {r: (sheet[r], height[comp[r]]) for r in sheet if r in comp}
+    for r in sheet:
+        if r not in floor:
+            floor[r] = (sheet[r], 0)
+    dense = {k: i for i, k in enumerate(sorted(set(floor.values())))}
+    unhonoured = sum(1 for lo in above for hi in above[lo]
+                     if height[hi] - height[lo] != 1)
+    return {r: dense[v] for r, v in floor.items()}, len(dense), unhonoured
+
+
+def build_game(story, pdf, verbose=False, tol=LANE_TOLS[0],
+               nudge_on=True):
     """(pos, release, serial, stats) for one game, or (None, ...) if it fails."""
     graph, release, serial = room_graph(os.path.join(Z3DIR, story + ".Z3"))
 
@@ -321,7 +621,7 @@ def build_game(story, pdf, verbose=False):
     names = {norm(r["name"]) for r in graph.values()} - {""}
 
     doc = pymupdf.open(pdf)
-    cache = {}
+    cache = _PAGE_CACHE
     pages = []
     for page in range(1, doc.page_count + 1):
         named, total, mode = page_items(pdf, page, names, cache)
@@ -335,7 +635,7 @@ def build_game(story, pdf, verbose=False):
     for seq, (page, named, total, mode) in enumerate(pages):
         cx = [b[0] + b[2] / 2.0 for b in named]
         cy = [b[1] + b[3] / 2.0 for b in named]
-        col, row = snap(cx, 60), snap(cy, 60)
+        col, row = snap(cx, tol), snap(cy, tol)
         for i, b in enumerate(named):
             cells[(seq, i)] = (col[i], row[i] + y_base, b[4])
         y_base += max(row.values()) + 3
@@ -368,7 +668,7 @@ def build_game(story, pdf, verbose=False):
         uniq[k] = v
     pos = uniq
     pos = {k: v for k, v in pos.items()
-           if -128 <= v[0] <= 127 and -128 <= v[1] <= 127}
+           if CELL_MIN <= v[0] <= CELL_MAX and CELL_MIN <= v[1] <= CELL_MAX}
     page = {k: v for k, v in page.items() if k in pos}
 
     # Renumber densely from zero. A page whose every room lost the coordinate
@@ -401,13 +701,19 @@ def build_game(story, pdf, verbose=False):
             a2, t2, b2 = agreement(turned, graph)
             if a2 > agreed:
                 pos, agreed, tested, bad, orient = turned, a2, t2, b2, label
+    nudged = nudge(pos, page, graph) if nudge_on else 0
+    page, nfloors, unhonoured = storeys(graph, page)
+    if nudged:
+        agreed, tested, bad = agreement(pos, graph)
     rate = (agreed / tested) if tested else 0.0
     aligned, atested, abad = alignment(pos, graph)
     stats = {"rooms": len(pos), "agreed": agreed, "tested": tested,
              "rate": rate, "bad": bad, "pages": used_pages, "dropped": dropped,
-             "orient": orient, "page": page, "npages": len(order),
+             "orient": orient, "page": page, "npages": nfloors,
+             "sheets": len(order), "unhonoured": unhonoured,
              "aligned": aligned, "atested": atested, "abad": abad,
              "arate": (aligned / atested) if atested else 0.0,
+             "tol": tol, "nudged": nudged,
              "names": {k: graph[k]["name"] for k in pos}}
     if tested == 0 or rate < PASS_RATE:
         stats["reason"] = f"only {agreed}/{tested} exits agree ({rate:.0%})"
@@ -430,7 +736,8 @@ def emit(tables, out):
         w("\n/*----------------------\n")
         w(f" | MAP_ATLAS_{t['story']}\n")
         w(f" | Description: {t['story']}, release {t['release']} serial {t['serial']}.\n")
-        w(f" |   {st['rooms']} rooms on {st['npages']} floor(s), ascending by object\n")
+        w(f" |   {st['rooms']} rooms on {st['npages']} floor(s) off {st['sheets']} drawn\n")
+        w(f" |   sheet(s), ascending by object\n")
         w(f" |   number so map_atlas_pos can bisect. {st['agreed']} of {st['tested']} compass exits\n")
         w(f" |   between two placed rooms land in the half-plane their direction names\n")
         w(f" |   ({st['rate']:.0%}), which is the test the layout was scored and accepted on.\n")
@@ -438,6 +745,14 @@ def emit(tables, out):
         w(f" |   with no sideways component ({st['arate']:.0%}) -- the stricter thing a player\n")
         w(f" |   reads off the screen, reported rather than enforced because a plan drawn\n")
         w(f" |   square to a building is the publisher's and not an error.\n")
+        w(f" |   A floor is one vertical step of the story's own routes inside one\n")
+        w(f" |   drawn sheet, not a sheet -- see storeys().\n")
+        if st["unhonoured"]:
+            w(f" |   {st['unhonoured']} vertical exit(s) do not fit one ordering of the levels,\n")
+            w(f" |   which is a real loop in the geography rather than a fault.\n")
+        w(f" |   Read at a lane tolerance of {st['tol']}, chosen by sweep; {st['nudged']} room(s)\n")
+        w(f" |   then moved a lane or two onto an exit's axis without losing any exit\n")
+        w(f" |   from the half-plane its direction names.\n")
         if st["abad"]:
             w(" |\n |   Cardinal exits drawn off their axis:\n")
             for a, d, b, dx, dy in st["abad"][:8]:
@@ -456,6 +771,9 @@ def emit(tables, out):
         w(f"static const MapAtlasCell MAP_ATLAS_{t['story']}[] = {{\n")
         for room in sorted(t["pos"]):
             x, y = t["pos"][room]
+            assert CELL_MIN <= x <= CELL_MAX and CELL_MIN <= y <= CELL_MAX, (
+                f"{t['story']} room {room} at ({x},{y}) will not fit a "
+                "signed char")
             nm = st["names"].get(room, "")
             w(f"    {{ {room:3d}, {st['page'][room]:2d}, {x:4d}, {y:4d} }},"
               f"   /* {nm} */\n")
@@ -488,6 +806,10 @@ def main():
     ap.add_argument("--only", nargs="*", help="limit to these story stems")
     ap.add_argument("--report", action="store_true",
                     help="write the per-game report to stderr and emit nothing")
+    ap.add_argument("--no-nudge", action="store_true",
+                    help="place rooms exactly as the lanes read them, without "
+                         "moving any onto its exits' axes; for measuring what "
+                         "the nudge pass is worth")
     args = ap.parse_args()
 
     os.makedirs(args.cache, exist_ok=True)
@@ -504,7 +826,28 @@ def main():
         if not os.path.exists(pdf):
             subprocess.run(["curl", "-sSL", "-o", pdf, BASE_URL + MAPS[story]],
                            check=True)
-        pos, release, serial, stats = build_game(story, pdf)
+        # Sweep the lane tolerance and keep the reading that puts the most
+        # cardinal exits on their own axis. One number cannot serve every map --
+        # they are printed at different scales -- and the cost of guessing it
+        # wrong is a corridor drawn with a step in it. Ties go to the tightest
+        # tolerance, so a game gains nothing from a looser reading it did not
+        # need, and a tolerance that loses half-plane agreement is not taken
+        # however straight it draws: that would be merging two columns Infocom
+        # really did draw apart.
+        pos = release = serial = stats = None
+        for tol in LANE_TOLS:
+            t_pos, t_rel, t_ser, t_st = build_game(story, pdf, tol=tol,
+                                                   nudge_on=not args.no_nudge)
+            if t_pos is None:
+                if stats is None:
+                    release, serial, stats = t_rel, t_ser, t_st
+                continue
+            if pos is None:
+                pos, release, serial, stats = t_pos, t_rel, t_ser, t_st
+                continue
+            if (t_st["aligned"] > stats["aligned"] and
+                    t_st["agreed"] >= stats["agreed"]):
+                pos, release, serial, stats = t_pos, t_rel, t_ser, t_st
         if pos is None:
             failed.append((story, stats.get("reason", "?"), stats))
             print(f"  DROP {story:9s} {stats.get('reason','?')}", file=sys.stderr)
@@ -514,8 +857,14 @@ def main():
         pages = ",".join(str(p) for p, _, _ in stats["pages"])
         turn = "" if stats.get("orient") == "as drawn" else             f"  turned {stats.get('orient')}"
         print(f"  OK   {story:9s} {stats['rooms']:4d} rooms  "
-              f"{stats['agreed']:4d}/{stats['tested']:<4d} exits "
-              f"({stats['rate']:.0%})  pages {pages}{turn}", file=sys.stderr)
+              f"{stats['agreed']:4d}/{stats['tested']:<4d} half "
+              f"({stats['rate']:.0%})  "
+              f"{stats['aligned']:4d}/{stats['atested']:<4d} on axis "
+              f"({stats['arate']:.0%})  tol {stats['tol']:3d}  "
+              f"nudged {stats['nudged']:3d}  "
+              f"{stats['npages']:2d} floors off {stats['sheets']} sheet(s)  "
+              f"pages {pages}{turn}",
+              file=sys.stderr)
 
     print(f"\n{len(tables)} games pass, {len(failed)} dropped", file=sys.stderr)
     if args.report:

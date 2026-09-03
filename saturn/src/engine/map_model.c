@@ -716,14 +716,75 @@ int map_model_pages(void) {
 }
 
 /*----------------------
- | map_model_page
- | Description: See map_model.h. The boxes are in the table's coordinates and
- |   the room's position is in the model's, so the frame offset atlas_target
- |   established is added to the box rather than subtracted from the room --
- |   same arithmetic, but it keeps the room's own coordinates untouched for the
- |   comparison a reader is checking.
+ | g_seen / g_queue
+ | Description: page_via_routes' visited set and its queue, at file scope
+ |   because 256 rooms of each is more than the menu-depth stack wants to carry
+ |   and the walk is never reentrant -- it runs inside one map_model_page call.
  | Author: suinevere
- | Dependencies: map_atlas.h, map_model_pos
+ ----------------------*/
+static unsigned char  g_seen[MAP_ROOM_MAX];
+static unsigned short g_queue[MAP_ROOM_MAX];
+
+/*----------------------
+ | page_via_routes
+ | Description: The floor of the nearest room the atlas places, walking only
+ |   exits that do not change floor.
+ |
+ |   A floor is now one vertical step of the story's routes inside one drawn
+ |   sheet, so the storeys of a building stand on the building's own footprint
+ |   and the floors' boxes overlap. That is what the old rule here could not
+ |   survive: it gave an unplaced room the floor whose box it was nearest, which
+ |   was unambiguous only while each floor had a band of rows to itself. Inside
+ |   a shared footprint every candidate is distance zero and the first index
+ |   won, so every room the atlas does not place -- twenty of The Lurking
+ |   Horror's seventy-one -- would have piled onto one floor.
+ |
+ |   Up and down are the only exits excluded. In and out are not: walking into a
+ |   building puts you on its ground floor. That is the same rule the generator
+ |   partitions by, and deliberately not the same as record_exits' MAP_LINK_VERT,
+ |   which styles in and out as a stair because that is what they look like on a
+ |   drawing -- a different question from which floor they land on.
+ | Author: suinevere
+ | Dependencies: map_atlas.h
+ | Globals: g_seen, g_queue, g_kind, g_dest, g_vis
+ | Params: room -- object number; page -- receives the floor
+ | Returns: 1 when a placed room was reached, 0 otherwise
+ ----------------------*/
+static int page_via_routes(unsigned short room, int *page) {
+    int head = 0, tail = 0, d, i;
+
+    for (i = 0; i < MAP_ROOM_MAX; i++) g_seen[i] = 0;
+    if (!in_range(room)) return 0;
+    g_seen[room] = 1;
+    g_queue[tail++] = room;
+
+    while (head < tail) {
+        unsigned short cur = g_queue[head++];
+        for (d = 0; d < RM_DIR_N; d++) {
+            unsigned short next = g_dest[cur][d];
+            if (d == RM_UP || d == RM_DOWN) continue;
+            if (g_kind[cur][d] == MAP_LINK_NONE) continue;
+            if (!in_range(next) || next == 0 || g_seen[next]) continue;
+            if (map_atlas_page(next, page)) return 1;
+            g_seen[next] = 1;
+            if (tail < MAP_ROOM_MAX) g_queue[tail++] = next;
+        }
+    }
+    return 0;
+}
+
+/*----------------------
+ | map_model_page
+ | Description: See map_model.h. An unplaced room takes the floor of the nearest
+ |   room the atlas does place along level exits -- see page_via_routes -- and
+ |   only where that finds nothing does it fall back to the floor whose box it
+ |   is nearest. The boxes are in the table's coordinates and the room's
+ |   position is in the model's, so the frame offset atlas_target established is
+ |   added to the box rather than subtracted from the room -- same arithmetic,
+ |   but it keeps the room's own coordinates untouched for the comparison a
+ |   reader is checking.
+ | Author: suinevere
+ | Dependencies: map_atlas.h, map_model_pos, page_via_routes
  | Globals: g_frame_set, g_frame_x, g_frame_y
  | Params: room -- object number
  | Returns: 0 to map_model_pages() - 1
@@ -732,6 +793,7 @@ int map_model_page(unsigned short room) {
     int p = 0, x = 0, y = 0, i, n, best = 0, bestd = -1;
 
     if (map_atlas_page(room, &p)) return p;
+    if (page_via_routes(room, &p)) return p;
     if (!g_frame_set) return 0;
     if (!map_model_pos(room, &x, &y)) return 0;
 

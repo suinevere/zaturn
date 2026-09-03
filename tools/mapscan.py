@@ -104,7 +104,19 @@ def room_graph(path):
 
     Exits are decoded exactly as room_model_refresh_room does: a one-byte
     direction property is a plain destination, two bytes is a blocked message,
-    anything longer is conditional.
+    anything longer is conditional -- and a conditional four or five bytes long
+    carries its destination in byte 0, which is kept when it names a room.
+
+    That last clause matters to the floor pass and to nothing else. Only OPEN
+    exits are scored, so what a conditional names cannot move a room; but a
+    floor is a set of rooms joined by level exits, and a door or a flag is a
+    perfectly good way to walk from one room to the next. Dropping those
+    destinations cut floors apart at every locked door.
+
+    Two passes, because "names a room" means "names an object that itself has
+    direction properties", which is not known until the first pass is done --
+    the same guard room_model.c applies for the same reason: nothing in the
+    format distinguishes a destination byte from any other.
     """
     st = zstory.Story(path)
     raw = st.raw
@@ -120,10 +132,16 @@ def room_graph(path):
                 exits[DIRW[d]] = ("OPEN", raw[addr])
             elif plen == 2:
                 exits[DIRW[d]] = ("BLOCKED", 0)
+            elif plen in (4, 5):
+                exits[DIRW[d]] = ("MAYBE", raw[addr])
             else:
                 exits[DIRW[d]] = ("MAYBE", 0)
         if exits:
             graph[o.num] = {"name": o.name, "exits": exits}
+    for r in graph.values():
+        for d, (kind, dest) in list(r["exits"].items()):
+            if kind == "MAYBE" and dest not in graph:
+                r["exits"][d] = (kind, 0)
     return (graph,
             struct.unpack(">H", raw[2:4])[0],
             raw[0x12:0x18].decode("ascii", "replace"))

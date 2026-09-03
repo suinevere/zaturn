@@ -684,7 +684,10 @@ int main(void) {
         hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
         memcpy(hdr + 0x12, "840726", 6);
         assert(map_atlas_bind(hdr, sizeof hdr) > 0);
-        assert(map_model_pages() == 3);
+        /* Nine, not the three sheets it is drawn on: a floor is one vertical
+           step of the story's own routes inside one sheet, so the coal mine's
+           levels and the temple above the dungeon are floors of their own. */
+        assert(map_model_pages() == 9);
 
         map_model_reset();
         {
@@ -696,16 +699,23 @@ int main(void) {
             map_model_enter(&mz);
         }
 
-        /* The two authored rooms take the floor they were drawn on, and they
-           are not the same floor -- a stairway down is a floor change, which is
-           the whole reason paging exists. */
+        /* The two authored rooms take the floor the story's routes put them
+           on, and they are not the same floor -- a stairway down is a floor
+           change, which is the whole reason paging exists. The Living Room is
+           above ground and the Cellar is in the dungeon, five vertical steps
+           below it; both used to answer 0 and 1, which were the sheets they
+           were drawn on. */
         assert(map_model_page(193) == 0);
-        assert(map_model_page(72) == 1);
+        assert(map_model_page(72) == 5);
         assert(map_model_page(193) != map_model_page(72));
 
-        /* And the unmapped room follows the room it was entered from rather
-           than falling to zero. */
-        assert(map_model_page(73) == 1);
+        /* And the unmapped room follows the room it can reach without changing
+           floor rather than falling to zero. Object 73 stands in for a Maze
+           room, whose only exit here is north into the Cellar, so
+           page_via_routes walks that one level exit and takes the Cellar's
+           floor -- which is the case the nearest-box rule could not answer once
+           floors began to overlap. */
+        assert(map_model_page(73) == 5);
 
         /* An object nobody placed and nobody drew has no floor to be on and
            answers with the first, which is what the caller filters by: it is
@@ -751,6 +761,41 @@ int main(void) {
         n = map_model_exits(30, ex, RM_DIR_N);
         assert(n == 1);
         assert(ex[0].flags & MAP_EXIT_ONEWAY);
+
+        /* An unplaced room takes its floor from the rooms it can reach without
+           changing floor, not from whichever floor box it happens to sit
+           nearest. Floors overlap now -- a floor is one vertical step of the
+           story's routes inside one drawn sheet, so the storeys of a building
+           share the building's footprint -- and inside a shared footprint every
+           candidate box is distance zero, which would have put every room the
+           atlas does not place onto the lowest-numbered of them.
+
+           No atlas is bound here, so map_atlas_page answers for nothing and the
+           walk finds nothing either; what this pins is that the walk runs and
+           declines rather than reading off the end of anything. The floor a
+           real table produces is checked in test_map_atlas.c, where a table
+           exists to produce one. */
+        map_model_reset();
+        { RoomModel a = mk(90); link1(&a, RM_E, 91); map_model_enter(&a); }
+        { RoomModel b = mk(91); link1(&b, RM_W, 90); map_model_enter(&b); }
+        assert(map_model_page(90) == 0);
+        assert(map_model_page(91) == 0);
+
+        /* Up and down are the only exits the walk refuses to cross. A room
+           whose only way out is a staircase must not inherit the floor at the
+           top of it, or a building's storeys would collapse back into one. */
+        map_model_reset();
+        { RoomModel a = mk(92); link1(&a, RM_UP, 93); map_model_enter(&a); }
+        { RoomModel b = mk(93); link1(&b, RM_DOWN, 92); map_model_enter(&b); }
+        assert(map_model_page(92) == 0);
+        assert(map_model_page(93) == 0);
+
+        /* A cycle of level exits must not hang the walk. */
+        map_model_reset();
+        { RoomModel a = mk(94); link1(&a, RM_E, 95); map_model_enter(&a); }
+        { RoomModel b = mk(95); link1(&b, RM_E, 96); map_model_enter(&b); }
+        { RoomModel c = mk(96); link1(&c, RM_W, 94); map_model_enter(&c); }
+        assert(map_model_page(94) == 0);
 
         /* A room holding a passage whose far end the story never states cannot
            be said to have no way back, so no arrow. This is what a v3 direction

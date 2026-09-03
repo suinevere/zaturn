@@ -11,17 +11,20 @@ south-east, and the map is then answering a question they did not ask. That was
 the owner's report on The Lurking Horror: Terminal Room's south exit reaches
 Second Floor, which is drawn at (+2,+1).
 
-Until now the emitted header reported the half-plane result as "leave in the
-direction drawn", so The Lurking Horror's table claimed 34 of 34 (100%) while
-19 of its 32 plain cardinal exits are on axis. gen_map_atlas.py now reports both
-numbers; this measures the shipped file, which needs neither the map scans nor
-the cache they live in and so runs anywhere the repo does.
+The emitted header used to report the half-plane result as "leave in the
+direction drawn", so The Lurking Horror's table claimed 34 of 34 (100%) while 19
+of its 32 plain cardinal exits were on axis. gen_map_atlas.py now reports both
+numbers and its nudge pass has taken that game to 32 of 32; across the atlas the
+figure went from 664 of 779 to 702 of 779. This measures the shipped file, which
+needs neither the map scans nor the cache they live in and so runs anywhere the
+repo does.
 
 Nothing here enforces alignment. A plan drawn square to a building rather than
 to the compass is Infocom's and not an error, and refusing those would drop
 Zork I, The Lurking Horror and The Witness from the atlas entirely and fall all
 three back to the graph walk. What this holds is that no regeneration quietly
-makes a table worse.
+makes a table worse -- which is the whole value of a number nobody can see on
+screen.
 """
 import pathlib
 import re
@@ -46,21 +49,21 @@ CARD = {W.index("north"): (0, -1), W.index("south"): (0, 1),
 BASELINE = {
     "BALLYHOO": (15, 19),
     "CUTHROAT": (33, 35),
-    "ENCHANTR": (55, 61),
-    "HOLYWOOD": (41, 42),
+    "ENCHANTR": (58, 61),
+    "HOLYWOOD": (42, 42),
     "INFIDEL": (80, 80),
     "LEATHERG": (15, 15),
-    "LURKING": (19, 32),
+    "LURKING": (32, 32),
     "MOONMIST": (4, 4),
     "PLNDHRTS": (48, 50),
     "SORCERER": (80, 95),
-    "SPLBRKR": (17, 24),
-    "STATFALL": (62, 66),
+    "SPLBRKR": (23, 24),
+    "STATFALL": (63, 66),
     "SUSPENDD": (48, 48),
     "WISHBRNG": (19, 23),
-    "WITNESS": (4, 8),
-    "ZORK1": (69, 113),
-    "ZORK2": (15, 20),
+    "WITNESS": (8, 8),
+    "ZORK1": (75, 113),
+    "ZORK2": (17, 20),
     "ZORK3": (40, 44),
 }
 

@@ -16,9 +16,14 @@ the owner's list.
 - ink per sheet: `map_ink` in `video/map_view.cxx`, `pres_map_bg_index` in
   `scene/presentation.c`
 - pad legend removed: `MAP_ROW_HELP` is gone from `map_view.cxx`
-- floor number moved left one column and up one row: `draw_once`'s tail
+- picked room's name to the top-left: `MAP_ROW_ROOM` in `map_view.cxx`
+- floor number down one row and three columns in from the tear: `draw_once`'s tail
 - roster to the bottom-left on the floor number's own row, others above:
   `draw_players`
+- crosshair red on every sheet: `MARK_XHAIR` keeps `PAL_ACCENT` alone and
+  `dash_map_ink` no longer writes that slot
+- marble strip in keyboard mode: `dash_input_hide` in `video/dash_map.c`, called
+  from `render_keyboard`
 - other seats as figures, colour coded: `DT_KNIGHT_PEER0` in
   `video/dash_map.h`, `knight_tiles`/`paint_knight` in `map_view.cxx`
 - shared room quartered: `DT_SHIELD0`, `room_party`/`party_one`
@@ -43,8 +48,8 @@ That is safe for one measured reason and not for a comfortable one: outside the
 four, the map's own tiles reach palette entries **0, 1, 2, 12, 13, 14 and 15 and
 nothing else** -- `dash_map_begin` clears every other cell to `DT_BLANK` and this
 screen draws no box -- so 3..11 are unreachable while it is drawn. Both halves are held by
-`saturn/tests/test_dash_accent.py`: only the peer figures may name those
-entries, and `write_palette` must **not** grow an exemption arm for them, since
+`saturn/tests/test_dash_accent.py`: only the four figures and the shield's own
+quadrants may name those entries, and `write_palette` must **not** grow an exemption arm for them, since
 an exemption would leave a player's colour on the marble for the rest of the
 session.
 
@@ -55,7 +60,7 @@ wholly in entry 5 is *inside* it. The claim that replaces it is that entry 5 is
 not on the ramp while the map is drawn. The shield is not exempted -- its ring is
 still on the ramp, so only its quartered core is borrowed and the tile clears the
 band on its own. If anything ever paints marble on the
-map screen, three seat colours appear in the stone and the exemption is what let
+map screen, four party colours appear in the stone and the exemption is what let
 it through.
 
 ## Decisions worth knowing

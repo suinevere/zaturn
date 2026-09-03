@@ -99,3 +99,8 @@ tools/assets/cache/
 # but these are the source of record for the assignments themselves, so they
 # ARE tracked. Only the atomic-write temp file is not.
 tools/assets/presentation/*.json.tmp
+
+# The raw generations. 1,931 rooms of them would be 520 MB, and the styled
+# plate under analysis/zork_bg/png encodes to the same CGL record byte for
+# byte -- so that is the source of record and this is scratch.
+tools/assets/art/*.png

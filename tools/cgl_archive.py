@@ -58,19 +58,27 @@ def stems(prefix, n):
      |     numbered: every archive on the original disc is letters only, and so
      |     are the regexes two other generators read PRES_AREA back with.
      |     Refuses a stem too long for load_area's eight-character buffer, and
-     |     refuses to run out of letters, rather than producing a filename the
+     |     refuses to run out of names, rather than producing a filename the
      |     runtime would look for and not find.
+     |
+     |     Two letters, not one. One letter was enough while a picture served
+     |     many rooms; a picture per room is about 140 archives and the single
+     |     letter ran out at 34, which is where this refused -- correctly, but
+     |     it stopped the run. Two letters name 676, which is past anything the
+     |     LWRAM budget would allow on a disc.
      | Author: suinevere
      | Dependencies: string
      | Globals: MAX_STEM
      | Params: prefix -- the stem prefix; n -- how many archives
      | Returns: a list of n stems
      ----------------------*/"""
-    if n > len(string.ascii_uppercase):
-        raise ValueError(f"{n} archives is more than the "
-                         f"{len(string.ascii_uppercase)} letters a stem suffix "
-                         "has; raise the cap or split the manifest")
-    out = [prefix + string.ascii_uppercase[i] for i in range(n)]
+    alphabet = string.ascii_uppercase
+    if n > len(alphabet) ** 2:
+        raise ValueError(f"{n} archives is more than the {len(alphabet) ** 2} "
+                         "a two-letter suffix can name; raise the cap or split "
+                         "the manifest")
+    out = [prefix + alphabet[i // len(alphabet)] + alphabet[i % len(alphabet)]
+           for i in range(n)]
     for s in out:
         if len(s) > MAX_STEM:
             raise ValueError(f"archive stem {s!r} is longer than the {MAX_STEM} "
@@ -78,7 +86,7 @@ def stems(prefix, n):
     return out
 
 
-def pack(records, cap=CAP):
+def pack(records, cap=CAP, keys=None):
     """/*----------------------
      | pack
      | Description: Lays complete CGL records end to end into as many archives
@@ -88,24 +96,39 @@ def pack(records, cap=CAP):
      |     refused -- the cap is a budget preference and a single oversized
      |     frame is still a frame, but it gets an archive to itself so it
      |     cannot drag a neighbour over with it.
+     |
+     |     `keys` groups the records: an archive never spans two keys, so a
+     |     boundary between archives is always a boundary between whatever the
+     |     key names. That is how the original disc was laid out and it is the
+     |     whole reason a resident archive is affordable. Its eleven archives are
+     |     places -- the cellar, the maze, the river -- and every one of its 54
+     |     archive crossings is also a CD-DA track change, all 54, because each
+     |     non-silent track lives in exactly one archive. The reload therefore
+     |     lands on the step where the music was changing anyway and interrupts
+     |     nothing. Records are expected already grouped by key; a key that
+     |     reappears later simply opens another archive.
      | Author: suinevere
      | Dependencies: N/A
      | Globals: CAP
      | Params: records -- complete records from cgl_encode.record;
-     |     cap -- the byte ceiling one archive may reach
+     |     cap -- the byte ceiling one archive may reach; keys -- one grouping
+     |     key per record, or None to pack purely by size
      | Returns: (list of archive bytes,
      |     list of (archive index, offset, length) parallel to records)
      ----------------------*/"""
     archives = []
     placements = []
     cur = bytearray()
-    for rec in records:
+    last = None
+    for n, rec in enumerate(records):
         if len(rec) & 3:
             raise ValueError(f"record of {len(rec)} bytes is not 4-byte aligned; "
                              "the next record in the archive would start inside it")
-        if cur and len(cur) + len(rec) > cap:
+        key = keys[n] if keys is not None else None
+        if cur and (len(cur) + len(rec) > cap or key != last):
             archives.append(bytes(cur))
             cur = bytearray()
+        last = key
         placements.append((len(archives), len(cur), len(rec)))
         cur += rec
     if cur:
@@ -151,7 +174,7 @@ def verify(archives, placements, frames):
                              f"past archive {a}, which is {len(archives[a])} bytes")
 
 
-def build(frames, prefix, cap=CAP):
+def build(frames, prefix, cap=CAP, keys=None):
     """/*----------------------
      | build
      | Description: The whole job in one call: encode each (palette, pixels)
@@ -161,12 +184,13 @@ def build(frames, prefix, cap=CAP):
      | Dependencies: hashlib, cgl_encode
      | Globals: CAP
      | Params: frames -- a sequence of (palette, pixels); prefix -- the archive
-     |     stem prefix; cap -- the byte ceiling one archive may reach
+     |     stem prefix; cap -- the byte ceiling one archive may reach;
+     |     keys -- one grouping key per frame, so an archive never spans two
      | Returns: ({stem: bytes}, [{"archive": stem, "offset": int,
      |     "length": int}], {stem: sha256 hex})
      ----------------------*/"""
     records = [cgl_encode.record(pal, pix) for pal, pix in frames]
-    archives, placements = pack(records, cap)
+    archives, placements = pack(records, cap, keys)
     verify(archives, placements, [pix for _pal, pix in frames])
     names = stems(prefix, len(archives))
     blobs = {names[i]: archives[i] for i in range(len(archives))}

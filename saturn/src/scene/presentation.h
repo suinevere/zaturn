@@ -31,7 +31,7 @@ extern "C" {
 
 #ifndef PRES_FRAME_N
 typedef struct {
-    unsigned char image;
+    unsigned short image;
     unsigned char track;
     unsigned char se_bank;
 } Presentation;
@@ -56,8 +56,8 @@ typedef struct {
  |   they grow every time a generated picture is added to the supply.
  | Author: suinevere
  ----------------------*/
-#define PRES_FRAME_N 75
-#define PRES_AREA_N 12
+#define PRES_FRAME_N 483
+#define PRES_AREA_N 65
 #define PRES_MAP_BG_N 4
 #endif /* PRES_FRAME_N */
 

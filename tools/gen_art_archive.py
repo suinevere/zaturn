@@ -25,13 +25,14 @@
  |     supply and is chosen the same way any other picture is, through the
  |     review app.
  | Author: suinevere
- | Dependencies: argparse, art_frames, csv, json, pathlib, sys, PIL,
- |     cgl_archive, room_art_style, scene_vocab
+ | Dependencies: argparse, art_frames, csv, hashlib, json, pathlib, sys,
+ |     PIL, cgl_archive, room_art_style, scene_vocab
  | Globals: ROOT, ART, MANIFEST, FRAMES, CSV, PNG_DIR, BG_STAGE, BG_LOCAL,
  |     PREFIX
  ----------------------*/"""
 import argparse
 import csv
+import hashlib
 import json
 import pathlib
 import sys
@@ -94,10 +95,14 @@ def load_manifest():
             raise SystemExit(f"gen_art_archive: {p['source']} names no reference "
                              "frame -- a plate is graded against the picture it "
                              "stands beside, and there is no default")
-        if not p.get("scenes"):
-            raise SystemExit(f"gen_art_archive: {p['source']} names no scenes, so "
-                             "nothing would ever pick it -- an unpickable picture "
-                             "is disc space and a maintenance cost and no more")
+        # A plate that names a room is picked by that room's own record and
+        # needs no scene to be reachable. A plate that names neither is
+        # unreachable, which is disc space and a maintenance cost and no more --
+        # 951 of the 1,931 rooms carry no scene tag, so refusing on scenes alone
+        # would have thrown away half of a per-room run after it had drawn it.
+        if not p.get("scenes") and not ("game" in p and "obj" in p):
+            raise SystemExit(f"gen_art_archive: {p['source']} names neither a "
+                             "scene nor a room, so nothing would ever pick it")
         for s in p["scenes"]:
             if s not in scene_vocab.SCENES:
                 raise SystemExit(f"gen_art_archive: {p['source']} names scene "
@@ -125,6 +130,111 @@ def measured():
         return len({(r["area_archive"], r["frame"]) for r in csv.DictReader(f)})
 
 
+def area_keys(plates):
+    """/*----------------------
+     | area_keys
+     | Description: One grouping key per plate, so that an archive holds a
+     |     region of one game's map rather than whatever happened to be next in
+     |     the manifest.
+     |
+     |     The key is the game, and the ORDER within it is a DEPTH-first walk of
+     |     that game's own exit graph, so the cap cuts contiguous regions of the
+     |     map and an archive holds rooms the player actually walks between.
+     |
+     |     Depth-first, and the difference is not small. Measured over the four
+     |     games drawn so far, on adjacent-room moves that force a reload:
+     |
+     |       depth-first walk    28.4%
+     |       object number       39.9%
+     |       breadth-first walk  40.2%
+     |       by CD-DA track      46.0%
+     |
+     |     Depth-first follows a corridor to its end and so lays down runs of
+     |     connected rooms; breadth-first fans across every branch at once and
+     |     interleaves places that are nowhere near each other. Grouping by
+     |     track was tried first because that is demonstrably how the original
+     |     disc is laid out -- all 54 of Zork I's archive crossings are track
+     |     changes -- and it came last, because Zork I's authors made place and
+     |     music the same decision while ours are guessed from scene tags, so
+     |     sorting by track scatters neighbours that merely differ in music.
+     |     28.4% is also better than the 34.6% the disc paid before any of this,
+     |     which is the number that matters: it is now cheaper to walk around
+     |     with a picture for every room than it was with one picture for twenty.
+     |
+     |     A plate that belongs to no room -- the scene supply, which any game
+     |     may draw on -- is keyed apart from every game and so gets its own
+     |     archives.
+     | Author: suinevere
+     | Dependencies: collections, pres_store, zexits
+     | Globals: N/A
+     | Params: plates -- the manifest entries
+     | Returns: (keys, rank) -- both parallel to plates: the key an archive may
+     |     not span, and the position within it to lay records down in
+     ----------------------*/"""
+    import collections
+    import pres_store as store
+    import zexits
+
+    rank = {}
+    for stem in store.games():
+        raw = zexits.story(stem)
+        rooms = sorted(int(r["obj"]) for r in store.rooms(stem))
+        adj = zexits.neighbours(zexits.graph(raw)) if raw else {}
+        seen, order = set(), []
+        for start in rooms:
+            if start in seen:
+                continue
+            stack = [start]
+            seen.add(start)
+            while stack:
+                o = stack.pop()
+                order.append(o)
+                for k in sorted(adj.get(o, ()), reverse=True):
+                    if k not in seen:
+                        seen.add(k)
+                        stack.append(k)
+        for i, o in enumerate(order):
+            rank[(stem, o)] = i
+
+    keys, order = [], []
+    for p in plates:
+        if "game" in p and "obj" in p:
+            keys.append(p["game"])
+            order.append(rank.get((p["game"], int(p["obj"])), 1 << 30))
+        else:
+            keys.append("")
+            order.append(0)
+    return keys, order
+
+
+def fingerprint(plate):
+    """/*----------------------
+     | fingerprint
+     | Description: Everything that decides what a plate's styled picture looks
+     |     like: the bytes it was generated as, the frame it is graded against,
+     |     and the three numbers the styler takes. If all of those are what they
+     |     were when the styled plate was written, the styled plate is still
+     |     right and does not have to be made again.
+     |
+     |     A raw generation that is not on this machine fingerprints as its own
+     |     name. That is not a weakness: without it there is nothing to restyle
+     |     from either, so the styled plate is the only thing there is.
+     | Author: suinevere
+     | Dependencies: hashlib
+     | Globals: ART
+     | Params: plate -- one manifest entry
+     | Returns: a hex digest
+     ----------------------*/"""
+    h = hashlib.sha256()
+    src = ART / plate["source"]
+    h.update(src.read_bytes() if src.is_file() else plate["source"].encode())
+    for k in ("reference", "grain"):
+        h.update(f"|{k}={plate.get(k, 0)}".encode())
+    h.update(f"|margin={room_art_style.MARGIN}".encode())
+    h.update(f"|target={room_art_style.TARGET_MEAN}".encode())
+    return h.hexdigest()
+
+
 def styled(plate):
     """/*----------------------
      | styled
@@ -137,10 +247,46 @@ def styled(plate):
      | Params: plate -- one manifest entry
      | Returns: (image, palette, pixel bytes)
      ----------------------*/"""
-    with Image.open(ART / plate["source"]) as im:
-        q, pal = room_art_style.stylise(im, int(plate["reference"]),
-                                        grain=float(plate.get("grain", 0.0)))
-    return q, pal, q.tobytes()
+    src = ART / plate["source"]
+    if src.is_file():
+        with Image.open(src) as im:
+            q, pal = room_art_style.stylise(im, int(plate["reference"]),
+                                            grain=float(plate.get("grain", 0.0)))
+        return q, pal, q.tobytes()
+
+    # No raw generation on this machine: the styled plate is the source of
+    # record and encodes to the same record byte for byte, having been written
+    # out of exactly the pixels and palette the record is built from.
+    kept = PNG_DIR / preview_name(plate)
+    if not kept.is_file():
+        raise SystemExit(f"gen_art_archive: {plate['source']} has neither a raw "
+                         f"generation in {ART.relative_to(ROOT)} nor a styled "
+                         f"plate at {kept.relative_to(ROOT)}")
+    return from_preview(kept)
+
+
+def from_preview(kept):
+    """/*----------------------
+     | from_preview
+     | Description: One already-styled plate read straight back as the
+     |     (palette, pixels) a record is built from. It was written out of
+     |     exactly those, so this encodes to the same record byte for byte --
+     |     which is what lets the styling be skipped for a plate nothing has
+     |     changed about, and what lets a checkout with no raw generations build
+     |     every archive.
+     | Author: suinevere
+     | Dependencies: PIL
+     | Globals: N/A
+     | Params: kept -- the styled plate
+     | Returns: (image, palette, pixel bytes)
+     ----------------------*/"""
+    q = Image.open(kept)
+    if q.mode != "P":
+        raise SystemExit(f"gen_art_archive: {kept.name} is {q.mode}, not the "
+                         "paletted image a record is built from")
+    pal = list(q.getpalette() or [])
+    pal += [0] * (256 * 3 - len(pal))
+    return q, [(pal[3 * i], pal[3 * i + 1], pal[3 * i + 2]) for i in range(256)], q.tobytes()
 
 
 def write_dirs(blobs):
@@ -173,7 +319,25 @@ def write_dirs(blobs):
     return written
 
 
-def previews(blobs, rows, images):
+def preview_name(plate):
+    """/*----------------------
+     | preview_name
+     | Description: The filename one plate's styled picture is kept under.
+     |     Named for the plate, never for where it landed in an archive: at
+     |     nearly two thousand plates the packing shuffles whenever anything is
+     |     added, and a preview whose name moved would break every reference to
+     |     it and, worse, would stop the styled plate being findable as the
+     |     source of record for the plate it belongs to.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: plate -- one manifest entry
+     | Returns: a bare PNG filename
+     ----------------------*/"""
+    return pathlib.Path(plate["source"]).stem + ".png"
+
+
+def previews(plates, images):
     """/*----------------------
      | previews
      | Description: Writes each styled plate out beside the disc's own extracted
@@ -183,17 +347,19 @@ def previews(blobs, rows, images):
      | Author: suinevere
      | Dependencies: pathlib
      | Globals: PNG_DIR
-     | Params: blobs -- {stem: bytes}; rows -- the placements; images -- the
-     |     paletted images in the same order
+     | Params: plates -- the manifest entries; images -- the paletted images in
+     |     the same order
      | Returns: the list of PNG names, in frame order
      ----------------------*/"""
-    seen = {stem: 0 for stem in blobs}
     names = []
     PNG_DIR.mkdir(parents=True, exist_ok=True)
-    for row, im in zip(rows, images):
-        stem = row["archive"]
-        name = f"{stem}_{seen[stem]:02d}.png"
-        seen[stem] += 1
+    for plate, im in zip(plates, images):
+        name = preview_name(plate)
+        # Written every time, not only when absent. The styled plate is the
+        # source of record, so one that is left behind after the styler changes
+        # -- a new margin, a new lift -- is not merely a stale preview: the next
+        # rebuild encodes the archive from it, and the disc quietly keeps the
+        # picture the change was made to get rid of.
         im.save(PNG_DIR / name)
         names.append(name)
     return names
@@ -226,15 +392,48 @@ def main(argv=None):
               f"{FRAMES.relative_to(ROOT)}")
         return 0
 
-    images, frames = [], []
+    # What each plate looked like last time, so a plate whose inputs have not
+    # moved is not styled again. One redraw used to cost a full restyle of
+    # every plate on the disc, which at 109 was five minutes and at 1,931 would
+    # be an hour and a half to change one picture.
+    was = {}
+    if art_frames.FRAMES.is_file():
+        for f in art_frames.frames():
+            if "fingerprint" in f:
+                was[f["source"]] = f["fingerprint"]
+
+    prints, images, frames, restyled = [], [], [], 0
     for p in plates:
-        im, pal, pix = styled(p)
+        fp = fingerprint(p)
+        prints.append(fp)
+        kept = PNG_DIR / preview_name(p)
+        if was.get(p["source"]) == fp and kept.is_file():
+            im, pal, pix = from_preview(kept)
+        else:
+            im, pal, pix = styled(p)
+            restyled += 1
         images.append(im)
         frames.append((pal, pix))
+    print(f"styled {restyled} of {len(plates)} plates "
+          f"({len(plates) - restyled} unchanged)")
 
     base = measured()
-    blobs, rows, sums = cgl_archive.build(frames, PREFIX, cap=args.cap)
-    names = previews(blobs, rows, images)
+
+    # Packed in area order, indexed in manifest order. A frame's index is its
+    # position in the manifest and a room record stores that index, so the order
+    # here must not move -- but nothing requires the BYTES to be laid down in
+    # that order, because every frame records its own archive and offset. So the
+    # records are packed grouped by area and the placements are scattered back.
+    keys, walk = area_keys(plates)
+    order = sorted(range(len(plates)),
+                   key=lambda i: (keys[i], walk[i], plates[i]["source"]))
+    blobs, packed, sums = cgl_archive.build(
+        [frames[i] for i in order], PREFIX, cap=args.cap,
+        keys=[keys[i] for i in order])
+    rows = [None] * len(plates)
+    for slot, i in enumerate(order):
+        rows[i] = packed[slot]
+    names = previews(plates, images)
     dirs = write_dirs(blobs)
 
     out = {
@@ -249,8 +448,12 @@ def main(argv=None):
         "frames": [{"index": base + i + 1, "source": p["source"],
                     "reference": int(p["reference"]),
                     "shows": p.get("shows", ""),
-                    "scenes": list(p["scenes"]), "png": n, **r}
-                   for i, (p, r, n) in enumerate(zip(plates, rows, names))],
+                    "scenes": list(p.get("scenes", [])), "png": n,
+                    "fingerprint": fp,
+                    **({"game": p["game"], "obj": p["obj"]}
+                       if "game" in p and "obj" in p else {}), **r}
+                   for i, (p, r, n, fp) in enumerate(
+                       zip(plates, rows, names, prints))],
     }
     FRAMES.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
 

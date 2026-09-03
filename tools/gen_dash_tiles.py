@@ -13,7 +13,7 @@ import random
 
 from PIL import Image
 
-N = 142
+N = 144
 SEED = 20260828
 
 # Palette index by role. The blue channel runs two steps above red and green
@@ -221,6 +221,21 @@ LOOP = ["..####..",
         ".#....#.",
         "..####..",
         "...##..."]
+
+# Infocom's narrow-passageway (baggage limit) mark: three short bars struck
+# through the passage line. The shaft is the same two-pixel groove every link
+# tile draws on rows 3 and 4, kept solid underneath the bars so a baggage
+# exit never shows a gap where the mark sits; the bars are three one-pixel
+# ticks, two rows tall above and below the shaft, so the mark reads as
+# crossing the line rather than replacing it.
+BAGGAGE_H = ["........",
+             "..#.#.#.",
+             "..#.#.#.",
+             "########",
+             "########",
+             "..#.#.#.",
+             "..#.#.#.",
+             "........"]
 
 
 def build():
@@ -431,6 +446,13 @@ def build():
     tiles.append(bitmap(GLYPH_U, MARK_DARK))                    # DT_GLYPH_U
     tiles.append(bitmap(GLYPH_D, MARK_DARK))                    # DT_GLYPH_D
     tiles.append(bitmap(LOOP, MARK_DARK))                       # DT_LOOP
+
+    # The vertical baggage tile is taken as the horizontal one's quarter
+    # turn, not hand-drawn, so the pair cannot drift apart -- the same
+    # relationship rot_cw already gives the arrowheads.
+    baggage_h = bitmap(BAGGAGE_H, MARK_DARK)
+    tiles.append(baggage_h)                                     # DT_BAGGAGE_H
+    tiles.append(rot_cw(baggage_h))                             # DT_BAGGAGE_V
 
     assert len(tiles) == N, len(tiles)
     return tiles

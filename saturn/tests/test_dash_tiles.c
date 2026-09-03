@@ -294,7 +294,7 @@ int main(void) {
         assert(DT_GLYPH_U == 139);
         assert(DT_GLYPH_D == 140);
         assert(DT_LOOP == 141);
-        assert(DT_N == 142);
+        assert(DT_N == 144);
 
         /* Mask 0 is never painted and stays blank in both sets. */
         for (y = 0; y < 8; y++)
@@ -350,6 +350,35 @@ int main(void) {
             assert(memcmp(dash_tile_data[DT_GLYPH_U],
                           dash_tile_data[DT_GLYPH_D], 32) != 0);
         }
+
+        /* DT_BAGGAGE_H and DT_BAGGAGE_V carry Infocom's narrow-passageway
+           mark: three bars struck through the groove. The shaft must stay
+           lit under the bars -- rows 3 and 4 for the horizontal tile,
+           columns 3 and 4 for the vertical one -- or a baggage-limited exit
+           would draw a gap where the mark sits. */
+        assert(DT_BAGGAGE_H == 142);
+        assert(DT_BAGGAGE_V == 143);
+        assert(DT_N == 144);
+
+        for (x = 0; x < 8; x++)
+            assert(px(DT_BAGGAGE_H, x, 3) != 0 && px(DT_BAGGAGE_H, x, 4) != 0);
+        for (y = 0; y < 8; y++)
+            assert(px(DT_BAGGAGE_V, 3, y) != 0 && px(DT_BAGGAGE_V, 4, y) != 0);
+
+        /* Exactly three bars, struck through the shaft: two would read as
+           the pair of ticks Infocom uses elsewhere, four would not match
+           the legend. */
+        lit = 0;
+        for (x = 0; x < 8; x++)
+            if (px(DT_BAGGAGE_H, x, 1)) lit++;
+        assert(lit == 3);
+
+        /* The vertical tile really is the horizontal one turned a quarter
+           clockwise -- the same rot_cw the arrowheads use -- so the pair
+           cannot drift apart. */
+        for (y = 0; y < 8; y++)
+            for (x = 0; x < 8; x++)
+                assert(px(DT_BAGGAGE_V, x, y) == px(DT_BAGGAGE_H, y, 7 - x));
     }
 
     printf("test_dash_tiles: ok\n");

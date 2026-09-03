@@ -74,6 +74,12 @@ extern "C" {
  |   where the arrow starts; the DASH set is the same head over a dashed shaft.
  |   DT_GLYPH_U and DT_GLYPH_D end a stub whose far end is on another floor,
  |   and DT_LOOP marks an exit that returns to the room it left.
+ |
+ |   DT_BAGGAGE_H and DT_BAGGAGE_V carry Infocom's narrow-passageway mark --
+ |   three bars struck through the groove -- on an east-west and a north-south
+ |   run respectively. The vertical tile is the horizontal one's quarter turn,
+ |   drawn by the same rot_cw the arrowheads use, so the pair cannot drift
+ |   apart.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -108,6 +114,7 @@ enum {
     DT_ARROW_DASH_N, DT_ARROW_DASH_E, DT_ARROW_DASH_S, DT_ARROW_DASH_W,
     DT_GLYPH_U, DT_GLYPH_D,
     DT_LOOP,
+    DT_BAGGAGE_H, DT_BAGGAGE_V,
     DT_N
 };
 

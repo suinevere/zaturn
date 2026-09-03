@@ -164,20 +164,25 @@ int map_model_room_at(int index, unsigned short *room);
 #define MAP_LINK_VERT 2
 
 /*----------------------
- | MAP_EXIT_COND / MAP_EXIT_ONEWAY / MAP_EXIT_SELF
+ | MAP_EXIT_COND / MAP_EXIT_ONEWAY / MAP_EXIT_SELF / MAP_EXIT_BAGGAGE
  | Description: What the exit graph already implies about a passage, beside
  |   which way it runs. COND is RM_EXIT_MAYBE and draws dashed; ONEWAY is an
  |   exit with no way back and draws an arrowhead; SELF is an exit whose
- |   destination is the room it left.
+ |   destination is the room it left; BAGGAGE is an exit Infocom's own map
+ |   marks with cross-bars, meaning it can be taken only under a limit on what
+ |   is carried -- a fact no compiled story records, so it can only ever come
+ |   from map_marks, never be derived from the exit graph the way the other
+ |   three are.
  |
  |   A blocked exit back counts as a way back, so a shut door is not one-way.
  |   Counting it would make the arrowhead appear and vanish as the player
  |   opens and closes things, and a mark that flickers teaches nothing.
  | Author: suinevere
  ----------------------*/
-#define MAP_EXIT_COND   1
-#define MAP_EXIT_ONEWAY 2
-#define MAP_EXIT_SELF   4
+#define MAP_EXIT_COND    1
+#define MAP_EXIT_ONEWAY  2
+#define MAP_EXIT_SELF    4
+#define MAP_EXIT_BAGGAGE 8
 
 /*----------------------
  | MapExit

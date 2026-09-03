@@ -26,18 +26,27 @@ extern "C" {
 #endif
 
 /*----------------------
- | MAP_EDGE_UP / MAP_EDGE_DOWN / MAP_EDGE_LOOP
- | Description: The three glyph bits map_edges_glyph takes: U or D for an exit
- |   whose far end is on another floor, and a loop for one that returns to the
- |   room it left. Declared here rather than only in map_edges.c because
- |   map_edges_glyph's callers need them; the rest of the bit plan
+ | MAP_EDGE_UP / MAP_EDGE_DOWN / MAP_EDGE_LOOP / MAP_EDGE_BAGGAGE
+ | Description: The three glyph bits map_edges_glyph takes -- U or D for an
+ |   exit whose far end is on another floor, and a loop for one that returns
+ |   to the room it left -- declared here rather than only in map_edges.c
+ |   because map_edges_glyph's callers need them; the rest of the bit plan
  |   (MAP_EDGE_STAIR .. MAP_EDGE_SOLID) is internal to the accumulator and
  |   stays in the .c file.
+ |
+ |   MAP_EDGE_BAGGAGE joins them here beside the others rather than with the
+ |   internal block, even though every read and write of it stays inside
+ |   map_edges.c: it is the fourth bit a route or stub carries into the tile
+ |   choice on top of its four-side mask, the same role UP/DOWN/LOOP already
+ |   play, so it belongs in the same block rather than split across two by an
+ |   accident of which .c function happens to touch it. It takes the lower of
+ |   the two bits this block had left; 0x8000 is still spare.
  | Author: suinevere
  ----------------------*/
-#define MAP_EDGE_UP   0x0400
-#define MAP_EDGE_DOWN 0x0800
-#define MAP_EDGE_LOOP 0x1000
+#define MAP_EDGE_UP      0x0400
+#define MAP_EDGE_DOWN    0x0800
+#define MAP_EDGE_LOOP    0x1000
+#define MAP_EDGE_BAGGAGE 0x4000
 
 /*----------------------
  | map_edges_reset
@@ -97,23 +106,30 @@ void map_edges_link(int ax, int ay, int bx, int by, int kind,
 
 /*----------------------
  | map_edges_stub
- | Description: A two-cell dashed run out of a mark, for an exit whose far end
- |   is on another floor. Before this, such an exit drew nothing at all -- the
- |   gather drops it for having no far end on this page -- so the map never
- |   said that a floor connects to another floor.
+ | Description: A two-cell run out of a mark, dashed or solid, for an exit
+ |   whose far end is on another floor. Before this, such an exit drew nothing
+ |   at all -- the gather drops it for having no far end on this page -- so the
+ |   map never said that a floor connects to another floor.
  |
  |   Two cells and not one because the glyph goes at the far end: one cell
  |   would set only the side facing the mark and draw as a half-tick with a
  |   letter floating past it, where two make a run that reaches what it
  |   labels. It stops there, one cell short of where a neighbouring room's mark
  |   would sit, which is what makes it read as an edge rather than a passage.
+ |
+ |   flags carries MAP_EXIT_BAGGAGE, which draws the run solid rather than
+ |   dashed and marks its single shaft cell -- the cell one step out from the
+ |   mark -- so the tile chooser can put the baggage mark on it. See
+ |   map_edges_tile in map_edges.c for why that cell, and not the cell two
+ |   steps out, is the one that gets it.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_edge
- | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step
+ | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step;
+ |   flags -- the exit's MAP_EXIT_* bits
  | Returns: N/A
  ----------------------*/
-void map_edges_stub(int mx, int my, int dx, int dy);
+void map_edges_stub(int mx, int my, int dx, int dy, unsigned int flags);
 
 /*----------------------
  | map_edges_glyph

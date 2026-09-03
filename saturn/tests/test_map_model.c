@@ -1,9 +1,11 @@
 /* Build:
      gcc -O2 -I saturn/src -o /tmp/tmm saturn/tests/test_map_model.c \
-         saturn/src/engine/map_model.c && /tmp/tmm
+         saturn/src/engine/map_model.c saturn/src/engine/map_atlas.c \
+         saturn/src/engine/map_marks.c && /tmp/tmm
    map_model.c is deliberately free of SRL includes so this links on the host. */
 #include "../src/engine/map_model.h"
 #include "../src/engine/map_atlas.h"
+#include "../src/engine/map_marks.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -838,6 +840,134 @@ int main(void) {
         map_model_step(RM_UP, &dx, &dy);   assert(dx == 0 && dy == -1);
         map_model_step(RM_IN, &dx, &dy);   assert(dx == 0 && dy == -1);
         map_model_step(99, &dx, &dy);      assert(dx == 0 && dy == -1);
+    }
+
+    /* The chimney. The story decodes Studio's up exit with no destination and
+       the Kitchen's descent as conditional on a flag that is never set, so the
+       map drew a one-way arrow at the single direction the game refuses. The
+       scanned marks supply the one and retract the other, and the two edits are
+       one edit: supplying the destination alone would make has_reverse succeed
+       and delete the arrow entirely. */
+    {
+        unsigned char hdr[0x18];
+        MapExit ex[RM_DIR_N];
+        int n, k, saw_up = 0;
+
+        memset(hdr, 0, sizeof hdr);
+        hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
+        memcpy(hdr + 0x12, "840726", 6);
+        assert(map_marks_bind(hdr, sizeof hdr) > 0);
+
+        map_model_reset();
+        {
+            RoomModel studio = mk(94);
+            link_kind(&studio, RM_UP, 0, RM_EXIT_MAYBE);
+            map_model_enter(&studio);
+        }
+        {
+            RoomModel kitchen = mk(203);
+            link_kind(&kitchen, RM_DOWN, 94, RM_EXIT_MAYBE);
+            map_model_enter(&kitchen);
+        }
+
+        n = map_model_exits(94, ex, RM_DIR_N);
+        for (k = 0; k < n; k++) {
+            if (ex[k].dir != RM_UP) continue;
+            saw_up = 1;
+            assert(ex[k].dest == 203);
+            assert(ex[k].flags & MAP_EXIT_BAGGAGE);
+            assert(ex[k].flags & MAP_EXIT_ONEWAY);
+        }
+        assert(saw_up);
+
+        n = map_model_exits(203, ex, RM_DIR_N);
+        for (k = 0; k < n; k++)
+            assert(ex[k].dir != RM_DOWN);
+    }
+
+    /* A baggage-only mark: Timber Room's west exit to the Drafty Room is a
+       plain two-way passage the story already resolves on its own, marked
+       narrow only for the weight it can carry through. Unlike the chimney,
+       this row never overrides dest -- mdest stays 0 -- so it is the only
+       case that exercises record_exits leaving the story's own destination
+       and kind alone while still setting MAP_EXIT_BAGGAGE. Drafty holds the
+       reverse exit, so this also pins that a mark does not manufacture a
+       one-way arrow, and that it leaves the conditional bit the four earlier
+       legend symbols are drawn from untouched. */
+    {
+        unsigned char hdr[0x18];
+        MapExit ex[RM_DIR_N];
+        int n, k, saw_w = 0;
+
+        memset(hdr, 0, sizeof hdr);
+        hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
+        memcpy(hdr + 0x12, "840726", 6);
+        assert(map_marks_bind(hdr, sizeof hdr) > 0);
+
+        map_model_reset();
+        {
+            RoomModel timber = mk(206);
+            link_kind(&timber, RM_W, 228, RM_EXIT_MAYBE);
+            map_model_enter(&timber);
+        }
+        {
+            RoomModel drafty = mk(228);
+            link1(&drafty, RM_E, 206);
+            map_model_enter(&drafty);
+        }
+
+        n = map_model_exits(206, ex, RM_DIR_N);
+        for (k = 0; k < n; k++) {
+            if (ex[k].dir != RM_W) continue;
+            saw_w = 1;
+            assert(ex[k].dest == 228);
+            assert(ex[k].flags & MAP_EXIT_BAGGAGE);
+            assert((ex[k].flags & MAP_EXIT_ONEWAY) == 0);
+            assert(ex[k].flags & MAP_EXIT_COND);
+        }
+        assert(saw_w);
+    }
+
+    /* The rule the generator enforces, enforced again here. A table row is a
+       reading of a drawing and the story's own exit graph outranks it, so a
+       mark lands only on an exit the story left conditional. Timber Room's
+       west exit carries a shipped baggage row; stated OPEN rather than MAYBE,
+       the row must be ignored outright -- no baggage bit, and the story's own
+       destination and kind left as the snapshot gave them. Retraction is the
+       sharper half of the same rule, since it would delete the exit, but the
+       two share one guard and the baggage row is the one the shipped table
+       lets this test reach. */
+    {
+        unsigned char hdr[0x18];
+        MapExit ex[RM_DIR_N];
+        int n, k, saw_w = 0;
+
+        memset(hdr, 0, sizeof hdr);
+        hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
+        memcpy(hdr + 0x12, "840726", 6);
+        assert(map_marks_bind(hdr, sizeof hdr) > 0);
+
+        map_model_reset();
+        {
+            RoomModel timber = mk(206);
+            link_kind(&timber, RM_W, 228, RM_EXIT_OPEN);
+            map_model_enter(&timber);
+        }
+        {
+            RoomModel drafty = mk(228);
+            link1(&drafty, RM_E, 206);
+            map_model_enter(&drafty);
+        }
+
+        n = map_model_exits(206, ex, RM_DIR_N);
+        for (k = 0; k < n; k++) {
+            if (ex[k].dir != RM_W) continue;
+            saw_w = 1;
+            assert((ex[k].flags & MAP_EXIT_BAGGAGE) == 0);
+            assert((ex[k].flags & MAP_EXIT_COND) == 0);
+            assert(ex[k].dest == 228);
+        }
+        assert(saw_w);
     }
 
     printf("test_map_model: ok\n");

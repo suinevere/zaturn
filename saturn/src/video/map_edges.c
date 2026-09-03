@@ -202,6 +202,12 @@ static int trace(const short *pts, int npts, int stair, int record,
  |   caller sweeps the layer in one pass afterwards, which is what lets a cell
  |   two lines cross come out as a crossing rather than as whichever was drawn
  |   last.
+ |
+ |   MAP_EXIT_BAGGAGE forces the whole route solid even when MAP_EXIT_COND is
+ |   also set: Infocom draws its baggage-limit mark as its own legend entry,
+ |   not as a flavour of the dashed "requires problem solving" mark, and it
+ |   draws a baggage passage solid even where that passage is also
+ |   conditional. Dashing it as well would report the same fact twice.
  | Author: suinevere
  | Dependencies: trace
  | Globals: g_edge
@@ -214,7 +220,8 @@ void map_edges_link(int ax, int ay, int bx, int by, int kind,
                     unsigned int flags, int arrow)
 {
     unsigned short deco = (unsigned short)
-        ((flags & MAP_EXIT_COND) ? MAP_EDGE_DASH : MAP_EDGE_SOLID);
+        ((flags & MAP_EXIT_BAGGAGE) ? (MAP_EDGE_SOLID | MAP_EDGE_BAGGAGE)
+         : (flags & MAP_EXIT_COND) ? MAP_EDGE_DASH : MAP_EDGE_SOLID);
     int stair = (kind == MAP_LINK_VERT);
     int mx = (ax + bx) / 2, my = (ay + by) / 2;
     short cand[4][8];
@@ -258,16 +265,30 @@ void map_edges_link(int ax, int ay, int bx, int by, int kind,
 /*----------------------
  | map_edges_stub
  | Description: See map_edges.h.
+ |
+ |   A baggage stub cannot pass MAP_EDGE_SOLID | MAP_EDGE_BAGGAGE as its deco
+ |   the way map_edges_link does: mark_step ORs deco into both cells of every
+ |   step, and a stub is two steps, so that would light three cells --
+ |   including the mark's own cell and the far cell one short of the
+ |   neighbouring room's mark -- rather than the one cell the mark actually
+ |   belongs on. Passing plain MAP_EDGE_SOLID and then setting the bit only on
+ |   (mx + dx, my + dy), the shaft cell between the two steps, is what keeps it
+ |   to one.
  | Author: suinevere
- | Dependencies: mark_step
+ | Dependencies: mark_step, in_view
  | Globals: g_edge
- | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step
+ | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step;
+ |   flags -- the exit's MAP_EXIT_* bits
  | Returns: N/A
  ----------------------*/
-void map_edges_stub(int mx, int my, int dx, int dy)
+void map_edges_stub(int mx, int my, int dx, int dy, unsigned int flags)
 {
-    mark_step(mx, my, mx + dx, my + dy, 0, MAP_EDGE_DASH);
-    mark_step(mx + dx, my + dy, mx + 2 * dx, my + 2 * dy, 0, MAP_EDGE_DASH);
+    int baggage = (flags & MAP_EXIT_BAGGAGE) != 0;
+    unsigned short deco = (unsigned short) (baggage ? MAP_EDGE_SOLID : MAP_EDGE_DASH);
+    mark_step(mx, my, mx + dx, my + dy, 0, deco);
+    mark_step(mx + dx, my + dy, mx + 2 * dx, my + 2 * dy, 0, deco);
+    if (baggage && in_view(mx + dx, my + dy))
+        g_edge[my + dy][mx + dx] |= MAP_EDGE_BAGGAGE;
 }
 
 /*----------------------
@@ -299,10 +320,74 @@ const unsigned short *map_edges_layer(void)
 }
 
 /*----------------------
+ | has_baggage
+ | Description: Whether a cell is a genuine interior route cell carrying
+ |   MAP_EDGE_BAGGAGE, off-viewport cells and room-mark cells both answering
+ |   no rather than faulting or misleading a caller.
+ |
+ |   A room mark is excluded on purpose, not just off-viewport ground: trace's
+ |   first and last steps land on the mark cells at both ends of a route, and a
+ |   baggage link's deco carries MAP_EDGE_BAGGAGE on every step, so mark_step
+ |   ORs the bit onto those mark cells too as a side effect of its both-ends
+ |   convention -- the same convention map_edges_stub deliberately avoids by
+ |   passing plain MAP_EDGE_SOLID. Counting a mark as a "neighbour that
+ |   carries the bit" was the review's Finding 1: at distance 4 the run's real
+ |   interior neighbour always outvotes it, but at distance 2 -- one interior
+ |   cell flanked by two marks -- there is no interior neighbour to outvote it,
+ |   so the isolated-cell clause silently stopped firing and the run's only
+ |   cell lost its bar. A mark cell is not a route cell; it must not count.
+ | Author: suinevere
+ | Dependencies: in_view
+ | Globals: g_edge, g_mark
+ | Params: x, y -- the cell
+ | Returns: 1 if the cell is in view, is not a room mark, and carries the bit;
+ |   0 otherwise
+ ----------------------*/
+static int has_baggage(int x, int y)
+{
+    return in_view(x, y) && !g_mark[y][x] && (g_edge[y][x] & MAP_EDGE_BAGGAGE) != 0;
+}
+
+/*----------------------
  | map_edges_tile
  | Description: See map_edges.h.
+ |
+ |   A cell carrying MAP_EDGE_BAGGAGE only ever has it on a straight run --
+ |   map_edges_link sets it on every cell of a baggage route and
+ |   map_edges_stub sets it on a stub's single shaft cell only, never on an
+ |   elbow, T or crossing -- so the mask is checked for E|W or N|S before the
+ |   bit is trusted at all.
+ |
+ |   The mark draws on such a cell when (x + y) % 3 == 0, which gives a link
+ |   three or more cells long one mark at a fixed period in cell space, in
+ |   phase across cell edges the way the dash stipple already is, OR when
+ |   neither of the cell's two run-neighbours -- (x-1,y) and (x+1,y) for an
+ |   E|W mask, (x,y-1) and (x,y+1) for N|S -- carries the bit itself. See
+ |   has_baggage for why a room-mark cell is never counted as a carrying
+ |   neighbour even though it can hold the bit.
+ |
+ |   That second clause is not a simplification of the first; it is the only
+ |   thing that marks a stub. A stub's shaft cell is the one cell in the
+ |   accumulator carrying MAP_EDGE_BAGGAGE with no neighbour that does, so its
+ |   own mask is always DT_EDGE_N|DT_EDGE_S or DT_EDGE_E|DT_EDGE_W -- both of
+ |   its mark_step calls OR one direction into it -- and a stub is two cells
+ |   long, too short for any fixed period to be sure of landing on it. Do not
+ |   drop this clause to "simplify" the period check: doing so silently
+ |   un-marks every stub, including the chimney this feature exists to draw.
+ |
+ |   The baggage branch runs before the staircase check, not after: a baggage
+ |   link that climbs a floor (MAP_LINK_VERT) sets MAP_EDGE_STAIR on every
+ |   cell of the route the same as any other vertical link, and the shipped
+ |   table has exactly this case -- Altar's exit down to Cave, a conditional,
+ |   one-way, baggage-marked passage on the same floor. Checking STAIR first
+ |   would return DT_LINK_STAIR on every cell the phase or isolation rule
+ |   would otherwise have marked, so the bars would never draw on a vertical
+ |   baggage run at all. Checking baggage first and falling through to STAIR
+ |   only on the cells baggage does not claim keeps both facts on screen: the
+ |   run still reads as a staircase everywhere else, punctuated by a bar every
+ |   third cell, which is what Infocom's own map draws.
  | Author: suinevere
- | Dependencies: N/A
+ | Dependencies: has_baggage
  | Globals: g_edge, g_mark
  | Params: x, y -- the cell
  | Returns: the tile index, or 0
@@ -327,6 +412,17 @@ unsigned char map_edges_tile(int x, int y)
     }
     mask = e & 15;
     if (mask == 0) return 0;
+    if (e & MAP_EDGE_BAGGAGE) {
+        int horiz = (mask == (DT_EDGE_E | DT_EDGE_W));
+        int vert  = (mask == (DT_EDGE_N | DT_EDGE_S));
+        if (horiz || vert) {
+            int isolated = horiz
+                ? (!has_baggage(x - 1, y) && !has_baggage(x + 1, y))
+                : (!has_baggage(x, y - 1) && !has_baggage(x, y + 1));
+            if (isolated || ((x + y) % 3) == 0)
+                return horiz ? DT_BAGGAGE_H : DT_BAGGAGE_V;
+        }
+    }
     if ((e & MAP_EDGE_STAIR) && mask == (DT_EDGE_N | DT_EDGE_S))
         return DT_LINK_STAIR;
     if ((e & MAP_EDGE_DASH) && !(e & MAP_EDGE_SOLID))

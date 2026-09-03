@@ -9,6 +9,7 @@
  ----------------------*/
 #include "map_model.h"
 #include "map_atlas.h"
+#include "map_marks.h"
 
 /*----------------------
  | DX / DY
@@ -117,17 +118,28 @@ static unsigned char  g_kind[MAP_ROOM_MAX][RM_DIR_N];
 static unsigned short g_cond[MAP_ROOM_MAX];
 
 /*----------------------
+ | g_bag
+ | Description: Which of each placed room's exits carry a baggage-limit mark,
+ |   one bit per direction, the same shape as g_cond and for the same reason:
+ |   this is a fact map_marks supplies at record_exits time and nothing in the
+ |   story's own exit graph can rederive it, so it has to be held rather than
+ |   recomputed on every map_model_exits call.
+ | Author: suinevere
+ ----------------------*/
+static unsigned short g_bag[MAP_ROOM_MAX];
+
+/*----------------------
  | map_model_reset
  | Description: See map_model.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_vis, g_revealed, g_cur, g_have_cur, g_have_prev
+ | Globals: g_vis, g_revealed, g_cond, g_bag, g_cur, g_have_cur, g_have_prev
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void map_model_reset(void) {
     int i;
-    for (i = 0; i < MAP_ROOM_MAX; i++) { g_vis[i] = 0; g_revealed[i] = 0; g_x[i] = 0; g_y[i] = 0; g_cond[i] = 0; { int d; for (d = 0; d < RM_DIR_N; d++) { g_dest[i][d] = 0; g_kind[i][d] = 0; } } }
+    for (i = 0; i < MAP_ROOM_MAX; i++) { g_vis[i] = 0; g_revealed[i] = 0; g_x[i] = 0; g_y[i] = 0; g_cond[i] = 0; g_bag[i] = 0; { int d; for (d = 0; d < RM_DIR_N; d++) { g_dest[i][d] = 0; g_kind[i][d] = 0; } } }
     g_cur = 0;
     g_have_cur = 0;
     g_have_prev = 0;
@@ -322,25 +334,60 @@ static int atlas_target(unsigned short room, int wx, int wy, int anchored,
 /*----------------------
  | record_exits
  | Description: Copies one snapshot's exits and destinations into the placed
- |   room's own row, which is what map_model_link answers from. Shared by the
- |   live path and by the rebind a restore needs, so the two cannot disagree
- |   about what counts as a vertical exit.
+ |   room's own row, which is what map_model_link answers from, then applies
+ |   any scanned mark for each direction on top. This is the single chokepoint
+ |   the live path and the restore rebind both pass through, which is why the
+ |   marks are applied here and nowhere else: has_reverse, map_model_link and
+ |   map_model_exits all read this one row, so applying a mark anywhere but
+ |   here would leave some of them reading the story's raw, uncorrected
+ |   answer.
+ |
+ |   A mark is applied only where the story left the exit conditional. That is
+ |   the whole branch's rule -- the drawing may resolve a passage only where
+ |   every exit on it is RM_EXIT_MAYBE -- and it was until now enforced only in
+ |   the generator. A retraction clears the kind, the destination and the
+ |   conditional bit, so a table row aimed at an exit the story states outright
+ |   would delete geography the game asserts, on the strength of a scanned
+ |   line. Every shipped row targets a conditional exit and the guard costs
+ |   nothing today; it is what stops a future misread from being obeyed.
+ |
+ |   A retraction and a supplied destination are mutually exclusive per row in
+ |   the generated table, but the two directions of one conditional passage
+ |   are not: supplying Studio's missing destination without retracting the
+ |   Kitchen's backward exit would let has_reverse start seeing a way back
+ |   that the game does not permit, silently deleting the one-way arrow the
+ |   correction exists to draw. Both sides of such a pair are always present
+ |   in the same bound table and are applied on whichever visit reaches each
+ |   room, so the two edits land together regardless of walk order.
  | Author: suinevere
- | Dependencies: N/A
- | Globals: g_dest, g_kind, g_cond
+ | Dependencies: map_marks_for
+ | Globals: g_dest, g_kind, g_cond, g_bag
  | Params: room -- an in-range object number; m -- the snapshot to read
  | Returns: N/A
  ----------------------*/
 static void record_exits(unsigned short room, const RoomModel *m) {
     int d;
     g_cond[room] = 0;
+    g_bag[room] = 0;
     for (d = 0; d < RM_DIR_N; d++) {
+        unsigned char mdest = 0, mflags = 0;
+        int marked = map_marks_for(room, d, &mdest, &mflags);
         g_dest[room][d] = m->dest[d];
         g_kind[room][d] = (unsigned char)
             (m->exits[d] == RM_EXIT_NONE ? MAP_LINK_NONE
              : (d >= RM_UP ? MAP_LINK_VERT : MAP_LINK_FLAT));
         if (m->exits[d] == RM_EXIT_MAYBE)
             g_cond[room] |= (unsigned short) (1u << d);
+        if (!marked || m->exits[d] != RM_EXIT_MAYBE) continue;
+        if (mflags & MARK_RETRACT) {
+            g_kind[room][d] = MAP_LINK_NONE;
+            g_dest[room][d] = 0;
+            g_cond[room] &= (unsigned short) ~(1u << d);
+            continue;
+        }
+        if (mdest != 0) g_dest[room][d] = mdest;
+        if (mflags & MARK_BAGGAGE)
+            g_bag[room] |= (unsigned short) (1u << d);
     }
 }
 
@@ -538,7 +585,7 @@ static int has_reverse(unsigned short a, unsigned short b) {
  | Description: See map_model.h.
  | Author: suinevere
  | Dependencies: map_model_visited, has_reverse
- | Globals: g_dest, g_kind, g_cond
+ | Globals: g_dest, g_kind, g_cond, g_bag
  | Params: room -- object number; out -- receives the exits; max -- its length
  | Returns: how many exits were written
  ----------------------*/
@@ -555,6 +602,8 @@ int map_model_exits(unsigned short room, MapExit *out, int max) {
         out[n].flags = 0;
         if (g_cond[room] & (unsigned short) (1u << d))
             out[n].flags |= MAP_EXIT_COND;
+        if (g_bag[room] & (unsigned short) (1u << d))
+            out[n].flags |= MAP_EXIT_BAGGAGE;
         if (dest == room)
             out[n].flags |= MAP_EXIT_SELF;
         else if (map_model_visited(dest) && !has_reverse(room, dest))

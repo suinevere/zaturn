@@ -20,6 +20,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import pytest
@@ -432,6 +433,67 @@ def test_c_decoder_matches_python_for_every_shipped_story():
                 f"{want_dest}")
             compared += 1
     assert compared > 0, "cross-check compared nothing -- dump_exits or the story parsing is broken"
+
+
+def map_marks_story_graph():
+    """tools/gen_map_marks.story_graph, or None when its imports are missing.
+
+    The generator pulls in pymupdf, opencv and an OCR runtime through mapscan,
+    none of which this suite otherwise needs, so a checkout without them skips
+    this comparison the way a checkout without a C compiler skips the one
+    above rather than failing for a reason that has nothing to do with the
+    decode.
+    """
+    tools = str(ROOT / "tools")
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    try:
+        import gen_map_marks
+    except ImportError:
+        return None
+    return gen_map_marks.story_graph
+
+
+def test_gen_map_marks_decodes_the_same_destinations_for_every_shipped_story():
+    """The third copy of the plen-4/5 rule, held to the same bytes as the
+    other two.
+
+    tools/gen_map_marks.story_graph repeats room_model_refresh_room's
+    conditional-destination decode instead of putting it in
+    mapscan.room_graph, so that gen_map_atlas keeps emitting a byte-identical
+    table. A rule written down three times drifts unless something compares
+    the copies, and this file is already where two of them are compared, over
+    every story on the disc rather than over a fixture -- so the generator's
+    copy is checked here rather than in a test of its own that could go green
+    against a decode this file had already found wrong.
+    """
+    story_graph = map_marks_story_graph()
+    if story_graph is None:
+        pytest.skip("tools/gen_map_marks.py imports are unavailable -- "
+                    "generator/Python cross-check skipped")
+
+    compared = 0
+    for name, story in STORIES.items():
+        graph, _release, _serial = story_graph(str(story.path))
+        for obj, prop, data in story.conditional_exits():
+            idx = story.dir_index[prop]
+            want_dest = data[0] if data[0] in story.rooms else 0
+            assert obj in graph, f"{name}: gen_map_marks has no room {obj}"
+            got = graph[obj]["exits"].get(idx)
+            assert got is not None, (
+                f"{name}: gen_map_marks recorded no exit for room {obj} "
+                f"dir {idx}")
+            got_kind, got_dest = got
+            assert got_kind == "MAYBE", (
+                f"{name}: room {obj} dir {idx} kind {got_kind!r}, expected "
+                f"MAYBE for a {len(data)}-byte direction property")
+            assert got_dest == want_dest, (
+                f"{name}: room {obj} dir {idx} dest {got_dest}, this file's "
+                f"decode says byte 0 is {data[0]!r} and expects {want_dest}")
+            compared += 1
+    assert compared > 0, (
+        "generator cross-check compared nothing -- story_graph or the story "
+        "parsing is broken")
 
 
 if __name__ == "__main__":

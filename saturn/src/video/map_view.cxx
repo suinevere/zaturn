@@ -493,7 +493,7 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
             if (!map_layout_glyph(cx, cy, 0, dy, layer, &gx, &gy)) continue;
             if (gx == cx && gy == cy + 2 * dy &&
                 map_layout_cell_free(cx, cy + dy, layer))
-                map_edges_stub(cx, cy, 0, dy);
+                map_edges_stub(cx, cy, 0, dy, ex[k].flags);
             map_edges_glyph(gx, gy, up ? MAP_EDGE_UP : MAP_EDGE_DOWN);
         }
     }

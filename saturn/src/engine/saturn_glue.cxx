@@ -46,6 +46,7 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 #include "map_model.h"
 #include "save_blob.h"
 #include "map_atlas.h"
+#include "map_marks.h"
 #include "save_ui.h"
 #include "soft_reset.h"
 #include "title.h"   /* title_bg_fade_engaged */
@@ -181,7 +182,8 @@ extern "C" void saturn_typeahead_release(void) {
  |   difficulty change and on every prompt after a failed node allocation.
  | Author: suinevere
  | Dependencies: saturn_glue.h (saturn_story_data), typeahead.h,
- |   typeahead_extract.h, typeahead_solution.h, room_model.h, map_model.h
+ |   typeahead_extract.h, typeahead_solution.h, room_model.h, map_model.h,
+ |   map_atlas.h, map_marks.h
  | Globals: g_typeahead_root, g_ta_story, g_ta_diff, g_difficulty, g_map_story
  | Params: N/A
  | Returns: N/A
@@ -202,6 +204,7 @@ static void ensure_typeahead() {
     if (story != nullptr && len > 0) room_model_bind(story, len);
     if (story != g_map_story) {
         map_atlas_bind(story, len);
+        map_marks_bind(story, len);
         map_model_reset();
         g_map_story = story;
     }

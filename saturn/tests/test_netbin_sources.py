@@ -55,6 +55,7 @@ EXPECTED = {
     "src/engine/room_model.c",
     "src/engine/map_model.c",
     "src/engine/map_atlas.c",
+    "src/engine/map_marks.c",
     "src/video/map_edges.c",
     "src/video/map_view.cxx",
     "src/input/command_panel.c",

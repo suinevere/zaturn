@@ -32,6 +32,7 @@ extern "C" {
 #include "room_model.h"
 #include "map_model.h"
 #include "map_atlas.h"
+#include "map_marks.h"
 }
 extern "C" {
 #include "console.h"
@@ -446,6 +447,7 @@ void online_mode(void) {
        be another's, with nothing here able to tell which. A map that starts
        empty every session is always honest about what it is showing. */
     map_atlas_bind(netbin_story_data(), netbin_story_size());
+    map_marks_bind(netbin_story_data(), netbin_story_size());
     map_model_reset();
     /* And the roster with it, for the same reason: the seats belong to one
        instance, and the next dial may be a different one. */

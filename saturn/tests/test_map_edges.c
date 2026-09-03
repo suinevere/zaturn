@@ -271,7 +271,7 @@ int main(void)
     {
         map_edges_reset();
         map_edges_mark(4, 4);
-        map_edges_stub(4, 4, 0, -1);
+        map_edges_stub(4, 4, 0, -1, 0);
         assert(map_edges_tile(4, 3) == DT_DASH0 + (DT_EDGE_N | DT_EDGE_S));
     }
 
@@ -309,13 +309,13 @@ int main(void)
         layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
         assert(map_layout_glyph(4, 4, 0, 1, layer, &gx, &gy));
         assert(gx == 4 && gy == 6);
-        map_edges_stub(4, 4, 0, 1);
+        map_edges_stub(4, 4, 0, 1, 0);
         map_edges_glyph(gx, gy, MAP_EDGE_DOWN);
 
         layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
         assert(map_layout_glyph(4, 8, 0, -1, layer, &gx, &gy));
         assert(gx == 4 && gy == 7);
-        map_edges_stub(4, 8, 0, -1);
+        map_edges_stub(4, 8, 0, -1, 0);
         map_edges_glyph(gx, gy, MAP_EDGE_UP);
 
         raw = map_edges_layer()[7 * (MAP_ROOMS_W * MAP_CELLS) + 4];
@@ -327,7 +327,7 @@ int main(void)
         layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
         assert(map_layout_glyph(4, 4, 0, 1, layer, &gx, &gy));
         assert(gx == 4 && gy == 6);
-        map_edges_stub(4, 4, 0, 1);
+        map_edges_stub(4, 4, 0, 1, 0);
         map_edges_glyph(gx, gy, MAP_EDGE_DOWN);
 
         layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
@@ -339,6 +339,79 @@ int main(void)
         assert((raw & 15) == 0);
         assert(map_edges_tile(4, 7) == DT_GLYPH_U);
         assert(map_edges_tile(4, 5) == DT_DASH0 + (DT_EDGE_N | DT_EDGE_S));
+    }
+
+    /* A baggage run draws solid rather than dashed even though the exit is
+       conditional -- Infocom makes the baggage limit its own legend entry, not
+       a flavour of "requires problem solving", and draws Timber to Drafty solid
+       despite its being a conditional exit. Exactly one cross-bar cell falls in
+       the three between adjacent rooms. */
+    {
+        int x, bars = 0, solid = 0;
+        map_edges_reset();
+        map_edges_mark(4, 4);
+        map_edges_mark(8, 4);
+        map_edges_link(4, 4, 8, 4, MAP_LINK_FLAT,
+                       MAP_EXIT_COND | MAP_EXIT_BAGGAGE, 0);
+        for (x = 5; x <= 7; x++) {
+            unsigned char t = map_edges_tile(x, 4);
+            if (t == DT_BAGGAGE_H) bars++;
+            else if (t == DT_LINK_H) solid++;
+            assert(t != DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
+        }
+        assert(bars == 1);
+        assert(solid == 2);
+    }
+
+    /* A conditional run with no baggage mark still dashes, so the override is
+       the mark's doing and not a change to conditional passages at large. */
+    {
+        map_edges_reset();
+        map_edges_mark(4, 4);
+        map_edges_mark(8, 4);
+        map_edges_link(4, 4, 8, 4, MAP_LINK_FLAT, MAP_EXIT_COND, 0);
+        assert(map_edges_tile(6, 4) == DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
+    }
+
+    /* The chimney is drawn as a stub, because Studio and the Kitchen are on
+       different floors of the atlas, so the mark has to reach the stub path as
+       well as the link path. A stub's single shaft cell always takes one. */
+    {
+        map_edges_reset();
+        map_edges_mark(6, 6);
+        map_edges_stub(6, 6, 0, -1, MAP_EXIT_BAGGAGE);
+        assert(map_edges_tile(6, 5) == DT_BAGGAGE_V);
+    }
+
+    /* Review finding 1: a baggage link only one cell long has no genuine
+       interior neighbour -- both cells flanking its single interior cell are
+       room marks, which pick up MAP_EDGE_BAGGAGE as a side effect of
+       mark_step's both-ends convention but are not route cells and must not
+       count as carrying the mark for the isolation test. Before has_baggage
+       excluded marks, this cell's neighbours both "carried" the bit, the
+       clause never fired, and the run fell back to phase-only -- which does
+       not select (6+4)%3=1, so the cell drew DT_LINK_H with no bar at all. */
+    {
+        map_edges_reset();
+        map_edges_mark(5, 4);
+        map_edges_mark(7, 4);
+        map_edges_link(5, 4, 7, 4, MAP_LINK_FLAT, MAP_EXIT_BAGGAGE, 0);
+        assert(map_edges_tile(6, 4) == DT_BAGGAGE_H);
+    }
+
+    /* Review finding 2: a baggage link that also climbs a floor keeps the
+       staircase tile on every cell the baggage rule does not claim, and the
+       bar on the one it does -- Altar's own exit to Cave is exactly this
+       case in the shipped table, and checking MAP_EDGE_STAIR before the
+       baggage branch would have drawn DT_LINK_STAIR everywhere and lost the
+       mark on this passage entirely. */
+    {
+        map_edges_reset();
+        map_edges_mark(4, 4);
+        map_edges_mark(4, 12);
+        map_edges_link(4, 4, 4, 12, MAP_LINK_VERT, MAP_EXIT_BAGGAGE, 0);
+        assert(map_edges_tile(4, 5) == DT_BAGGAGE_V);
+        assert(map_edges_tile(4, 6) == DT_LINK_STAIR);
     }
 
     printf("test_map_edges: ok\n");

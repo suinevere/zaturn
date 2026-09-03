@@ -5,8 +5,9 @@ metadata:
   type: project
 ---
 
-Branch `map-baggage-marks`, commits `1c9d95f` and `83a28f4` on top of 82dbbd2 --
-the second is the owner's four corrections after reading the first. Continues
+Branch `map-baggage-marks`, commits `1c9d95f`, `83a28f4` and `4493818` on top of
+82dbbd2 -- the second and third are the owner's corrections after looking at
+the first. Continues
 [[2026-09-03-map-inset-to-parchment-handoff]] and
 [[2026-09-01-map-floors-crosshair-and-party-handoff]]. One wave, all of it from
 the owner's list.
@@ -40,14 +41,18 @@ colour with the sheet.
 
 The other four are **borrowed**: `DASH_PAL_PARTY0..3` are 3, 4, 5 and 6 -- a
 groove, a shadow face and two steps of marble body in `dash_palette` -- and
-`dash_map_ink` writes colours over them for as long as the map is up.
-`dash_tint` on the way out rewrites all sixteen from the ramp and calls the loan
-in.
+`dash_map_party` writes colours over them for as long as the map is up.
+`DASH_PAL_FILL` (7, the marble's frame rim) is a fifth on the same terms, and
+`DASH_PAL_LINE` (1) is a sixth entry written per sheet but not borrowed from
+anything: the passages have always been drawn in it and it is merely set rather
+than taken off the tinted ramp. `dash_tint` on the way out rewrites all sixteen
+from the ramp and calls every one of them in.
 
-That is safe for one measured reason and not for a comfortable one: outside the
-four, the map's own tiles reach palette entries **0, 1, 2, 12, 13, 14 and 15 and
+That is safe for one measured reason and not for a comfortable one: the map's
+own tiles reach palette entries **0, 1, 2, 3, 4, 5, 6, 7, 12, 13, 14 and 15 and
 nothing else** -- `dash_map_begin` clears every other cell to `DT_BLANK` and this
-screen draws no box -- so 3..11 are unreachable while it is drawn. Both halves are held by
+screen draws no box -- so 8..11 are all that is left free and every borrowed
+slot is one the map itself is the only reader of while it is up. Both halves are held by
 `saturn/tests/test_dash_accent.py`: only the four figures and the shield's own
 quadrants may name those entries, and `write_palette` must **not** grow an exemption arm for them, since
 an exemption would leave a player's colour on the marble for the rest of the
@@ -66,10 +71,29 @@ it through.
 ## Decisions worth knowing
 
 - **The ink is chosen by sheet, not by genre.** What matters is the paper a mark
-  has to be found on. Sheets 0 and 1 take black, 2 takes red (which is what the
-  previous session's accent already was), 3 takes `display_text_rgb` -- the
-  player's own font colour, because that sheet has nothing of its own to read
-  against.
+  has to be found on, and two genres sharing a sheet share that problem.
+- **The four sheets were finally measured rather than assumed.** Decoding them
+  and averaging the solid band: `MAP.TGA` is tan parchment (227,176,122),
+  `MAP2` cream ledger (238,223,192), `MAP3` **white** (254,254,253) and `MAP4`
+  **solid black** (0,0,0), fully opaque -- not transparent, which is what the
+  first pass in this session took "MAP4 transparent" to mean. The one that
+  needed red is the white one, and the one with nothing of its own to read
+  against is the black one.
+- **Each sheet gets four colours, in `MapInk`**: the labels, the passages, the
+  fill of a location, and the local player. The two warm papers take black
+  labels, dark-brown passages and a black fill; the white sheet keeps the black
+  fill and takes grey passages with red labels and a red player; the black sheet
+  takes the player's own two terminal colours -- `display_text_rgb` for the
+  passages and the labels, `display_bg_rgb` for the fill -- so it reads as their
+  console rather than as paper.
+- **The location's fill is its own palette entry now** (`DASH_PAL_FILL`, 7,
+  borrowed from the marble's frame rim). It used to be `MARK_DARK`, the same
+  entry the passages are drawn in, which made "the passages are brown" and "the
+  locations are filled black" the same sentence. Only `DT_ROOM` may name it, and
+  `test_dash_accent.py` holds that.
+- **`dash_map_ink` and `dash_map_party` are two calls** for the same reason:
+  what the drawing is made of is a property of the paper, and what colour a seat
+  is is a property of the party.
 - **The crosshair is not part of the ink.** It keeps the accent on all four
   sheets. Everything else the map draws in a colour -- the labels, the figures,
   the shield -- follows the sheet or the seat.
@@ -141,6 +165,21 @@ has decided there is no strip states it rather than declining to speak.
 `online.cxx`'s terminal loop is where this is worst -- it ends every frame in
 `menu_sync` -- but the fix is in `render_keyboard`, which every loop that can be
 in keyboard mode goes through, so it covers all of them.
+
+## The one thing that came out wrong on purpose
+
+**On MAP4 the local player's figure is invisible.** The owner asked for it black
+there; MAP4.TGA is solid black. It is shipped as asked because it was asked, and
+a scratch render of all four sheets confirms the figure simply is not there --
+the other three seats' red, green and blue are fine on it, as is the amber-on-blue
+drawing. One line changes it back to the letter colour (`ink.party = ink.text`
+in `map_ink`'s `g_sheet == 3` arm) if the owner wants it.
+
+Two smaller things the same render showed and nobody has asked about: the
+here-mark and the peer-mark are still drawn in ramp entries 12 and 15, which are
+tinted toward the map's tan whatever sheet is underneath, so on the white sheet
+they are faint; and the ordinary location's ring is entry 13, pale tan, which on
+white is nearly invisible and on black is the brightest thing on the mark.
 
 ## State
 

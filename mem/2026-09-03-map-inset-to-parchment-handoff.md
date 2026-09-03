@@ -311,3 +311,8 @@ scratch script -- not captured from the console. The owner's original report
 came from screenshots that did not reach this session, so the specific rooms
 named (West of House, North of House, Forest) were not confirmed; the cause was
 established from the code path, not from the images.
+
+**Correction, same day.** This handoff calls MAP3 "the dark sheet". It is not:
+decoding the four sheets and averaging their solid band gives MAP tan
+(227,176,122), MAP2 cream (238,223,192), MAP3 **white** (254,254,253) and MAP4
+**solid black** (0,0,0). See [[2026-09-03-map-party-colours-handoff]].

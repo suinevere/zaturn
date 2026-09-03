@@ -157,6 +157,37 @@ static inline void map_layout_knight(int mx, int my, int w, int *kx, int *ky)
 }
 
 /*----------------------
+ | MAP_OFFVIEW_NONE / MAP_OFFVIEW_RUN / MAP_OFFVIEW_GLYPH / map_layout_offview
+ | Description: Which of the map's two ways of saying "there is more that way"
+ |   an exit takes when its far end is not on screen: a run laid into the gutter
+ |   toward where the far room is drawn, or a U/D glyph beside the mark.
+ |
+ |   A staircase takes the glyph and must never take the run. It has no
+ |   direction on the page -- the room above may be drawn anywhere, or nowhere
+ |   -- so a run pointing west because that is where it happens to sit is a
+ |   corridor the player cannot walk, drawn in a direction the story never
+ |   offered.
+ |
+ |   Both passes ask this one question rather than each testing its own
+ |   condition, which is how the fault it fixes arose. The link pass gave every
+ |   ungathered exit to the run; the glyph pass declined any whose far room was
+ |   placed on this floor, on the assumption the link pass would draw it
+ |   properly -- true only while the far end was on screen. Between them, The
+ |   Lurking Horror's Renovated Cave drew a line running north out of the room
+ |   for an exit that goes DOWN, and drew no D at all. It was invisible until
+ |   enough rooms were placed for the far end of such an exit to be in the table
+ |   at all; before that the glyph pass had it to itself and was right.
+ | Author: suinevere
+ ----------------------*/
+enum { MAP_OFFVIEW_NONE = 0, MAP_OFFVIEW_RUN, MAP_OFFVIEW_GLYPH };
+
+static inline int map_layout_offview(int vertical, int on_screen)
+{
+    if (on_screen) return MAP_OFFVIEW_NONE;
+    return vertical ? MAP_OFFVIEW_GLYPH : MAP_OFFVIEW_RUN;
+}
+
+/*----------------------
  | map_layout_cell_free
  | Description: Whether a cell is on the viewport and nothing has claimed it.
  | Author: suinevere

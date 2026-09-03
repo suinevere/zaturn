@@ -754,9 +754,13 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
             if (ex[k].flags & MAP_EXIT_SELF) continue;
             j = g_slot[ex[k].dest];
             if (j < 0) {
-                edge_stub(map_layout_cell(g_dxs[i], 0, MAP_CX, MAP_LEFT),
-                          map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP),
-                          i, &ex[k], sx, sy, page);
+                // A staircase off the edge is the glyph pass's, not a run
+                // toward wherever the room above happens to be drawn.
+                if (map_layout_offview(ex[k].kind == MAP_LINK_VERT, 0) ==
+                    MAP_OFFVIEW_RUN)
+                    edge_stub(map_layout_cell(g_dxs[i], 0, MAP_CX, MAP_LEFT),
+                              map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP),
+                              i, &ex[k], sx, sy, page);
                 continue;
             }
             if (!(ex[k].flags & MAP_EXIT_ONEWAY) && ex[k].dest < g_ids[i])
@@ -802,8 +806,13 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
                     map_edges_glyph(gx, gy, up ? MAP_EDGE_UP : MAP_EDGE_DOWN);
                 continue;
             }
-            if (map_model_visited(ex[k].dest) &&
-                map_model_page(ex[k].dest) == page) continue;
+            // Reached only when the far end is off screen, which by
+            // map_layout_offview is exactly when this pass owns the exit. A
+            // condition here used to decline it whenever the far room was
+            // placed on this floor, on the assumption the link pass would draw
+            // the staircase -- which it can only do while both ends are
+            // gathered. Off screen that left the exit to edge_stub, which drew
+            // it as a corridor running wherever the far room happened to sit.
             dy = up ? -1 : 1;
             if (!map_layout_glyph(cx, cy, 0, dy, layer, &gx, &gy)) continue;
             if (gx == cx && gy == cy + 2 * dy &&

@@ -20,7 +20,55 @@
 
 #define SPAN 24
 
+/*----------------------
+ | check_offview
+ | Description: Which pass owns an exit whose far end is not on screen.
+ |
+ |   The map has two ways to say "there is more that way": a run laid into the
+ |   gutter toward where the far room is drawn, and a U or D glyph beside the
+ |   mark. A staircase must take the second. It has no direction on the page --
+ |   the room above may be drawn anywhere or nowhere -- so a run pointing west
+ |   because that is where it happens to sit is a corridor the player cannot
+ |   walk, drawn in a direction the story never offered.
+ |
+ |   That is not hypothetical. The Lurking Horror's Renovated Cave goes DOWN to
+ |   Before the Altar, which sits six cells west and six north on the same
+ |   floor. The link pass handed it to the run, and the glyph pass skipped it
+ |   because the far room was placed and on this floor -- so the only thing
+ |   drawn was a line running north out of the room, for an exit that goes
+ |   down. It was invisible until a table filled in enough rooms for the far end
+ |   to be placed at all; before that the glyph pass drew it correctly.
+ | Author: suinevere
+ ----------------------*/
+static void check_offview(void) {
+    /* On screen: neither -- the ordinary link pass draws it end to end. */
+    assert(map_layout_offview(0, 1) == MAP_OFFVIEW_NONE);
+    assert(map_layout_offview(1, 1) == MAP_OFFVIEW_NONE);
+
+    /* Off screen and level: a run into the gutter, which is what says "this
+       corridor carries on past the edge". */
+    assert(map_layout_offview(0, 0) == MAP_OFFVIEW_RUN);
+
+    /* Off screen and vertical: the glyph, never the run. */
+    assert(map_layout_offview(1, 0) == MAP_OFFVIEW_GLYPH);
+
+    /* The two passes must not both claim it and must not both decline it: one
+       exit, one mark. */
+    {
+        int vert, on;
+        for (vert = 0; vert < 2; vert++)
+            for (on = 0; on < 2; on++) {
+                int k = map_layout_offview(vert, on);
+                assert(k == MAP_OFFVIEW_NONE || k == MAP_OFFVIEW_RUN ||
+                       k == MAP_OFFVIEW_GLYPH);
+                assert((k == MAP_OFFVIEW_RUN) == (!vert && !on));
+                assert((k == MAP_OFFVIEW_GLYPH) == (vert && !on));
+            }
+    }
+}
+
 int main(void) {
+    check_offview();
     int hx, hy, sx, sy;
 
     /* The viewport is what the constants say it is, and its centre is inside

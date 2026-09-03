@@ -166,14 +166,23 @@ has decided there is no strip states it rather than declining to speak.
 `menu_sync` -- but the fix is in `render_keyboard`, which every loop that can be
 in keyboard mode goes through, so it covers all of them.
 
-## The one thing that came out wrong on purpose
+## The figure that briefly went black on a black sheet
 
-**On MAP4 the local player's figure is invisible.** The owner asked for it black
-there; MAP4.TGA is solid black. It is shipped as asked because it was asked, and
-a scratch render of all four sheets confirms the figure simply is not there --
-the other three seats' red, green and blue are fine on it, as is the amber-on-blue
-drawing. One line changes it back to the letter colour (`ink.party = ink.text`
-in `map_ink`'s `g_sheet == 3` arm) if the owner wants it.
+Worth keeping because the same trap sits one level down. The owner asked for the
+MAP4 figure to be black; MAP4.TGA is solid black, so it disappeared. A scratch
+render of all four sheets showed it before it reached a console, the owner
+corrected it in one word, and the figure now takes `ink.text` on every sheet --
+so it is black on the two parchments, red on the white one and the player's own
+font colour on the black one, and there is no longer a sheet whose figure is
+chosen independently of what can be seen on it.
+
+The trap one level down was the clash rule: the first other seat gives up red
+when the player already holds it, and it used to give it up for **black**, which
+on the black sheet is the same disappearance one seat over -- and that sheet is
+exactly the one a player is most likely to have chosen red letters on. What it
+falls back to is now `MapInk::clash`, black on three sheets and white on the
+fourth, decided by the same question as everything else in that struct: what can
+be seen on this paper.
 
 Two smaller things the same render showed and nobody has asked about: the
 here-mark and the peer-mark are still drawn in ramp entries 12 and 15, which are

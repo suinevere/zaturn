@@ -138,11 +138,50 @@ provenance marks so a measured table cannot quietly become a derived one.
 `test_map_atlas.c` binds Starcross by its real release and serial, which is the
 assertion that the runtime cannot tell the two kinds apart and does not have to.
 
-## Stage two -- not done
+## Stage two, shipped (`a0350a9`)
 
-Anchored fill for the scanned games: keep every measured cell, walk in the 431
-rooms the scans missed. The spike measured it at 100% coverage for 96% -> 94%
-half-plane, and every anchor provably unmoved. **The open problem is paging, not
-placement** -- authored pages are drawn sheets, route floors are levels, and a
-newly-placed room has to join one. The quick version gave Cutthroat 37 floors
-against a ceiling of 16.
+`gen_map_atlas.py --merge` walks the missing rooms into every measured table:
+**843 rooms become 1,274**, and the eighteen scans keep every coordinate they
+read. Zork I 84 -> 111, Zork II 32 -> 80, Moonmist 19 -> 65, Cutthroat 28 -> 86.
+Nothing was dropped; the whole atlas is now 1,877 cells, 7.5 KB.
+
+**The paging rule is the whole of it, and it is a dissolution rather than a
+solution.** The open problem was that authored pages are drawn sheets, route
+floors are levels, and an added room has to join one. Trying to inherit a sheet
+and re-derive the floors was measured first and is what NOT to do: the shipped
+table records the densified (sheet, level) pair and **not the sheet**, so the
+sheet cannot be recovered from it at all, and approximating it took one game to
+**35 floors against a ceiling of 16** and moved 53 of Zork I's measured rooms to
+other pages.
+
+What works instead: an added room joins the page of a placed room it shares a
+LEVEL with -- same route-floor component, therefore same sheet and same storey
+by definition -- and only a room sharing a level with nothing placed falls back
+to its nearest placed neighbour's page. Across the eighteen that was 304 by
+level and 127 by neighbour. Because **no page is ever invented**, three things
+hold by construction rather than by luck: a game's floor count cannot change, no
+measured room can change page, and the ceiling cannot be breached.
+
+Cost: half-plane holds at 93%, axis 78% -> 75%. The losses land where the scan
+caught a minority -- Lurking 100 -> 89 half and 100 -> 69 axis, Moonmist 100 ->
+87 and 100 -> 58, Zork I 95 -> 88 and 62 -> 52. Nothing fell below `PASS_RATE`,
+and a table that did would keep its measured cells alone.
+
+### Two things I predicted wrong
+
+- **I said the diff could not stay additive.** It did: 701 insertions, zero
+  deletions. A measured cell's emitted line is unchanged and added cells
+  interleave by room number, so git sees pure insertion after all.
+- **I planned to lower the alignment baselines.** Wrong instinct -- that would
+  have spent the guard to buy the feature. `tables(measured_only=True)` filters
+  on the `+` marker each added cell carries, so `BASELINE` now asserts **exact
+  equality** on the measured rooms (they must not improve either: a reading that
+  changed is a reading that was wrong once), and a separate `WHOLE` holds the
+  filled table to a floor. The suite is stronger than before the change.
+
+`test_atlas_merge.py` holds the frozen set (a frozen room never moves; freezing
+nothing is bit-for-bit the old behaviour; a frozen room is still an anchor its
+neighbours score against), the paging rule, and the shipped file's own
+consistency. Note `REPAIR_SPAN` is 3 -- two test fixtures were written displacing
+a room further than that and had to be corrected, not the code; the locality
+bound is real and now has a test of its own.

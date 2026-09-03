@@ -199,17 +199,23 @@ static int map_ink_is_red(unsigned short c)
 
 
 /*----------------------
- | MAP_ROW_ROOM / MAP_ROW_ROSTER / MAP_ROW_TOP / MAP_TEXT_LEFT /
+ | MAP_ROOM_DROP / MAP_ROW_ROSTER / MAP_ROW_TOP / MAP_TEXT_LEFT /
  | MAP_TEXT_COLS / MAP_PAGE_COLS
  | Description: The text rows written over the map and the band they may run
  |   in. All of them are derived from the grid rather than written down, because
  |   the point of them is to stay on the paper the grid was inset to reach.
  |
- |   The picked room's name is on the drawing's own top row, which is the
- |   gutter: it is the one label the player is reading while they move the
- |   cursor, and the cursor is somewhere in the grid below it, so it belongs
- |   where the eye is not. It used to be under the grid with the roster and the
- |   floor number, three labels in one corner.
+ |   The picked room's name has no row of its own. It is centred under the
+ |   crosshair and moves with it -- MAP_ROOM_DROP cells below the mark, clear of
+ |   the reticle's own bottom brackets -- because it names the thing the cursor
+ |   is on and a caption belongs against what it captions. Reading it anywhere
+ |   else means looking away from the cursor and back.
+ |
+ |   It is drawn over the map rather than beside it, which is what a caption
+ |   does. The text layer is above the tile layer, so a passage running under
+ |   the label is covered for that row and nothing is corrupted; the label is
+ |   redrawn from scratch every time the cursor moves, since draw_once opens
+ |   with menu_clear.
  |
  |   The roster and the floor number share the row directly below the grid --
  |   row twenty-four, the last of MAP.TGA's solid band; row twenty-six, which is
@@ -229,7 +235,7 @@ static int map_ink_is_red(unsigned short c)
  |   floor number reserves at the right-hand end of the roster's own row.
  | Author: suinevere
  ----------------------*/
-#define MAP_ROW_ROOM    MAP_CLIP_Y0
+#define MAP_ROOM_DROP   2
 #define MAP_ROW_ROSTER  (MAP_CELL_H)
 #define MAP_ROW_TOP     (MAP_ROW_ROSTER - (PARTY_SEATS - 1))
 #define MAP_TEXT_LEFT   MAP_CLIP_X0
@@ -650,9 +656,9 @@ static void edge_stub(int cx, int cy, int i, const MapExit *ex,
  | draw_once
  | Description: Paints one whole frame of the map: every room of one floor the
  |   viewport reaches, the links between them, a figure beside every player
- |   standing on it, the crosshair, and the rows of text around them -- the
- |   picked room's name along the top of the drawing, the roster and the floor
- |   number on one row under it in the bottom-left corner. The
+ |   standing on it, the crosshair, the picked room's name captioned under it,
+ |   and the roster and the floor number on one row in the bottom-left corner.
+ |   The
  |   ground is not among them: it is the parchment behind this layer, and every
  |   cell nothing is painted into shows it through. Clears the text layer
  |   first,
@@ -859,14 +865,26 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
 
     {
         char nm[MAP_TEXT_COLS - 2];
+        int nc, ncol;
         char pg[8];
         int pages = map_model_pages();
         int k;
 
         draw_players();
 
-        if (hover != 0 && room_model_object_name(hover, nm, (int) sizeof nm))
-            text_print_str(MAP_TEXT_LEFT, MAP_ROW_ROOM, nm);
+        /* Centred on the crosshair's own column and clamped into the drawing's
+           columns, so a room picked at either edge of the viewport still reads
+           left to right on paper rather than running off it. The clamp moves
+           the label, not the cursor: a caption pinned under a cursor two cells
+           from the edge would be half off the sheet. */
+        if (hover != 0 && room_model_object_name(hover, nm, (int) sizeof nm)) {
+            for (nc = 0; nm[nc] != '\0'; nc++) { }
+            ncol = hcx - nc / 2;
+            if (ncol + nc > MAP_TEXT_LEFT + MAP_TEXT_COLS)
+                ncol = MAP_TEXT_LEFT + MAP_TEXT_COLS - nc;
+            if (ncol < MAP_TEXT_LEFT) ncol = MAP_TEXT_LEFT;
+            text_print_str(ncol, hcy + MAP_ROOM_DROP, nm);
+        }
 
         /* The floor number ends three columns short of the drawing's right
            edge and shares the roster's row: the corner itself is where the
@@ -1151,9 +1169,10 @@ extern "C" void map_view_show(void) {
 
     if (g_menu_page_fade > 0) menu_fade_out(g_menu_page_fade);
     {
+        /* The whole band the map may have written in. The room's caption goes
+           wherever the cursor was, so there is no single row to name. */
         int r;
-        text_clear_line(MAP_ROW_ROOM);
-        for (r = MAP_ROW_TOP; r <= MAP_ROW_ROSTER; r++) text_clear_line(r);
+        for (r = MAP_CLIP_Y0; r <= MAP_ROW_ROSTER; r++) text_clear_line(r);
     }
     text_flush();
     // Both the map's ink and its ground handed back in one call, the same way

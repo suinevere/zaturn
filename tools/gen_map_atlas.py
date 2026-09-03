@@ -117,6 +117,42 @@ HALF = {
     "ne": lambda dx, dy: dx > 0 and dy < 0, "nw": lambda dx, dy: dx < 0 and dy < 0,
     "se": lambda dx, dy: dx > 0 and dy > 0, "sw": lambda dx, dy: dx < 0 and dy > 0,
 }
+"""HALF
+
+Description: Whether a drawn delta falls in the half-plane a direction names.
+    This is deliberately loose and is the right test for what it is used for --
+    scoring which object a drawn box is, and whether a whole map has been turned
+    -- because Infocom's maps are not drawn on a lattice and a room reached by
+    going north may well be drawn up and a little to one side.
+
+    It is NOT a test that a north exit is drawn due north, and the emitted
+    header used to report its result as "leave in the direction drawn", which
+    reads as though it were. AXIS below is that test, reported beside it.
+Author: suinevere
+"""
+
+AXIS = {
+    "north": lambda dx, dy: dx == 0 and dy < 0,
+    "south": lambda dx, dy: dx == 0 and dy > 0,
+    "east": lambda dx, dy: dy == 0 and dx > 0,
+    "west": lambda dx, dy: dy == 0 and dx < 0,
+}
+"""AXIS
+
+Description: Whether a cardinal exit is drawn on its own axis, with no sideways
+    component at all. Only the four compass points have an axis to be on; a
+    diagonal is a diagonal at any ratio, so the eight-way HALF test is already
+    exact for those and they are left out rather than given a rule that would
+    always pass.
+
+    This is what a player reads off the screen: told the exit is south, they
+    expect the line to go down, not down and across. It is reported and not
+    enforced -- see the note on the drop rule in main() -- because a map drawn
+    square to a building rather than to the compass is Infocom's, not an error,
+    and refusing those would drop Zork I, The Lurking Horror and The Witness
+    entirely and fall all three back to the graph walk.
+Author: suinevere
+"""
 
 
 def snap(values, tol):
@@ -154,6 +190,26 @@ def agreement(pos, graph, among=None):
             else:
                 bad.append((graph[a]["name"], dirn, graph[dest]["name"]))
     return agreed, tested, bad
+
+
+def alignment(pos, graph):
+    """(aligned, tested, [failures]) over cardinal exits with both ends placed
+    on the same page. The strict counterpart of agreement()."""
+    aligned = tested = 0
+    bad = []
+    for a in pos:
+        ax, ay = pos[a]
+        for dirn, (kind, dest) in graph[a]["exits"].items():
+            if kind != "OPEN" or dest not in pos or dirn not in AXIS:
+                continue
+            tested += 1
+            bx, by = pos[dest]
+            if AXIS[dirn](bx - ax, by - ay):
+                aligned += 1
+            else:
+                bad.append((graph[a]["name"], dirn, graph[dest]["name"],
+                            bx - ax, by - ay))
+    return aligned, tested, bad
 
 
 def assign(cells, graph):
@@ -346,9 +402,12 @@ def build_game(story, pdf, verbose=False):
             if a2 > agreed:
                 pos, agreed, tested, bad, orient = turned, a2, t2, b2, label
     rate = (agreed / tested) if tested else 0.0
+    aligned, atested, abad = alignment(pos, graph)
     stats = {"rooms": len(pos), "agreed": agreed, "tested": tested,
              "rate": rate, "bad": bad, "pages": used_pages, "dropped": dropped,
              "orient": orient, "page": page, "npages": len(order),
+             "aligned": aligned, "atested": atested, "abad": abad,
+             "arate": (aligned / atested) if atested else 0.0,
              "names": {k: graph[k]["name"] for k in pos}}
     if tested == 0 or rate < PASS_RATE:
         stats["reason"] = f"only {agreed}/{tested} exits agree ({rate:.0%})"
@@ -373,7 +432,18 @@ def emit(tables, out):
         w(f" | Description: {t['story']}, release {t['release']} serial {t['serial']}.\n")
         w(f" |   {st['rooms']} rooms on {st['npages']} floor(s), ascending by object\n")
         w(f" |   number so map_atlas_pos can bisect. {st['agreed']} of {st['tested']} compass exits\n")
-        w(f" |   between two placed rooms leave in the direction drawn ({st['rate']:.0%}).\n")
+        w(f" |   between two placed rooms land in the half-plane their direction names\n")
+        w(f" |   ({st['rate']:.0%}), which is the test the layout was scored and accepted on.\n")
+        w(f" |   Of the cardinal ones, {st['aligned']} of {st['atested']} are drawn on their own axis\n")
+        w(f" |   with no sideways component ({st['arate']:.0%}) -- the stricter thing a player\n")
+        w(f" |   reads off the screen, reported rather than enforced because a plan drawn\n")
+        w(f" |   square to a building is the publisher's and not an error.\n")
+        if st["abad"]:
+            w(" |\n |   Cardinal exits drawn off their axis:\n")
+            for a, d, b, dx, dy in st["abad"][:8]:
+                w(f" |     {a} --{d}--> {b} at ({dx:+d},{dy:+d})\n")
+            if len(st["abad"]) > 8:
+                w(f" |     ... and {len(st['abad']) - 8} more\n")
         if st["bad"]:
             w(" |\n |   The exceptions, which are rooms whose exits contradict any planar\n")
             w(" |   layout rather than misplacements:\n")

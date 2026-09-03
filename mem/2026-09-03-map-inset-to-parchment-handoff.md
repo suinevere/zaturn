@@ -1,6 +1,6 @@
 ---
 name: 2026-09-03-map-inset-to-parchment-handoff
-description: "The map grid is inset with a gutter so every mark lands on MAP.TGA's paper and a passage to a room scrolled off screen runs to the edge instead of vanishing; the crosshair moves off the stone ramp onto a red accent slot. Measured off the sheet, both targets link, never on a screen."
+description: "Three waves off the owner's own screenshots: the map grid inset onto MAP.TGA's paper with a gutter so edge passages run to the edge, the crosshair moved onto a red accent slot, and the one-way arrowhead withheld where the story never states the far room's exits -- which was 64% of every arrow on the disc. Never on a screen."
 metadata:
   type: project
 ---
@@ -64,6 +64,63 @@ code: `MAP_LEFT`/`MAP_TOP` now name where the first *mark* goes, and
   the netbin has no sheet and draws on flat tan, where it is invisible. The red
   accent applies everywhere, since `write_palette` is shared.
 
+## Wave three -- the owner's Lurking Horror screenshot
+
+Two findings, one fixed and one measured and left to the owner.
+
+**The one-way arrowhead was drawn from absent evidence.** `has_reverse` asks
+whether the far room has an exit leading back; `map_model_exits` read "no" as
+"one way". But a v3 direction property three bytes long is a routine that
+decides at run time and carries no destination at all, so `room_model` records
+it as RM_EXIT_MAYBE with a destination of zero. The Lurking Horror's Terminal
+Room has exactly two exits, `south` and `out`, and *both* are routines -- so the
+story never states that Terminal Room leads anywhere, Second Floor's plain
+`north` to it looked unreciprocated, and the map arrowed a passage the player
+walks both ways.
+
+Measured across all thirty-one stories: 383 arrows drawn today, 246 of them
+(64%) on a room in that state. `reverse_unknown` now vetoes those. A refusal
+message -- a two-byte property -- is excluded, because it asserts there is no
+passage that way; that is why the conditional bit is tested and not the
+destination alone. Zork I loses exactly three arrows and they are the trap door,
+the grating and the chimney, all genuinely two-way; it keeps the Altar, the
+White Cliffs and the slide. The chimney is the one the previous pass had already
+corrected by hand in Zork I's marks table -- this is that correction as a rule.
+
+**The room positions really are off-axis, and the file's own audit was hiding
+it.** Terminal Room sits at (1,4) and Second Floor at (3,5): the story's `south`
+draws as two columns across and one down, which is what the owner read as
+south-east. The generator scores layouts with `HALF`, a half-plane test -- for
+`south`, `dy > 0` with `dx` ignored entirely -- which is the right test for
+deciding which object a drawn box is, but the emitted header reported its result
+as "leave in the direction drawn". The Lurking Horror's table therefore claimed
+34 of 34 (100%) while 19 of its 32 plain cardinal exits are on axis.
+
+Across the whole shipped atlas: 664 of 779 (85%). Worst are The Witness (4/8),
+Zork I (69/113), The Lurking Horror (19/32). Of the 115 that miss, 57% are off
+by exactly one lane and 78% by one or two, which is the signature of the lane
+clustering splitting columns the map draws aligned rather than of a genuinely
+diagonal map; 12 (10%) point to the wrong side entirely.
+
+`gen_map_atlas.py` now has `AXIS` beside `HALF` and reports both, and the header
+wording says which test it is quoting. **The shipped .inc still carries the old
+wording**, because regenerating it needs the map scan cache, which is not in the
+repo and must not be committed. `saturn/tests/test_atlas_axis.py` measures the
+rate from the committed table and the shipped story files instead, records a
+per-game baseline and fails on regression, so the number is in the repo and
+under review without the scans.
+
+**Open for the owner.** Nothing was changed about where a room is drawn. Three
+ways forward, and the choice is not mine: re-run the generator with the cache
+and a looser lane tolerance, which the one-lane distribution says would fix most
+of it; add a snapping pass that nudges rooms into alignment where a cardinal
+exit misses by one lane and keeps only changes that improve the total, which
+works on committed data but moves the table away from what the scan measured;
+or accept it, since a campus plan drawn square to its buildings is Infocom's and
+not an error. Enforcing alignment is not an option -- at PASS_RATE 0.85 it would
+drop Zork I, The Lurking Horror and The Witness out of the atlas entirely and
+fall all three back to the graph walk.
+
 ## State
 
 Both Saturn targets compile and link. The ISO step fails at Error 127 only
@@ -77,6 +134,11 @@ re-proves from the emitted tiles that nothing but the crosshair reaches the slot
 Several `test_map_edges` fixtures sat on rows 0..3 and were shifted down rather
 than reinterpreted; the "every step leaves the viewport" case now starts at the
 clip corner, since `MAP_LEFT` is inside the drawing.
+
+`test_hwram_budget.py` fails whenever BuildDrop's link map is the netbin's
+rather than the CD's -- the two configs share the BuildDrop names and it reads
+the heap size off whichever built last. Build the CD target last before running
+the suite.
 
 **Never seen on a screen.** The previews in this session were composited from
 the real tiles, the real palette and `write_palette`'s own arithmetic by a

@@ -752,6 +752,60 @@ int main(void) {
         assert(n == 1);
         assert(ex[0].flags & MAP_EXIT_ONEWAY);
 
+        /* A room holding a passage whose far end the story never states cannot
+           be said to have no way back, so no arrow. This is what a v3 direction
+           property three bytes long is -- a routine deciding at run time, which
+           carries no destination -- and it is every door the game opens with a
+           verb: Zork I's trap door, its grating and its chimney, and The
+           Lurking Horror's Terminal Room, whose only two exits are both
+           routines and which was drawn with an arrowhead on the one passage the
+           player walks both ways. */
+        map_model_reset();
+        { RoomModel a = mk(32); link1(&a, RM_E, 33); map_model_enter(&a); }
+        { RoomModel b = mk(33);
+          link_kind(&b, RM_S, 0, RM_EXIT_MAYBE); map_model_enter(&b); }
+        n = map_model_exits(32, ex, RM_DIR_N);
+        assert(n == 1);
+        assert((ex[0].flags & MAP_EXIT_ONEWAY) == 0);
+
+        /* A refusal message is an assertion, not an absence: it says there is
+           no passage that way. It must not veto the arrow, or a room that
+           merely prints "the wall is solid" would suppress every arrowhead
+           pointing at it. */
+        map_model_reset();
+        { RoomModel a = mk(34); link1(&a, RM_E, 35); map_model_enter(&a); }
+        { RoomModel b = mk(35);
+          link_kind(&b, RM_S, 0, RM_EXIT_BLOCKED); map_model_enter(&b); }
+        n = map_model_exits(34, ex, RM_DIR_N);
+        assert(n == 1);
+        assert(ex[0].flags & MAP_EXIT_ONEWAY);
+
+        /* An unstated destination anywhere in the room is enough. The reverse
+           of a compass exit is not always its opposite -- a maze, an "out", a
+           one-way loop -- so the veto cannot be narrowed to the facing
+           direction without assuming a symmetry the stories do not have. */
+        map_model_reset();
+        { RoomModel a = mk(36); link1(&a, RM_E, 37); map_model_enter(&a); }
+        { RoomModel b = mk(37);
+          link1(&b, RM_E, 38);
+          link_kind(&b, RM_UP, 0, RM_EXIT_MAYBE); map_model_enter(&b); }
+        { RoomModel c = mk(38); link1(&c, RM_W, 37); map_model_enter(&c); }
+        n = map_model_exits(36, ex, RM_DIR_N);
+        assert(n == 1);
+        assert((ex[0].flags & MAP_EXIT_ONEWAY) == 0);
+
+        /* A conditional exit that DOES name its destination -- a door or flag
+           property, which carries one in byte 0 -- states where it goes, so it
+           is no reason to withhold the arrow. */
+        map_model_reset();
+        { RoomModel a = mk(42); link1(&a, RM_E, 43); map_model_enter(&a); }
+        { RoomModel b = mk(43);
+          link_kind(&b, RM_S, 44, RM_EXIT_MAYBE); map_model_enter(&b); }
+        { RoomModel c = mk(44); link1(&c, RM_N, 43); map_model_enter(&c); }
+        n = map_model_exits(42, ex, RM_DIR_N);
+        assert(n == 1);
+        assert(ex[0].flags & MAP_EXIT_ONEWAY);
+
         /* A shut door back is still a way back, so this is not one-way. The
            arrow must not appear and vanish as the player opens things. */
         map_model_reset();

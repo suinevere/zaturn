@@ -567,6 +567,9 @@ void map_model_step(int dir, int *dx, int *dy) {
  | Description: Whether b has any exit at all leading to a, in any state but
  |   RM_EXIT_NONE. g_kind is already RM_EXIT_NONE-filtered, so a blocked exit
  |   answers yes, which is what keeps a shut door off the one-way arrow.
+ |
+ |   No is not the same as "there is no way back" -- see reverse_unknown, which
+ |   map_model_exits asks as well before it draws the arrowhead.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_dest, g_kind
@@ -581,10 +584,47 @@ static int has_reverse(unsigned short a, unsigned short b) {
 }
 
 /*----------------------
+ | reverse_unknown
+ | Description: Whether b holds a passage whose far end the story never states,
+ |   which makes "b has no way back to a" unprovable rather than false.
+ |
+ |   A v3 direction property three bytes long is a routine that decides at run
+ |   time, and it carries no destination at all -- room_model records it as
+ |   RM_EXIT_MAYBE with a destination of zero, which is this test. Every door
+ |   the game opens with a verb rather than a step is one: Zork I's trap door,
+ |   its grating and its chimney, and The Lurking Horror's Terminal Room, whose
+ |   only two exits are both routines. Reading the absence of a decodable
+ |   reverse as evidence of a one-way passage put an arrowhead on all of them --
+ |   383 across the thirty-one stories, 246 of which rest on a room in this
+ |   state.
+ |
+ |   A refusal message -- a two-byte property -- is not this. It says there is
+ |   no passage that way, which is an assertion, so it must not veto; that is
+ |   why the conditional bit is tested rather than the destination alone.
+ |
+ |   Same rule the baggage-limit scan already runs under: the drawing may
+ |   resolve a passage only where the graph has actually asserted something. The
+ |   previous pass reached it one room at a time, correcting the chimney by hand
+ |   in Zork I's marks table; this is that correction as a rule.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_dest, g_kind, g_cond
+ | Params: b -- object number
+ | Returns: 1 when b has a passage of unstated destination, 0 otherwise
+ ----------------------*/
+static int reverse_unknown(unsigned short b) {
+    int d;
+    for (d = 0; d < RM_DIR_N; d++)
+        if (g_kind[b][d] != MAP_LINK_NONE && g_dest[b][d] == 0 &&
+            (g_cond[b] & (unsigned short) (1u << d)) != 0) return 1;
+    return 0;
+}
+
+/*----------------------
  | map_model_exits
  | Description: See map_model.h.
  | Author: suinevere
- | Dependencies: map_model_visited, has_reverse
+ | Dependencies: map_model_visited, has_reverse, reverse_unknown
  | Globals: g_dest, g_kind, g_cond, g_bag
  | Params: room -- object number; out -- receives the exits; max -- its length
  | Returns: how many exits were written
@@ -606,7 +646,8 @@ int map_model_exits(unsigned short room, MapExit *out, int max) {
             out[n].flags |= MAP_EXIT_BAGGAGE;
         if (dest == room)
             out[n].flags |= MAP_EXIT_SELF;
-        else if (map_model_visited(dest) && !has_reverse(room, dest))
+        else if (map_model_visited(dest) && !has_reverse(room, dest) &&
+                 !reverse_unknown(dest))
             out[n].flags |= MAP_EXIT_ONEWAY;
         n++;
     }

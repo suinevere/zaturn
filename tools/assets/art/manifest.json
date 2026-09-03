@@ -1,16 +1,4471 @@
 {
- "_comment": "Pictures that were never on the original disc. Order is the order they are packed in, and a frame's IMAGE_FRAME index is its position here after the 74 measured ones -- so a plate may be appended, but reordering or removing one silently changes what every room record naming a later frame points at. reference is the IMAGE_FRAME index of the picture this plate is graded against: a plate is put into the house style by measuring the frame it stands beside, never by describing a colour. scenes are the scene tags this picture will genuinely do for, best first, and a plate must name at least one or nothing will ever pick it. shows is what the picture actually depicts, in the same terms tools/image_looks.py records the measured ones in, and is what makes it choosable in the review app.",
+ "_comment": "Pictures that were never on the original disc. Order is the order they are packed in, and a frame's IMAGE_FRAME index is its position here after the 74 measured ones -- so a plate may be appended, but reordering or removing one silently changes what every room record naming a later frame points at. reference is the IMAGE_FRAME index of the picture this plate is graded against: a plate is put into the house style by measuring the frame it stands beside, never by describing a colour. scenes are the scene tags this picture will genuinely do for, best first, and a plate must name at least one or nothing will ever pick it. lift opens the reference's ramp past the colours the reference itself holds -- 0 reproduces its range exactly and 1 puts its brightest colour at full scale -- and is the one field here that deliberately does not reproduce the original. shows is what the picture actually depicts, in the same terms tools/image_looks.py records the measured ones in, and is what makes it choosable in the review app.",
  "prefix": "GEN",
  "plates": [
   {
    "source": "bridge.png",
-   "reference": 51,
+   "reference": 69,
    "grain": 0.0,
    "shows": "a narrow metal walkway crossing a dark drop, rails on both sides, lit from below",
    "scenes": [
     "SHIP_INT",
     "CORRIDOR"
+   ],
+   "lift": 1.0
+  },
+  {
+   "source": "corridor_stone.png",
+   "reference": 39,
+   "grain": 0.0,
+   "lift": 0.6,
+   "shows": "a long dressed-stone passage receding, flagstones underfoot",
+   "scenes": [
+    "CORRIDOR"
    ]
+  },
+  {
+   "source": "corridor_timber.png",
+   "reference": 65,
+   "grain": 0.0,
+   "lift": 0.6,
+   "shows": "a timber-lined passage, close boards and props",
+   "scenes": [
+    "CORRIDOR"
+   ]
+  },
+  {
+   "source": "corridor_rock.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.6,
+   "shows": "a rough-hewn rock passage, unworked walls closing in",
+   "scenes": [
+    "CORRIDOR"
+   ]
+  },
+  {
+   "source": "corridor_metal.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.6,
+   "shows": "a riveted metal passage receding, pipes along the wall",
+   "scenes": [
+    "CORRIDOR",
+    "SHIP_INT"
+   ]
+  },
+  {
+   "source": "maze_brick.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 0.6,
+   "shows": "a brick junction with identical openings both ways",
+   "scenes": [
+    "MAZE"
+   ]
+  },
+  {
+   "source": "maze_stone.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.6,
+   "shows": "a low stone crawl branching into darkness",
+   "scenes": [
+    "MAZE"
+   ]
+  },
+  {
+   "source": "forest_birch.png",
+   "reference": 3,
+   "grain": 0.0,
+   "lift": 0.2,
+   "shows": "pale slender trunks, light coming through high",
+   "scenes": [
+    "FOREST"
+   ]
+  },
+  {
+   "source": "forest_pine.png",
+   "reference": 1,
+   "grain": 0.0,
+   "lift": 0.2,
+   "shows": "dark conifers crowding in, needled ground",
+   "scenes": [
+    "FOREST"
+   ]
+  },
+  {
+   "source": "mine_shaft.png",
+   "reference": 71,
+   "grain": 0.0,
+   "lift": 0.5,
+   "shows": "a propped shaft head with rail and spoil",
+   "scenes": [
+    "MINE"
+   ]
+  },
+  {
+   "source": "road_track.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.2,
+   "shows": "a rutted dirt track running away between hedges",
+   "scenes": [
+    "ROAD"
+   ]
+  },
+  {
+   "source": "road_paved.png",
+   "reference": 56,
+   "grain": 0.0,
+   "lift": 0.4,
+   "shows": "a narrow cobbled street between stone walls",
+   "scenes": [
+    "ROAD",
+    "VILLAGE"
+   ]
+  },
+  {
+   "source": "cave_teal.png",
+   "reference": 35,
+   "grain": 0.0,
+   "lift": 0.5,
+   "shows": "a wet cave chamber, flowstone and standing water",
+   "scenes": [
+    "CAVE"
+   ]
+  },
+  {
+   "source": "bathroom_tiled.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "a tiled washroom, basin and mirror",
+   "scenes": [
+    "BATHROOM"
+   ]
+  },
+  {
+   "source": "bathroom_bathhouse.png",
+   "reference": 69,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a stone bathhouse pool, steam over water",
+   "scenes": [
+    "BATHROOM"
+   ]
+  },
+  {
+   "source": "bathroom_cramped.png",
+   "reference": 38,
+   "grain": 0.0,
+   "lift": 0.44,
+   "shows": "a cramped ship's washroom in metal",
+   "scenes": [
+    "BATHROOM"
+   ]
+  },
+  {
+   "source": "bedroom_fourposter.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a four-poster bed under heavy hangings",
+   "scenes": [
+    "BEDROOM"
+   ]
+  },
+  {
+   "source": "bedroom_bunk.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a narrow bunk in a panelled cabin",
+   "scenes": [
+    "BEDROOM"
+   ]
+  },
+  {
+   "source": "bedroom_attic.png",
+   "reference": 31,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "an attic bed under a sloping roof",
+   "scenes": [
+    "BEDROOM"
+   ]
+  },
+  {
+   "source": "castle_hall.png",
+   "reference": 46,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a great hall with a vaulted roof",
+   "scenes": [
+    "CASTLE"
+   ]
+  },
+  {
+   "source": "castle_rampart.png",
+   "reference": 23,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a battlement walk between merlons",
+   "scenes": [
+    "CASTLE"
+   ]
+  },
+  {
+   "source": "castle_gate.png",
+   "reference": 47,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a portcullis arch into a courtyard",
+   "scenes": [
+    "CASTLE"
+   ]
+  },
+  {
+   "source": "cave_dry.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "a dry chamber of pale rock",
+   "scenes": [
+    "CAVE"
+   ]
+  },
+  {
+   "source": "cave_crystal.png",
+   "reference": 16,
+   "grain": 0.0,
+   "lift": 0.44,
+   "shows": "a chamber lined with crystal growth",
+   "scenes": [
+    "CAVE"
+   ]
+  },
+  {
+   "source": "cave_column.png",
+   "reference": 35,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a cavern where a column meets the floor",
+   "scenes": [
+    "CAVE"
+   ]
+  },
+  {
+   "source": "cell_barred.png",
+   "reference": 18,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a cell behind heavy iron bars",
+   "scenes": [
+    "CELL"
+   ]
+  },
+  {
+   "source": "cell_oubliette.png",
+   "reference": 12,
+   "grain": 0.0,
+   "lift": 0.36,
+   "shows": "a bare stone pit with a grate above",
+   "scenes": [
+    "CELL"
+   ]
+  },
+  {
+   "source": "cell_brig.png",
+   "reference": 69,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a metal holding cell aboard a ship",
+   "scenes": [
+    "CELL"
+   ]
+  },
+  {
+   "source": "corridor_panelled.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "a panelled hallway with closed doors",
+   "scenes": [
+    "CORRIDOR"
+   ]
+  },
+  {
+   "source": "corridor_vault.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "a low barrel vault of set brick",
+   "scenes": [
+    "CORRIDOR"
+   ]
+  },
+  {
+   "source": "corridor_gallery.png",
+   "reference": 39,
+   "grain": 0.0,
+   "lift": 0.97,
+   "shows": "a colonnaded gallery running away",
+   "scenes": [
+    "CORRIDOR"
+   ]
+  },
+  {
+   "source": "crypt_niches.png",
+   "reference": 45,
+   "grain": 0.0,
+   "lift": 0.88,
+   "shows": "a crypt wall of stacked burial niches",
+   "scenes": [
+    "CRYPT"
+   ]
+  },
+  {
+   "source": "crypt_sarcophagus.png",
+   "reference": 48,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a stone sarcophagus in a vault",
+   "scenes": [
+    "CRYPT"
+   ]
+  },
+  {
+   "source": "crypt_ossuary.png",
+   "reference": 6,
+   "grain": 0.0,
+   "lift": 0.04,
+   "shows": "an ossuary of stacked bone and stone",
+   "scenes": [
+    "CRYPT"
+   ]
+  },
+  {
+   "source": "darkroom_void.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a room the light does not reach",
+   "scenes": [
+    "DARKROOM"
+   ]
+  },
+  {
+   "source": "darkroom_doorway.png",
+   "reference": 12,
+   "grain": 0.0,
+   "lift": 0.36,
+   "shows": "a black room with one lit doorway",
+   "scenes": [
+    "DARKROOM"
+   ]
+  },
+  {
+   "source": "darkroom_lamp.png",
+   "reference": 18,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a failing lamp in an unlit space",
+   "scenes": [
+    "DARKROOM"
+   ]
+  },
+  {
+   "source": "desert_dune.png",
+   "reference": 62,
+   "grain": 0.0,
+   "lift": 0.45,
+   "shows": "wind-rippled dunes to the horizon",
+   "scenes": [
+    "DESERT"
+   ]
+  },
+  {
+   "source": "desert_hardpan.png",
+   "reference": 44,
+   "grain": 0.0,
+   "lift": 0.33,
+   "shows": "cracked hardpan under a pale sky",
+   "scenes": [
+    "DESERT"
+   ]
+  },
+  {
+   "source": "desert_rockdesert.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "boulders on red desert sand",
+   "scenes": [
+    "DESERT"
+   ]
+  },
+  {
+   "source": "dock_wharf.png",
+   "reference": 63,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a timber wharf over dark water",
+   "scenes": [
+    "DOCK"
+   ]
+  },
+  {
+   "source": "dock_harbour.png",
+   "reference": 56,
+   "grain": 0.0,
+   "lift": 0.93,
+   "shows": "a stone harbour wall and steps",
+   "scenes": [
+    "DOCK"
+   ]
+  },
+  {
+   "source": "dock_jetty.png",
+   "reference": 50,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a narrow jetty running out into mist",
+   "scenes": [
+    "DOCK"
+   ]
+  },
+  {
+   "source": "forest_clearing.png",
+   "reference": 3,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "a small clearing walled by trees",
+   "scenes": [
+    "FOREST"
+   ]
+  },
+  {
+   "source": "forest_mossy.png",
+   "reference": 1,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "moss-covered trunks and deep undergrowth",
+   "scenes": [
+    "FOREST"
+   ]
+  },
+  {
+   "source": "forest_winter.png",
+   "reference": 7,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "bare branches over frozen ground",
+   "scenes": [
+    "FOREST"
+   ]
+  },
+  {
+   "source": "garden_formal.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "clipped hedges along a gravel walk",
+   "scenes": [
+    "GARDEN"
+   ]
+  },
+  {
+   "source": "garden_overgrown.png",
+   "reference": 55,
+   "grain": 0.0,
+   "lift": 0.26,
+   "shows": "a walled garden gone to seed",
+   "scenes": [
+    "GARDEN"
+   ]
+  },
+  {
+   "source": "garden_greenhouse.png",
+   "reference": 21,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a glasshouse of leaves and iron",
+   "scenes": [
+    "GARDEN"
+   ]
+  },
+  {
+   "source": "house_ext_cottage.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "a shuttered cottage front",
+   "scenes": [
+    "HOUSE_EXT"
+   ]
+  },
+  {
+   "source": "house_ext_manor.png",
+   "reference": 2,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "a manor facade behind a lawn",
+   "scenes": [
+    "HOUSE_EXT"
+   ],
+   "seed": 7713
+  },
+  {
+   "source": "house_ext_porch.png",
+   "reference": 8,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "a wooden porch and a closed door",
+   "scenes": [
+    "HOUSE_EXT"
+   ]
+  },
+  {
+   "source": "kitchen_range.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "a range and hanging pans",
+   "scenes": [
+    "KITCHEN"
+   ]
+  },
+  {
+   "source": "kitchen_scullery.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a stone scullery with a deep sink",
+   "scenes": [
+    "KITCHEN"
+   ]
+  },
+  {
+   "source": "kitchen_galley.png",
+   "reference": 49,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a ship's galley in steel",
+   "scenes": [
+    "KITCHEN"
+   ]
+  },
+  {
+   "source": "lab_glassware.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "benches of glassware and burners",
+   "scenes": [
+    "LAB"
+   ]
+  },
+  {
+   "source": "lab_machine.png",
+   "reference": 70,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a control bank of dials and switches",
+   "scenes": [
+    "LAB"
+   ]
+  },
+  {
+   "source": "lab_operating.png",
+   "reference": 49,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a clinical room with a steel table",
+   "scenes": [
+    "LAB"
+   ]
+  },
+  {
+   "source": "library_stacks.png",
+   "reference": 14,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "shelves of books running away",
+   "scenes": [
+    "LIBRARY"
+   ]
+  },
+  {
+   "source": "library_readingroom.png",
+   "reference": 15,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a reading room with a long table",
+   "scenes": [
+    "LIBRARY"
+   ]
+  },
+  {
+   "source": "library_study.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a private study lined with books",
+   "scenes": [
+    "LIBRARY"
+   ]
+  },
+  {
+   "source": "maze_hedge.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "identical hedge walls and a turn",
+   "scenes": [
+    "MAZE"
+   ],
+   "seed": 7712
+  },
+  {
+   "source": "maze_mirror.png",
+   "reference": 19,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a passage that repeats itself",
+   "scenes": [
+    "MAZE"
+   ]
+  },
+  {
+   "source": "maze_tunnels.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "three identical mouths in rough rock",
+   "scenes": [
+    "MAZE"
+   ],
+   "seed": 7701
+  },
+  {
+   "source": "mine_gallery.png",
+   "reference": 65,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a propped gallery with a rail",
+   "scenes": [
+    "MINE"
+   ]
+  },
+  {
+   "source": "mine_facewall.png",
+   "reference": 67,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a worked rock face and tools",
+   "scenes": [
+    "MINE"
+   ]
+  },
+  {
+   "source": "mine_cage.png",
+   "reference": 68,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a shaft head with a lift cage",
+   "scenes": [
+    "MINE"
+   ]
+  },
+  {
+   "source": "office_desk.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a desk under a shaded lamp",
+   "scenes": [
+    "OFFICE"
+   ]
+  },
+  {
+   "source": "office_clerks.png",
+   "reference": 49,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "rows of clerks' desks, all empty",
+   "scenes": [
+    "OFFICE"
+   ]
+  },
+  {
+   "source": "office_control.png",
+   "reference": 14,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "an office of monitors and consoles",
+   "scenes": [
+    "OFFICE"
+   ]
+  },
+  {
+   "source": "parlor_sitting.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "an armchair by a cold hearth",
+   "scenes": [
+    "PARLOR"
+   ]
+  },
+  {
+   "source": "parlor_drawing.png",
+   "reference": 14,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a drawing room with a piano",
+   "scenes": [
+    "PARLOR"
+   ]
+  },
+  {
+   "source": "parlor_lounge.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "a panelled lounge and a low table",
+   "scenes": [
+    "PARLOR"
+   ]
+  },
+  {
+   "source": "pit_shaftpit.png",
+   "reference": 34,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "a black shaft dropping away",
+   "scenes": [
+    "PIT"
+   ]
+  },
+  {
+   "source": "pit_chasm.png",
+   "reference": 72,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a chasm crossed by a plank",
+   "scenes": [
+    "PIT"
+   ]
+  },
+  {
+   "source": "pit_well.png",
+   "reference": 32,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a stone well mouth in a floor",
+   "scenes": [
+    "PIT"
+   ]
+  },
+  {
+   "source": "river_underground.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a black river under rock",
+   "scenes": [
+    "RIVER"
+   ]
+  },
+  {
+   "source": "river_bank.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a slow river between reeds",
+   "scenes": [
+    "RIVER"
+   ],
+   "seed": 7712
+  },
+  {
+   "source": "river_rapids.png",
+   "reference": 52,
+   "grain": 0.0,
+   "lift": 0.93,
+   "shows": "white water over stones",
+   "scenes": [
+    "RIVER"
+   ]
+  },
+  {
+   "source": "road_crossroads.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "a signless crossroads on a moor",
+   "scenes": [
+    "ROAD"
+   ],
+   "seed": 7714
+  },
+  {
+   "source": "road_avenue.png",
+   "reference": 56,
+   "grain": 0.0,
+   "lift": 0.93,
+   "shows": "a road under an avenue of trees",
+   "scenes": [
+    "ROAD"
+   ]
+  },
+  {
+   "source": "road_causeway.png",
+   "reference": 28,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "a raised causeway over flats",
+   "scenes": [
+    "ROAD"
+   ]
+  },
+  {
+   "source": "rocky_scree.png",
+   "reference": 53,
+   "grain": 0.0,
+   "lift": 0.33,
+   "shows": "a slope of loose scree",
+   "scenes": [
+    "ROCKY"
+   ]
+  },
+  {
+   "source": "rocky_ledge.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a narrow ledge along a cliff",
+   "scenes": [
+    "ROCKY"
+   ]
+  },
+  {
+   "source": "rocky_boulders.png",
+   "reference": 36,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a field of split boulders",
+   "scenes": [
+    "ROCKY"
+   ]
+  },
+  {
+   "source": "ship_ext_hull.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a hull at anchor seen from the water",
+   "scenes": [
+    "SHIP_EXT"
+   ]
+  },
+  {
+   "source": "ship_ext_wreck.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a wreck aground and listing",
+   "scenes": [
+    "SHIP_EXT"
+   ]
+  },
+  {
+   "source": "ship_ext_deck.png",
+   "reference": 64,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "an open deck of rail and rigging",
+   "scenes": [
+    "SHIP_EXT"
+   ]
+  },
+  {
+   "source": "ship_int_engine.png",
+   "reference": 70,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "an engine room of pipes and gauges",
+   "scenes": [
+    "SHIP_INT"
+   ]
+  },
+  {
+   "source": "ship_int_cabin.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a panelled cabin with a port",
+   "scenes": [
+    "SHIP_INT"
+   ]
+  },
+  {
+   "source": "ship_int_hold.png",
+   "reference": 49,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a cargo hold of crates and ribs",
+   "scenes": [
+    "SHIP_INT"
+   ]
+  },
+  {
+   "source": "shore_shingle.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "a shingle beach under cliffs",
+   "scenes": [
+    "SHORE"
+   ]
+  },
+  {
+   "source": "shore_sandbeach.png",
+   "reference": 63,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "wet sand and a far tideline",
+   "scenes": [
+    "SHORE"
+   ]
+  },
+  {
+   "source": "shore_cove.png",
+   "reference": 28,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "a rocky cove with a small strand",
+   "scenes": [
+    "SHORE"
+   ]
+  },
+  {
+   "source": "space_viewport.png",
+   "reference": 42,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "stars through a heavy viewport",
+   "scenes": [
+    "SPACE"
+   ]
+  },
+  {
+   "source": "space_surface.png",
+   "reference": 58,
+   "grain": 0.0,
+   "lift": 0.54,
+   "shows": "an airless plain under black sky",
+   "scenes": [
+    "SPACE"
+   ]
+  },
+  {
+   "source": "space_dock.png",
+   "reference": 43,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a station bay open to the dark",
+   "scenes": [
+    "SPACE"
+   ]
+  },
+  {
+   "source": "storage_crates.png",
+   "reference": 15,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "stacked crates in a store room",
+   "scenes": [
+    "STORAGE"
+   ]
+  },
+  {
+   "source": "storage_cellarstore.png",
+   "reference": 74,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "shelved jars in a cool cellar",
+   "scenes": [
+    "STORAGE"
+   ]
+  },
+  {
+   "source": "storage_lockup.png",
+   "reference": 73,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a lockup of tools and shelving",
+   "scenes": [
+    "STORAGE"
+   ]
+  },
+  {
+   "source": "temple_nave.png",
+   "reference": 47,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a nave between heavy columns",
+   "scenes": [
+    "TEMPLE"
+   ]
+  },
+  {
+   "source": "temple_shrine.png",
+   "reference": 46,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a carved shrine in an alcove",
+   "scenes": [
+    "TEMPLE"
+   ],
+   "seed": 1089
+  },
+  {
+   "source": "temple_cloister.png",
+   "reference": 45,
+   "grain": 0.0,
+   "lift": 0.88,
+   "shows": "a cloister walk around a court",
+   "scenes": [
+    "TEMPLE"
+   ]
+  },
+  {
+   "source": "theater_stage.png",
+   "reference": 43,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "a stage seen from the empty stalls",
+   "scenes": [
+    "THEATER"
+   ]
+  },
+  {
+   "source": "theater_boxes.png",
+   "reference": 23,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "gilded boxes above dark seats",
+   "scenes": [
+    "THEATER"
+   ]
+  },
+  {
+   "source": "theater_backstage.png",
+   "reference": 47,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "ropes and flats behind the scenes",
+   "scenes": [
+    "THEATER"
+   ]
+  },
+  {
+   "source": "village_lane.png",
+   "reference": 8,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "a village lane of stone cottages",
+   "scenes": [
+    "VILLAGE"
+   ]
+  },
+  {
+   "source": "village_square.png",
+   "reference": 2,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "a village square and a well",
+   "scenes": [
+    "VILLAGE"
+   ]
+  },
+  {
+   "source": "village_bridgeway.png",
+   "reference": 6,
+   "grain": 0.0,
+   "lift": 0.04,
+   "shows": "a stone bridge into a hamlet",
+   "scenes": [
+    "VILLAGE"
+   ]
+  },
+  {
+   "source": "advent_9.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "SW End of Repository",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 9
+  },
+  {
+   "source": "advent_13.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "NE End of Repository",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 13
+  },
+  {
+   "source": "advent_20.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Dead End, near Vending Machine",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 20
+  },
+  {
+   "source": "advent_21.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 21
+  },
+  {
+   "source": "advent_22.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 22
+  },
+  {
+   "source": "advent_23.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 23
+  },
+  {
+   "source": "advent_24.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 24
+  },
+  {
+   "source": "advent_25.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 25
+  },
+  {
+   "source": "advent_26.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 26
+  },
+  {
+   "source": "advent_27.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 27
+  },
+  {
+   "source": "advent_28.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 28
+  },
+  {
+   "source": "advent_29.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 29
+  },
+  {
+   "source": "advent_30.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 30
+  },
+  {
+   "source": "advent_31.png",
+   "reference": 20,
+   "grain": 0.0,
+   "lift": 0.94,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 31
+  },
+  {
+   "source": "advent_34.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "In Barren Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 34
+  },
+  {
+   "source": "advent_35.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "In Front of Barren Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 35
+  },
+  {
+   "source": "advent_37.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "In Limestone Passage",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 37
+  },
+  {
+   "source": "advent_40.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "In Chamber of Boulders",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 40
+  },
+  {
+   "source": "advent_42.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "At Breath-Taking View",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 42
+  },
+  {
+   "source": "advent_43.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "At Junction With Warm Walls",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 43
+  },
+  {
+   "source": "advent_44.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "At Fork in Path",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "ADVENT",
+   "obj": 44
+  },
+  {
+   "source": "advent_45.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "In Corridor",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 45
+  },
+  {
+   "source": "advent_46.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "On NE Side of Chasm",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 46
+  },
+  {
+   "source": "advent_52.png",
+   "reference": 34,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "On SW Side of Chasm",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 52
+  },
+  {
+   "source": "advent_53.png",
+   "reference": 34,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "Sloping Corridor",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 53
+  },
+  {
+   "source": "advent_54.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "At Reservoir",
+   "scenes": [
+    "SHORE"
+   ],
+   "game": "ADVENT",
+   "obj": 54
+  },
+  {
+   "source": "advent_55.png",
+   "reference": 72,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "At Window on Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 55
+  },
+  {
+   "source": "advent_57.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "In Mirror Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 57
+  },
+  {
+   "source": "advent_58.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "At Witt's End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 58
+  },
+  {
+   "source": "advent_61.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "In Anteroom",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 61
+  },
+  {
+   "source": "advent_62.png",
+   "reference": 39,
+   "grain": 0.0,
+   "lift": 0.97,
+   "shows": "Cul-de-Sac",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 62
+  },
+  {
+   "source": "advent_63.png",
+   "reference": 39,
+   "grain": 0.0,
+   "lift": 0.97,
+   "shows": "Ragged Corridor",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 63
+  },
+  {
+   "source": "advent_66.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Shell Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 66
+  },
+  {
+   "source": "advent_67.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Arched Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 67
+  },
+  {
+   "source": "advent_70.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "The Dark Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 70
+  },
+  {
+   "source": "advent_72.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Plover Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 72
+  },
+  {
+   "source": "advent_74.png",
+   "reference": 16,
+   "grain": 0.0,
+   "lift": 0.44,
+   "shows": "Alcove",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 74
+  },
+  {
+   "source": "advent_75.png",
+   "reference": 16,
+   "grain": 0.0,
+   "lift": 0.44,
+   "shows": "Misty Cavern",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 75
+  },
+  {
+   "source": "advent_79.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Oriental Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 79
+  },
+  {
+   "source": "advent_82.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "In Soft Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 82
+  },
+  {
+   "source": "advent_84.png",
+   "reference": 35,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "In Cavern With Waterfall",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 84
+  },
+  {
+   "source": "advent_86.png",
+   "reference": 35,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Immense N/S Passage",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 86
+  },
+  {
+   "source": "advent_87.png",
+   "reference": 40,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Recent Cave-in",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 87
+  },
+  {
+   "source": "advent_89.png",
+   "reference": 40,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Giant Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 89
+  },
+  {
+   "source": "advent_90.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Steep Incline Above Large Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 90
+  },
+  {
+   "source": "advent_92.png",
+   "reference": 40,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "In Narrow Corridor",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 92
+  },
+  {
+   "source": "advent_96.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "Secret Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 96
+  },
+  {
+   "source": "advent_97.png",
+   "reference": 72,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Atop Stalactite",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 97
+  },
+  {
+   "source": "advent_98.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 98
+  },
+  {
+   "source": "advent_99.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "In Tall E/W Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 99
+  },
+  {
+   "source": "advent_100.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "Canyon Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 100
+  },
+  {
+   "source": "advent_101.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "N/S Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 101
+  },
+  {
+   "source": "advent_102.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "Secret E/W Canyon Above Tight Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 102
+  },
+  {
+   "source": "advent_103.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Dead End Crawl",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 103
+  },
+  {
+   "source": "advent_104.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Large Low Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 104
+  },
+  {
+   "source": "advent_105.png",
+   "reference": 72,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Junction of Three Secret Canyons",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 105
+  },
+  {
+   "source": "advent_106.png",
+   "reference": 72,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Secret N/S Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 106
+  },
+  {
+   "source": "advent_107.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "Secret N/S Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 107
+  },
+  {
+   "source": "advent_109.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Slab Room",
+   "scenes": [
+    "LAB"
+   ],
+   "game": "ADVENT",
+   "obj": 109
+  },
+  {
+   "source": "advent_111.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "In East Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 111
+  },
+  {
+   "source": "advent_114.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "At East End of Twopit Room",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 114
+  },
+  {
+   "source": "advent_116.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "In West Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 116
+  },
+  {
+   "source": "advent_119.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "At West End of Twopit Room",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 119
+  },
+  {
+   "source": "advent_120.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "In Swiss Cheese Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 120
+  },
+  {
+   "source": "advent_121.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "In Bedquilt",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 121
+  },
+  {
+   "source": "advent_122.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "At Complex Junction",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 122
+  },
+  {
+   "source": "advent_124.png",
+   "reference": 19,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 124
+  },
+  {
+   "source": "advent_125.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 125
+  },
+  {
+   "source": "advent_126.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 126
+  },
+  {
+   "source": "advent_127.png",
+   "reference": 19,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 127
+  },
+  {
+   "source": "advent_128.png",
+   "reference": 19,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 128
+  },
+  {
+   "source": "advent_129.png",
+   "reference": 19,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 129
+  },
+  {
+   "source": "advent_130.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 130
+  },
+  {
+   "source": "advent_131.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 131
+  },
+  {
+   "source": "advent_132.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 132
+  },
+  {
+   "source": "advent_133.png",
+   "reference": 32,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 133
+  },
+  {
+   "source": "advent_136.png",
+   "reference": 32,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "At Brink of Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 136
+  },
+  {
+   "source": "advent_137.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 137
+  },
+  {
+   "source": "advent_138.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 138
+  },
+  {
+   "source": "advent_139.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 139
+  },
+  {
+   "source": "advent_140.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 140
+  },
+  {
+   "source": "advent_141.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 141
+  },
+  {
+   "source": "advent_142.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 142
+  },
+  {
+   "source": "advent_143.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 143
+  },
+  {
+   "source": "advent_144.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 144
+  },
+  {
+   "source": "advent_145.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 145
+  },
+  {
+   "source": "advent_146.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 146
+  },
+  {
+   "source": "advent_147.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 147
+  },
+  {
+   "source": "advent_148.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 148
+  },
+  {
+   "source": "advent_149.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 149
+  },
+  {
+   "source": "advent_150.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 150
+  },
+  {
+   "source": "advent_151.png",
+   "reference": 17,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Maze",
+   "scenes": [
+    "MAZE"
+   ],
+   "game": "ADVENT",
+   "obj": 151
+  },
+  {
+   "source": "advent_153.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "In Dusty Rock Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 153
+  },
+  {
+   "source": "advent_155.png",
+   "reference": 13,
+   "grain": 0.0,
+   "lift": 0.61,
+   "shows": "In Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 155
+  },
+  {
+   "source": "advent_157.png",
+   "reference": 13,
+   "grain": 0.0,
+   "lift": 0.61,
+   "shows": "Brink of Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 157
+  },
+  {
+   "source": "advent_158.png",
+   "reference": 22,
+   "grain": 0.0,
+   "lift": 0.69,
+   "shows": "Dirty Passage",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 158
+  },
+  {
+   "source": "advent_163.png",
+   "reference": 36,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "At Window on Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 163
+  },
+  {
+   "source": "advent_164.png",
+   "reference": 36,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Jumble of Rock",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 164
+  },
+  {
+   "source": "advent_165.png",
+   "reference": 36,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "At \"Y2\"",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 165
+  },
+  {
+   "source": "advent_167.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "In West Side Chamber",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 167
+  },
+  {
+   "source": "advent_169.png",
+   "reference": 27,
+   "grain": 0.0,
+   "lift": 0.21,
+   "shows": "In South Side Chamber",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 169
+  },
+  {
+   "source": "advent_171.png",
+   "reference": 22,
+   "grain": 0.0,
+   "lift": 0.69,
+   "shows": "Low N/S Passage",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 171
+  },
+  {
+   "source": "advent_173.png",
+   "reference": 27,
+   "grain": 0.0,
+   "lift": 0.21,
+   "shows": "Hall of the Mountain King",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 173
+  },
+  {
+   "source": "advent_174.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Dead End",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 174
+  },
+  {
+   "source": "advent_175.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "N/S and E/W Crossover",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 175
+  },
+  {
+   "source": "advent_176.png",
+   "reference": 22,
+   "grain": 0.0,
+   "lift": 0.69,
+   "shows": "At West End of Long Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 176
+  },
+  {
+   "source": "advent_177.png",
+   "reference": 22,
+   "grain": 0.0,
+   "lift": 0.69,
+   "shows": "At East End of Long Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 177
+  },
+  {
+   "source": "advent_178.png",
+   "reference": 22,
+   "grain": 0.0,
+   "lift": 0.69,
+   "shows": "At West End of Hall of Mists",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 178
+  },
+  {
+   "source": "advent_180.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "West Side of Fissure",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 180
+  },
+  {
+   "source": "advent_183.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "On East Bank of Fissure",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 183
+  },
+  {
+   "source": "advent_185.png",
+   "reference": 27,
+   "grain": 0.0,
+   "lift": 0.21,
+   "shows": "Low Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 185
+  },
+  {
+   "source": "advent_186.png",
+   "reference": 27,
+   "grain": 0.0,
+   "lift": 0.21,
+   "shows": "In Hall of Mists",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ADVENT",
+   "obj": 186
+  },
+  {
+   "source": "advent_189.png",
+   "reference": 34,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "At Top of Small Pit",
+   "scenes": [
+    "PIT"
+   ],
+   "game": "ADVENT",
+   "obj": 189
+  },
+  {
+   "source": "advent_191.png",
+   "reference": 34,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "Orange River Chamber",
+   "scenes": [
+    "RIVER"
+   ],
+   "game": "ADVENT",
+   "obj": 191
+  },
+  {
+   "source": "advent_192.png",
+   "reference": 53,
+   "grain": 0.0,
+   "lift": 0.33,
+   "shows": "Sloping E/W Canyon",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ADVENT",
+   "obj": 192
+  },
+  {
+   "source": "advent_194.png",
+   "reference": 53,
+   "grain": 0.0,
+   "lift": 0.33,
+   "shows": "In Debris Room",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 194
+  },
+  {
+   "source": "advent_196.png",
+   "reference": 53,
+   "grain": 0.0,
+   "lift": 0.33,
+   "shows": "In Cobble Crawl",
+   "scenes": [
+    "CAVE"
+   ],
+   "game": "ADVENT",
+   "obj": 196
+  },
+  {
+   "source": "advent_198.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Below the Grate",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 198
+  },
+  {
+   "source": "advent_200.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Outside Grate",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 200
+  },
+  {
+   "source": "advent_201.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "At Slit In Streambed",
+   "scenes": [
+    "RIVER"
+   ],
+   "game": "ADVENT",
+   "obj": 201
+  },
+  {
+   "source": "advent_202.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "In A Valley",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 202
+  },
+  {
+   "source": "advent_203.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "In Forest",
+   "scenes": [
+    "FOREST"
+   ],
+   "game": "ADVENT",
+   "obj": 203
+  },
+  {
+   "source": "advent_204.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "In Forest",
+   "scenes": [
+    "FOREST"
+   ],
+   "game": "ADVENT",
+   "obj": 204
+  },
+  {
+   "source": "advent_213.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Inside Building",
+   "scenes": [],
+   "game": "ADVENT",
+   "obj": 213
+  },
+  {
+   "source": "advent_214.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "At Hill In Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "ADVENT",
+   "obj": 214
+  },
+  {
+   "source": "advent_219.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "At End Of Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "ADVENT",
+   "obj": 219
+  },
+  {
+   "source": "ballyhoo_1.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Inside Prop Tent",
+   "scenes": [
+    "HOUSE_EXT"
+   ],
+   "game": "BALLYHOO",
+   "obj": 1
+  },
+  {
+   "source": "ballyhoo_4.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Back Yard",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 4
+  },
+  {
+   "source": "ballyhoo_13.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Inside Mahler's Cage",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 13
+  },
+  {
+   "source": "ballyhoo_15.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Hypnotist's Parlor",
+   "scenes": [
+    "PARLOR"
+   ],
+   "game": "BALLYHOO",
+   "obj": 15
+  },
+  {
+   "source": "ballyhoo_30.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Top of Cage",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 30
+  },
+  {
+   "source": "ballyhoo_53.png",
+   "reference": 2,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "On the Tent",
+   "scenes": [
+    "HOUSE_EXT"
+   ],
+   "game": "BALLYHOO",
+   "obj": 53
+  },
+  {
+   "source": "ballyhoo_56.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Platform",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 56
+  },
+  {
+   "source": "ballyhoo_57.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Connection",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 57
+  },
+  {
+   "source": "ballyhoo_59.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Office",
+   "scenes": [
+    "OFFICE"
+   ],
+   "game": "BALLYHOO",
+   "obj": 59
+  },
+  {
+   "source": "ballyhoo_62.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Walking a Tightrope",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 62
+  },
+  {
+   "source": "ballyhoo_63.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "On the Wagon",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 63
+  },
+  {
+   "source": "ballyhoo_70.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Platform",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 70
+  },
+  {
+   "source": "ballyhoo_81.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "In the Wings",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 81
+  },
+  {
+   "source": "ballyhoo_87.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Midway Entrance",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 87
+  },
+  {
+   "source": "ballyhoo_91.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "East Half of Fat Lady",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 91
+  },
+  {
+   "source": "ballyhoo_94.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Camp, West",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 94
+  },
+  {
+   "source": "ballyhoo_105.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Midway of Midway",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 105
+  },
+  {
+   "source": "ballyhoo_108.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Jennifer's Boudoir",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 108
+  },
+  {
+   "source": "ballyhoo_112.png",
+   "reference": 8,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Elephant Tent",
+   "scenes": [
+    "HOUSE_EXT"
+   ],
+   "game": "BALLYHOO",
+   "obj": 112
+  },
+  {
+   "source": "ballyhoo_121.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Menagerie Nook",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 121
+  },
+  {
+   "source": "ballyhoo_131.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Performance Ring",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 131
+  },
+  {
+   "source": "ballyhoo_148.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Near White Wagon",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 148
+  },
+  {
+   "source": "ballyhoo_150.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "West Half of Fat Lady",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 150
+  },
+  {
+   "source": "ballyhoo_157.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Clown Alley",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 157
+  },
+  {
+   "source": "ballyhoo_170.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Lions' Den",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 170
+  },
+  {
+   "source": "ballyhoo_175.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Menagerie",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 175
+  },
+  {
+   "source": "ballyhoo_178.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Wardrobe Closet",
+   "scenes": [
+    "DARKROOM"
+   ],
+   "game": "BALLYHOO",
+   "obj": 178
+  },
+  {
+   "source": "ballyhoo_182.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Standing Room Only",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 182
+  },
+  {
+   "source": "ballyhoo_192.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Inside Cage",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 192
+  },
+  {
+   "source": "ballyhoo_194.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Far End of Midway",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 194
+  },
+  {
+   "source": "ballyhoo_201.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Camp, East",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 201
+  },
+  {
+   "source": "ballyhoo_206.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Under the Bleachers",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 206
+  },
+  {
+   "source": "ballyhoo_225.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Left Hanging",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 225
+  },
+  {
+   "source": "ballyhoo_226.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Inside Trailer",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "BALLYHOO",
+   "obj": 226
+  },
+  {
+   "source": "ballyhoo_230.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Beside the Big Top",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 230
+  },
+  {
+   "source": "ballyhoo_232.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Blue Room",
+   "scenes": [],
+   "game": "BALLYHOO",
+   "obj": 232
+  },
+  {
+   "source": "cuthroat_15.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Below Decks",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 15
+  },
+  {
+   "source": "cuthroat_17.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Below Decks",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 17
+  },
+  {
+   "source": "cuthroat_18.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Ocean Floor",
+   "scenes": [
+    "SHORE"
+   ],
+   "game": "CUTHROAT",
+   "obj": 18
+  },
+  {
+   "source": "cuthroat_22.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Below Decks",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 22
+  },
+  {
+   "source": "cuthroat_27.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Below Decks",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 27
+  },
+  {
+   "source": "cuthroat_29.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Ocean Floor",
+   "scenes": [
+    "SHORE"
+   ],
+   "game": "CUTHROAT",
+   "obj": 29
+  },
+  {
+   "source": "cuthroat_32.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Below Decks",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 32
+  },
+  {
+   "source": "cuthroat_37.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Middle Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 37
+  },
+  {
+   "source": "cuthroat_39.png",
+   "reference": 64,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Middle Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 39
+  },
+  {
+   "source": "cuthroat_41.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Middle Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 41
+  },
+  {
+   "source": "cuthroat_46.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Middle Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 46
+  },
+  {
+   "source": "cuthroat_49.png",
+   "reference": 60,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Middle Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 49
+  },
+  {
+   "source": "cuthroat_50.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Top Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 50
+  },
+  {
+   "source": "cuthroat_51.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Top Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 51
+  },
+  {
+   "source": "cuthroat_53.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Top Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 53
+  },
+  {
+   "source": "cuthroat_54.png",
+   "reference": 61,
+   "grain": 0.0,
+   "lift": 0.65,
+   "shows": "Ocean Floor",
+   "scenes": [
+    "SHORE"
+   ],
+   "game": "CUTHROAT",
+   "obj": 54
+  },
+  {
+   "source": "cuthroat_56.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Underwater",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 56
+  },
+  {
+   "source": "cuthroat_57.png",
+   "reference": 70,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Engine Room",
+   "scenes": [
+    "SHIP_INT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 57
+  },
+  {
+   "source": "cuthroat_58.png",
+   "reference": 70,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Captain's Cabin",
+   "scenes": [
+    "SHIP_INT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 58
+  },
+  {
+   "source": "cuthroat_59.png",
+   "reference": 70,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Lounge",
+   "scenes": [
+    "PARLOR"
+   ],
+   "game": "CUTHROAT",
+   "obj": 59
+  },
+  {
+   "source": "cuthroat_60.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "Galley",
+   "scenes": [
+    "KITCHEN"
+   ],
+   "game": "CUTHROAT",
+   "obj": 60
+  },
+  {
+   "source": "cuthroat_61.png",
+   "reference": 15,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Crew's Quarters",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 61
+  },
+  {
+   "source": "cuthroat_65.png",
+   "reference": 15,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Storage Locker",
+   "scenes": [
+    "STORAGE"
+   ],
+   "game": "CUTHROAT",
+   "obj": 65
+  },
+  {
+   "source": "cuthroat_66.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "Wheelhouse",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 66
+  },
+  {
+   "source": "cuthroat_67.png",
+   "reference": 64,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Aft Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 67
+  },
+  {
+   "source": "cuthroat_68.png",
+   "reference": 64,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Port Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 68
+  },
+  {
+   "source": "cuthroat_69.png",
+   "reference": 64,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Starboard Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 69
+  },
+  {
+   "source": "cuthroat_70.png",
+   "reference": 64,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Fore Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 70
+  },
+  {
+   "source": "cuthroat_71.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Engine Room",
+   "scenes": [
+    "SHIP_INT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 71
+  },
+  {
+   "source": "cuthroat_73.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Captain's Cabin",
+   "scenes": [
+    "SHIP_INT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 73
+  },
+  {
+   "source": "cuthroat_75.png",
+   "reference": 51,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Lounge",
+   "scenes": [
+    "PARLOR"
+   ],
+   "game": "CUTHROAT",
+   "obj": 75
+  },
+  {
+   "source": "cuthroat_77.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Galley",
+   "scenes": [
+    "KITCHEN"
+   ],
+   "game": "CUTHROAT",
+   "obj": 77
+  },
+  {
+   "source": "cuthroat_80.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Crew's Quarters",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 80
+  },
+  {
+   "source": "cuthroat_86.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Storage Locker",
+   "scenes": [
+    "STORAGE"
+   ],
+   "game": "CUTHROAT",
+   "obj": 86
+  },
+  {
+   "source": "cuthroat_87.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Wheelhouse",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 87
+  },
+  {
+   "source": "cuthroat_91.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Aft Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 91
+  },
+  {
+   "source": "cuthroat_92.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Port Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 92
+  },
+  {
+   "source": "cuthroat_93.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Starboard Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 93
+  },
+  {
+   "source": "cuthroat_95.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Fore Deck",
+   "scenes": [
+    "SHIP_EXT"
+   ],
+   "game": "CUTHROAT",
+   "obj": 95
+  },
+  {
+   "source": "cuthroat_97.png",
+   "reference": 54,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Wharf",
+   "scenes": [
+    "DOCK"
+   ],
+   "game": "CUTHROAT",
+   "obj": 97
+  },
+  {
+   "source": "cuthroat_98.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Ferry Landing",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "CUTHROAT",
+   "obj": 98
+  },
+  {
+   "source": "cuthroat_99.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Point Lookout",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 99
+  },
+  {
+   "source": "cuthroat_101.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Mariners' Trust",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 101
+  },
+  {
+   "source": "cuthroat_112.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "The Shanty",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 112
+  },
+  {
+   "source": "cuthroat_131.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Outfitters Int'l",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 131
+  },
+  {
+   "source": "cuthroat_132.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Vacant Lot",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 132
+  },
+  {
+   "source": "cuthroat_135.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "McGinty Salvage",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 135
+  },
+  {
+   "source": "cuthroat_147.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Upstairs Hallway",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "CUTHROAT",
+   "obj": 147
+  },
+  {
+   "source": "cuthroat_148.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Back Alley",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 148
+  },
+  {
+   "source": "cuthroat_149.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Back Alley",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 149
+  },
+  {
+   "source": "cuthroat_150.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Back Alley",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 150
+  },
+  {
+   "source": "cuthroat_152.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Back Alley",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 152
+  },
+  {
+   "source": "cuthroat_153.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Back Alley",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 153
+  },
+  {
+   "source": "cuthroat_154.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Shore Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 154
+  },
+  {
+   "source": "cuthroat_156.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Shore Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 156
+  },
+  {
+   "source": "cuthroat_157.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Ocean Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 157
+  },
+  {
+   "source": "cuthroat_158.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Ocean Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 158
+  },
+  {
+   "source": "cuthroat_159.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Ocean Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 159
+  },
+  {
+   "source": "cuthroat_160.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Wharf Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 160
+  },
+  {
+   "source": "cuthroat_161.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Wharf Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 161
+  },
+  {
+   "source": "cuthroat_162.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Wharf Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 162
+  },
+  {
+   "source": "cuthroat_163.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Wharf Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 163
+  },
+  {
+   "source": "cuthroat_165.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Wharf Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 165
+  },
+  {
+   "source": "cuthroat_166.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Winding Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 166
+  },
+  {
+   "source": "cuthroat_167.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Winding Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 167
+  },
+  {
+   "source": "cuthroat_169.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Winding Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "CUTHROAT",
+   "obj": 169
+  },
+  {
+   "source": "cuthroat_183.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Your Room",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 183
+  },
+  {
+   "source": "cuthroat_190.png",
+   "reference": 30,
+   "grain": 0.0,
+   "lift": 0.41,
+   "shows": "Red Boar Inn",
+   "scenes": [],
+   "game": "CUTHROAT",
+   "obj": 190
+  },
+  {
+   "source": "deadline_164.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "George's Bedroom",
+   "scenes": [
+    "BEDROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 164
+  },
+  {
+   "source": "deadline_166.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "George's Bathroom",
+   "scenes": [
+    "BATHROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 166
+  },
+  {
+   "source": "deadline_167.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dunbar's Bedroom",
+   "scenes": [
+    "BEDROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 167
+  },
+  {
+   "source": "deadline_168.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dunbar's Bathroom",
+   "scenes": [
+    "BATHROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 168
+  },
+  {
+   "source": "deadline_169.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Closet",
+   "scenes": [
+    "DARKROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 169
+  },
+  {
+   "source": "deadline_170.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "End of South Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 170
+  },
+  {
+   "source": "deadline_172.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "South Upstairs Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 172
+  },
+  {
+   "source": "deadline_173.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Guest Room",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 173
+  },
+  {
+   "source": "deadline_174.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "North Upstairs Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 174
+  },
+  {
+   "source": "deadline_175.png",
+   "reference": 31,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "Bedroom Balcony",
+   "scenes": [
+    "BEDROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 175
+  },
+  {
+   "source": "deadline_176.png",
+   "reference": 31,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "Master Bathroom",
+   "scenes": [
+    "BATHROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 176
+  },
+  {
+   "source": "deadline_178.png",
+   "reference": 31,
+   "grain": 0.0,
+   "lift": 0.9,
+   "shows": "Master Bedroom",
+   "scenes": [
+    "BEDROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 178
+  },
+  {
+   "source": "deadline_180.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Hidden Closet",
+   "scenes": [
+    "DARKROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 180
+  },
+  {
+   "source": "deadline_181.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Upstairs Closet",
+   "scenes": [
+    "DARKROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 181
+  },
+  {
+   "source": "deadline_182.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Library Balcony",
+   "scenes": [
+    "LIBRARY"
+   ],
+   "game": "DEADLINE",
+   "obj": 182
+  },
+  {
+   "source": "deadline_185.png",
+   "reference": 9,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Library",
+   "scenes": [
+    "LIBRARY"
+   ],
+   "game": "DEADLINE",
+   "obj": 185
+  },
+  {
+   "source": "deadline_187.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "End of Hallway",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 187
+  },
+  {
+   "source": "deadline_189.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Hallway",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 189
+  },
+  {
+   "source": "deadline_190.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Hallway",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 190
+  },
+  {
+   "source": "deadline_193.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Hallway",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 193
+  },
+  {
+   "source": "deadline_194.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Top of Stairs",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 194
+  },
+  {
+   "source": "deadline_195.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "Pantry",
+   "scenes": [
+    "KITCHEN"
+   ],
+   "game": "DEADLINE",
+   "obj": 195
+  },
+  {
+   "source": "deadline_196.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "Kitchen",
+   "scenes": [
+    "KITCHEN"
+   ],
+   "game": "DEADLINE",
+   "obj": 196
+  },
+  {
+   "source": "deadline_197.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dining Room",
+   "scenes": [
+    "PARLOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 197
+  },
+  {
+   "source": "deadline_198.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Corner",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 198
+  },
+  {
+   "source": "deadline_202.png",
+   "reference": 14,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Living Room",
+   "scenes": [
+    "PARLOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 202
+  },
+  {
+   "source": "deadline_203.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Stairs",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 203
+  },
+  {
+   "source": "deadline_204.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Bottom of Stairs",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 204
+  },
+  {
+   "source": "deadline_206.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "South Closet",
+   "scenes": [
+    "DARKROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 206
+  },
+  {
+   "source": "deadline_210.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Mrs. Rourke's Bathroom",
+   "scenes": [
+    "BATHROOM"
+   ],
+   "game": "DEADLINE",
+   "obj": 210
+  },
+  {
+   "source": "deadline_214.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Mrs. Rourke's Room",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 214
+  },
+  {
+   "source": "deadline_217.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "South Hallway",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 217
+  },
+  {
+   "source": "deadline_219.png",
+   "reference": 11,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "South Hallway",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 219
+  },
+  {
+   "source": "deadline_220.png",
+   "reference": 14,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "North of Foyer",
+   "scenes": [
+    "PARLOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 220
+  },
+  {
+   "source": "deadline_221.png",
+   "reference": 14,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Foyer",
+   "scenes": [
+    "PARLOR"
+   ],
+   "game": "DEADLINE",
+   "obj": 221
+  },
+  {
+   "source": "deadline_222.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "North Lawn",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 222
+  },
+  {
+   "source": "deadline_223.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "In the Orchard",
+   "scenes": [
+    "GARDEN"
+   ],
+   "game": "DEADLINE",
+   "obj": 223
+  },
+  {
+   "source": "deadline_226.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Orchard Path",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "DEADLINE",
+   "obj": 226
+  },
+  {
+   "source": "deadline_228.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Among the Roses",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 228
+  },
+  {
+   "source": "deadline_231.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Garden Path",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "DEADLINE",
+   "obj": 231
+  },
+  {
+   "source": "deadline_232.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Behind the Shed",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 232
+  },
+  {
+   "source": "deadline_233.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Shed",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 233
+  },
+  {
+   "source": "deadline_234.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "West Side of House",
+   "scenes": [
+    "HOUSE_EXT"
+   ],
+   "game": "DEADLINE",
+   "obj": 234
+  },
+  {
+   "source": "deadline_235.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "East Side of House",
+   "scenes": [
+    "HOUSE_EXT"
+   ],
+   "game": "DEADLINE",
+   "obj": 235
+  },
+  {
+   "source": "deadline_238.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "East Lawn",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 238
+  },
+  {
+   "source": "deadline_240.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "West Lawn",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 240
+  },
+  {
+   "source": "deadline_242.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "East of Front Door",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 242
+  },
+  {
+   "source": "deadline_244.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "West of Front Door",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 244
+  },
+  {
+   "source": "deadline_246.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Front Path",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "DEADLINE",
+   "obj": 246
+  },
+  {
+   "source": "deadline_249.png",
+   "reference": 4,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "South Lawn",
+   "scenes": [],
+   "game": "DEADLINE",
+   "obj": 249
+  },
+  {
+   "source": "enchantr_2.png",
+   "reference": 18,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Dungeon",
+   "scenes": [
+    "CELL"
+   ],
+   "game": "ENCHANTR",
+   "obj": 2
+  },
+  {
+   "source": "enchantr_9.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Mountain Trail",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "ENCHANTR",
+   "obj": 9
+  },
+  {
+   "source": "enchantr_22.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Courtyard",
+   "scenes": [
+    "GARDEN"
+   ],
+   "game": "ENCHANTR",
+   "obj": 22
+  },
+  {
+   "source": "enchantr_23.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Map Room",
+   "scenes": [],
+   "game": "ENCHANTR",
+   "obj": 23
+  },
+  {
+   "source": "enchantr_27.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "Kitchen",
+   "scenes": [
+    "KITCHEN"
+   ],
+   "game": "ENCHANTR",
+   "obj": 27
+  },
+  {
+   "source": "enchantr_32.png",
+   "reference": 3,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Swamp",
+   "scenes": [],
+   "game": "ENCHANTR",
+   "obj": 32
+  },
+  {
+   "source": "enchantr_35.png",
+   "reference": 47,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Sacrificial Altar",
+   "scenes": [
+    "TEMPLE"
+   ],
+   "game": "ENCHANTR",
+   "obj": 35
+  },
+  {
+   "source": "enchantr_42.png",
+   "reference": 56,
+   "grain": 0.0,
+   "lift": 0.93,
+   "shows": "Fork",
+   "scenes": [],
+   "game": "ENCHANTR",
+   "obj": 42
+  },
+  {
+   "source": "enchantr_43.png",
+   "reference": 10,
+   "grain": 0.0,
+   "lift": 0.91,
+   "shows": "East Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ENCHANTR",
+   "obj": 43
+  },
+  {
+   "source": "enchantr_45.png",
+   "reference": 56,
+   "grain": 0.0,
+   "lift": 0.93,
+   "shows": "Long Road",
+   "scenes": [
+    "ROAD"
+   ],
+   "game": "ENCHANTR",
+   "obj": 45
+  },
+  {
+   "source": "enchantr_47.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "Winding Stair",
+   "scenes": [],
+   "game": "ENCHANTR",
+   "obj": 47
+  },
+  {
+   "source": "enchantr_49.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Lonely Mountain",
+   "scenes": [
+    "ROCKY"
+   ],
+   "game": "ENCHANTR",
+   "obj": 49
+  },
+  {
+   "source": "enchantr_54.png",
+   "reference": 47,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Cell",
+   "scenes": [
+    "CELL"
+   ],
+   "game": "ENCHANTR",
+   "obj": 54
+  },
+  {
+   "source": "enchantr_64.png",
+   "reference": 37,
+   "grain": 0.0,
+   "lift": 0.71,
+   "shows": "North Gate",
+   "scenes": [],
+   "game": "ENCHANTR",
+   "obj": 64
+  },
+  {
+   "source": "enchantr_65.png",
+   "reference": 46,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Tower",
+   "scenes": [
+    "CASTLE"
+   ],
+   "game": "ENCHANTR",
+   "obj": 65
+  },
+  {
+   "source": "enchantr_66.png",
+   "reference": 5,
+   "grain": 0.0,
+   "lift": 0.0,
+   "shows": "Courtyard",
+   "scenes": [
+    "GARDEN"
+   ],
+   "game": "ENCHANTR",
+   "obj": 66
+  },
+  {
+   "source": "enchantr_70.png",
+   "reference": 33,
+   "grain": 0.0,
+   "lift": 0.73,
+   "shows": "Hall of Mirrors Three",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ENCHANTR",
+   "obj": 70
+  },
+  {
+   "source": "enchantr_77.png",
+   "reference": 46,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "West Hall",
+   "scenes": [
+    "CORRIDOR"
+   ],
+   "game": "ENCHANTR",
+   "obj": 77
+  },
+  {
+   "source": "enchantr_87.png",
+   "reference": 47,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Cell",
+   "scenes": [
+    "CELL"
+   ],
+   "game": "ENCHANTR",
+   "obj": 87
+  },
+  {
+   "source": "enchantr_89.png",
+   "reference": 59,
+   "grain": 0.0,
+   "lift": 1.0,
+   "shows": "Shady Brook",
+   "scenes": [
+    "RIVER"
+   ],
+   "game": "ENCHANTR",
+   "obj": 89
   }
  ]
 }

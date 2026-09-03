@@ -253,6 +253,37 @@ Author: suinevere
 """
 
 
+def room_images(scene):
+    """/*----------------------
+     | room_images
+     | Description: The pictures a room of a game that is not Zork I may be
+     |     given for one scene: the generated ones, and Zork I's own only for a
+     |     scene nothing has been drawn for yet.
+     |
+     |     The thirty other games borrowed Zork I's 74 pictures because there
+     |     was nothing else -- which put a Victorian kitchen on the bridge of
+     |     the Heart of Gold and a fantasy brick vault under a fifth of the
+     |     disc. A picture drawn FOR a scene beats one that merely does not
+     |     contradict it, so once a scene has its own the borrowed ones stop
+     |     being offered for it. The fallback is not a courtesy: a scene with
+     |     nothing drawn for it and no borrowed picture would give its rooms no
+     |     picture at all.
+     |
+     |     Zork I is never routed through here. Its own table is measured off
+     |     the original disc in gen_presentation.py and does not pass through
+     |     the guesser at all, so nothing here can take a picture away from the
+     |     game it was drawn for.
+     | Author: suinevere
+     | Dependencies: art_frames
+     | Globals: N/A
+     | Params: scene -- the scene name
+     | Returns: a tuple of picture indices, possibly empty
+     ----------------------*/"""
+    have = scene_images().get(scene, ())
+    drawn = tuple(i for i in have if i in generated_looks())
+    return drawn or have
+
+
 def images_for(scene, measured=None):
     """/*----------------------
      | images_for

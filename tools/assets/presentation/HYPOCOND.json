@@ -1,81 +1,65 @@
 {
  "rooms": {
   "1": {
-   "image": 5,
+   "image": 85,
    "track": 11
   },
   "17": {
-   "image": 42,
-   "track": 11
-  },
-  "19": {
-   "image": 3,
+   "image": 171,
    "track": 3
   },
+  "19": {
+   "image": 82,
+   "track": 11
+  },
   "20": {
-   "image": 5,
+   "image": 85,
    "track": 11
   },
   "42": {
-   "image": 11,
-   "track": 11
+   "image": 147,
+   "track": 10
   },
   "48": {
-   "image": 33,
+   "image": 104,
    "track": 3
   },
   "50": {
-   "image": 9,
+   "image": 93,
    "track": 10
   },
   "52": {
-   "image": 33,
+   "image": 98,
    "track": 3
   },
   "6": {
-   "image": 9,
+   "image": 93,
    "track": 10
   },
   "63": {
-   "image": 10,
+   "image": 90,
    "track": 10
   },
   "72": {
-   "image": 33,
+   "image": 98,
    "track": 3
   },
   "78": {
-   "image": 33,
+   "image": 104,
    "track": 3
   },
   "79": {
-   "image": 33,
+   "image": 104,
    "track": 3
   },
   "80": {
-   "image": 11,
-   "track": 11
+   "image": 147,
+   "track": 10
   }
  },
  "undo": [
   {
    "obj": "1",
-   "prev": null
-  },
-  {
-   "obj": "48",
-   "prev": null
-  },
-  {
-   "obj": "50",
-   "prev": null
-  },
-  {
-   "obj": "52",
-   "prev": null
-  },
-  {
-   "obj": "63",
    "prev": null
   },
   {
@@ -99,6 +83,22 @@
    "prev": null
   },
   {
+   "obj": "48",
+   "prev": null
+  },
+  {
+   "obj": "50",
+   "prev": null
+  },
+  {
+   "obj": "52",
+   "prev": null
+  },
+  {
+   "obj": "63",
+   "prev": null
+  },
+  {
    "obj": "72",
    "prev": null
   },
@@ -113,41 +113,6 @@
   {
    "obj": "80",
    "prev": null
-  },
-  {
-   "obj": "80",
-   "prev": {
-    "image": 59,
-    "track": 11
-   }
-  },
-  {
-   "obj": "19",
-   "prev": {
-    "image": 3,
-    "track": 11
-   }
-  },
-  {
-   "obj": "48",
-   "prev": {
-    "image": 37,
-    "track": 4
-   }
-  },
-  {
-   "obj": "78",
-   "prev": {
-    "image": 37,
-    "track": 4
-   }
-  },
-  {
-   "obj": "79",
-   "prev": {
-    "image": 37,
-    "track": 4
-   }
   }
  ]
 }

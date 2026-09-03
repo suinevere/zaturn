@@ -1,0 +1,607 @@
+[
+ {
+  "plate": "river_bank",
+  "score": 0.9965,
+  "box": [
+   173,
+   114,
+   181,
+   129
+  ]
+ },
+ {
+  "plate": "maze_hedge",
+  "score": 0.9476,
+  "box": [
+   154,
+   107,
+   161,
+   119
+  ]
+ },
+ {
+  "plate": "river_underground",
+  "score": 0.8697,
+  "box": [
+   1,
+   0,
+   229,
+   240
+  ]
+ },
+ {
+  "plate": "house_ext_manor",
+  "score": 0.8236,
+  "box": [
+   129,
+   114,
+   139,
+   135
+  ]
+ },
+ {
+  "plate": "pit_well",
+  "score": 0.7961,
+  "box": [
+   100,
+   56,
+   206,
+   146
+  ]
+ },
+ {
+  "plate": "river_rapids",
+  "score": 0.643,
+  "box": [
+   237,
+   0,
+   320,
+   89
+  ]
+ },
+ {
+  "plate": "village_bridgeway",
+  "score": 0.4925,
+  "box": [
+   256,
+   68,
+   320,
+   178
+  ]
+ },
+ {
+  "plate": "cave_crystal",
+  "score": 0.221,
+  "box": [
+   79,
+   25,
+   319,
+   198
+  ]
+ },
+ {
+  "plate": "theater_boxes",
+  "score": 0.2085,
+  "box": [
+   306,
+   221,
+   319,
+   240
+  ]
+ },
+ {
+  "plate": "crypt_ossuary",
+  "score": 0.1127,
+  "box": [
+   139,
+   121,
+   156,
+   148
+  ]
+ },
+ {
+  "plate": "library_stacks",
+  "score": 0.0871,
+  "box": [
+   233,
+   236,
+   256,
+   240
+  ]
+ },
+ {
+  "plate": "shore_cove",
+  "score": 0.0784,
+  "box": [
+   0,
+   90,
+   133,
+   211
+  ]
+ },
+ {
+  "plate": "rocky_ledge",
+  "score": 0.0655,
+  "box": [
+   87,
+   7,
+   198,
+   239
+  ]
+ },
+ {
+  "plate": "castle_gate",
+  "score": 0.0625,
+  "box": [
+   261,
+   0,
+   277,
+   21
+  ]
+ },
+ {
+  "plate": "bridge",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "corridor_stone",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "corridor_timber",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "corridor_rock",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "corridor_metal",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "maze_brick",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "maze_stone",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "forest_birch",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "forest_pine",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "mine_shaft",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "road_track",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "road_paved",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "cave_teal",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "bathroom_tiled",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "bathroom_bathhouse",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "bathroom_cramped",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "bedroom_fourposter",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "bedroom_bunk",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "bedroom_attic",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "castle_hall",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "castle_rampart",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "cave_dry",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "cave_column",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "cell_barred",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "cell_oubliette",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "cell_brig",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "corridor_panelled",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "corridor_vault",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "corridor_gallery",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "crypt_niches",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "crypt_sarcophagus",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "darkroom_void",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "darkroom_doorway",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "darkroom_lamp",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "desert_dune",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "desert_hardpan",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "desert_rockdesert",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "dock_wharf",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "dock_harbour",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "dock_jetty",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "forest_clearing",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "forest_mossy",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "forest_winter",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "garden_formal",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "garden_overgrown",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "garden_greenhouse",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "house_ext_cottage",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "house_ext_porch",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "kitchen_range",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "kitchen_scullery",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "kitchen_galley",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "lab_glassware",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "lab_machine",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "lab_operating",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "library_readingroom",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "library_study",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "maze_mirror",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "mine_gallery",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "mine_facewall",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "mine_cage",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "office_desk",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "office_clerks",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "office_control",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "parlor_sitting",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "parlor_drawing",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "parlor_lounge",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "pit_shaftpit",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "pit_chasm",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "road_crossroads",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "road_avenue",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "road_causeway",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "rocky_scree",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "rocky_boulders",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "ship_ext_hull",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "ship_ext_wreck",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "ship_ext_deck",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "ship_int_engine",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "ship_int_cabin",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "ship_int_hold",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "shore_shingle",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "shore_sandbeach",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "space_viewport",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "space_surface",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "space_dock",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "storage_crates",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "storage_cellarstore",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "storage_lockup",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "temple_nave",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "temple_cloister",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "theater_stage",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "theater_backstage",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "village_lane",
+  "score": 0.0,
+  "box": null
+ },
+ {
+  "plate": "village_square",
+  "score": 0.0,
+  "box": null
+ }
+]

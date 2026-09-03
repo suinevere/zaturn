@@ -96,6 +96,13 @@ INC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # tables carrying it, so neither kind can quietly turn into the other.
 DERIVED_MARK = "DERIVED, not measured:"
 
+# What marks one CELL of an otherwise measured table as walked in rather than
+# read off the drawing. A whole table's provenance is a sentence in its header;
+# a single room's has to be on its own line, because a merged table's two halves
+# sit in one list and a reader picking a coordinate out of it is entitled to
+# know which kind it is.
+ADDED_MARK = "+"
+
 # page_items' memo, at module scope rather than per build_game. The sweep below
 # lays one game out dozens of ways and OCR is far and away the slowest thing
 # here; keyed by (pdf, page), so re-reading is free and the sweep costs what one
@@ -485,7 +492,7 @@ def score_edges(edges, pos, sheet=None):
     return axis, half, vert
 
 
-def nudge(pos, page, graph):
+def nudge(pos, page, graph, frozen=frozenset()):
     """Move rooms onto their exits' axes, one lane at a time.
 
     The lanes come off a drawing, and a drawing is not a lattice: a room printed
@@ -508,6 +515,14 @@ def nudge(pos, page, graph):
     Greedy and deterministic. It is not looking for the best layout -- that is a
     placement problem with the drawing as its evidence, and the drawing has
     already been read -- only for the moves that are obviously right.
+
+    `frozen` holds rooms that may not move. It is empty for a table built in one
+    go and holds the measured rooms when a scan is being filled in, where the
+    whole point is that a coordinate read off Infocom's drawing survives the
+    addition of the rooms around it. A frozen room is still an ANCHOR: its edges
+    are scored as they always were, so the rooms beside it settle against it.
+    Skipping its edges as well as its position would leave every room next to a
+    measured one unscored, which is most of them.
     """
     idx = incident(graph, pos)
     taken = {(page[r], x, y) for r, (x, y) in pos.items()}
@@ -515,6 +530,8 @@ def nudge(pos, page, graph):
     for _ in range(NUDGE_ROUNDS):
         gained = 0
         for room in sorted(pos):
+            if room in frozen:
+                continue
             edges = idx[room]
             if not edges:
                 continue
@@ -625,7 +642,53 @@ def walk_seed(graph, floors):
     return pos
 
 
-def repair(pos, page, graph):
+def fill_seed(graph, placed, page):
+    """Place every room the scan missed, without moving one it found.
+
+    A missing room hangs off a placed neighbour, one cell along the exit that
+    reaches it, with a taken cell on its own page resolved outward. Sweeps until
+    nothing more can be reached, because a room two hops from anything placed
+    becomes reachable once the room between them is down.
+
+    What is left after that is an island the placed set cannot reach at all --
+    a room behind a conditional exit, usually -- and it is seeded at the origin
+    of its own page for the next sweep to grow from. Those are the rooms whose
+    coordinates mean least, and there is nothing better available: nothing
+    placed is near enough to say where they go.
+    """
+    pos = dict(placed)
+    taken = {}
+    for r, (x, y) in pos.items():
+        taken.setdefault(page[r], set()).add((x, y))
+
+    while True:
+        grew = False
+        for a in sorted(pos):
+            for d, (kind, dest) in sorted(graph[a]["exits"].items()):
+                if kind != "OPEN" or d not in STEP or dest in pos:
+                    continue
+                if dest not in graph:
+                    continue
+                dx, dy = STEP[d]
+                p = page[dest]
+                cell = free_cell(taken.setdefault(p, set()),
+                                 pos[a][0] + dx, pos[a][1] + dy)
+                pos[dest] = cell
+                taken[p].add(cell)
+                grew = True
+        if grew:
+            continue
+        rest = [r for r in sorted(graph) if r not in pos]
+        if not rest:
+            return pos
+        r = rest[0]
+        p = page[r]
+        cell = free_cell(taken.setdefault(p, set()), 0, 0)
+        pos[r] = cell
+        taken[p].add(cell)
+
+
+def repair(pos, page, graph, frozen=frozenset()):
     """Move rooms onto the correct SIDE of their neighbours.
 
     The counterpart nudge() cannot be. nudge may only ever raise the number of
@@ -643,6 +706,9 @@ def repair(pos, page, graph):
 
     Ordering is object order and the search is a square rather than two axes,
     since a room on the wrong side is usually wrong in both.
+
+    `frozen` is nudge's, for nudge's reason: a measured coordinate does not move
+    to tidy an inferred one.
     """
     idx = incident(graph, pos)
     taken = {(page[r], x, y) for r, (x, y) in pos.items()}
@@ -650,6 +716,8 @@ def repair(pos, page, graph):
     for _ in range(REPAIR_ROUNDS):
         gained = 0
         for room in sorted(pos):
+            if room in frozen:
+                continue
             edges = idx[room]
             if not edges:
                 continue
@@ -685,6 +753,88 @@ def repair(pos, page, graph):
         if gained == 0:
             break
     return moved
+
+
+def merge_pages(graph, placed):
+    """A page for every room, inventing none.
+
+    The paging rule for filling a measured table in, and the reason the fill is
+    safe at all. A story's floors are (sheet, level) pairs: the sheet is which
+    drawing the room was read off, which only a scan knows, and the level comes
+    from the routes. A room the scan missed has no sheet -- and the shipped
+    table does not record sheets, only the densified pair -- so the sheet cannot
+    be inherited and the floors cannot be re-derived. Trying anyway took one
+    game to thirty-five floors against a ceiling of sixteen.
+
+    What CAN be recovered is the level, from the story alone. A room in the same
+    level-exit component as a placed room is on that room's floor by definition:
+    same storey, and since it is joined to it without going up or down, the same
+    drawing. So it takes that page. A room sharing a level with nothing placed
+    -- a whole storey the scan missed -- falls back to the page of the nearest
+    placed room through any exit, which is a guess, and is counted separately so
+    the header can say how many it made.
+
+    Because no page is created, the floor count cannot change, no placed room
+    can change page, and MAP_ATLAS_PAGE_MAX cannot be breached. Those are the
+    three things the sheet-inheritance rule could not promise.
+    """
+    parent = {r: r for r in graph}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for a in graph:
+        for d, (kind, dest) in graph[a]["exits"].items():
+            if d in LEVEL_DIRS and kind != "BLOCKED" and dest in parent:
+                ra, rb = find(a), find(dest)
+                if ra != rb:
+                    parent[rb] = ra
+
+    # Which page each level holds, by majority: a component can contain rooms
+    # the scan put on two pages, and the one with more of them is the drawing
+    # the level is mostly on.
+    votes = {}
+    for r, p in placed.items():
+        if r in parent:
+            votes.setdefault(find(r), {}).setdefault(p, 0)
+            votes[find(r)][p] += 1
+    level_page = {c: max(sorted(v), key=lambda p: (v[p], -p))
+                  for c, v in votes.items()}
+
+    page = dict(placed)
+    by_level = 0
+    for r in sorted(graph):
+        if r in page:
+            continue
+        c = find(r)
+        if c in level_page:
+            page[r] = level_page[c]
+            by_level += 1
+
+    fallback = 0
+    frontier = sorted(page)
+    while frontier:
+        nxt = []
+        for a in frontier:
+            for d, (kind, dest) in sorted(graph[a]["exits"].items()):
+                if kind == "BLOCKED" or dest not in graph or dest in page:
+                    continue
+                page[dest] = page[a]
+                fallback += 1
+                nxt.append(dest)
+        frontier = nxt
+
+    # An island nothing placed can reach at all. It has to go somewhere and no
+    # page is better than another, so it goes on the first.
+    first = min(placed.values()) if placed else 0
+    for r in graph:
+        if r not in page:
+            page[r] = first
+            fallback += 1
+    return page, by_level, fallback
 
 
 def storeys(graph, sheet):
@@ -933,6 +1083,65 @@ def build_walked(story):
     return pos, release, serial, stats
 
 
+def build_merged(story, entry):
+    """(pos, page, stats) for a measured table with its missing rooms walked in.
+
+    The measured cells anchor it: they keep their coordinate and their page, and
+    both refinement passes are told not to touch them. What the scan missed is
+    filled in around them and then repaired against them.
+
+    Asserts the anchors survived rather than trusting the frozen set, because
+    this is the one promise the whole stage rests on and it costs a comparison.
+    That assert runs on every regeneration, not only the first.
+
+    Returns pos None when the filled table would miss PASS_RATE, in which case
+    the caller keeps the measured table exactly as it stands: a merge that makes
+    a map worse than the one already shipping is not worth its extra rooms.
+    """
+    graph, release, serial = room_graph(os.path.join(Z3DIR, story + ".Z3"))
+    anchors = {r: (c[1], c[2]) for r, c in entry["cells"].items() if r in graph}
+    apage = {r: entry["cells"][r][0] for r in anchors}
+    if not anchors:
+        return None, {"reason": "no carried cell names a room in this story"}
+
+    page, by_level, fallback = merge_pages(graph, apage)
+    pos = fill_seed(graph, anchors, page)
+    frozen = set(anchors)
+    repaired = repair(pos, page, graph, frozen=frozen)
+    nudged = nudge(pos, page, graph, frozen=frozen)
+
+    for r, cell in anchors.items():
+        assert pos[r] == cell, (
+            f"{story} room {r} moved from {cell} to {pos[r]}: a measured "
+            "coordinate was not held")
+        assert page[r] == apage[r], (
+            f"{story} room {r} changed page from {apage[r]} to {page[r]}")
+    assert len(set(page.values())) == len(set(apage.values())), (
+        f"{story} gained a floor, which merge_pages must never do")
+
+    pos = {r: v for r, v in pos.items()
+           if CELL_MIN <= v[0] <= CELL_MAX and CELL_MIN <= v[1] <= CELL_MAX}
+    page = {r: page[r] for r in pos}
+    agreed, tested, bad = agreement(pos, graph)
+    aligned, atested, abad = alignment(pos, graph)
+    rate = agreed / tested if tested else 0.0
+    stats = {
+        "rooms": len(pos), "npages": len(set(page.values())),
+        "agreed": agreed, "tested": tested, "rate": rate,
+        "aligned": aligned, "atested": atested,
+        "arate": aligned / atested if atested else 0.0,
+        "page": page, "names": {r: graph[r]["name"] for r in pos},
+        "added": sorted(set(pos) - set(anchors)), "measured": len(anchors),
+        "by_level": by_level, "fallback": fallback,
+        "repaired": repaired, "nudged": nudged,
+        "bad": bad, "abad": abad, "release": release, "serial": serial,
+    }
+    if rate < PASS_RATE:
+        stats["reason"] = f"filled layout agrees with only {rate:.0%} of its exits"
+        return None, stats
+    return pos, stats
+
+
 def carried(path):
     """Every table already in an emitted .inc, as the verbatim text of its block.
 
@@ -952,9 +1161,21 @@ def carried(path):
     text = open(path, encoding="utf-8").read()
     out = {}
     for m in re.finditer(
-            r"(/\*-{10,}\n \| MAP_ATLAS_(\w+)\n.*?\nstatic const MapAtlasCell "
-            r"MAP_ATLAS_\2\[\] = \{.*?\n\};\n)", text, re.S):
-        out[m.group(2)] = {"story": m.group(2), "block": m.group(1)}
+            r"(/\*-{10,}\n \| MAP_ATLAS_(\w+)\n.*?\n -{10,}\*/\n)"
+            r"static const MapAtlasCell MAP_ATLAS_\2\[\] = \{\n(.*?)\n\};\n",
+            text, re.S):
+        cells = {}
+        for line in m.group(3).splitlines():
+            c = re.match(r"\s*\{\s*(\d+),\s*(\d+),\s*(-?\d+),\s*(-?\d+)\s*\}",
+                         line)
+            if c:
+                cells[int(c.group(1))] = (int(c.group(2)), int(c.group(3)),
+                                          int(c.group(4)))
+        out[m.group(2)] = {"story": m.group(2), "header": m.group(1),
+                           "cells": cells,
+                           "block": m.group(1) + "static const MapAtlasCell "
+                                    f"MAP_ATLAS_{m.group(2)}[] = {{\n"
+                                    + m.group(3) + "\n};\n"}
     for m in re.finditer(
             r"\{ (\d+)u, \"([^\"]+)\", MAP_ATLAS_(\w+),.*?\n\s+(\d+) \},",
             text, re.S):
@@ -981,9 +1202,44 @@ def emit_cells(w, t, st):
         assert 0 <= room <= 255, (
             f"{t['story']} room {room} will not fit MapAtlasCell.room")
         nm = st["names"].get(room, "")
+        # A cell walked into an otherwise measured table is marked, so a reader
+        # picking a coordinate out of the list can see which kind it is without
+        # counting back to the header.
+        mark = ADDED_MARK + " " if room in st.get("added", ()) else ""
         w(f"    {{ {room:3d}, {st['page'][room]:2d}, {x:4d}, {y:4d} }},"
-          f"   /* {nm} */\n")
+          f"   /* {mark}{nm} */\n")
     w("};\n")
+
+
+def emit_merged(w, t, st):
+    """A measured table with the rooms its scan missed walked in.
+
+    The scan's own header is reproduced and appended to rather than replaced:
+    the lane tolerance, the drawn pages and the exits it could not satisfy are
+    the only record of how the measured half was obtained, and a merge has no
+    business throwing them away to describe itself. The paragraph added at the
+    end says what the merge did and how each added room got its page.
+    """
+    head, tail = t["header"].split(" | Author: suinevere\n", 1)
+    w("\n" + head)
+    w(" |\n")
+    w(f" |   FILLED IN: {len(st['added'])} walked in beside {st['measured']} measured. The\n")
+    w(f" |   scan read what the OCR could find on the drawing; the rest of the\n")
+    w(f" |   story's rooms are placed by stepping out from the ones it did find,\n")
+    w(f" |   then repaired and nudged against them. Every measured coordinate and\n")
+    w(f" |   page above is unchanged and asserted so on each regeneration; the added\n")
+    w(f" |   cells are marked '{ADDED_MARK}' in the list below.\n")
+    w(f" |   No floor was created: {st['by_level']} added room(s) took the page of a placed\n")
+    w(f" |   room on their own level, which is the same sheet and storey by\n")
+    w(f" |   definition, and {st['fallback']} took the page of the nearest placed room\n")
+    w(f" |   through any exit, which is a guess and the only one here.\n")
+    w(f" |   With them the table agrees with {st['agreed']} of {st['tested']} compass exits ({st['rate']:.0%})\n")
+    w(f" |   and draws {st['aligned']} of {st['atested']} cardinal ones on axis ({st['arate']:.0%}).\n")
+    w(f" |   {st['repaired']} added room(s) moved onto the right side of a neighbour and\n")
+    w(f" |   {st['nudged']} onto an exit's own axis.\n")
+    w(" | Author: suinevere\n")
+    w(tail)
+    emit_cells(w, t, st)
 
 
 def emit_walked(w, t, st):
@@ -1053,6 +1309,9 @@ def emit(tables, out):
             w("\n" + t["block"])
             continue
         st = t["stats"]
+        if st.get("added") is not None:
+            emit_merged(w, t, st)
+            continue
         if st.get("derived"):
             emit_walked(w, t, st)
             continue
@@ -1119,6 +1378,10 @@ def main():
     ap.add_argument("--cache",
                     help="directory for downloaded map PDFs; not part of the "
                          "repo. Required unless --walk is the whole run")
+    ap.add_argument("--merge", action="store_true",
+                    help="fill each measured table in with the rooms its scan "
+                         "missed, anchoring every coordinate it did read. "
+                         "Composes with --walk and needs no --cache either")
     ap.add_argument("--walk", action="store_true",
                     help="lay out the stories that have no map to scan from "
                          "their own exit graphs, carrying every table already "
@@ -1135,7 +1398,7 @@ def main():
                          "the nudge pass is worth")
     args = ap.parse_args()
 
-    if args.walk:
+    if args.walk or args.merge:
         return main_walk(args)
     if not args.cache:
         ap.error("--cache is required unless --walk is given")
@@ -1216,14 +1479,45 @@ def main_walk(args):
     """
     keep = carried(INC_PATH)
     on_disc = sorted(f[:-3] for f in os.listdir(Z3DIR) if f.endswith(".Z3"))
+
+    tables = []
+    for stem in sorted(keep):
+        entry = keep[stem]
+        if not args.merge or not os.path.exists(
+                os.path.join(Z3DIR, stem + ".Z3")):
+            tables.append(dict(entry))
+            continue
+        pos, st = build_merged(stem, entry)
+        if pos is not None and not st["added"]:
+            # Nothing to add: the scan already reached every room, or the table
+            # was walked out whole and is complete by construction. Rewriting it
+            # to say so would append "beside N measured" to a header that opens
+            # by saying it was never measured.
+            tables.append(dict(entry))
+            continue
+        if pos is None:
+            # The measured table stands. A fill that makes the map worse than
+            # the one already shipping is not worth its extra rooms.
+            print(f"  KEEP {stem:9s} {st.get('reason','?')}", file=sys.stderr)
+            tables.append(dict(entry))
+            continue
+        tables.append({"story": stem, "pos": pos, "header": entry["header"],
+                       "release": st["release"], "serial": st["serial"],
+                       "stats": st})
+        print(f"  FILL {stem:9s} {st['measured']:4d} measured + "
+              f"{len(st['added']):3d} walked  "
+              f"{st['agreed']:4d}/{st['tested']:<4d} half ({st['rate']:.0%})  "
+              f"{st['aligned']:4d}/{st['atested']:<4d} on axis ({st['arate']:.0%})  "
+              f"{st['npages']:2d} floors  "
+              f"{st['by_level']} by level, {st['fallback']} by neighbour",
+              file=sys.stderr)
     # Every story with no TABLE, which is not the same as every story with no
     # map. Four of the disc's stories have a scan that was read and then
     # rejected for disagreeing with their own exits -- Starcross among them, and
     # it is the one this was asked for. Keying off MAPS would skip exactly the
     # games whose drawing has already been tried and found wanting.
-    wanted = args.only or [s for s in on_disc if s not in keep]
+    wanted = (args.only or [s for s in on_disc if s not in keep]) if args.walk else []
 
-    tables = [dict(t) for t in keep.values()]
     dropped = []
     for story in wanted:
         if story in keep:
@@ -1246,9 +1540,11 @@ def main_walk(args):
               f"{st['npages']:2d} floors", file=sys.stderr)
 
     tables.sort(key=lambda t: t["story"])
-    print(f"\n{len(tables)} tables ({len(keep)} carried, "
-          f"{len(tables) - len(keep)} walked), {len(dropped)} dropped",
-          file=sys.stderr)
+    filled = sum(1 for t in tables if "stats" in t
+                 and t["stats"].get("added") is not None)
+    print(f"\n{len(tables)} tables ({len(keep)} carried, {filled} of them "
+          f"filled in, {len(tables) - len(keep)} walked), "
+          f"{len(dropped)} dropped", file=sys.stderr)
     if args.report:
         return
     emit(tables, sys.stdout)

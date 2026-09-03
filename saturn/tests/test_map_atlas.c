@@ -11,9 +11,15 @@
 /* How many rooms each table this test names is expected to carry. These track a
    generated file, so they are the one thing here that legitimately changes when
    tools/gen_map_atlas.py is re-run over better scans; everything else asserted
-   below is geometry that must hold whatever the count. */
-#define ZORK1_ROOMS    84
-#define ENCHANTR_ROOMS 52
+   below is geometry that must hold whatever the count.
+
+   They moved once already, when the generator learned to walk in the rooms a
+   scan had missed: Zork I from 84 to all 111, Enchanter from 52 to all 66. The
+   geometry below did not move with them, which is the point -- every room this
+   file names by hand was read off Infocom's drawing and is asserted to be
+   exactly where it was. */
+#define ZORK1_ROOMS    111
+#define ENCHANTR_ROOMS 66
 
 /* A Z-machine v3 header is all map_atlas_bind looks at: the release word at
    0x02 and the six serial bytes at 0x12. */

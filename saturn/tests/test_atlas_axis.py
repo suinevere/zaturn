@@ -93,14 +93,61 @@ BASELINE = {
     "SUSPECT": (70, 98),
 }
 
+# The whole table as a player sees it: the rooms read off the drawing and the
+# ones a fill walked in beside them. Recorded apart from BASELINE because the
+# two answer different questions -- how good the reading was, and how good the
+# map is -- and one number cannot be both. This one is a floor to hold: a
+# better fill is a better map and may raise it.
+WHOLE = {
+    "BALLYHOO": (18, 24),
+    "CUTHROAT": (66, 82),
+    "ENCHANTR": (74, 84),
+    "HITCHHKR": (18, 20),
+    "HOLYWOOD": (57, 57),
+    "INFIDEL": (133, 135),
+    "INFOSAM5": (109, 147),
+    "INFOSAM7": (35, 69),
+    "LEATHERG": (52, 59),
+    "LURKING": (50, 70),
+    "MOONMIST": (30, 52),
+    "MZORKI": (46, 84),
+    "MZORKI2": (56, 94),
+    "MZORKII": (40, 53),
+    "PLNDHRTS": (50, 54),
+    "PLNTFALL": (115, 138),
+    "SEASTLKR": (25, 38),
+    "SORCERER": (93, 111),
+    "SPLBRKR": (52, 54),
+    "STARCROS": (131, 170),
+    "STATFALL": (71, 76),
+    "SUSPECT": (70, 98),
+    "SUSPENDD": (102, 111),
+    "WISHBRNG": (32, 39),
+    "WITNESS": (22, 27),
+    "ZORK1": (100, 177),
+    "ZORK2": (76, 97),
+    "ZORK3": (73, 122),
+}
 
-def tables():
-    """{story stem: {object: (page, x, y)}} out of the shipped .inc."""
+
+def tables(measured_only=False):
+    """{story stem: {object: (page, x, y)}} out of the shipped .inc.
+
+    With measured_only, the rooms a merge walked in are left out -- they carry
+    a marker in their trailing comment. That is what lets BASELINE keep meaning
+    the thing it was recorded to mean: how well the rooms read off Infocom's
+    drawing agree with the story. Filling a table in adds rooms whose placement
+    was inferred and which are harder to satisfy, so the whole table's rate
+    drops; the measured half's must not move at all, because those coordinates
+    did not.
+    """
     text = INC.read_text(encoding="utf-8")
     out = {}
     for m in re.finditer(r"MAP_ATLAS_(\w+)\[\] = \{(.*?)\n\};", text, re.S):
         cells = {}
         for line in m.group(2).splitlines():
+            if measured_only and re.search(r"/\* \+ ", line):
+                continue
             c = re.match(r"\s*\{\s*(\d+),\s*(\d+),\s*(-?\d+),\s*(-?\d+)\s*\}", line)
             if c:
                 cells[int(c.group(1))] = (int(c.group(2)), int(c.group(3)),
@@ -160,11 +207,34 @@ def measure(stem, cells):
 
 @pytest.mark.parametrize("stem", sorted(BASELINE))
 def test_no_table_loses_alignment(stem):
+    """Measured rooms only, and the number must be EXACTLY the recorded one.
+
+    Not ">=", which is what this asserted while a table could only be
+    regenerated whole. A measured coordinate is not supposed to improve either:
+    it is a reading of a drawing, and a reading that changed is a reading that
+    was wrong once. Filling a table in is asserted not to move one, and this is
+    that assertion surviving into the repo, where it holds against any future
+    regeneration rather than only against the run that made it.
+    """
+    cells = tables(measured_only=True).get(stem)
+    assert cells, f"{stem} has no table in {INC.name}"
+    aligned, tested = measure(stem, cells)[:2]
+    assert (aligned, tested) == BASELINE[stem], (
+        f"{stem} measured rooms now score {aligned}/{tested}, recorded as "
+        f"{BASELINE[stem][0]}/{BASELINE[stem][1]} -- a coordinate read off the "
+        "drawing moved")
+
+
+@pytest.mark.parametrize("stem", sorted(WHOLE))
+def test_no_filled_table_loses_alignment(stem):
+    """The whole table, measured rooms and walked-in ones together, which is
+    what a player actually sees. ">=" here, because this half CAN legitimately
+    improve: a better fill is a better map."""
     cells = tables().get(stem)
     assert cells, f"{stem} has no table in {INC.name}"
     aligned, tested, _ = measure(stem, cells)
     assert tested > 0
-    base_a, base_t = BASELINE[stem]
+    base_a, base_t = WHOLE[stem]
     assert aligned / tested >= base_a / base_t - 1e-9, (
         f"{stem} fell to {aligned}/{tested} from {base_a}/{base_t}")
 

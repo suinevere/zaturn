@@ -17,30 +17,57 @@
 #define MAP_LAYOUT_H
 
 /*----------------------
- | MAP_CELLS / MAP_ROOMS_W / MAP_ROOMS_H / MAP_CX / MAP_CY / MAP_TOP
+ | MAP_CELLS / MAP_ROOMS_W / MAP_ROOMS_H / MAP_CX / MAP_CY / MAP_GUTTER /
+ | MAP_LEFT / MAP_TOP / MAP_CLIP_X0 / MAP_CLIP_Y0 / MAP_CELL_W / MAP_CELL_H
  | Description: One room is four text cells -- the original's 32-pixel step
- |   over an 8x8 font -- so a 320x224 screen shows ten rooms by seven, and the
- |   player sits at the middle one. Seven rooms of four rows is exactly the 28
- |   rows the screen has, so MAP_TOP is zero and the map fills it; it exists as
- |   a name rather than a bare 0 because the ground and the marks must agree on
- |   it, and they did not in an earlier draft. Named MAP_ROOMS_W/H rather than
- |   MAP_VIEW_W/H because the latter collides with map_view.h's own include
- |   guard (which is MAP_VIEW_H).
+ |   over an 8x8 font -- and the grid is inset so that it lands on the paper
+ |   rather than over the torn edge of it. MAP.TGA is a sheet with ragged
+ |   edges on a transparent surround, and its cells are solid only from column
+ |   two to column thirty-eight and from row three to row twenty-five; a grid
+ |   that filled the screen -- which is what ten rooms by seven does exactly --
+ |   put marks and lines on the black outside the paper along every edge.
+ |
+ |   MAP_LEFT and MAP_TOP are where the first room's MARK goes, not where the
+ |   drawing starts. MAP_GUTTER cells outside them on all four sides belong to
+ |   the drawing too, and hold the stubs that run off the viewport toward a
+ |   room scrolled past its edge. Without that margin the marks sat on the
+ |   boundary itself and an exit to a room just off screen had nowhere to draw
+ |   to, so it drew nothing: scrolling one room north made the passages back to
+ |   the rooms you had come from vanish rather than run to the edge.
+ |
+ |   Nine rooms by five with a two-cell gutter is the largest whole-room grid
+ |   that fits the solid band and still leaves the two text rows below it on
+ |   paper: marks on columns 4..36 and rows 5..21, drawing on columns 2..38 and
+ |   rows 3..23. Both spans are odd, so unlike the ten-by-seven grid the centre
+ |   room is the true middle and MAP_DX_MIN/MAX come out symmetric.
+ |
+ |   MAP_CELL_W/H are exclusive far edges, and the layer is indexed in absolute
+ |   screen cells so that nothing between here and dash_map_paint translates
+ |   between two coordinate spaces; that leaves MAP_CLIP_X0 columns and
+ |   MAP_CLIP_Y0 rows of it allocated and never touched, a few hundred bytes
+ |   against every call site staying one subtraction simpler. Named
+ |   MAP_ROOMS_W/H rather than MAP_VIEW_W/H because the latter collides with
+ |   map_view.h's own include guard (MAP_VIEW_H).
  | Author: suinevere
  ----------------------*/
 #define MAP_CELLS    4
-#define MAP_ROOMS_W  10
-#define MAP_ROOMS_H  7
-#define MAP_CX       5
-#define MAP_CY       3
-#define MAP_TOP      0
+#define MAP_ROOMS_W  9
+#define MAP_ROOMS_H  5
+#define MAP_CX       4
+#define MAP_CY       2
+#define MAP_GUTTER   2
+#define MAP_LEFT     4
+#define MAP_TOP      5
+#define MAP_CLIP_X0  (MAP_LEFT - MAP_GUTTER)
+#define MAP_CLIP_Y0  (MAP_TOP - MAP_GUTTER)
+#define MAP_CELL_W   (MAP_LEFT + (MAP_ROOMS_W - 1) * MAP_CELLS + MAP_GUTTER + 1)
+#define MAP_CELL_H   (MAP_TOP + (MAP_ROOMS_H - 1) * MAP_CELLS + MAP_GUTTER + 1)
 
 /*----------------------
  | MAP_DX_MIN / MAP_DX_MAX / MAP_DY_MIN / MAP_DY_MAX
  | Description: The offsets from the view centre a room can have and still be
- |   on screen, inclusive. Asymmetric because the centre is not the middle of an
- |   even span: ten columns around column five leaves five to the left and four
- |   to the right.
+ |   on screen, inclusive. Symmetric in both axes, because both spans are odd
+ |   and the centre room really is the middle one.
  | Author: suinevere
  ----------------------*/
 #define MAP_DX_MIN (-MAP_CX)
@@ -74,7 +101,7 @@ static inline int map_layout_visible(int dx, int dy)
  | Dependencies: N/A
  | Globals: N/A
  | Params: d -- the room's offset from the player; s -- the view's; centre --
- |   MAP_CX or MAP_CY; base -- 0 for a column, MAP_TOP for a row
+ |   MAP_CX or MAP_CY; base -- MAP_LEFT for a column, MAP_TOP for a row
  | Returns: the cell
  ----------------------*/
 static inline int map_layout_cell(int d, int s, int centre, int base)
@@ -125,7 +152,7 @@ static inline void map_layout_follow(int hx, int hy, int *sx, int *sy)
 static inline void map_layout_knight(int mx, int my, int w, int *kx, int *ky)
 {
     *kx = mx - 1 - w;
-    if (*kx < 0) *kx = mx + 2;
+    if (*kx < MAP_CLIP_X0) *kx = mx + 2;
     *ky = my - 1;
 }
 
@@ -140,11 +167,11 @@ static inline void map_layout_knight(int mx, int my, int w, int *kx, int *ky)
  | Returns: 1 when the cell is free, 0 otherwise
  ----------------------*/
 static inline int map_layout_cell_free(int x, int y,
-    const unsigned short taken[][MAP_ROOMS_W * MAP_CELLS])
+    const unsigned short taken[][MAP_CELL_W])
 {
-    if (x < 0 || y < 0) return 0;
-    if (x >= MAP_ROOMS_W * MAP_CELLS) return 0;
-    if (y >= MAP_ROOMS_H * MAP_CELLS) return 0;
+    if (x < MAP_CLIP_X0 || y < MAP_CLIP_Y0) return 0;
+    if (x >= MAP_CELL_W) return 0;
+    if (y >= MAP_CELL_H) return 0;
     return taken[y][x] == 0;
 }
 
@@ -162,7 +189,7 @@ static inline int map_layout_cell_free(int x, int y,
  | Returns: 1 when a cell was found, 0 when every candidate was occupied
  ----------------------*/
 static inline int map_layout_glyph(int mx, int my, int pdx, int pdy,
-    const unsigned short taken[][MAP_ROOMS_W * MAP_CELLS], int *gx, int *gy)
+    const unsigned short taken[][MAP_CELL_W], int *gx, int *gy)
 {
     static const int DIAG[4][2] = { { 1, -1 }, { 1, 1 }, { -1, -1 }, { -1, 1 } };
     int i, cx = mx + 2 * pdx, cy = my + 2 * pdy;

@@ -29,8 +29,8 @@ int main(void)
         assert(map_edges_tile(4, 4) == 0);
         assert(map_edges_tile(8, 4) == 0);
 
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 if (map_edges_tile(x, y) != 0) n++;
         assert(n == 3);
     }
@@ -60,13 +60,13 @@ int main(void)
        swept once, and it is the property a per-link painter cannot have. */
     {
         map_edges_reset();
-        map_edges_mark(0, 4); map_edges_mark(8, 4);
-        map_edges_mark(4, 0); map_edges_mark(4, 8);
-        map_edges_link(0, 4, 8, 4, MAP_LINK_FLAT, 0, 0);
-        map_edges_link(4, 0, 4, 8, MAP_LINK_FLAT, 0, 0);
-        assert(map_edges_tile(4, 4) == DT_LINK0 + 15);
-        assert(map_edges_tile(3, 4) == DT_LINK_H);
-        assert(map_edges_tile(4, 3) == DT_LINK_V);
+        map_edges_mark(4, 8); map_edges_mark(12, 8);
+        map_edges_mark(8, 4); map_edges_mark(8, 12);
+        map_edges_link(4, 8, 12, 8, MAP_LINK_FLAT, 0, 0);
+        map_edges_link(8, 4, 8, 12, MAP_LINK_FLAT, 0, 0);
+        assert(map_edges_tile(8, 8) == DT_LINK0 + 15);
+        assert(map_edges_tile(7, 8) == DT_LINK_H);
+        assert(map_edges_tile(8, 7) == DT_LINK_V);
     }
 
     /* An L route turns, so the corner cell is an elbow. */
@@ -104,10 +104,11 @@ int main(void)
     {
         int x, y, n = 0;
         map_edges_reset();
-        map_edges_mark(0, 0);
-        map_edges_link(0, 0, -8, 0, MAP_LINK_FLAT, 0, 0);
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        map_edges_mark(MAP_CLIP_X0, MAP_CLIP_Y0);
+        map_edges_link(MAP_CLIP_X0, MAP_CLIP_Y0, MAP_CLIP_X0 - 8, MAP_CLIP_Y0,
+                       MAP_LINK_FLAT, 0, 0);
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 if (map_edges_tile(x, y) != 0) n++;
         assert(n == 0);
     }
@@ -128,21 +129,21 @@ int main(void)
        pins that map_edges_link itself is order-dependent, so a future reader
        does not assume symmetry that was never there. */
     {
-        static unsigned char fwd[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
+        static unsigned char fwd[MAP_CELL_H][MAP_CELL_W];
         int x, y, diff = 0;
 
         map_edges_reset();
         map_edges_mark(4, 4); map_edges_mark(10, 8);
         map_edges_link(4, 4, 10, 8, MAP_LINK_FLAT, 0, 0);
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 fwd[y][x] = map_edges_tile(x, y);
 
         map_edges_reset();
         map_edges_mark(4, 4); map_edges_mark(10, 8);
         map_edges_link(10, 8, 4, 4, MAP_LINK_FLAT, 0, 0);
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 if (fwd[y][x] != map_edges_tile(x, y)) diff++;
         assert(diff > 0);
     }
@@ -151,19 +152,19 @@ int main(void)
        -- is stable: calling it twice in that order leaves the layer
        unchanged, which is what draw_once actually relies on. */
     {
-        static unsigned char once[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
+        static unsigned char once[MAP_CELL_H][MAP_CELL_W];
         int x, y;
 
         map_edges_reset();
         map_edges_mark(4, 4); map_edges_mark(10, 8);
         map_edges_link(4, 4, 10, 8, MAP_LINK_FLAT, 0, 0);
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 once[y][x] = map_edges_tile(x, y);
 
         map_edges_link(4, 4, 10, 8, MAP_LINK_FLAT, 0, 0);
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 assert(once[y][x] == map_edges_tile(x, y));
     }
 
@@ -173,19 +174,19 @@ int main(void)
        pins it, so a double-draw shows up as a test failure rather than as a
        map that looks right. */
     {
-        static unsigned char once[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
+        static unsigned char once[MAP_CELL_H][MAP_CELL_W];
         int x, y;
 
         map_edges_reset();
         map_edges_mark(4, 4); map_edges_mark(4, 12);
         map_edges_link(4, 4, 4, 12, MAP_LINK_VERT, 0, 0);
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 once[y][x] = map_edges_tile(x, y);
 
         map_edges_link(4, 4, 4, 12, MAP_LINK_VERT, 0, 0);
-        for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-            for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++)
+        for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+            for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++)
                 assert(once[y][x] == map_edges_tile(x, y));
     }
 
@@ -203,15 +204,15 @@ int main(void)
        read as conditional. */
     {
         map_edges_reset();
-        map_edges_mark(0, 4); map_edges_mark(8, 4);
-        map_edges_mark(4, 0); map_edges_mark(4, 8);
-        map_edges_link(0, 4, 8, 4, MAP_LINK_FLAT, MAP_EXIT_COND, 0);
-        map_edges_link(4, 0, 4, 8, MAP_LINK_FLAT, 0, 0);
-        assert(map_edges_tile(3, 4) == DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
-        assert(map_edges_tile(4, 3) == DT_LINK_V);
-        assert(map_edges_tile(2, 4) == DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
+        map_edges_mark(4, 8); map_edges_mark(12, 8);
+        map_edges_mark(8, 4); map_edges_mark(8, 12);
+        map_edges_link(4, 8, 12, 8, MAP_LINK_FLAT, MAP_EXIT_COND, 0);
+        map_edges_link(8, 4, 8, 12, MAP_LINK_FLAT, 0, 0);
+        assert(map_edges_tile(7, 8) == DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
+        assert(map_edges_tile(8, 7) == DT_LINK_V);
+        assert(map_edges_tile(6, 8) == DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
         /* The shared cell itself, which is the whole point of the case. */
-        assert(map_edges_tile(4, 4) == DT_LINK0 + 15);
+        assert(map_edges_tile(8, 8) == DT_LINK0 + 15);
     }
 
     /* arrow == 1 puts the head in the last cell before the (bx,by) end,
@@ -257,22 +258,91 @@ int main(void)
        placement only ever puts them in cells nothing else claimed. */
     {
         map_edges_reset();
-        map_edges_mark(4, 4);
-        map_edges_glyph(4, 2, MAP_EDGE_UP);
-        map_edges_glyph(6, 4, MAP_EDGE_DOWN);
-        map_edges_glyph(4, 6, MAP_EDGE_LOOP);
-        assert(map_edges_tile(4, 2) == DT_GLYPH_U);
-        assert(map_edges_tile(6, 4) == DT_GLYPH_D);
-        assert(map_edges_tile(4, 6) == DT_LOOP);
+        map_edges_mark(4, 8);
+        map_edges_glyph(4, 6, MAP_EDGE_UP);
+        map_edges_glyph(6, 8, MAP_EDGE_DOWN);
+        map_edges_glyph(4, 10, MAP_EDGE_LOOP);
+        assert(map_edges_tile(4, 6) == DT_GLYPH_U);
+        assert(map_edges_tile(6, 8) == DT_GLYPH_D);
+        assert(map_edges_tile(4, 10) == DT_LOOP);
     }
 
     /* A stub is a dashed run of its own, so an exit leaving the floor shows as
        something rather than as nothing -- which is what it showed before. */
     {
         map_edges_reset();
-        map_edges_mark(4, 4);
-        map_edges_stub(4, 4, 0, -1, 0);
-        assert(map_edges_tile(4, 3) == DT_DASH0 + (DT_EDGE_N | DT_EDGE_S));
+        map_edges_mark(4, 8);
+        map_edges_stub(4, 8, 0, -1, 0);
+        assert(map_edges_tile(4, 7) == DT_DASH0 + (DT_EDGE_N | DT_EDGE_S));
+    }
+
+    /* An off-view run from a mark on the rim reaches the gutter instead of
+       being clipped away, and reaches all MAP_GUTTER cells of it. This is the
+       property draw_once's edge_stub rests on: with the marks sitting on the
+       boundary itself, both of mark_step's cells were off the layer and an
+       exit to a room one step off screen drew nothing at all -- scrolling one
+       room north made the passages back the way you came vanish rather than
+       run to the edge. */
+    {
+        const int lo = MAP_LEFT, tp = MAP_TOP;
+
+        map_edges_reset();
+        map_edges_mark(lo, tp);
+        map_edges_offview(lo, tp, -1, 0, 0);
+        assert(map_edges_tile(lo - 1, tp) == DT_LINK_H);
+        assert(map_edges_tile(lo - MAP_GUTTER, tp) != 0);
+
+        map_edges_reset();
+        map_edges_mark(lo, tp);
+        map_edges_offview(lo, tp, 0, -1, 0);
+        assert(map_edges_tile(lo, tp - 1) == DT_LINK_V);
+        assert(map_edges_tile(lo, tp - MAP_GUTTER) != 0);
+    }
+
+    /* The far rim has the same margin, so a run east or south is not the one
+       direction that still draws nothing. */
+    {
+        const int hi = MAP_LEFT + (MAP_ROOMS_W - 1) * MAP_CELLS;
+        const int bt = MAP_TOP + (MAP_ROOMS_H - 1) * MAP_CELLS;
+
+        map_edges_reset();
+        map_edges_mark(hi, bt);
+        map_edges_offview(hi, bt, 1, 0, 0);
+        assert(map_edges_tile(hi + 1, bt) == DT_LINK_H);
+        assert(map_edges_tile(hi + MAP_GUTTER, bt) != 0);
+
+        map_edges_reset();
+        map_edges_mark(hi, bt);
+        map_edges_offview(hi, bt, 0, 1, 0);
+        assert(map_edges_tile(hi, bt + 1) == DT_LINK_V);
+        assert(map_edges_tile(hi, bt + MAP_GUTTER) != 0);
+    }
+
+    /* An off-view run carries the exit's own decoration, where a stub to
+       another floor is dashed whatever the exit says. The two look identical
+       for a conditional passage and must not for an open one: drawing every
+       run to the viewport edge dashed would put the legend's "requires problem
+       solving" mark on passages the story lets you walk. */
+    {
+        const int lo = MAP_LEFT, tp = MAP_TOP;
+
+        map_edges_reset();
+        map_edges_mark(lo, tp);
+        map_edges_offview(lo, tp, -1, 0, MAP_EXIT_COND);
+        assert(map_edges_tile(lo - 1, tp) == DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
+
+        map_edges_reset();
+        map_edges_mark(lo, tp);
+        map_edges_stub(lo, tp, -1, 0, 0);
+        assert(map_edges_tile(lo - 1, tp) == DT_DASH0 + (DT_EDGE_E | DT_EDGE_W));
+
+        /* A baggage limit still draws solid and still puts its one bar on the
+           shaft cell, not on the mark or on the cell past it. */
+        map_edges_reset();
+        map_edges_mark(lo, tp);
+        map_edges_offview(lo, tp, -1, 0, MAP_EXIT_BAGGAGE | MAP_EXIT_COND);
+        assert(map_edges_tile(lo - 1, tp) == DT_BAGGAGE_H);
+        assert(map_edges_tile(lo - MAP_GUTTER, tp) != DT_BAGGAGE_H);
     }
 
     /* The layer is readable, which is how the placement pass finds free cells. */
@@ -282,8 +352,8 @@ int main(void)
         map_edges_mark(4, 4); map_edges_mark(8, 4);
         map_edges_link(4, 4, 8, 4, MAP_LINK_FLAT, 0, 0);
         layer = map_edges_layer();
-        assert(layer[4 * (MAP_ROOMS_W * MAP_CELLS) + 5] != 0);
-        assert(layer[0] == 0);
+        assert(layer[4 * MAP_CELL_W + 5] != 0);
+        assert(layer[MAP_CLIP_Y0 * MAP_CELL_W + MAP_CLIP_X0] == 0);
     }
 
     /* Two off-floor exits pointing at each other, four cells apart, contest
@@ -299,43 +369,43 @@ int main(void)
        leaves that cell carrying nothing but its own letter: no dashed edge
        reaches it, so it is not part of any run. */
     {
-        const unsigned short (*layer)[MAP_ROOMS_W * MAP_CELLS];
+        const unsigned short (*layer)[MAP_CELL_W];
         int gx, gy;
         unsigned short raw;
 
         map_edges_reset();
         map_edges_mark(4, 4); map_edges_mark(4, 8);
 
-        layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
+        layer = (const unsigned short (*)[MAP_CELL_W]) map_edges_layer();
         assert(map_layout_glyph(4, 4, 0, 1, layer, &gx, &gy));
         assert(gx == 4 && gy == 6);
         map_edges_stub(4, 4, 0, 1, 0);
         map_edges_glyph(gx, gy, MAP_EDGE_DOWN);
 
-        layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
+        layer = (const unsigned short (*)[MAP_CELL_W]) map_edges_layer();
         assert(map_layout_glyph(4, 8, 0, -1, layer, &gx, &gy));
         assert(gx == 4 && gy == 7);
         map_edges_stub(4, 8, 0, -1, 0);
         map_edges_glyph(gx, gy, MAP_EDGE_UP);
 
-        raw = map_edges_layer()[7 * (MAP_ROOMS_W * MAP_CELLS) + 4];
+        raw = map_edges_layer()[7 * MAP_CELL_W + 4];
         assert((raw & 15) == (DT_EDGE_N | DT_EDGE_S));
 
         map_edges_reset();
         map_edges_mark(4, 4); map_edges_mark(4, 8);
 
-        layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
+        layer = (const unsigned short (*)[MAP_CELL_W]) map_edges_layer();
         assert(map_layout_glyph(4, 4, 0, 1, layer, &gx, &gy));
         assert(gx == 4 && gy == 6);
         map_edges_stub(4, 4, 0, 1, 0);
         map_edges_glyph(gx, gy, MAP_EDGE_DOWN);
 
-        layer = (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
+        layer = (const unsigned short (*)[MAP_CELL_W]) map_edges_layer();
         assert(map_layout_glyph(4, 8, 0, -1, layer, &gx, &gy));
         assert(gx == 4 && gy == 7);
         map_edges_glyph(gx, gy, MAP_EDGE_UP);
 
-        raw = map_edges_layer()[7 * (MAP_ROOMS_W * MAP_CELLS) + 4];
+        raw = map_edges_layer()[7 * MAP_CELL_W + 4];
         assert((raw & 15) == 0);
         assert(map_edges_tile(4, 7) == DT_GLYPH_U);
         assert(map_edges_tile(4, 5) == DT_DASH0 + (DT_EDGE_N | DT_EDGE_S));

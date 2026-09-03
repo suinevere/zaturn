@@ -132,6 +132,28 @@ void map_edges_link(int ax, int ay, int bx, int by, int kind,
 void map_edges_stub(int mx, int my, int dx, int dy, unsigned int flags);
 
 /*----------------------
+ | map_edges_offview
+ | Description: The run that says a passage leaves this room toward one the
+ |   viewport does not reach: the same two cells map_edges_stub lays, but
+ |   carrying the exit's own decoration rather than a forced dash, because the
+ |   far end is a room on this floor that has merely scrolled off and the
+ |   passage to it is as solid or as conditional as any drawn in full. Drawing
+ |   it dashed would report a condition the story does not impose.
+ |
+ |   Whether the two cells exist is the caller's geometry, not this file's: the
+ |   grid is inset by MAP_GUTTER cells so that a mark on the rim has margin to
+ |   run into. Off the layer mark_step declines and this draws nothing, which is
+ |   what the whole viewport used to do to a link with one end off screen.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_edge
+ | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step,
+ |   orthogonal; flags -- the exit's MAP_EXIT_* bits
+ | Returns: N/A
+ ----------------------*/
+void map_edges_offview(int mx, int my, int dx, int dy, unsigned int flags);
+
+/*----------------------
  | map_edges_glyph
  | Description: Puts one of MAP_EDGE_UP, MAP_EDGE_DOWN or MAP_EDGE_LOOP in a
  |   cell. The caller has already established the cell is free, which is why
@@ -153,7 +175,7 @@ void map_edges_glyph(int x, int y, unsigned int bit);
  | Dependencies: N/A
  | Globals: g_edge
  | Params: N/A
- | Returns: the layer, MAP_ROOMS_H*MAP_CELLS rows of MAP_ROOMS_W*MAP_CELLS
+ | Returns: the layer, MAP_CELL_H rows of MAP_CELL_W
  ----------------------*/
 const unsigned short *map_edges_layer(void);
 

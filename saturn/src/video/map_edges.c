@@ -33,12 +33,17 @@
  | g_edge / g_mark
  | Description: Which sides of each cell a line leaves through, and which cells
  |   a room mark holds. A whole viewport of shorts rather than a sparse list
- |   because the sweep then costs one pass with no lookup, and four kilobytes is
- |   nothing beside the story image the heap is already carrying.
+ |   because the sweep then costs one pass with no lookup, and a few kilobytes
+ |   is nothing beside the story image the heap is already carrying.
+ |
+ |   Indexed in absolute screen cells, so the inset the grid sits at is part of
+ |   the index rather than something every caller subtracts off; the
+ |   MAP_CLIP_X0 columns and MAP_CLIP_Y0 rows that leaves are allocated and
+ |   never written.
  | Author: suinevere
  ----------------------*/
-static unsigned short g_edge[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
-static unsigned char  g_mark[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
+static unsigned short g_edge[MAP_CELL_H][MAP_CELL_W];
+static unsigned char  g_mark[MAP_CELL_H][MAP_CELL_W];
 
 /*----------------------
  | in_view
@@ -51,8 +56,8 @@ static unsigned char  g_mark[MAP_ROOMS_H * MAP_CELLS][MAP_ROOMS_W * MAP_CELLS];
  ----------------------*/
 static int in_view(int x, int y)
 {
-    return x >= 0 && y >= 0 &&
-           x < MAP_ROOMS_W * MAP_CELLS && y < MAP_ROOMS_H * MAP_CELLS;
+    return x >= MAP_CLIP_X0 && y >= MAP_CLIP_Y0 &&
+           x < MAP_CELL_W && y < MAP_CELL_H;
 }
 
 /*----------------------
@@ -67,8 +72,8 @@ static int in_view(int x, int y)
 void map_edges_reset(void)
 {
     int y, x;
-    for (y = 0; y < MAP_ROOMS_H * MAP_CELLS; y++)
-        for (x = 0; x < MAP_ROOMS_W * MAP_CELLS; x++) {
+    for (y = MAP_CLIP_Y0; y < MAP_CELL_H; y++)
+        for (x = MAP_CLIP_X0; x < MAP_CELL_W; x++) {
             g_edge[y][x] = 0;
             g_mark[y][x] = 0;
         }
@@ -185,6 +190,52 @@ static int trace(const short *pts, int npts, int stair, int record,
 }
 
 /*----------------------
+ | link_deco
+ | Description: How a passage is drawn, from the exit's own flags: dashed for a
+ |   conditional one, solid otherwise, and solid with the baggage bar when it
+ |   carries a limit. MAP_EXIT_BAGGAGE wins over MAP_EXIT_COND -- Infocom draws
+ |   its baggage-limit mark as its own legend entry rather than as a flavour of
+ |   the dashed "requires problem solving" mark, and draws a baggage passage
+ |   solid even where that passage is also conditional; dashing it as well would
+ |   report the same fact twice.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: flags -- the exit's MAP_EXIT_* bits
+ | Returns: the MAP_EDGE_* decoration bits
+ ----------------------*/
+static unsigned short link_deco(unsigned int flags)
+{
+    return (unsigned short)
+        ((flags & MAP_EXIT_BAGGAGE) ? (MAP_EDGE_SOLID | MAP_EDGE_BAGGAGE)
+         : (flags & MAP_EXIT_COND) ? MAP_EDGE_DASH : MAP_EDGE_SOLID);
+}
+
+/*----------------------
+ | stub_run
+ | Description: The two steps both stubs are made of. The baggage bar is set
+ |   here rather than carried in deco because mark_step ORs deco into both cells
+ |   of every step, and two steps touch three cells: passing the bit would light
+ |   the mark's own cell and the cell one short of the neighbouring room as well
+ |   as the shaft between them, where the one bar belongs.
+ | Author: suinevere
+ | Dependencies: mark_step, in_view
+ | Globals: g_edge
+ | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step;
+ |   flags -- the exit's MAP_EXIT_* bits; deco -- the decoration to lay, which
+ |   is what the two callers differ in
+ | Returns: N/A
+ ----------------------*/
+static void stub_run(int mx, int my, int dx, int dy, unsigned int flags,
+                     unsigned short deco)
+{
+    mark_step(mx, my, mx + dx, my + dy, 0, deco);
+    mark_step(mx + dx, my + dy, mx + 2 * dx, my + 2 * dy, 0, deco);
+    if ((flags & MAP_EXIT_BAGGAGE) && in_view(mx + dx, my + dy))
+        g_edge[my + dy][mx + dx] |= MAP_EDGE_BAGGAGE;
+}
+
+/*----------------------
  | map_edges_link
  | Description: See map_edges.h.
  |
@@ -219,9 +270,7 @@ static int trace(const short *pts, int npts, int stair, int record,
 void map_edges_link(int ax, int ay, int bx, int by, int kind,
                     unsigned int flags, int arrow)
 {
-    unsigned short deco = (unsigned short)
-        ((flags & MAP_EXIT_BAGGAGE) ? (MAP_EDGE_SOLID | MAP_EDGE_BAGGAGE)
-         : (flags & MAP_EXIT_COND) ? MAP_EDGE_DASH : MAP_EDGE_SOLID);
+    unsigned short deco = link_deco(flags);
     int stair = (kind == MAP_LINK_VERT);
     int mx = (ax + bx) / 2, my = (ay + by) / 2;
     short cand[4][8];
@@ -264,18 +313,13 @@ void map_edges_link(int ax, int ay, int bx, int by, int kind,
 
 /*----------------------
  | map_edges_stub
- | Description: See map_edges.h.
- |
- |   A baggage stub cannot pass MAP_EDGE_SOLID | MAP_EDGE_BAGGAGE as its deco
- |   the way map_edges_link does: mark_step ORs deco into both cells of every
- |   step, and a stub is two steps, so that would light three cells --
- |   including the mark's own cell and the far cell one short of the
- |   neighbouring room's mark -- rather than the one cell the mark actually
- |   belongs on. Passing plain MAP_EDGE_SOLID and then setting the bit only on
- |   (mx + dx, my + dy), the shaft cell between the two steps, is what keeps it
- |   to one.
+ | Description: See map_edges.h. Always dashed unless it carries a baggage
+ |   limit, which is not link_deco's rule: the far end of this one is on another
+ |   floor and is not drawn at all, so the dash says "goes somewhere off this
+ |   sheet" rather than "conditional". map_edges_offview is the case where the
+ |   far end IS on this floor and the exit's own decoration is the truth.
  | Author: suinevere
- | Dependencies: mark_step, in_view
+ | Dependencies: stub_run
  | Globals: g_edge
  | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step;
  |   flags -- the exit's MAP_EXIT_* bits
@@ -283,12 +327,25 @@ void map_edges_link(int ax, int ay, int bx, int by, int kind,
  ----------------------*/
 void map_edges_stub(int mx, int my, int dx, int dy, unsigned int flags)
 {
-    int baggage = (flags & MAP_EXIT_BAGGAGE) != 0;
-    unsigned short deco = (unsigned short) (baggage ? MAP_EDGE_SOLID : MAP_EDGE_DASH);
-    mark_step(mx, my, mx + dx, my + dy, 0, deco);
-    mark_step(mx + dx, my + dy, mx + 2 * dx, my + 2 * dy, 0, deco);
-    if (baggage && in_view(mx + dx, my + dy))
-        g_edge[my + dy][mx + dx] |= MAP_EDGE_BAGGAGE;
+    stub_run(mx, my, dx, dy, flags, (unsigned short)
+             ((flags & MAP_EXIT_BAGGAGE) ? MAP_EDGE_SOLID : MAP_EDGE_DASH));
+}
+
+/*----------------------
+ | map_edges_offview
+ | Description: See map_edges.h.
+ | Author: suinevere
+ | Dependencies: link_deco, stub_run
+ | Globals: g_edge
+ | Params: mx, my -- the mark's cell; dx, dy -- the direction as a unit step;
+ |   flags -- the exit's MAP_EXIT_* bits
+ | Returns: N/A
+ ----------------------*/
+void map_edges_offview(int mx, int my, int dx, int dy, unsigned int flags)
+{
+    unsigned short deco = link_deco(flags);
+    stub_run(mx, my, dx, dy, flags,
+             (unsigned short) (deco & (unsigned short) ~MAP_EDGE_BAGGAGE));
 }
 
 /*----------------------
@@ -312,7 +369,7 @@ void map_edges_glyph(int x, int y, unsigned int bit)
  | Dependencies: N/A
  | Globals: g_edge
  | Params: N/A
- | Returns: the layer, MAP_ROOMS_H*MAP_CELLS rows of MAP_ROOMS_W*MAP_CELLS
+ | Returns: the layer, MAP_CELL_H rows of MAP_CELL_W
  ----------------------*/
 const unsigned short *map_edges_layer(void)
 {

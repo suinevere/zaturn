@@ -33,7 +33,7 @@ PALETTE = [
     (18, 18, 20),  # 11
     (20, 20, 22),  # 12
     (22, 22, 24),  # 13 bevel highlight
-    (24, 24, 26),  # 14
+    (28, 2, 4),    # 14 accent -- see PAL_ACCENT
     (27, 27, 29),  # 15 specular edge
 ]
 
@@ -41,6 +41,17 @@ PALETTE = [
 # edge of that box: a rim, two groove entries, then the highlight, with the
 # marble field carrying on immediately behind it. Taking the minimum depth over
 # every edge a pixel is near is what mitres the corners on the diagonal.
+# Entry 14 is the accent slot rather than the next step of the ramp. Nothing on
+# the marble can reach it -- marble() caps its veins at 12 and its body runs 5..9,
+# and no frame, rule or mark names it -- so it is the one index that can carry a
+# colour of its own without changing a pixel of the stone. dash_view's
+# write_palette copies it straight to CRAM instead of bending it toward the
+# background's hue and brightness the way it does every other entry; that is what
+# keeps it red on a tan sheet, and it is why the value here is a colour rather
+# than a point on the grey ramp. Kept in step with DASH_PAL_ACCENT in
+# video/dash_tiles.h by tests/test_dash_accent.py.
+PAL_ACCENT = 14
+
 FRAME = [7, 3, 2, 13]
 
 # The rule inside a module -- the one horizontal divider GAMEKB draws -- stays a
@@ -113,7 +124,13 @@ MARK_PEER_PUPIL = 1
 # so the picked room sits inside a reticle rather than wearing a colour a reader
 # would have to have been told about. XHAIR_ARM is how many pixels each arm runs
 # from the corner it turns at.
-MARK_XHAIR = 15
+#
+# Drawn in the accent rather than on the ramp. It was the ramp's brightest entry,
+# which is a pale near-white, and on a sheet of tan paper carrying a drawing in
+# dark ink that is the one value with nothing to read against -- the reticle was
+# reported as hard to find on screen. Every other mark stays on the ramp; the
+# cursor is the one thing that has to be found without being looked for.
+MARK_XHAIR = PAL_ACCENT
 XHAIR_ARM = 5
 
 # The figure standing beside the player. 16x24 is exactly two tiles by three,

@@ -79,19 +79,29 @@
 
 
 /*----------------------
- | MAP_ROW_PLAYERS / MAP_ROW_STATUS / MAP_ROW_HELP / MAP_TEXT_COLS
- | Description: The text rows written over the map and how wide they may run.
- |   The roster opens at MAP_ROW_PLAYERS and takes one row per occupied seat, so
- |   it can reach four; the status row carries the room under the crosshair on
- |   the left and the floor number on the right. MAP_TEXT_COLS is the 40 columns
- |   a 320-pixel screen shows, which is narrower than text_map's own 64-cell
- |   pitch -- printing past it writes cells nobody can see.
+ | MAP_ROW_PLAYERS / MAP_ROW_STATUS / MAP_ROW_HELP / MAP_TEXT_LEFT /
+ | MAP_TEXT_COLS
+ | Description: The text rows written over the map and the band they may run
+ |   in. All five are derived from the grid rather than written down, because
+ |   the point of them is to stay on the paper the grid was inset to reach: the
+ |   roster opens on the grid's first row and takes one row per occupied seat,
+ |   so it can reach four, and the status and help rows are the two directly
+ |   below the grid -- rows twenty-four and twenty-five, the last two of
+ |   MAP.TGA's solid band. They used to be twenty-six and twenty-seven, which
+ |   is where the sheet is torn, so the floor number on the right of the status
+ |   row was printed on black.
+ |
+ |   MAP_TEXT_LEFT/COLS are the drawing box's own columns, gutter included,
+ |   which is narrower than the forty a 320-pixel screen shows and much
+ |   narrower than text_map's 64-cell pitch -- printing outside it writes cells
+ |   that are either off the paper or off the screen.
  | Author: suinevere
  ----------------------*/
-#define MAP_ROW_PLAYERS 1
-#define MAP_ROW_STATUS  26
-#define MAP_ROW_HELP    27
-#define MAP_TEXT_COLS   40
+#define MAP_ROW_PLAYERS MAP_TOP
+#define MAP_ROW_STATUS  (MAP_CELL_H)
+#define MAP_ROW_HELP    (MAP_CELL_H + 1)
+#define MAP_TEXT_LEFT   MAP_CLIP_X0
+#define MAP_TEXT_COLS   (MAP_CELL_W - MAP_CLIP_X0)
 
 /*----------------------
  | MAP_FLASH_SHIFT
@@ -326,7 +336,7 @@ static void draw_players(void)
         while (lbl[k] != '\0') { line[k] = lbl[k]; k++; }
         room_model_object_name(map_model_current(), line + k,
                                (int) sizeof line - k);
-        text_print_str(2, row, line);
+        text_print_str(MAP_TEXT_LEFT, row, line);
         return;
     }
 
@@ -339,8 +349,62 @@ static void draw_players(void)
         line[k++] = ':';
         line[k++] = ' ';
         room_model_object_name(rm, line + k, (int) sizeof line - k);
-        text_print_str(2, row++, line);
+        text_print_str(MAP_TEXT_LEFT, row++, line);
     }
+}
+
+/*----------------------
+ | edge_stub
+ | Description: Draws the short run that says a passage leaves this room toward
+ |   one the viewport does not reach. gather() only collects rooms inside the
+ |   viewport, and the link pass can only join two gathered rooms, so an exit
+ |   whose far end has scrolled off drew nothing at all: step the crosshair one
+ |   room and every passage back the way you came vanished rather than running
+ |   to the edge. This lays MAP_GUTTER cells of the same dashed-or-solid run a
+ |   link is made of, into the margin the grid is inset by.
+ |
+ |   Only for a room on the floor being shown. An exit to another floor is not
+ |   a passage running off the edge of this one, and the U/D pass below already
+ |   gives it a letter and a stub of its own; drawing this as well would put two
+ |   marks on one exit.
+ |
+ |   The run carries the exit's own decoration, not the forced dash a stub to
+ |   another floor takes: this far end is a room on this floor that has merely
+ |   scrolled off, and the passage to it is as solid or as conditional as one
+ |   drawn end to end.
+ |
+ |   The direction is the axis the far room actually left the viewport by, not
+ |   the larger of its two offsets: a room one step north-east that is off the
+ |   top but not off the right side is reached northward, and a stub pointing
+ |   east at a column still on screen would name a passage that is not there.
+ |   Off a corner, both are true and the longer leg wins.
+ | Author: suinevere
+ | Dependencies: map_model.h, map_edges.h, map_layout.h
+ | Globals: g_dxs, g_dys
+ | Params: cx, cy -- the room's mark cell; i -- its slot, for its own offset;
+ |   ex -- the exit; sx, sy -- the view's offset in rooms; page -- the floor
+ | Returns: N/A
+ ----------------------*/
+static void edge_stub(int cx, int cy, int i, const MapExit *ex,
+                      int sx, int sy, int page) {
+    int dx = 0, dy = 0, ox, oy;
+
+    if (map_model_page(ex->dest) != page) return;
+    if (!map_model_offset(ex->dest, &dx, &dy)) return;
+    dx -= sx;
+    dy -= sy;
+
+    ox = (dx < MAP_DX_MIN) ? -1 : (dx > MAP_DX_MAX) ? 1 : 0;
+    oy = (dy < MAP_DY_MIN) ? -1 : (dy > MAP_DY_MAX) ? 1 : 0;
+    if (ox != 0 && oy != 0) {
+        int ax = dx - g_dxs[i], ay = dy - g_dys[i];
+        if (ax < 0) ax = -ax;
+        if (ay < 0) ay = -ay;
+        if (ay > ax) ox = 0; else oy = 0;
+    }
+    if (ox == 0 && oy == 0) return;
+
+    map_edges_offview(cx, cy, ox, oy, ex->flags);
 }
 
 /*----------------------
@@ -416,7 +480,7 @@ static void draw_players(void)
 static void draw_once(int sx, int sy, int page, int hx, int hy) {
     int n, i;
     int hvx = hx - sx, hvy = hy - sy;
-    int hcx = map_layout_cell(hx, sx, MAP_CX, 0);
+    int hcx = map_layout_cell(hx, sx, MAP_CX, MAP_LEFT);
     int hcy = map_layout_cell(hy, sy, MAP_CY, MAP_TOP);
     unsigned short hover = 0;
 
@@ -433,7 +497,7 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
 
     map_edges_reset();
     for (i = 0; i < n; i++)
-        map_edges_mark(map_layout_cell(g_dxs[i], 0, MAP_CX, 0),
+        map_edges_mark(map_layout_cell(g_dxs[i], 0, MAP_CX, MAP_LEFT),
                        map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP));
 
     for (i = 0; i < n; i++) {
@@ -443,15 +507,20 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
             int j, lo, hi, arrow;
             if (ex[k].flags & MAP_EXIT_SELF) continue;
             j = g_slot[ex[k].dest];
-            if (j < 0) continue;
+            if (j < 0) {
+                edge_stub(map_layout_cell(g_dxs[i], 0, MAP_CX, MAP_LEFT),
+                          map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP),
+                          i, &ex[k], sx, sy, page);
+                continue;
+            }
             if (!(ex[k].flags & MAP_EXIT_ONEWAY) && ex[k].dest < g_ids[i])
                 continue;
             if (g_ids[i] < ex[k].dest) { lo = i; hi = j; } else { lo = j; hi = i; }
             arrow = !(ex[k].flags & MAP_EXIT_ONEWAY) ? 0
                     : (ex[k].dest == g_ids[hi]) ? 1 : 2;
-            map_edges_link(map_layout_cell(g_dxs[lo], 0, MAP_CX, 0),
+            map_edges_link(map_layout_cell(g_dxs[lo], 0, MAP_CX, MAP_LEFT),
                            map_layout_cell(g_dys[lo], 0, MAP_CY, MAP_TOP),
-                           map_layout_cell(g_dxs[hi], 0, MAP_CX, 0),
+                           map_layout_cell(g_dxs[hi], 0, MAP_CX, MAP_LEFT),
                            map_layout_cell(g_dys[hi], 0, MAP_CY, MAP_TOP),
                            map_model_link(g_ids[i], ex[k].dest),
                            ex[k].flags, arrow);
@@ -460,11 +529,11 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
 
     for (i = 0; i < n; i++) {
         MapExit ex[RM_DIR_N];
-        int cx = map_layout_cell(g_dxs[i], 0, MAP_CX, 0);
+        int cx = map_layout_cell(g_dxs[i], 0, MAP_CX, MAP_LEFT);
         int cy = map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP);
         int k, gx, gy, ne = map_model_exits(g_ids[i], ex, RM_DIR_N);
-        const unsigned short (*layer)[MAP_ROOMS_W * MAP_CELLS] =
-            (const unsigned short (*)[MAP_ROOMS_W * MAP_CELLS]) map_edges_layer();
+        const unsigned short (*layer)[MAP_CELL_W] =
+            (const unsigned short (*)[MAP_CELL_W]) map_edges_layer();
 
         for (k = 0; k < ne; k++) {
             int up, dy;
@@ -498,16 +567,16 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
         }
     }
 
-    for (i = 0; i < MAP_ROOMS_H * MAP_CELLS; i++) {
+    for (i = MAP_CLIP_Y0; i < MAP_CELL_H; i++) {
         int c;
-        for (c = 0; c < MAP_ROOMS_W * MAP_CELLS; c++) {
+        for (c = MAP_CLIP_X0; c < MAP_CELL_W; c++) {
             unsigned char t = map_edges_tile(c, i);
             if (t) dash_map_paint(c, i, t);
         }
     }
 
     for (i = 0; i < n; i++) {
-        int cx = map_layout_cell(g_dxs[i], 0, MAP_CX, 0);
+        int cx = map_layout_cell(g_dxs[i], 0, MAP_CX, MAP_LEFT);
         int cy = map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP);
         int picked = (g_dxs[i] == (short) hvx && g_dys[i] == (short) hvy);
         unsigned char tile = DT_ROOM;
@@ -550,15 +619,15 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
         draw_players();
 
         if (hover != 0 && room_model_object_name(hover, nm, (int) sizeof nm))
-            text_print_str(2, MAP_ROW_STATUS, nm);
+            text_print_str(MAP_TEXT_LEFT, MAP_ROW_STATUS, nm);
 
         k = put_uint(pg, 0, (unsigned int) (page + 1));
         pg[k++] = '/';
         k = put_uint(pg, k, (unsigned int) pages);
         pg[k] = '\0';
-        text_print_str(MAP_TEXT_COLS - 1 - k, MAP_ROW_STATUS, pg);
+        text_print_str(MAP_TEXT_LEFT + MAP_TEXT_COLS - k, MAP_ROW_STATUS, pg);
 
-        text_print_str(2, MAP_ROW_HELP,
+        text_print_str(MAP_TEXT_LEFT, MAP_ROW_HELP,
                        (pages > 1) ? "D-pad: pick  L/R: floor  A/B/C: back"
                                    : "D-pad: pick     A/B/C: back");
         text_flush();

@@ -144,6 +144,12 @@ static void flush_hook(void)
  |   black and the greys have to move on. Straight into the SH-2's uncached CRAM
  |   mirror, as text_set_color does it, so no flush is needed and nothing has to
  |   wait for a DMA.
+ |
+ |   DASH_PAL_ACCENT is copied through instead. It is the one entry that is a
+ |   colour rather than a step of the ramp -- only the map's crosshair is drawn
+ |   in it -- and both halves above would work against that: the hue would bend
+ |   it toward the paper it has to be found on, and the level would dim it
+ |   exactly where the ground is darkest.
  | Author: suinevere
  | Dependencies: dash_tiles.h (dash_palette), SRL (VDP2_COLRAM)
  | Globals: g_tint_bg
@@ -166,6 +172,16 @@ static void write_palette(void)
     for (int i = 0; i < 16; i++) {
         unsigned short src = dash_palette[i];
         if (src == 0) { cram[DASH_PAL_NO * 16 + i] = 0; continue; }   // transparent
+        // The accent is a colour, not a step of the ramp: tinting it toward the
+        // background would turn the map's red cursor into another shade of the
+        // paper it has to be found against, which is the whole reason it is not
+        // on the ramp. It takes the level for nothing either -- a cursor that
+        // dimmed with the background would be hardest to see exactly where the
+        // ground is darkest.
+        if (i == DASH_PAL_ACCENT) {
+            cram[DASH_PAL_NO * 16 + i] = (unsigned short) (0x8000 | src);
+            continue;
+        }
         unsigned r = src & 31, g = (src >> 5) & 31, b = (src >> 10) & 31;
         if (peak != 0) {
             const unsigned d = DASH_TINT_DEN, n = DASH_TINT_NUM;

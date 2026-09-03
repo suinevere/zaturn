@@ -124,10 +124,15 @@ it through.
   bargain `DT_LINK0`'s mask 0 makes. Mask 0 is asserted byte-identical to
   `DT_ROOM_HERE`, which is what makes the four quadrant comparisons mean
   anything.
-- **The picked room's name is on the drawing's own top row** (`MAP_ROW_ROOM`,
-  row 3, the top gutter). It is the label a player reads while moving the cursor
-  and the cursor is somewhere in the grid below it, so it belongs where the eye
-  is not. It shares the gutter with the edge stubs, which is the cost.
+- **The picked room's name is a caption under the crosshair**, `MAP_ROOM_DROP`
+  cells below the mark and centred on its column, moving with the cursor. It was
+  briefly parked in the top-left corner, which meant looking away from the cursor
+  and back to read what the cursor was on. Clamped into the drawing's columns, so
+  a room picked at either edge does not run off the paper -- the clamp moves the
+  label, not the cursor. It is drawn over the map, which is what a caption does:
+  the text layer is above the tile layer, so a passage under the label is covered
+  for that row and nothing is corrupted. There is no longer a single row to name,
+  so the exit clear takes the whole band.
 - **The roster sits at the bottom** on the floor number's own row
   (`MAP_ROW_ROSTER`, row 24 -- the last solid row of the sheet) with the others
   climbing above it. The local player's line is the one that is always there, so

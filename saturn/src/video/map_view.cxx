@@ -79,16 +79,17 @@
 #define MAP_BACK_555 ((unsigned short) (MAP_GROUND_555 | 0x8000u))
 
 /*----------------------
- | MAP_INK_BLACK / MAP_INK_BROWN / MAP_INK_GRAY / MAP_INK_RED /
- | MAP_INK_GREEN / MAP_INK_BLUE
- | Description: The colours the map draws itself in. Black is the ink of a
- |   drawing on paper; brown and grey are the two pencils the passages are drawn
- |   with, one for the warm sheets and one for the white; and the last three are
- |   the seat colours, saturated because they have to be told apart at one cell
- |   across on a television.
+ | MAP_INK_BLACK / MAP_INK_WHITE / MAP_INK_BROWN / MAP_INK_GRAY /
+ | MAP_INK_RED / MAP_INK_GREEN / MAP_INK_BLUE
+ | Description: The colours the map draws itself in. Black and white are the two
+ |   answers to "what can be seen on this paper"; brown and grey are the two
+ |   pencils the passages are drawn with, one for the warm sheets and one for
+ |   the white; and the last three are the seat colours, saturated because they
+ |   have to be told apart at one cell across on a television.
  | Author: suinevere
  ----------------------*/
 #define MAP_INK_BLACK DISP_RGB555(0x00, 0x00, 0x00)
+#define MAP_INK_WHITE DISP_RGB555(0xF0, 0xF0, 0xF0)
 #define MAP_INK_BROWN DISP_RGB555(0x4A, 0x2E, 0x18)
 #define MAP_INK_GRAY  DISP_RGB555(0x78, 0x78, 0x80)
 #define MAP_INK_RED   DISP_RGB555(0xE0, 0x10, 0x20)
@@ -109,11 +110,16 @@ static int g_sheet = 0;
 
 /*----------------------
  | MapInk
- | Description: The four colours one sheet gives the map: its labels, the ink
+ | Description: The five colours one sheet gives the map: its labels, the ink
  |   its passages and glyphs are drawn in, the fill in the middle of a location
- |   mark, and the local player's own colour for their figure and their quadrant
- |   of a shared room. The crosshair is not among them -- it keeps the accent
- |   and is red on all four sheets.
+ |   mark, the local player's own colour for their figure and their quadrant of
+ |   a shared room, and the colour the first other seat falls back to when the
+ |   player already holds its red. The crosshair is not among them -- it keeps
+ |   the accent and is red on all four sheets.
+ |
+ |   `clash` is in here rather than being a constant because it is the same
+ |   question the other four ask: what can be seen on this paper. Black is right
+ |   on three sheets and invisible on the fourth.
  | Author: suinevere
  ----------------------*/
 typedef struct {
@@ -121,6 +127,7 @@ typedef struct {
     unsigned short line;
     unsigned short fill;
     unsigned short party;
+    unsigned short clash;
 } MapInk;
 
 /*----------------------
@@ -139,10 +146,14 @@ typedef struct {
  |   it takes the player's own two terminal colours -- their letters for the
  |   passages and labels, their background for the fill -- and reads as their
  |   console rather than as paper.
+ |
+ |   The player's figure follows the labels on all four, which on the black
+ |   sheet means their font colour. It was briefly black there, along with the
+ |   other three sheets' figures, and black on black is nothing at all.
  | Author: suinevere
  | Dependencies: scene/presentation.h (PRES_MAP_BG order), display.h
  | Globals: g_display, g_sheet
- | Params: ink -- receives the four colours
+ | Params: ink -- receives the five colours
  | Returns: N/A
  ----------------------*/
 static void map_ink(MapInk *ink)
@@ -150,16 +161,17 @@ static void map_ink(MapInk *ink)
     ink->text  = MAP_INK_BLACK;
     ink->line  = MAP_INK_BROWN;
     ink->fill  = MAP_INK_BLACK;
-    ink->party = MAP_INK_BLACK;
+    ink->clash = MAP_INK_BLACK;
     if (g_sheet == 2) {
         ink->text  = MAP_INK_RED;
         ink->line  = MAP_INK_GRAY;
-        ink->party = MAP_INK_RED;
     } else if (g_sheet == 3) {
         ink->text  = (unsigned short) display_text_rgb(g_display.text);
         ink->line  = ink->text;
         ink->fill  = (unsigned short) display_bg_rgb(g_display.bg);
+        ink->clash = MAP_INK_WHITE;
     }
+    ink->party = ink->text;
 }
 
 /*----------------------
@@ -169,7 +181,10 @@ static void map_ink(MapInk *ink)
  |   gives way rather than the player's: the player's is chosen by the sheet and
  |   has to be readable on it, and a seat has no such constraint. Asked of the
  |   colour rather than of the sheet number, because the fourth sheet takes a
- |   font colour the player picked and that can be red as easily as anything.
+ |   font colour the player picked and that can be red as easily as anything --
+ |   which is also why what it gives way TO comes off the sheet (MapInk::clash)
+ |   rather than being black everywhere: the sheet a player is most likely to
+ |   have chosen red letters on is the black one.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -1054,7 +1069,7 @@ extern "C" void map_view_show(void) {
         text_set_color(ink.text, MAP_GROUND_555);
         dash_map_ink(ink.line, ink.fill);
         dash_map_party(ink.party,
-                       map_ink_is_red(ink.party) ? MAP_INK_BLACK : MAP_INK_RED,
+                       map_ink_is_red(ink.party) ? ink.clash : MAP_INK_RED,
                        MAP_INK_GREEN, MAP_INK_BLUE);
     }
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();

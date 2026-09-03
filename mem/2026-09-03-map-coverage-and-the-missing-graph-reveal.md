@@ -5,9 +5,9 @@ metadata:
   type: reference
 ---
 
-Started as an owner's question; became a measured spike. **Nothing here was
-shipped** -- the probe scripts are throwaway and live in the session scratchpad,
-not the tree. Companion to [[2026-09-03-map-inset-to-parchment-handoff]] and
+Started as an owner's question, became a measured spike, and stage one is now
+shipped as `77f3796`. The probe scripts were throwaway; what shipped was written
+fresh against tests. Companion to [[2026-09-03-map-inset-to-parchment-handoff]] and
 [[2026-09-03-map-party-colours-handoff]].
 
 ## The two things that decide how much map you see
@@ -104,17 +104,45 @@ no anchored room moved. Zork I would go from 84 rooms to all 111.
 - One thing to check before implementing: `MapAtlasCell.room` is an
   `unsigned char`, so a story whose room objects exceed 255 cannot be tabled.
 
-## Recommendation
+## Stage one, shipped (`77f3796`)
 
-Two stages, smallest first, because the second contains the open problem.
+`gen_map_atlas.py --walk` adds a table for every story with **no table** -- not
+every story with no map, which is the bug I wrote first and which skipped
+Starcross, Planetfall, Deadline and Suspect: those four have a scan that was
+read and then rejected for disagreeing with their own exits, so keying off
+`MAPS` missed exactly the games whose drawing had already been tried.
 
-**Stage one -- synthesise whole tables for the tableless stories.** No merge, so
-no paging question: their floors come from `storeys()` and are already sane.
-Gate on the existing `PASS_RATE`, mark the tables as derived rather than
-measured so nobody reads them as scan data and so the axis baselines are not
-polluted, and ship the ten that clear it. Adventure, Deadline and Hypochondriac
-stay on the walked fallback exactly as today.
+Three additions to the generator: `walk_seed`, `repair`, and a carry-forward.
+The carry is the part worth remembering -- it reproduces each already-emitted
+table as **verbatim text**, so a walk run needs neither the map scans nor the
+cache they live in, and its diff is 1,000 insertions and **zero deletions**.
+That is the proof that no measured coordinate moved, and it is cheaper than any
+assertion could be. A second `--walk` run is byte-identical to the first, which
+also proves the carry round-trips its own output.
 
-**Stage two -- anchored fill for the scanned games.** Worth doing for the 431
-rooms the scans missed, but only after the paging rule is designed. Not a
-footnote to stage one.
+Ten tables shipped: HITCHHKR 93%, INFOSAM5 96%, INFOSAM7 85%, MZORKI 85%,
+MZORKI2 85%, MZORKII 96%, PLNTFALL 92%, SEASTLKR 100%, STARCROS 87%, SUSPECT
+98%. Three still ship nothing, below the same `PASS_RATE` a scan must clear:
+ADVENT 78%, DEADLINE 83%, HYPOCOND 25%. Cells 843 -> 1,446, which is 2.4 KB.
+No runtime source changed at all.
+
+Worth knowing: **`nudge` moves nothing on a walked table** -- it reported 0 on
+all ten. `repair` breaks ties on axis alignment, so it has already taken every
+move `nudge` would have found. `nudge` still runs, as a guard rather than as a
+contributor.
+
+`test_atlas_walk.py` holds the algorithm on lattice fixtures (a lattice must lay
+out as a lattice; `repair` must fix what `nudge` cannot and must not reach past
+`REPAIR_SPAN`; neither may turn a descent over), and holds the shipped file's
+provenance marks so a measured table cannot quietly become a derived one.
+`test_map_atlas.c` binds Starcross by its real release and serial, which is the
+assertion that the runtime cannot tell the two kinds apart and does not have to.
+
+## Stage two -- not done
+
+Anchored fill for the scanned games: keep every measured cell, walk in the 431
+rooms the scans missed. The spike measured it at 100% coverage for 96% -> 94%
+half-plane, and every anchor provably unmoved. **The open problem is paging, not
+placement** -- authored pages are drawn sheets, route floors are levels, and a
+newly-placed room has to join one. The quick version gave Cutthroat 37 floors
+against a ceiling of 16.

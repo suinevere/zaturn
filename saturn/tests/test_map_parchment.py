@@ -152,7 +152,7 @@ def test_the_read_happens_before_the_music_starts():
     same seek with the track already running."""
     lines = code_lines("main.cxx")
     try:
-        pre = next(i for i, l in enumerate(lines) if "map_view_preload()" in l)
+        pre = next(i for i, l in enumerate(lines) if "map_view_preload(" in l)
     except StopIteration:
         raise AssertionError(
             "main.cxx never calls map_view_preload(), so the first time the "

@@ -402,6 +402,11 @@ int dash_input_up(void)
             || g_variant == DASH_OVERLAY || g_variant == DASH_OVERLAY_TALL) ? 1 : 0;
 }
 
+void dash_input_hide(void)
+{
+    if (dash_input_up()) dash_build(DASH_NONE, 0);
+}
+
 void dash_hold_latch(int on)
 {
     g_latched = on ? 1 : 0;

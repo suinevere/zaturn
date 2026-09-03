@@ -398,6 +398,32 @@ unsigned char dash_cell(int x, int y);
 int dash_input_up(void);
 
 /*----------------------
+ | dash_input_hide
+ | Description: Takes the game's input strip down now, and leaves anything else
+ |   -- a menu box, the map, an empty layer -- exactly where it is. The hold
+ |   latch is not touched either, so a menu teardown that owes the layer to the
+ |   next text flush still gets it.
+ |
+ |   Expiry is not enough on its own for this one case. dash_frame_end drops the
+ |   layer on any frame no renderer claimed it, which is the right rule while
+ |   "nobody drew" means "nobody wants it" -- but dash_hold_any means to preserve
+ |   whatever is on the layer across frames that draw nothing, and it cannot tell
+ |   a strip nobody has drawn YET from one nobody will draw again. A loop that
+ |   ends every frame in menu_sync therefore pinned the gamepad strip's marble on
+ |   screen for as long as the player stayed on a real keyboard.
+ |
+ |   So the renderer that decides there is no strip says so, rather than
+ |   declining to say anything and trusting the frame's end to read the silence
+ |   correctly.
+ | Author: suinevere
+ | Dependencies: dash_input_up, dash_build
+ | Globals: g_variant
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void dash_input_hide(void);
+
+/*----------------------
  | dash_dirty_top / dash_dirty_bottom / dash_dirty_clear
  | Description: The span of rows changed since the last clear, and the call that
  |   closes it. The span is empty when bottom is below top, which is the state a

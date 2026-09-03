@@ -99,29 +99,29 @@ unsigned short dash_tint_current(void);
 
 /*----------------------
  | dash_map_ink
- | Description: Gives the map's four party colours to CRAM, untinted: the
- |   accent slot the crosshair and the local player's figure are drawn in, and
- |   the three borrowed slots the other seats' figures and the shared-room
- |   shield are drawn in.
+ | Description: Gives the map's four party colours to CRAM, untinted: the four
+ |   borrowed slots the figures and the shared-room shield are drawn in, the
+ |   local player's first. The crosshair is not among them -- it keeps the
+ |   accent, which is red on every sheet and needs no writing here.
  |
  |   Written straight rather than through the ramp for the reason the accent
  |   already was: these are colours, not stone, and bending them toward the
  |   paper they have to be found on is exactly what would hide them.
  |
- |   The three peer slots are ordinary ramp entries the rest of the time -- see
- |   DASH_PAL_PEER0 in dash_tiles.h -- so this is a loan that the next dash_tint
- |   calls in. Call it AFTER the dash_tint that sets the map's ground, since
- |   that rewrites all sixteen entries from the ramp, and let the dash_tint on
- |   the way out put the stone back.
+ |   All four are ordinary ramp entries the rest of the time -- see
+ |   DASH_PAL_PARTY0 in dash_tiles.h -- so this is a loan that the next
+ |   dash_tint calls in. Call it AFTER the dash_tint that sets the map's ground,
+ |   since that rewrites all sixteen entries from the ramp, and let the
+ |   dash_tint on the way out put the stone back.
  | Author: suinevere
  | Dependencies: dash_tiles.h, SRL
  | Globals: N/A
- | Params: accent -- the local player's colour; p0, p1, p2 -- the other three
+ | Params: self -- the local player's colour; p0, p1, p2 -- the other three
  |   seats', in seat order. All packed RGB555 with or without the opaque bit,
  |   which is set here either way
  | Returns: N/A
  ----------------------*/
-void dash_map_ink(unsigned short accent, unsigned short p0,
+void dash_map_ink(unsigned short self, unsigned short p0,
                   unsigned short p1, unsigned short p2);
 
 /*----------------------

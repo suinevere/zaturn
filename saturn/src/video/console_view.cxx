@@ -856,8 +856,17 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
 
     if (!g_kbd_visible) {
         /* A real keyboard is in hand: no on-screen interface to back, so drop the
-           window and draw the input line over the console's ">" prompt row. */
-        if (g_in_game) image_window_off();
+           window and the strip's marble with it, and draw the input line over the
+           console's ">" prompt row.
+
+           The strip is taken down rather than left to expire. Expiry reads "no
+           renderer claimed the layer this frame" as "nothing wants it", and
+           dash_hold_any -- which every loop ending in menu_sync runs -- says the
+           opposite about the same silence: keep whatever is painted. Between them
+           the gamepad's marble stayed on screen for as long as the player stayed
+           on the keyboard. Only the strip goes; a menu box, the map and the hold
+           latch are all left alone. */
+        if (g_in_game) { image_window_off(); dash_input_hide(); }
         int row = base - 1;
         text_clear_line(base);
         text_clear_line(row);

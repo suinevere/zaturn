@@ -104,11 +104,13 @@ static int g_sheet = 0;
 
 /*----------------------
  | map_ink
- | Description: The colour the map's text, crosshair and player figure take on
+ | Description: The colour the map's text and the local player's figure take on
  |   the sheet this game was given. The two pale papers get the ink a drawing on
  |   paper is made of; the dark sheet gets red, which is what it was found to
  |   need on screen; and the fourth is drawn on the player's own font colour,
  |   because that sheet is the one with nothing of its own to read against.
+ |
+ |   Not the crosshair, which keeps the accent and is red on all four.
  |
  |   The choice is by sheet and not by genre. What matters is the paper a mark
  |   has to be found on, and two genres sharing a sheet share that problem.
@@ -149,21 +151,25 @@ static int map_ink_is_red(unsigned short c)
 
 
 /*----------------------
- | MAP_ROW_STATUS / MAP_ROW_ROSTER / MAP_ROW_TOP / MAP_TEXT_LEFT /
+ | MAP_ROW_ROOM / MAP_ROW_ROSTER / MAP_ROW_TOP / MAP_TEXT_LEFT /
  | MAP_TEXT_COLS / MAP_PAGE_COLS
  | Description: The text rows written over the map and the band they may run
  |   in. All of them are derived from the grid rather than written down, because
- |   the point of them is to stay on the paper the grid was inset to reach: the
- |   status row is the one directly below the grid -- row twenty-four, the last
- |   of MAP.TGA's solid band -- and the roster is the row above it, climbing one
- |   row per other seat. It used to be row twenty-six, which is where the sheet
- |   is torn, so the floor number on the right of it was printed on black.
+ |   the point of them is to stay on the paper the grid was inset to reach.
  |
- |   The roster stands at the bottom rather than at the top, sharing its row
- |   with the floor number: the corner of the sheet furthest from the drawing is
- |   where a legend goes, and the top-left corner is where the map itself opens
- |   on most stories. The local player is on that row and the others climb above
- |   it, so the name that is always there is always in the same place.
+ |   The picked room's name is on the drawing's own top row, which is the
+ |   gutter: it is the one label the player is reading while they move the
+ |   cursor, and the cursor is somewhere in the grid below it, so it belongs
+ |   where the eye is not. It used to be under the grid with the roster and the
+ |   floor number, three labels in one corner.
+ |
+ |   The roster and the floor number share the row directly below the grid --
+ |   row twenty-four, the last of MAP.TGA's solid band; row twenty-six, which is
+ |   where the sheet is torn, is what the floor number used to be printed on.
+ |   The local player is on that row and the others climb above it, so the name
+ |   that is always there is always in the same place and a growing roster grows
+ |   away from the corner rather than pushing the player's own line up the
+ |   sheet.
  |
  |   There is no help row. It carried the pad legend, which said the same three
  |   things on every screen the map has ever been opened from.
@@ -175,8 +181,8 @@ static int map_ink_is_red(unsigned short c)
  |   floor number reserves at the right-hand end of the roster's own row.
  | Author: suinevere
  ----------------------*/
-#define MAP_ROW_STATUS  (MAP_CELL_H)
-#define MAP_ROW_ROSTER  (MAP_ROW_STATUS - 1)
+#define MAP_ROW_ROOM    MAP_CLIP_Y0
+#define MAP_ROW_ROSTER  (MAP_CELL_H)
 #define MAP_ROW_TOP     (MAP_ROW_ROSTER - (PARTY_SEATS - 1))
 #define MAP_TEXT_LEFT   MAP_CLIP_X0
 #define MAP_TEXT_COLS   (MAP_CELL_W - MAP_CLIP_X0)
@@ -498,8 +504,8 @@ static int seat_line(int seat, char *line, int cap)
  |   are standing in. The local player is on the lowest row, beside the floor
  |   number, and the others climb above them in seat order -- so the one line
  |   that is always there is always in the same place, and a roster that grows
- |   grows away from the corner rather than pushing the player's own line down
- |   the sheet.
+ |   grows away from the corner rather than pushing the player's own line up the
+ |   sheet.
  |
  |   An empty roster is not an error and is the ordinary state on a disc, which
  |   has no server to hear from. It falls back to the one line the local player
@@ -596,9 +602,9 @@ static void edge_stub(int cx, int cy, int i, const MapExit *ex,
  | draw_once
  | Description: Paints one whole frame of the map: every room of one floor the
  |   viewport reaches, the links between them, a figure beside every player
- |   standing on it, the crosshair, and the rows of text below them -- the
- |   roster and the floor number on one row, the picked room on the row under
- |   it, both in the bottom-left corner and both off the drawing. The
+ |   standing on it, the crosshair, and the rows of text around them -- the
+ |   picked room's name along the top of the drawing, the roster and the floor
+ |   number on one row under it in the bottom-left corner. The
  |   ground is not among them: it is the parchment behind this layer, and every
  |   cell nothing is painted into shows it through. Clears the text layer
  |   first,
@@ -812,17 +818,17 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
         draw_players();
 
         if (hover != 0 && room_model_object_name(hover, nm, (int) sizeof nm))
-            text_print_str(MAP_TEXT_LEFT, MAP_ROW_STATUS, nm);
+            text_print_str(MAP_TEXT_LEFT, MAP_ROW_ROOM, nm);
 
-        /* The floor number ends one column short of the drawing's right edge
-           and sits on the roster's row rather than the status row: the corner
-           itself is where the sheet starts to tear, and the two numbers that
-           are always there belong on one line. */
+        /* The floor number ends three columns short of the drawing's right
+           edge and shares the roster's row: the corner itself is where the
+           sheet starts to tear, and the two things that are on the screen
+           whatever the map is showing belong on one line. */
         k = put_uint(pg, 0, (unsigned int) (page + 1));
         pg[k++] = '/';
         k = put_uint(pg, k, (unsigned int) pages);
         pg[k] = '\0';
-        text_print_str(MAP_TEXT_LEFT + MAP_TEXT_COLS - k - 1, MAP_ROW_ROSTER, pg);
+        text_print_str(MAP_TEXT_LEFT + MAP_TEXT_COLS - k - 3, MAP_ROW_ROSTER, pg);
 
         text_flush();
     }
@@ -994,6 +1000,12 @@ extern "C" void map_view_show(void) {
     // has to follow it, because a tint rewrites all sixteen entries from the
     // ramp and would take the borrowed slots back.
     //
+    // The crosshair is not among the colours set here. It is drawn in the accent
+    // and the accent is red whatever the sheet, because the cursor is the one
+    // mark on the screen a player looks for rather than reads: a reticle that
+    // changed colour with the paper would have to be found before it could be
+    // used.
+    //
     // The map's labels do not take the player's font colour. It is chosen to be
     // read on their own background and this screen is not on it: a bright green
     // that is right on black is barely there on tan paper. The one sheet where
@@ -1085,7 +1097,8 @@ extern "C" void map_view_show(void) {
     if (g_menu_page_fade > 0) menu_fade_out(g_menu_page_fade);
     {
         int r;
-        for (r = MAP_ROW_TOP; r <= MAP_ROW_STATUS; r++) text_clear_line(r);
+        text_clear_line(MAP_ROW_ROOM);
+        for (r = MAP_ROW_TOP; r <= MAP_ROW_ROSTER; r++) text_clear_line(r);
     }
     text_flush();
     // Both the map's ink and its ground handed back in one call, the same way

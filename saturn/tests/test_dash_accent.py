@@ -17,13 +17,13 @@ side. That is a property of the generator's numbers, not a reservation, so it
 is checked against the emitted tiles rather than trusted -- a new mark or a
 raised vein cap would take the slot silently.
 
-The three peer slots are a different bargain and need a different check. They
-ARE stone the rest of the time; what makes borrowing them safe is that no tile
-the map paints reaches them, so they are unreachable for as long as the screen
-is up, and that dash_map_ink is the only writer while the next dash_tint calls
-the loan in. Both halves are checked here: only the peer figures may name those
-entries, and write_palette must NOT exempt them, or the stone would keep a
-player's colour after the map closed.
+The four party slots are a different bargain and need a different check. They
+ARE stone the rest of the time; what makes borrowing them safe is that no other
+tile the map paints reaches them, so they are unreachable for as long as the
+screen is up, and that dash_map_ink is the only writer while the next dash_tint
+calls the loan in. Both halves are checked here: only the figures and the shield
+may name those entries, and write_palette must NOT exempt them, or the stone
+would keep a player's colour after the map closed.
 """
 import pathlib
 import re
@@ -34,9 +34,9 @@ HDR = ROOT / "saturn" / "src" / "video" / "dash_tiles.h"
 SRC = ROOT / "saturn" / "src" / "video" / "dash_tiles.c"
 VIEW = ROOT / "saturn" / "src" / "video" / "dash_view.cxx"
 
-# The tiles allowed to name the accent: the four reticle corners and the local
-# player's own figure. Read off the enum in dash_map.h rather than recomputed
-# here, so a tile inserted before them moves this with it.
+# The only tiles allowed to name the accent: the four reticle corners. Read off
+# the enum in dash_map.h rather than recomputed here, so a tile inserted before
+# them moves this with it.
 XHAIR_NAMES = ("DT_XHAIR_TL", "DT_XHAIR_TR", "DT_XHAIR_BL", "DT_XHAIR_BR")
 
 # One figure, two cells by three. Written down rather than read off
@@ -97,38 +97,40 @@ def enum_values():
 
 
 def accent_tiles():
-    """The tiles allowed to name the accent: the reticle and the local player's
-    own figure, which is drawn in the colour the map gives that player."""
+    """The tiles allowed to name the accent: the reticle, and nothing else. The
+    cursor is red on every sheet and in every party, which is only true while it
+    is the sole occupant of the one entry write_palette leaves alone."""
     e = enum_values()
-    out = [e[n] for n in XHAIR_NAMES]
-    out += [e["DT_KNIGHT0"] + i for i in range(KNIGHT_CELLS)]
-    return out
+    return [e[n] for n in XHAIR_NAMES]
 
 
 def map_paints(e, t):
     """Whether the map screen can put this tile on the layer. Everything else is
     chrome the map never draws -- it clears the layer to DT_BLANK and paints no
-    box -- which is exactly what makes three of the chrome's own palette entries
+    box -- which is exactly what makes four of the chrome's own palette entries
     borrowable while it is up. The two ranges are the ones is_map_ink names in
     test_dash_tiles.c; DT_GROUND is left out of both because nothing paints it
     any more."""
-    return (e["DT_ROOM"] <= t <= e["DT_LINK_STAIR"]) or            (e["DT_ROOM_SEL"] <= t < e["DT_N"])
+    return ((e["DT_ROOM"] <= t <= e["DT_LINK_STAIR"]) or
+            (e["DT_ROOM_SEL"] <= t < e["DT_N"]))
 
 
-def peer_indices():
-    """PAL_PEER and DASH_PAL_PEER0..2, which must be the same three numbers."""
-    gen = re.search(r"^PAL_PEER\s*=\s*\(([^)]*)\)\s*$",
+def party_indices():
+    """PAL_PARTY and DASH_PAL_PARTY0..3, which must be the same four numbers."""
+    gen = re.search(r"^PAL_PARTY\s*=\s*\(([^)]*)\)\s*$",
                     GEN.read_text(encoding="utf-8"), re.M)
-    assert gen is not None, "tools/gen_dash_tiles.py defines no PAL_PEER"
+    assert gen is not None, "tools/gen_dash_tiles.py defines no PAL_PARTY"
     want = [int(v) for v in re.findall(r"\d+", gen.group(1))]
     hdr = HDR.read_text(encoding="utf-8")
     got = []
     for i in range(len(want)):
-        m = re.search(r"^#define\s+DASH_PAL_PEER%d\s+(\d+)\s*$" % i, hdr, re.M)
-        assert m is not None, "dash_tiles.h defines no DASH_PAL_PEER%d" % i
+        m = re.search(r"^#define\s+DASH_PAL_PARTY%d\s+(\d+)\s*$" % i, hdr, re.M)
+        assert m is not None, "dash_tiles.h defines no DASH_PAL_PARTY%d" % i
         got.append(int(m.group(1)))
-    assert want == got, "PAL_PEER %s and DASH_PAL_PEER* %s disagree" % (want, got)
+    assert want == got, "PAL_PARTY %s and DASH_PAL_PARTY* %s disagree" % (want, got)
     assert len(set(want)) == len(want), "two seats share a palette slot"
+    assert accent_index() not in want, (
+        "a seat holds the accent, so the crosshair is not red on every sheet")
     return want
 
 
@@ -143,17 +145,14 @@ def test_write_palette_passes_the_accent_through():
         "write_palette no longer exempts the accent from the tint"
 
 
-def test_only_the_cursor_and_the_player_use_the_accent():
+def test_only_the_cursor_uses_the_accent():
     """Nothing on the stone reaches the slot, so the marble and the frames are
-    untouched by giving it a colour. The reticle and the local player's figure
-    are what may reach it; the shared-room shield is checked separately, since
-    its own upper-left quadrant is that player's colour too."""
+    untouched by giving it a colour -- and nothing on the MAP reaches it either
+    but the reticle, which is what makes the cursor red on every sheet and in
+    every party rather than one more thing the ink decides."""
     a = accent_index()
     allowed = set(accent_tiles())
-    shield = enum_values()["DT_SHIELD0"]
     for i, px in enumerate(tiles()):
-        if shield <= i < shield + 16:
-            continue
         used = a in px
         if i in allowed:
             assert used, "tile %d is not drawn in the accent" % i
@@ -161,27 +160,28 @@ def test_only_the_cursor_and_the_player_use_the_accent():
             assert not used, "tile %d uses the accent slot %d" % (i, a)
 
 
-def test_generator_and_header_name_the_same_peer_slots():
-    peer_indices()
+def test_generator_and_header_name_the_same_party_slots():
+    party_indices()
 
 
-def test_only_the_peer_figures_use_the_borrowed_slots():
-    """The borrow is only safe while nothing the map paints reaches those
+def test_only_the_party_tiles_use_the_borrowed_slots():
+    """The borrow is only safe while nothing else the map paints reaches those
     entries. That is a property of the emitted tiles, not a reservation: a mark
-    that took one would be drawn in another player's colour on the map screen
-    and in stone everywhere else, and would build."""
+    that took one would be drawn in a player's colour on the map screen and in
+    stone everywhere else, and would build."""
     e = enum_values()
-    peers = peer_indices()
+    party = party_indices()
     shield = e["DT_SHIELD0"]
     px = tiles()
-    for slot, ink in enumerate(peers):
-        drawn = e["DT_KNIGHT_PEER0"] + slot * KNIGHT_CELLS
+    for slot, ink in enumerate(party):
+        drawn = (e["DT_KNIGHT0"] if slot == 0
+                 else e["DT_KNIGHT_PEER0"] + (slot - 1) * KNIGHT_CELLS)
         allowed = set(range(drawn, drawn + KNIGHT_CELLS))
         for i, t in enumerate(px):
             if shield <= i < shield + 16:
                 continue
             if i in allowed:
-                assert ink in t, "peer figure tile %d is not drawn in slot %d" % (i, ink)
+                assert ink in t, "figure tile %d is not drawn in slot %d" % (i, ink)
             elif map_paints(e, i):
                 assert ink not in t, "map tile %d reaches borrowed slot %d" % (i, ink)
 
@@ -190,7 +190,7 @@ def test_the_shield_quarters_the_four_party_slots():
     """One quadrant per seat, in the same order the tile set numbers them, so a
     room two people share names the two."""
     e = enum_values()
-    inks = [accent_index()] + peer_indices()
+    inks = party_indices()
     px = tiles()
     quad = [(2, 2), (4, 2), (2, 4), (4, 4)]
     for mask in range(16):
@@ -207,8 +207,10 @@ def test_write_palette_does_not_exempt_the_borrowed_slots():
     """They are stone the rest of the time. An exemption would leave a player's
     colour on the marble for the rest of the session."""
     text = VIEW.read_text(encoding="utf-8")
-    for i in range(3):
-        assert "i == DASH_PAL_PEER%d" % i not in text,             "write_palette exempts DASH_PAL_PEER%d, so dash_tint cannot call the loan in" % i
+    for i in range(4):
+        assert "i == DASH_PAL_PARTY%d" % i not in text, (
+            "write_palette exempts DASH_PAL_PARTY%d, so dash_tint cannot call "
+            "the loan in" % i)
 
 
 def test_the_accent_is_a_colour_not_a_grey():

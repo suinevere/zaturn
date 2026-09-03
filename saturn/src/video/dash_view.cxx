@@ -147,9 +147,10 @@ static void flush_hook(void)
  |
  |   DASH_PAL_ACCENT is copied through instead. It is the one entry that is a
  |   colour rather than a step of the ramp -- only the map's crosshair is drawn
- |   in it -- and both halves above would work against that: the hue would bend
- |   it toward the paper it has to be found on, and the level would dim it
- |   exactly where the ground is darkest.
+ |   in it, and it is red there whatever sheet the map is on -- and both halves
+ |   above would work against that: the hue would bend it toward the paper it
+ |   has to be found on, and the level would dim it exactly where the ground is
+ |   darkest.
  | Author: suinevere
  | Dependencies: dash_tiles.h (dash_palette), SRL (VDP2_COLRAM)
  | Globals: g_tint_bg
@@ -208,14 +209,14 @@ unsigned short dash_tint_current(void)
     return g_tint_bg;
 }
 
-void dash_map_ink(unsigned short accent, unsigned short p0,
+void dash_map_ink(unsigned short self, unsigned short p0,
                   unsigned short p1, unsigned short p2)
 {
     volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
-    cram[DASH_PAL_NO * 16 + DASH_PAL_ACCENT] = (unsigned short) (0x8000 | accent);
-    cram[DASH_PAL_NO * 16 + DASH_PAL_PEER0]  = (unsigned short) (0x8000 | p0);
-    cram[DASH_PAL_NO * 16 + DASH_PAL_PEER1]  = (unsigned short) (0x8000 | p1);
-    cram[DASH_PAL_NO * 16 + DASH_PAL_PEER2]  = (unsigned short) (0x8000 | p2);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_PARTY0] = (unsigned short) (0x8000 | self);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_PARTY1] = (unsigned short) (0x8000 | p0);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_PARTY2] = (unsigned short) (0x8000 | p1);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_PARTY3] = (unsigned short) (0x8000 | p2);
 }
 
 bool dash_init(void)

@@ -52,20 +52,24 @@ PALETTE = [
 # video/dash_tiles.h by tests/test_dash_accent.py.
 PAL_ACCENT = 14
 
-# The three other seats' colours. There is only one slot nothing on the stone
-# reaches, and the map needs four colours at once -- the local player's ink and
-# one per other seat -- so these three are BORROWED rather than reserved. They
-# stay ordinary points of the ramp in dash_palette, and are only ever a colour
-# for as long as the map screen is up: map_view calls dash_map_ink after
-# dash_tint, and the dash_tint on the way out puts the ramp back.
+# The four seats' colours: the local player's first, then the other three. The
+# accent is not among them -- it stays the crosshair's alone, always red, so the
+# cursor is one thing on the screen whose colour never depends on the sheet or
+# on who else is playing.
 #
-# The borrow is safe because the map paints no stone. Its own tiles reach only
-# entries 0, 1, 2, 12, 13, 14 and 15 -- dash_map_begin clears every other cell
-# to DT_BLANK and the screen draws no box -- so 3..11 are unreachable for as
-# long as it is drawn, and these are three of them. Entry 4 is reachable by
-# nothing at all, anywhere; 5 and 6 are marble body, which is why the restore
-# on the way out is part of the design and not tidiness.
-PAL_PEER = (4, 5, 6)
+# All four are BORROWED rather than reserved. They stay ordinary points of the
+# ramp in dash_palette and are only ever a colour for as long as the map screen
+# is up: map_view calls dash_map_ink after dash_tint, and the dash_tint on the
+# way out puts the ramp back.
+#
+# The borrow is safe because the map paints no stone. Outside these four its own
+# tiles reach only entries 0, 1, 2, 12, 13, 14 and 15 -- dash_map_begin clears
+# every other cell to DT_BLANK and the screen draws no box -- so 3..11 are
+# unreachable for as long as it is drawn, and these are four of them. Entry 4 is
+# reachable by nothing at all, anywhere; 3 is a groove and 5 and 6 are marble
+# body, which is why the restore on the way out is part of the design and not
+# tidiness.
+PAL_PARTY = (3, 4, 5, 6)
 
 FRAME = [7, 3, 2, 13]
 
@@ -154,19 +158,19 @@ XHAIR_ARM = 5
 KNIGHT_PNG = "tools/assets/png/KNIGHT.PNG"
 KNIGHT_W = 2
 KNIGHT_H = 3
-# Drawn in the accent, which is the colour the map gives the player: black on
-# the two parchments, red on the dark sheet, and the player's own font colour on
-# the fourth. It used to be the grooves' own ink, which said nothing about whose
-# figure it was -- and now that the other seats stand on the map too, whose
-# figure it is is the only thing the drawing has to say.
-KNIGHT_INK = PAL_ACCENT
+# Drawn in the first party slot, which is the colour the map gives the local
+# player: black on the two parchments, red on the dark sheet, and their own font
+# colour on the fourth. It used to be the grooves' own ink, which said nothing
+# about whose figure it was -- and now that the other seats stand on the map
+# too, whose figure it is is the only thing the drawing has to say.
+KNIGHT_INK = PAL_PARTY[0]
 
-# One figure per other seat, in the borrowed slots, and the four quadrants of
-# the shared-room shield in the same order: the local player, then the three
-# others. A shield's upper-left quadrant is always the player's own colour and
-# the other three are fixed to a seat, so a room holding two people says which
-# two rather than only that it holds more than one.
-SHIELD_INK = (PAL_ACCENT,) + PAL_PEER
+# One figure per seat, and the four quadrants of the shared-room shield in the
+# same order: the local player, then the three others. A shield's upper-left
+# quadrant is always the player's own colour and the other three are fixed to a
+# seat, so a room holding two people says which two rather than only that it
+# holds more than one.
+SHIELD_INK = PAL_PARTY
 SHIELD_QUAD = ((2, 2), (4, 2), (2, 4), (4, 4))
 
 
@@ -507,7 +511,7 @@ def build():
     # The same figure again in each other seat's colour. Three copies of one
     # drawing rather than one copy recoloured, because two people can be on the
     # map at once and a tile carries its palette entry in its pixels.
-    for ink in PAL_PEER:
+    for ink in PAL_PARTY[1:]:
         tiles.extend(knight_set(ink))                           # DT_KNIGHT_PEER0
 
     # The shared-room shield, indexed by which seats are standing in the room:

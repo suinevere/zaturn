@@ -221,6 +221,45 @@ test asked was whether a table places rooms it has no business placing, because
 half-plane and axis agreement say nothing about it -- a maze room can satisfy
 "east of" perfectly and still be nonsense. That check exists now.
 
+## The second regression: a staircase drawn as a corridor (`724f749`)
+
+The owner again, after the maze fix: "LURKING still wrong, seeing lines to no
+where, Floor 7 Renovated Cave North for example." Right again, and a different
+bug -- and this one was not in the tables at all.
+
+Renovated Cave (object 201, floor 6, which the map shows as 7) has two exits,
+`down` and `south`. There is no north exit, which is what made the report worth
+taking literally rather than filing under the first fix.
+
+**`map_view.cxx` had two passes each testing its own condition, and between them
+they lost the staircase.** The link pass gives any exit whose far end it has not
+gathered to `edge_stub`, which lays a run into the gutter toward wherever the
+far room is drawn -- it never asks whether the exit is vertical. The glyph pass
+declined any exit whose far room was `map_model_visited` and on this page, on
+the assumption that the link pass would draw it properly; true only while both
+ends are on screen. So `down` to Before the Altar, placed six cells west and six
+north on the same floor, drew a line leaving the room NORTHWARD and no D at all.
+
+**Latent since the glyph pass was written.** It needs the far end of a vertical
+exit to be placed and off screen, and before the tables were filled in those
+rooms were mostly unplaced -- `map_model_offset` failed inside `edge_stub` and
+nothing was drawn, while the glyph pass had the exit to itself and was right.
+Filling the tables in is what made it reachable. It stands on **33 exits across
+the disc**, eleven of them in Moonmist.
+
+`map_layout_offview` is now the one rule both passes ask, and it lives in
+`map_layout.h` -- the header whose stated reason for existing is that a host
+test can exercise what a build for the target cannot be run to check.
+`test_map_layout.c` holds all four cases and that the two passes can neither
+both claim an exit nor both decline it.
+
+**The lesson for the next one.** Both regressions were latent faults that adding
+rooms made reachable, not faults in the rooms added. Coverage work is a stress
+test of the drawing code, and the drawing code has no host test at all --
+`map_view.cxx` cannot be linked without SRL. Moving a decision into
+`map_layout.h` is the available answer and is worth doing every time one of
+these is found.
+
 `test_atlas_merge.py` holds the frozen set (a frozen room never moves; freezing
 nothing is bit-for-bit the old behaviour; a frozen room is still an anchor its
 neighbours score against), the paging rule, and the shipped file's own

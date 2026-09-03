@@ -57,9 +57,8 @@ extern "C" {
  |   one more than a single tinted ramp can separate by lightness alone.
  |   DT_XHAIR_* are the reticle's four corners, which go in the cells diagonally
  |   around the picked mark. DT_KNIGHT0 opens six tiles holding one 16x24
- |   drawing, row-major two wide by three tall, painted beside the player's own
- |   room; they are on the ground field rather than on transparency, since NBG2
- |   is one layer and a transparent pixel is a hole through the map.
+ |   drawing, row-major two wide by three tall, painted beside the local
+ |   player's own room and drawn in the accent, so the figure says whose it is.
  |
  |   DT_DASH0 mirrors DT_LINK0 exactly -- sixteen tiles on the same four-bit
  |   mask -- but stippled two pixels on and two off. It is a full set rather
@@ -80,6 +79,19 @@ extern "C" {
  |   run respectively. The vertical tile is the horizontal one's quarter turn,
  |   drawn by the same rot_cw the arrowheads use, so the pair cannot drift
  |   apart.
+ |
+ |   DT_KNIGHT_PEER0 opens three more copies of the same figure, one per other
+ |   seat, in the three palette slots the map borrows while it is up. Three
+ |   drawings rather than one recoloured, because two people can stand on the
+ |   map at once and a tile carries its palette entry in its own pixels.
+ |
+ |   DT_SHIELD0 is sixteen marks indexed by which seats are standing in one
+ |   room: bit 0 the local player, bits 1..3 the others in seat order. The
+ |   here-mark with its core quartered, one quadrant per seat, so a room two
+ |   people share says which two. Only masks with more than one bit are ever
+ |   painted -- one occupant gets a figure beside the mark it already had -- and
+ |   the rest exist so the mask indexes the set directly, the same bargain
+ |   DT_LINK0's mask 0 makes.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -115,7 +127,9 @@ enum {
     DT_GLYPH_U, DT_GLYPH_D,
     DT_LOOP,
     DT_BAGGAGE_H, DT_BAGGAGE_V,
-    DT_N
+    DT_KNIGHT_PEER0,
+    DT_SHIELD0 = DT_KNIGHT_PEER0 + 18,
+    DT_N = DT_SHIELD0 + 16
 };
 
 /*----------------------
@@ -127,6 +141,19 @@ enum {
  ----------------------*/
 #define DT_KNIGHT_W 2
 #define DT_KNIGHT_H 3
+
+/*----------------------
+ | DT_KNIGHT_CELLS / DT_PARTY_INKS / DT_SHIELD_SELF
+ | Description: One figure's cells, how many colours the map tells apart, and
+ |   the shield bit that is the local player's. The inks are the accent plus one
+ |   per other seat, which is what makes four the number: a fifth player would
+ |   need a fifth quadrant as well as a fifth palette slot, and there are four
+ |   seats in a multizorkd instance.
+ | Author: suinevere
+ ----------------------*/
+#define DT_KNIGHT_CELLS (DT_KNIGHT_W * DT_KNIGHT_H)
+#define DT_PARTY_INKS   4
+#define DT_SHIELD_SELF  1
 
 /*----------------------
  | DT_EDGE_N .. DT_EDGE_W / DT_LINK_H / DT_LINK_V

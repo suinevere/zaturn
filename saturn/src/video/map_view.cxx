@@ -5,7 +5,7 @@
  | Dependencies: map_model.h, map_atlas.h, map_layout.h, map_edges.h, dash_map.h,
  |   room_model.h, text_map.h, dash_view.h, title.h, room_art.h, display.h,
  |   app_state.h, input.h, saturn_keyboard.h, soft_reset.h, console_view.h,
- |   party.h, menu.h
+ |   party.h, menu.h, menu/options.h, scene/presentation.h
  ----------------------*/
 #include <srl.hpp>
 #include "map_model.h"
@@ -23,6 +23,7 @@
 #include "soft_reset.h"
 #include "console_view.h"
 #include "menu.h"
+#include "../menu/options.h"
 #include "party.h"
 #include "map_layout.h"
 #include "map_edges.h"
@@ -77,31 +78,109 @@
  ----------------------*/
 #define MAP_BACK_555 ((unsigned short) (MAP_GROUND_555 | 0x8000u))
 
+/*----------------------
+ | MAP_INK_BLACK / MAP_INK_RED / MAP_INK_GREEN / MAP_INK_BLUE
+ | Description: The colours the map draws itself in. The first is the ink of a
+ |   drawing on paper and the other three are the seat colours, saturated
+ |   because they have to be told apart at one cell across on a television.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_INK_BLACK DISP_RGB555(0x00, 0x00, 0x00)
+#define MAP_INK_RED   DISP_RGB555(0xE0, 0x10, 0x20)
+#define MAP_INK_GREEN DISP_RGB555(0x10, 0xB0, 0x30)
+#define MAP_INK_BLUE  DISP_RGB555(0x20, 0x50, 0xE0)
 
 /*----------------------
- | MAP_ROW_PLAYERS / MAP_ROW_STATUS / MAP_ROW_HELP / MAP_TEXT_LEFT /
- | MAP_TEXT_COLS
+ | g_sheet
+ | Description: Which of the four map sheets this game's page is drawn on, as
+ |   pres_map_bg_index answers it. Recorded at preload because that is where the
+ |   story's identity is in hand -- map_view_show takes no arguments and is
+ |   reached from a menu that knows nothing about the story -- and read again on
+ |   every open to choose the ink. Zero is the default parchment, which is what
+ |   a build with no presentation table (the netbin) draws on.
+ | Author: suinevere
+ ----------------------*/
+static int g_sheet = 0;
+
+/*----------------------
+ | map_ink
+ | Description: The colour the map's text, crosshair and player figure take on
+ |   the sheet this game was given. The two pale papers get the ink a drawing on
+ |   paper is made of; the dark sheet gets red, which is what it was found to
+ |   need on screen; and the fourth is drawn on the player's own font colour,
+ |   because that sheet is the one with nothing of its own to read against.
+ |
+ |   The choice is by sheet and not by genre. What matters is the paper a mark
+ |   has to be found on, and two genres sharing a sheet share that problem.
+ | Author: suinevere
+ | Dependencies: scene/presentation.h (PRES_MAP_BG order), display.h
+ | Globals: g_display, g_sheet
+ | Params: N/A
+ | Returns: a packed RGB555 colour
+ ----------------------*/
+static unsigned short map_ink(void)
+{
+    switch (g_sheet) {
+    case 2:  return MAP_INK_RED;
+    case 3:  return (unsigned short) display_text_rgb(g_display.text);
+    default: return MAP_INK_BLACK;
+    }
+}
+
+/*----------------------
+ | map_ink_is_red
+ | Description: Whether the local player's colour is close enough to the first
+ |   other seat's red that the two could not be told apart. The seat colour
+ |   gives way rather than the player's: the player's is chosen by the sheet and
+ |   has to be readable on it, and a seat has no such constraint. Asked of the
+ |   colour rather than of the sheet number, because the fourth sheet takes a
+ |   font colour the player picked and that can be red as easily as anything.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: c -- a packed RGB555 colour
+ | Returns: 1 when the colour reads as red, 0 otherwise
+ ----------------------*/
+static int map_ink_is_red(unsigned short c)
+{
+    int r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
+    return r >= 16 && r > g + 8 && r > b + 8;
+}
+
+
+/*----------------------
+ | MAP_ROW_STATUS / MAP_ROW_ROSTER / MAP_ROW_TOP / MAP_TEXT_LEFT /
+ | MAP_TEXT_COLS / MAP_PAGE_COLS
  | Description: The text rows written over the map and the band they may run
- |   in. All five are derived from the grid rather than written down, because
+ |   in. All of them are derived from the grid rather than written down, because
  |   the point of them is to stay on the paper the grid was inset to reach: the
- |   roster opens on the grid's first row and takes one row per occupied seat,
- |   so it can reach four, and the status and help rows are the two directly
- |   below the grid -- rows twenty-four and twenty-five, the last two of
- |   MAP.TGA's solid band. They used to be twenty-six and twenty-seven, which
- |   is where the sheet is torn, so the floor number on the right of the status
- |   row was printed on black.
+ |   status row is the one directly below the grid -- row twenty-four, the last
+ |   of MAP.TGA's solid band -- and the roster is the row above it, climbing one
+ |   row per other seat. It used to be row twenty-six, which is where the sheet
+ |   is torn, so the floor number on the right of it was printed on black.
+ |
+ |   The roster stands at the bottom rather than at the top, sharing its row
+ |   with the floor number: the corner of the sheet furthest from the drawing is
+ |   where a legend goes, and the top-left corner is where the map itself opens
+ |   on most stories. The local player is on that row and the others climb above
+ |   it, so the name that is always there is always in the same place.
+ |
+ |   There is no help row. It carried the pad legend, which said the same three
+ |   things on every screen the map has ever been opened from.
  |
  |   MAP_TEXT_LEFT/COLS are the drawing box's own columns, gutter included,
  |   which is narrower than the forty a 320-pixel screen shows and much
  |   narrower than text_map's 64-cell pitch -- printing outside it writes cells
- |   that are either off the paper or off the screen.
+ |   that are either off the paper or off the screen. MAP_PAGE_COLS is what the
+ |   floor number reserves at the right-hand end of the roster's own row.
  | Author: suinevere
  ----------------------*/
-#define MAP_ROW_PLAYERS MAP_TOP
 #define MAP_ROW_STATUS  (MAP_CELL_H)
-#define MAP_ROW_HELP    (MAP_CELL_H + 1)
+#define MAP_ROW_ROSTER  (MAP_ROW_STATUS - 1)
+#define MAP_ROW_TOP     (MAP_ROW_ROSTER - (PARTY_SEATS - 1))
 #define MAP_TEXT_LEFT   MAP_CLIP_X0
 #define MAP_TEXT_COLS   (MAP_CELL_W - MAP_CLIP_X0)
+#define MAP_PAGE_COLS   6
 
 /*----------------------
  | MAP_FLASH_SHIFT
@@ -252,38 +331,102 @@ static int put_uint(char *out, int at, unsigned int v)
 }
 
 /*----------------------
- | peer_seat
- | Description: Which other player is standing in a room, if any. The local
- |   player is skipped even when the server has not said which seat is theirs:
- |   map_model_current answers for them first at the one call site, so a seat
- |   matching it would only ever repaint the mark that already won.
+ | peer_slot
+ | Description: Which of the three other-seat colours a seat is drawn in. The
+ |   seats are numbered by the server and one of them is ours, so the colour is
+ |   the seat's number with our own taken out of the count -- red, green, blue
+ |   in seat order, and the same colour for the same person however many people
+ |   join or leave, which a running index over the occupied seats would not
+ |   give.
+ |
+ |   Before the server has said which seat is ours there is no seat to take out,
+ |   so the fourth is the one with no colour. That is the honest answer for a
+ |   state in which we do not know which of the four is the player holding the
+ |   pad; it lasts until the first roster frame.
  | Author: suinevere
  | Dependencies: party.h
  | Globals: N/A
- | Params: room -- object number
- | Returns: the seat, or -1 when nobody else is there
+ | Params: seat -- 0 to PARTY_SEATS-1
+ | Returns: 0, 1 or 2, or -1 for our own seat and for a seat past the colours
  ----------------------*/
-static int peer_seat(unsigned short room)
+static int peer_slot(int seat)
 {
-    int i;
-    if (room == 0) return -1;
+    int self = party_self();
+    int slot;
+    if (seat < 0 || seat >= PARTY_SEATS) return -1;
+    if (seat == self) return -1;
+    slot = (self >= 0 && seat > self) ? seat - 1 : seat;
+    return (slot < DT_PARTY_INKS - 1) ? slot : -1;
+}
+
+/*----------------------
+ | room_party
+ | Description: Who is standing in a room, as the bit mask DT_SHIELD0 is
+ |   indexed by: bit 0 the local player, bits 1..3 the other seats in
+ |   peer_slot's order.
+ |
+ |   The local player's bit is taken from map_model_current rather than from
+ |   their seat, because that answers offline and before the server has said
+ |   which seat is ours -- which is every disc game and the first seconds of
+ |   every netbin one.
+ | Author: suinevere
+ | Dependencies: party.h, map_model.h, peer_slot
+ | Globals: N/A
+ | Params: room -- object number
+ | Returns: the mask, 0 when nobody is there
+ ----------------------*/
+static int room_party(unsigned short room)
+{
+    int i, mask = 0;
+    if (room == 0) return 0;
+    if (room == map_model_current()) mask |= DT_SHIELD_SELF;
     for (i = 0; i < PARTY_SEATS; i++) {
         unsigned short rm = 0;
-        if (i == party_self()) continue;
+        int slot = peer_slot(i);
+        if (slot < 0) continue;
         if (!party_seat(i, &rm, 0)) continue;
-        if (rm == room) return i;
+        if (rm == room) mask |= 1 << (slot + 1);
     }
-    return -1;
+    return mask;
+}
+
+/*----------------------
+ | party_one
+ | Description: The single bit set in a mask, or -1 when it holds none or more
+ |   than one. Which is the question the mark asks: one occupant takes the mark
+ |   they already had and a figure in their own colour beside it, and two or
+ |   more take the quartered shield instead, because there is no room for two
+ |   figures beside one cell.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: mask -- a room_party mask
+ | Returns: 0..3, or -1
+ ----------------------*/
+static int party_one(int mask)
+{
+    int i, found = -1;
+    for (i = 0; i < DT_PARTY_INKS; i++) {
+        if (!(mask & (1 << i))) continue;
+        if (found >= 0) return -1;
+        found = i;
+    }
+    return found;
 }
 
 /*----------------------
  | paint_knight
- | Description: Stands the figure beside the local player's own mark, two cells
- |   wide by three tall with one cell of clearance so a link leaving west still
- |   shows where it goes. It goes to the right of the mark instead when the left
- |   would run off the viewport: dash_map_paint drops cells it cannot place, so
- |   the alternative is not a knight that hangs over the edge but half a knight,
+ | Description: Stands a figure beside a mark, two cells wide by three tall
+ |   with one cell of clearance so a link leaving west still shows where it
+ |   goes. It goes to the right of the mark instead when the left would run off
+ |   the viewport: dash_map_paint drops cells it cannot place, so the
+ |   alternative is not a knight that hangs over the edge but half a knight,
  |   which reads as a drawing fault rather than as a figure.
+ |
+ |   One figure per person on the map, each in its own colour, so the roster
+ |   below and the drawing above name the same people. Which colour is which
+ |   ink is the tile set's business, not this function's: the caller hands over
+ |   the first tile of one of the four drawings.
  |
  |   It is painted after the links and before the crosshair, so it covers a
  |   groove running under it and the cursor covers it. A figure that a link was
@@ -291,65 +434,107 @@ static int peer_seat(unsigned short room)
  | Author: suinevere
  | Dependencies: dash_map.h, map_layout.h
  | Globals: N/A
- | Params: mx, my -- the cell holding the player's mark
+ | Params: mx, my -- the cell holding the mark; base -- the first of the six
+ |   tiles of one figure
  | Returns: N/A
  ----------------------*/
-static void paint_knight(int mx, int my)
+static void paint_knight(int mx, int my, int base)
 {
     int kx, ky, tx, ty;
     map_layout_knight(mx, my, DT_KNIGHT_W, &kx, &ky);
     for (ty = 0; ty < DT_KNIGHT_H; ty++)
         for (tx = 0; tx < DT_KNIGHT_W; tx++)
             dash_map_paint(kx + tx, ky + ty,
-                           (unsigned char) (DT_KNIGHT0 + ty * DT_KNIGHT_W + tx));
+                           (unsigned char) (base + ty * DT_KNIGHT_W + tx));
+}
+
+/*----------------------
+ | knight_tiles
+ | Description: The first tile of the figure drawn in one party colour: the
+ |   local player's is the set the accent colours, and the other three follow it
+ |   in seat order.
+ | Author: suinevere
+ | Dependencies: dash_map.h
+ | Globals: N/A
+ | Params: ink -- 0 for the local player, 1..3 for the other seats
+ | Returns: a DT_* tile index
+ ----------------------*/
+static int knight_tiles(int ink)
+{
+    if (ink <= 0) return DT_KNIGHT0;
+    return DT_KNIGHT_PEER0 + (ink - 1) * DT_KNIGHT_CELLS;
+}
+
+/*----------------------
+ | seat_line
+ | Description: One roster line -- a name, a colon and the room that seat is
+ |   standing in -- into a caller's buffer.
+ | Author: suinevere
+ | Dependencies: party.h, room_model.h
+ | Globals: N/A
+ | Params: seat -- the seat to name; line, cap -- the buffer and its size
+ | Returns: 1 when the seat was occupied and a line was written, 0 otherwise
+ ----------------------*/
+static int seat_line(int seat, char *line, int cap)
+{
+    unsigned short rm = 0;
+    const char *nm = 0;
+    int k = 0;
+    if (!party_seat(seat, &rm, &nm)) return 0;
+    while (nm[k] != '\0' && k < PARTY_NAME_MAX - 1 && k < cap - 3) {
+        line[k] = nm[k];
+        k++;
+    }
+    line[k++] = ':';
+    line[k++] = ' ';
+    room_model_object_name(rm, line + k, cap - k);
+    return 1;
 }
 
 /*----------------------
  | draw_players
- | Description: Writes the roster into the top-left corner: one row per seat
+ | Description: Writes the roster into the bottom-left corner: one row per seat
  |   the server has told us about, naming who is in the game and the room they
- |   are standing in.
+ |   are standing in. The local player is on the lowest row, beside the floor
+ |   number, and the others climb above them in seat order -- so the one line
+ |   that is always there is always in the same place, and a roster that grows
+ |   grows away from the corner rather than pushing the player's own line down
+ |   the sheet.
  |
  |   An empty roster is not an error and is the ordinary state on a disc, which
  |   has no server to hear from. It falls back to the one line the local player
  |   deserves either way, labelled rather than named because offline there is
- |   nobody to have a name.
+ |   nobody to have a name. The same fallback covers a netbin that has heard a
+ |   roster but not yet been told which seat is ours.
  |
  |   Every room name comes from the story image the client already holds, so
  |   naming where somebody else is standing costs no traffic and works for a
  |   room this map has never drawn -- which on a difficulty that shows only what
  |   has been walked into is most of them.
  | Author: suinevere
- | Dependencies: party.h, room_model.h, text_map.h, map_model.h
+ | Dependencies: party.h, room_model.h, text_map.h, map_model.h, seat_line
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void draw_players(void)
 {
-    char line[MAP_TEXT_COLS - 2];
-    int i, row = MAP_ROW_PLAYERS;
+    char line[MAP_TEXT_COLS - MAP_PAGE_COLS];
+    int i, self = party_self(), row = MAP_ROW_ROSTER;
 
-    if (party_count() == 0) {
+    if (self < 0 || !seat_line(self, line, (int) sizeof line)) {
         static const char lbl[] = "Player: ";
         int k = 0;
         while (lbl[k] != '\0') { line[k] = lbl[k]; k++; }
         room_model_object_name(map_model_current(), line + k,
                                (int) sizeof line - k);
-        text_print_str(MAP_TEXT_LEFT, row, line);
-        return;
     }
+    text_print_str(MAP_TEXT_LEFT, row--, line);
 
-    for (i = 0; i < PARTY_SEATS; i++) {
-        unsigned short rm = 0;
-        const char *nm = 0;
-        int k = 0;
-        if (!party_seat(i, &rm, &nm)) continue;
-        while (nm[k] != '\0' && k < PARTY_NAME_MAX - 1) { line[k] = nm[k]; k++; }
-        line[k++] = ':';
-        line[k++] = ' ';
-        room_model_object_name(rm, line + k, (int) sizeof line - k);
-        text_print_str(MAP_TEXT_LEFT, row++, line);
+    for (i = PARTY_SEATS - 1; i >= 0 && row >= MAP_ROW_TOP; i--) {
+        if (i == self) continue;
+        if (!seat_line(i, line, (int) sizeof line)) continue;
+        text_print_str(MAP_TEXT_LEFT, row--, line);
     }
 }
 
@@ -410,9 +595,10 @@ static void edge_stub(int cx, int cy, int i, const MapExit *ex,
 /*----------------------
  | draw_once
  | Description: Paints one whole frame of the map: every room of one floor the
- |   viewport reaches, the links between them, the figure beside the local
- |   player, the crosshair, and the four rows of text around them -- the roster
- |   at the top, the picked room and the floor number along the bottom. The
+ |   viewport reaches, the links between them, a figure beside every player
+ |   standing on it, the crosshair, and the rows of text below them -- the
+ |   roster and the floor number on one row, the picked room on the row under
+ |   it, both in the bottom-left corner and both off the drawing. The
  |   ground is not among them: it is the parchment behind this layer, and every
  |   cell nothing is painted into shows it through. Clears the text layer
  |   first,
@@ -469,8 +655,8 @@ static void edge_stub(int cx, int cy, int i, const MapExit *ex,
  |   no per-frame expiry.
  | Author: suinevere
  | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, party.h,
- |   menu.h, map_edges.h, map_layout.h, gather, paint_knight, draw_players,
- |   peer_seat, put_uint
+ |   menu.h, map_edges.h, map_layout.h, gather, paint_knight, knight_tiles,
+ |   draw_players, room_party, party_one, put_uint
  | Globals: g_ids, g_dxs, g_dys, g_flash_x, g_flash_y, g_flash_tile, g_flash_n
  | Params: sx, sy -- the scroll offset in rooms, zero with the player centred;
  |   page -- the floor to draw; hx, hy -- the crosshair, in the same offsets
@@ -579,11 +765,18 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
         int cx = map_layout_cell(g_dxs[i], 0, MAP_CX, MAP_LEFT);
         int cy = map_layout_cell(g_dys[i], 0, MAP_CY, MAP_TOP);
         int picked = (g_dxs[i] == (short) hvx && g_dys[i] == (short) hvy);
+        int party = room_party(g_ids[i]);
+        int lone = party_one(party);
         unsigned char tile = DT_ROOM;
         int flash = 0;
 
-        if (g_ids[i] == map_model_current())  { tile = DT_ROOM_HERE; flash = 1; }
-        else if (peer_seat(g_ids[i]) >= 0)    { tile = DT_ROOM_PEER; flash = 1; }
+        /* One occupant keeps the mark the map has always drawn and takes a
+           figure in their own colour beside it; two or more take the quartered
+           shield, because two figures do not fit beside one cell and a room
+           two people are in has to say which two. */
+        if (lone == 0)     { tile = DT_ROOM_HERE; flash = 1; }
+        else if (lone > 0) { tile = DT_ROOM_PEER; flash = 1; }
+        else if (party)    { tile = (unsigned char) (DT_SHIELD0 + party); flash = 1; }
         /* The pick recolours an ordinary room and leaves a player's mark alone.
            The crosshair opens sitting on the local player, so a pick that
            overrode every mark would hide the one thing the screen is for and
@@ -602,7 +795,7 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
             g_flash_tile[g_flash_n] = tile;
             g_flash_n++;
         }
-        if (g_ids[i] == map_model_current()) paint_knight(cx, cy);
+        if (lone >= 0) paint_knight(cx, cy, knight_tiles(lone));
     }
 
     dash_map_paint(hcx - 1, hcy - 1, DT_XHAIR_TL);
@@ -621,15 +814,16 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
         if (hover != 0 && room_model_object_name(hover, nm, (int) sizeof nm))
             text_print_str(MAP_TEXT_LEFT, MAP_ROW_STATUS, nm);
 
+        /* The floor number ends one column short of the drawing's right edge
+           and sits on the roster's row rather than the status row: the corner
+           itself is where the sheet starts to tear, and the two numbers that
+           are always there belong on one line. */
         k = put_uint(pg, 0, (unsigned int) (page + 1));
         pg[k++] = '/';
         k = put_uint(pg, k, (unsigned int) pages);
         pg[k] = '\0';
-        text_print_str(MAP_TEXT_LEFT + MAP_TEXT_COLS - k, MAP_ROW_STATUS, pg);
+        text_print_str(MAP_TEXT_LEFT + MAP_TEXT_COLS - k - 1, MAP_ROW_ROSTER, pg);
 
-        text_print_str(MAP_TEXT_LEFT, MAP_ROW_HELP,
-                       (pages > 1) ? "D-pad: pick  L/R: floor  A/B/C: back"
-                                   : "D-pad: pick     A/B/C: back");
         text_flush();
     }
 }
@@ -727,7 +921,9 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
  ----------------------*/
 extern "C" void map_view_preload(unsigned int release, const char *serial) {
 #ifndef NETBIN
-    const char *sheet = pres_map_bg(release, serial);
+    const char *sheet;
+    g_sheet = pres_map_bg_index(release, serial);
+    sheet = pres_map_bg(release, serial);
     title_bg_hold((sheet != nullptr) ? sheet : MAP_BG_FILE);
 #else
     (void) release; (void) serial;
@@ -792,7 +988,23 @@ extern "C" void map_view_show(void) {
         SRL::VDP2::SetBackColor(SRL::Types::HighColor(MAP_BACK_555));
         menu_back_override(MAP_BACK_555);
     }
-    dash_tint(MAP_GROUND_555);
+    // The ink first, then the party colours over it. text_set_color carries the
+    // dash_tint the map's ground needs -- the two have to be one call or the
+    // labels and the marks would be lit by different grounds -- and dash_map_ink
+    // has to follow it, because a tint rewrites all sixteen entries from the
+    // ramp and would take the borrowed slots back.
+    //
+    // The map's labels do not take the player's font colour. It is chosen to be
+    // read on their own background and this screen is not on it: a bright green
+    // that is right on black is barely there on tan paper. The one sheet where
+    // it IS the ink is the one with nothing of its own to be read against.
+    {
+        unsigned short ink = map_ink();
+        text_set_color(ink, MAP_GROUND_555);
+        dash_map_ink(ink,
+                     map_ink_is_red(ink) ? MAP_INK_BLACK : MAP_INK_RED,
+                     MAP_INK_GREEN, MAP_INK_BLUE);
+    }
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
     else                           map_model_clear_reveal();
 
@@ -873,13 +1085,13 @@ extern "C" void map_view_show(void) {
     if (g_menu_page_fade > 0) menu_fade_out(g_menu_page_fade);
     {
         int r;
-        for (r = MAP_ROW_PLAYERS; r < MAP_ROW_PLAYERS + PARTY_SEATS; r++)
-            text_clear_line(r);
+        for (r = MAP_ROW_TOP; r <= MAP_ROW_STATUS; r++) text_clear_line(r);
     }
-    text_clear_line(MAP_ROW_STATUS);
-    text_clear_line(MAP_ROW_HELP);
     text_flush();
-    dash_tint(tint);
+    // Both the map's ink and its ground handed back in one call, the same way
+    // they were taken: this rewrites the whole ramp, which is what calls the
+    // three borrowed party slots back in to the stone.
+    text_set_color((unsigned short) display_text_rgb(g_display.text), tint);
     if (!parchment) {
         // After the fade-out above, so that ramp takes the tan down rather than
         // the player's colour, and before the page underneath fades itself back

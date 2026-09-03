@@ -1,9 +1,9 @@
 /*----------------------
  | map_view.h
  | Description: The in-game map's screen: the ground, the room marks and links
- |   on the tile layer, the labels on the text layer, and the figure fixed at
- |   the centre. Owns every hardware write the map makes; map_model.c owns the
- |   geometry. Implemented in map_view.cxx.
+ |   on the tile layer, the labels on the text layer, and a figure beside every
+ |   player standing on it. Owns every hardware write the map makes; map_model.c
+ |   owns the geometry. Implemented in map_view.cxx.
  | Author: suinevere
  | Dependencies: N/A
  ----------------------*/
@@ -17,10 +17,17 @@ extern "C" {
 /*----------------------
  | map_view_show
  | Description: Draws the map and holds it until the player backs out, then
- |   returns with the screen cleared and the tile palette put back the way it
- |   was found. A/B/C/START or any key backs out; the D-pad scrolls the view a
- |   room at a time, clamped to the rooms actually placed so it cannot be walked
- |   off into empty ground.
+ |   returns with the screen cleared and both the tile palette and the text
+ |   colour put back the way they were found. A/B/C/START or any key backs out;
+ |   the D-pad scrolls the view a room at a time, clamped to the rooms actually
+ |   placed so it cannot be walked off into empty ground.
+ |
+ |   The map draws itself in an ink chosen by the sheet it is on rather than in
+ |   the player's own font colour, which is picked to be read on their own
+ |   background and not on paper: dark on the two pale sheets, red on the dark
+ |   one, and their font colour on the fourth, which has nothing of its own to
+ |   be read against. The other seats take a colour each -- red, green, blue --
+ |   for their figures and for the quadrants of the mark a shared room draws.
  |
  |   How much of the map there is comes from g_difficulty. Easy places the whole
  |   authored table before the first draw, so the screen shows the map as drawn

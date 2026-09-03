@@ -89,6 +89,26 @@ static int is_map_ink(int t) {
            (t >= DT_ROOM_SEL && t < DT_N);
 }
 
+/*----------------------
+ | is_borrowed_ink
+ | Description: Whether a tile is drawn wholly in one of the three palette
+ |   entries the map borrows for the other seats' colours. Those entries are
+ |   points of the stone ramp everywhere else and are only a colour while the
+ |   map is up, so the ground-band separation every other mark has to clear says
+ |   nothing about them: on the map they carry a saturated red, green or blue
+ |   that dash_map_ink wrote straight to CRAM, and off the map nothing paints
+ |   them. The other half of the bargain -- that no tile the map paints on top
+ |   of the stone reaches these entries -- is tests/test_dash_accent.py's.
+ | Author: suinevere
+ | Dependencies: dash_map.h, dash_tiles.h
+ | Globals: N/A
+ | Params: t -- a DT_* index
+ | Returns: 1 for the peer figures, 0 otherwise
+ ----------------------*/
+static int is_borrowed_ink(int t) {
+    return t >= DT_KNIGHT_PEER0 && t < DT_SHIELD0;
+}
+
 int main(void) {
     int i, v, x, y;
 
@@ -256,6 +276,7 @@ int main(void) {
         assert(ground_lo <= ground_hi);
         for (t = DT_GROUND; t < DT_N; t++) {
             if (t == DT_LINK0 || !is_map_ink(t)) continue;
+            if (is_borrowed_ink(t)) continue;
             assert(escapes_ground(t));
         }
     }
@@ -281,7 +302,7 @@ int main(void) {
         assert(DT_LINK_V == DT_LINK0 + (DT_EDGE_N | DT_EDGE_S));
     }
 
-    /* The set grew by exactly the 27 new tiles and nothing before them moved.
+    /* Nothing before the party tiles moved when they were added at the end.
        Every index after DT_KNIGHT0 is a literal in dash_tiles.c, so a renumber
        here silently repaints the whole map with the wrong glyphs. */
     {
@@ -294,7 +315,9 @@ int main(void) {
         assert(DT_GLYPH_U == 139);
         assert(DT_GLYPH_D == 140);
         assert(DT_LOOP == 141);
-        assert(DT_N == 144);
+        assert(DT_KNIGHT_PEER0 == 144);
+        assert(DT_SHIELD0 == 162);
+        assert(DT_N == 178);
 
         /* Mask 0 is never painted and stays blank in both sets. */
         for (y = 0; y < 8; y++)
@@ -358,7 +381,6 @@ int main(void) {
            would draw a gap where the mark sits. */
         assert(DT_BAGGAGE_H == 142);
         assert(DT_BAGGAGE_V == 143);
-        assert(DT_N == 144);
 
         for (x = 0; x < 8; x++)
             assert(px(DT_BAGGAGE_H, x, 3) != 0 && px(DT_BAGGAGE_H, x, 4) != 0);
@@ -379,6 +401,67 @@ int main(void) {
         for (y = 0; y < 8; y++)
             for (x = 0; x < 8; x++)
                 assert(px(DT_BAGGAGE_V, x, y) == px(DT_BAGGAGE_H, y, 7 - x));
+    }
+
+    /* The party colours: one figure per seat and the shield they share when
+       two of them stand in one room. */
+    {
+        int ink, mask, bit, cell;
+        static const int QUAD[4][2] = { { 2, 2 }, { 4, 2 }, { 2, 4 }, { 4, 4 } };
+
+        /* Every figure is the same drawing -- same pixels lit, one entry each
+           -- so the four are one person in four colours rather than four
+           differently shaped people. */
+        for (ink = 1; ink < DT_PARTY_INKS; ink++)
+            for (cell = 0; cell < DT_KNIGHT_CELLS; cell++) {
+                int a = DT_KNIGHT0 + cell;
+                int b = DT_KNIGHT_PEER0 + (ink - 1) * DT_KNIGHT_CELLS + cell;
+                int one = 0;
+                for (y = 0; y < 8; y++)
+                    for (x = 0; x < 8; x++) {
+                        assert((px(a, x, y) != 0) == (px(b, x, y) != 0));
+                        if (px(b, x, y) != 0) {
+                            if (one == 0) one = px(b, x, y);
+                            assert(px(b, x, y) == one);
+                        }
+                    }
+                assert(one != 0);
+                /* And no two seats share a colour, or the map would say two
+                   people were the same person. */
+                if (ink > 1) {
+                    int prev = DT_KNIGHT_PEER0 + (ink - 2) * DT_KNIGHT_CELLS;
+                    assert(memcmp(dash_tile_data[b], dash_tile_data[prev + cell],
+                                  32) != 0);
+                }
+            }
+
+        /* The shield is the here-mark with its core quartered: a quadrant a
+           seat claims is that seat's own entry, one nobody claims is the core's
+           own, and the ring is untouched so a shared room still reads as a
+           room. */
+        for (mask = 0; mask < 16; mask++) {
+            int t = DT_SHIELD0 + mask;
+            for (x = 1; x <= 6; x++) {
+                assert(px(t, x, 0) == 0);
+                assert(px(t, x, 7) == 0);
+            }
+            assert(px(t, 1, 1) == px(DT_ROOM_HERE, 1, 1));
+            for (bit = 0; bit < 4; bit++) {
+                int qx = QUAD[bit][0], qy = QUAD[bit][1];
+                int want = px(DT_ROOM_HERE, qx, qy);
+                int got = px(t, qx, qy);
+                if (mask & (1 << bit)) assert(got != want);
+                else                   assert(got == want);
+                assert(px(t, qx + 1, qy + 1) == got);
+            }
+        }
+
+        /* Mask 0 is the here-mark exactly. It is never painted -- one occupant
+           keeps the mark it already had -- and the whole quadrant scheme rests
+           on the shield being that mark with quadrants added, so proving it
+           here is what makes the four comparisons above mean anything. */
+        assert(memcmp(dash_tile_data[DT_SHIELD0],
+                      dash_tile_data[DT_ROOM_HERE], 32) == 0);
     }
 
     printf("test_dash_tiles: ok\n");

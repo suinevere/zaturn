@@ -29,10 +29,10 @@ extern const unsigned short dash_palette[16];
  | DASH_PAL_ACCENT
  | Description: The one palette entry that is a colour rather than a step of
  |   the stone ramp, and the one write_palette copies to CRAM untouched instead
- |   of bending toward the background's hue and brightness. Only the map's
- |   crosshair is drawn in it. The slot is free because nothing else can reach
- |   it: the marble caps its veins two steps below and every frame, rule and
- |   mark names an entry on either side of it.
+ |   of bending toward the background's hue and brightness. The map's crosshair
+ |   and the local player's figure are drawn in it. The slot is free because
+ |   nothing else can reach it: the marble caps its veins two steps below and
+ |   every frame, rule and mark names an entry on either side of it.
  |
  |   Owned by tools/gen_dash_tiles.py, which sets dash_palette[] from its own
  |   PAL_ACCENT; the two are held together by tests/test_dash_accent.py, since
@@ -41,6 +41,30 @@ extern const unsigned short dash_palette[16];
  | Author: suinevere
  ----------------------*/
 #define DASH_PAL_ACCENT 14
+
+/*----------------------
+ | DASH_PAL_PEER0 / DASH_PAL_PEER1 / DASH_PAL_PEER2
+ | Description: The other three seats' colours on the map. BORROWED, not
+ |   reserved: they are ordinary points of the stone ramp in dash_palette and
+ |   carry a colour only for as long as the map screen is up, which is between
+ |   dash_map_ink and the dash_tint that closes the screen.
+ |
+ |   Borrowing is what there is. The accent is the only entry nothing on the
+ |   stone reaches, and the map needs four colours at once -- one per seat. It
+ |   is safe because the map paints no stone: its own tiles reach entries 0, 1,
+ |   2, 12, 13, 14 and 15 and nothing else, so 3..11 are unreachable for as long
+ |   as it is drawn. Entry 4 is reachable by nothing anywhere; 5 and 6 are
+ |   marble body, which is why the restore on the way out is part of the design
+ |   rather than tidiness.
+ |
+ |   Kept in step with PAL_PEER in tools/gen_dash_tiles.py by
+ |   tests/test_dash_accent.py, for the reason the accent is: a drift would
+ |   build and link and quietly paint one player's figure in stone grey.
+ | Author: suinevere
+ ----------------------*/
+#define DASH_PAL_PEER0 4
+#define DASH_PAL_PEER1 5
+#define DASH_PAL_PEER2 6
 
 #ifdef __cplusplus
 }

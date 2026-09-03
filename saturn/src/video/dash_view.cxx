@@ -208,6 +208,16 @@ unsigned short dash_tint_current(void)
     return g_tint_bg;
 }
 
+void dash_map_ink(unsigned short accent, unsigned short p0,
+                  unsigned short p1, unsigned short p2)
+{
+    volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
+    cram[DASH_PAL_NO * 16 + DASH_PAL_ACCENT] = (unsigned short) (0x8000 | accent);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_PEER0]  = (unsigned short) (0x8000 | p0);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_PEER1]  = (unsigned short) (0x8000 | p1);
+    cram[DASH_PAL_NO * 16 + DASH_PAL_PEER2]  = (unsigned short) (0x8000 | p2);
+}
+
 bool dash_init(void)
 {
     if (g_ready) return true;

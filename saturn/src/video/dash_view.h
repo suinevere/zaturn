@@ -98,6 +98,33 @@ void dash_tint(unsigned short bg555);
 unsigned short dash_tint_current(void);
 
 /*----------------------
+ | dash_map_ink
+ | Description: Gives the map's four party colours to CRAM, untinted: the
+ |   accent slot the crosshair and the local player's figure are drawn in, and
+ |   the three borrowed slots the other seats' figures and the shared-room
+ |   shield are drawn in.
+ |
+ |   Written straight rather than through the ramp for the reason the accent
+ |   already was: these are colours, not stone, and bending them toward the
+ |   paper they have to be found on is exactly what would hide them.
+ |
+ |   The three peer slots are ordinary ramp entries the rest of the time -- see
+ |   DASH_PAL_PEER0 in dash_tiles.h -- so this is a loan that the next dash_tint
+ |   calls in. Call it AFTER the dash_tint that sets the map's ground, since
+ |   that rewrites all sixteen entries from the ramp, and let the dash_tint on
+ |   the way out put the stone back.
+ | Author: suinevere
+ | Dependencies: dash_tiles.h, SRL
+ | Globals: N/A
+ | Params: accent -- the local player's colour; p0, p1, p2 -- the other three
+ |   seats', in seat order. All packed RGB555 with or without the opaque bit,
+ |   which is set here either way
+ | Returns: N/A
+ ----------------------*/
+void dash_map_ink(unsigned short accent, unsigned short p0,
+                  unsigned short p1, unsigned short p2);
+
+/*----------------------
  | dash_hold
  | Description: Claims the dashboard panel for one frame with the variant and
  |   top-edge row the strip's renderers would have asked for, choosing between

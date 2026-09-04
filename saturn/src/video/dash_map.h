@@ -85,12 +85,6 @@ extern "C" {
  |   drawings rather than one recoloured, because two people can stand on the
  |   map at once and a tile carries its palette entry in its own pixels.
  |
- |   DT_ROOM_HERE_INV is the here-mark with its ring and core exchanged. The
- |   local player's mark pulses between the two rather than between itself and an
- |   empty room, so it turns inside out on its cell instead of vanishing from it
- |   for half of every pulse -- which is what keeps it readable with a figure
- |   standing beside it and the reticle sitting around it.
- |
  |   DT_KNIGHT_PARTY0 is a fifth copy of the figure in the neutral passage ink,
  |   for a room more than one player is standing in: there is one figure between
  |   them and the shield on its arm is what says whose. DT_SHIELD_HI0 and
@@ -102,6 +96,12 @@ extern "C" {
  |   bit are ever painted -- one occupant gets their own coloured figure and a
  |   blank shield -- and the rest exist so the mask indexes the set directly, the
  |   same bargain DT_LINK0's mask 0 makes.
+ |
+ |   DT_CAP_L and DT_CAP_R are the brackets that close the room caption. The
+ |   label is centred on the room it names, so it lands on whatever is drawn
+ |   there; the cells it covers are cleared to bare paper and these two say where
+ |   that clearing starts and stops, so a passage running under the words reads
+ |   as one the label is standing on rather than one that ends there.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -138,11 +138,11 @@ enum {
     DT_LOOP,
     DT_BAGGAGE_H, DT_BAGGAGE_V,
     DT_KNIGHT_PEER0,
-    DT_ROOM_HERE_INV = DT_KNIGHT_PEER0 + 18,
-    DT_KNIGHT_PARTY0,
+    DT_KNIGHT_PARTY0 = DT_KNIGHT_PEER0 + 18,
     DT_SHIELD_HI0 = DT_KNIGHT_PARTY0 + 6,
     DT_SHIELD_LO0 = DT_SHIELD_HI0 + 16,
-    DT_N = DT_SHIELD_LO0 + 16
+    DT_CAP_L = DT_SHIELD_LO0 + 16, DT_CAP_R,
+    DT_N
 };
 
 /*----------------------

@@ -13,7 +13,7 @@ import random
 
 from PIL import Image
 
-N = 201
+N = 202
 SEED = 20260828
 
 # Palette index by role. The blue channel runs two steps above red and green
@@ -567,15 +567,6 @@ def build():
     for ink in PAL_PARTY[1:]:
         tiles.extend(knight_set(ink))                           # DT_KNIGHT_PEER0
 
-    # The here-mark with its two entries exchanged -- dark ring, bright core.
-    # The local player's mark pulses between the two rather than between itself
-    # and an empty room, so what says "you are here" is a mark turning inside
-    # out on one cell instead of a mark that spends half its time gone, and it
-    # stays legible with a figure beside it and the reticle around it.
-    inv = solid(MARK_HERE_CORE, 1, 1, 6, 6)
-    inv = solid(MARK_HERE_RING, 2, 2, 5, 5, base=inv)
-    tiles.append(inv)                                           # DT_ROOM_HERE_INV
-
     # The figure a shared room gets: one drawing in the neutral ink, and then a
     # copy of each of the two cells its shield crosses per occupancy mask -- bit
     # 0 the local player, bits 1..3 the other three in seat order. Two cells per
@@ -590,6 +581,25 @@ def build():
         for mask in range(16):
             tiles.append(knight_cell(KNIGHT_PARTY_INK, cell, mask))
                                                     # DT_SHIELD_HI0 / DT_SHIELD_LO0
+
+    # The room caption's brackets, drawn in the cell either side of the name: a
+    # rule with a serif top and bottom, turned to face the words. The label is
+    # centred on the room it names and so lands on whatever the map has drawn
+    # there -- a passage leaving south runs straight down through it -- and the
+    # cells between these two are cleared to bare paper, so the brackets are
+    # what says where the clearing starts and stops rather than a gap in the
+    # drawing that could be read as a passage that is not there.
+    #
+    # Rows 1..6 and not 0..7: a bracket that reached the cell's own edges would
+    # join the one on the row above and read as a table rule.
+    cap_l = solid(MARK_DARK, 5, 1, 5, 6)
+    cap_l = solid(MARK_DARK, 5, 1, 7, 1, base=cap_l)
+    cap_l = solid(MARK_DARK, 5, 6, 7, 6, base=cap_l)
+    tiles.append(cap_l)                                         # DT_CAP_L
+    cap_r = solid(MARK_DARK, 2, 1, 2, 6)
+    cap_r = solid(MARK_DARK, 0, 1, 2, 1, base=cap_r)
+    cap_r = solid(MARK_DARK, 0, 6, 2, 6, base=cap_r)
+    tiles.append(cap_r)                                         # DT_CAP_R
 
     assert len(tiles) == N, len(tiles)
     return tiles

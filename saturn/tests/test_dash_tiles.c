@@ -106,7 +106,7 @@ static int is_map_ink(int t) {
  | Returns: 1 for the peer figures, 0 otherwise
  ----------------------*/
 static int is_borrowed_ink(int t) {
-    return t >= DT_KNIGHT_PEER0 && t < DT_ROOM_HERE_INV;
+    return t >= DT_KNIGHT_PEER0 && t < DT_KNIGHT_PARTY0;
 }
 
 int main(void) {
@@ -316,11 +316,12 @@ int main(void) {
         assert(DT_GLYPH_D == 140);
         assert(DT_LOOP == 141);
         assert(DT_KNIGHT_PEER0 == 144);
-        assert(DT_ROOM_HERE_INV == 162);
-        assert(DT_KNIGHT_PARTY0 == 163);
-        assert(DT_SHIELD_HI0 == 169);
-        assert(DT_SHIELD_LO0 == 185);
-        assert(DT_N == 201);
+        assert(DT_KNIGHT_PARTY0 == 162);
+        assert(DT_SHIELD_HI0 == 168);
+        assert(DT_SHIELD_LO0 == 184);
+        assert(DT_CAP_L == 200);
+        assert(DT_CAP_R == 201);
+        assert(DT_N == 202);
 
         /* Mask 0 is never painted and stays blank in both sets. */
         for (y = 0; y < 8; y++)
@@ -505,16 +506,24 @@ int main(void) {
                       dash_tile_data[DT_KNIGHT_PARTY0 + DT_SHIELD_HI_CELL], 32) == 0);
         assert(memcmp(dash_tile_data[DT_SHIELD_LO0],
                       dash_tile_data[DT_KNIGHT_PARTY0 + DT_SHIELD_LO_CELL], 32) == 0);
+    }
 
-        /* And the here-mark's inverse really is its two entries exchanged: the
-           pulse it drives is only readable as one mark turning inside out if the
-           two halves are the same shape. */
+    /* The caption's brackets face each other and keep off the cell's own top
+       and bottom rows, so a label does not join the one on the row above into a
+       table rule, and each is the other turned over -- the plate has to close
+       the same way at both ends. */
+    {
+        for (x = 0; x < 8; x++) {
+            assert(px(DT_CAP_L, x, 0) == 0 && px(DT_CAP_L, x, 7) == 0);
+            assert(px(DT_CAP_R, x, 0) == 0 && px(DT_CAP_R, x, 7) == 0);
+        }
         for (y = 0; y < 8; y++)
-            for (x = 0; x < 8; x++) {
-                int a = px(DT_ROOM_HERE, x, y), b = px(DT_ROOM_HERE_INV, x, y);
-                assert((a != 0) == (b != 0));
-                if (a != 0) assert(a != b);
-            }
+            for (x = 0; x < 8; x++)
+                assert(px(DT_CAP_L, x, y) == px(DT_CAP_R, 7 - x, y));
+        /* The rules face inward: the left bracket's own is on its right-hand
+           side, against the first letter, and the right bracket's on its left. */
+        assert(px(DT_CAP_L, 5, 3) != 0 && px(DT_CAP_L, 2, 3) == 0);
+        assert(px(DT_CAP_R, 2, 3) != 0 && px(DT_CAP_R, 5, 3) == 0);
     }
 
     printf("test_dash_tiles: ok\n");

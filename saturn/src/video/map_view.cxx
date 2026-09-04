@@ -213,10 +213,14 @@ static int map_ink_is_red(unsigned short c)
  |   else means looking away from the cursor and back.
  |
  |   It is drawn over the map rather than beside it, which is what a caption
- |   does. The text layer is above the tile layer, so a passage running under
- |   the label is covered for that row and nothing is corrupted; the label is
- |   redrawn from scratch every time the cursor moves, since draw_once opens
- |   with menu_clear.
+ |   does. The text layer is above the tile layer, so the label is never
+ |   corrupted by what it lands on; but a passage running south out of the room
+ |   the cursor is on runs straight down through its own name, and letters
+ |   crossing a groove read as neither. The cells the label covers are therefore
+ |   cleared to bare paper and closed with a bracket at each end -- see
+ |   MAP_CAP_ON -- and the whole plate steps aside for a second in four so the
+ |   drawing it is standing on can be read. The label is laid again from scratch
+ |   every time the cursor moves, since draw_once opens with menu_clear.
  |
  |   The roster and the floor number share the row directly below the grid --
  |   row twenty-four, the last of MAP.TGA's solid band; row twenty-six, which is
@@ -286,23 +290,136 @@ static short          g_dys[MAP_VIS_MAX];
 static short g_slot[MAP_ROOM_MAX];
 
 /*----------------------
- | g_flash_x / g_flash_y / g_flash_tile / g_flash_alt / g_flash_n
+ | g_flash_x / g_flash_y / g_flash_tile / g_flash_n
  | Description: The cells holding a player's mark, gathered by draw_once so the
  |   frame loop can pulse them without repeating the room and link walk. Each
- |   alternates between its own tile and the other half of its pulse, so a
- |   pulsing mark reads as a room that is being pointed at rather than as one
- |   blinking out of existence.
- |
- |   The other half is an ordinary room for somebody else's mark and the
- |   here-mark inverted for the local player's, which is the one the reader is
- |   looking for and the one with a figure and a reticle piled around it.
+ |   alternates between its own tile and DT_ROOM, so a pulsing mark reads as a
+ |   room that is being pointed at rather than as one blinking out of existence.
  | Author: suinevere
  ----------------------*/
 static short         g_flash_x[MAP_FLASH_MAX];
 static short         g_flash_y[MAP_FLASH_MAX];
 static unsigned char g_flash_tile[MAP_FLASH_MAX];
-static unsigned char g_flash_alt[MAP_FLASH_MAX];
 static int           g_flash_n;
+
+/*----------------------
+ | MAP_CAP_ON / MAP_CAP_OFF / MAP_CAP_MAX
+ | Description: How long the room caption stands and how long it stands down,
+ |   in frames -- three seconds and one at 60Hz -- and the most cells its plate
+ |   can cover, which is the drawing's whole width.
+ |
+ |   The label is centred on the room it names, so it lands on top of whatever
+ |   the map drew there; a room with a passage leaving south has that passage
+ |   running down through its own name. Moving the label off the room it names
+ |   is worse than the overlap, so instead the cells it covers are cleared to
+ |   bare paper with a bracket at each end, and the whole thing steps aside for
+ |   one second in four and puts the drawing back. What is hidden is never
+ |   hidden for long enough to be missed, and it is never hidden by letters
+ |   crossing a line.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_CAP_ON  180
+#define MAP_CAP_OFF 60
+#define MAP_CAP_MAX MAP_TEXT_COLS
+
+/*----------------------
+ | g_cap_x / g_cap_y / g_cap_n / g_cap_text / g_cap_under / g_cap_frame /
+ | g_cap_on
+ | Description: The caption as laid: the cell its left bracket went in, its row,
+ |   how many cells the plate covers, the name itself, and the tiles that were
+ |   under it, so the blink can put the drawing back and take it away again
+ |   without repeating the room and link walk. g_cap_n is zero when there is no
+ |   caption on screen, which is what makes the blink inert on a cursor sitting
+ |   over empty ground.
+ | Author: suinevere
+ ----------------------*/
+static short         g_cap_x, g_cap_y, g_cap_n;
+static char          g_cap_text[MAP_CAP_MAX];
+static unsigned char g_cap_under[MAP_CAP_MAX];
+static int           g_cap_frame;
+static int           g_cap_on;
+
+/*----------------------
+ | cap_show
+ | Description: Puts the caption up or takes it down. Up is the plate -- bare
+ |   paper between two brackets -- and the name over it; down is the tiles that
+ |   were there before and spaces where the letters were. Both write the same
+ |   cells, so the two are exact inverses of each other and a blink cannot leak.
+ | Author: suinevere
+ | Dependencies: dash_map.h, text_map.h
+ | Globals: g_cap_x, g_cap_y, g_cap_n, g_cap_text, g_cap_under
+ | Params: on -- non-zero to show the caption, zero to hide it
+ | Returns: N/A
+ ----------------------*/
+static void cap_show(int on)
+{
+    int i;
+    if (g_cap_n <= 0) return;
+    if (on) {
+        for (i = 0; i < g_cap_n; i++) {
+            unsigned char t = DT_BLANK;
+            if (i == 0)                t = DT_CAP_L;
+            else if (i == g_cap_n - 1) t = DT_CAP_R;
+            dash_map_paint(g_cap_x + i, g_cap_y, t);
+        }
+        text_print_str(g_cap_x + 1, g_cap_y, g_cap_text);
+    } else {
+        char blank[MAP_CAP_MAX + 1];
+        for (i = 0; i < g_cap_n; i++) {
+            dash_map_paint(g_cap_x + i, g_cap_y, g_cap_under[i]);
+            blank[i] = ' ';
+        }
+        blank[i] = '\0';
+        text_print_str(g_cap_x, g_cap_y, blank);
+    }
+}
+
+/*----------------------
+ | cap_covers
+ | Description: Whether a cell is under the caption's plate right now. The
+ |   pulse asks before repainting a player's mark: a mark two rows below the
+ |   room the cursor is on falls inside the label, and one that kept pulsing
+ |   there would punch a hole through it every half second.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cap_on, g_cap_x, g_cap_y, g_cap_n
+ | Params: x, y -- a cell
+ | Returns: 1 when the caption is up and covering it, 0 otherwise
+ ----------------------*/
+static int cap_covers(int x, int y)
+{
+    return g_cap_on && g_cap_n > 0 && y == g_cap_y &&
+           x >= g_cap_x && x < g_cap_x + g_cap_n;
+}
+
+/*----------------------
+ | cap_lay
+ | Description: Records where the caption is going and what it is covering, then
+ |   shows it. Reading the cells back out of the shadow rather than recomputing
+ |   them is what lets the blink restore a groove, a mark, a glyph or bare paper
+ |   without knowing which of those it is putting back.
+ | Author: suinevere
+ | Dependencies: dash_map.h (dash_cell)
+ | Globals: g_cap_*
+ | Params: col, row -- where the name's first letter goes; nm, nc -- the name
+ |   and its length
+ | Returns: N/A
+ ----------------------*/
+static void cap_lay(int col, int row, const char *nm, int nc)
+{
+    int i;
+    if (nc > MAP_CAP_MAX - 3) nc = MAP_CAP_MAX - 3;
+    for (i = 0; i < nc; i++) g_cap_text[i] = nm[i];
+    g_cap_text[nc] = '\0';
+    g_cap_x = (short) (col - 1);
+    g_cap_y = (short) row;
+    g_cap_n = (short) (nc + 2);
+    for (i = 0; i < g_cap_n; i++)
+        g_cap_under[i] = dash_cell(g_cap_x + i, g_cap_y);
+    g_cap_frame = 0;
+    g_cap_on = 1;
+    cap_show(1);
+}
 
 /*----------------------
  | gather
@@ -766,7 +883,7 @@ static unsigned short pick(int page, int hx, int hy)
  | Dependencies: map_model.h, dash_map.h, text_map.h, room_model.h, party.h,
  |   menu.h, map_edges.h, map_layout.h, gather, paint_knight, knight_tiles,
  |   draw_players, room_party, party_one, put_uint
- | Globals: g_ids, g_dxs, g_dys, g_flash_x, g_flash_y, g_flash_tile, g_flash_alt, g_flash_n
+ | Globals: g_ids, g_dxs, g_dys, g_flash_x, g_flash_y, g_flash_tile, g_flash_n
  | Params: sx, sy -- the scroll offset in rooms, zero with the player centred;
  |   page -- the floor to draw; hx, hy -- the crosshair, in the same offsets
  |   from the player that map_model_offset answers in
@@ -782,6 +899,10 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
     menu_clear();
     dash_map_begin();
     g_flash_n = 0;
+    /* Dropped before anything is painted, so a cursor that has moved onto empty
+       ground leaves the blink with nothing to restore rather than putting the
+       last room's cells back over the new drawing. cap_lay sets it again. */
+    g_cap_n = 0;
 
     // No ground is painted. The map's ground is the parchment on NBG0, or the
     // tan back colour where there is no parchment, and every cell this layer
@@ -908,14 +1029,6 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
             g_flash_x[g_flash_n] = (short) cx;
             g_flash_y[g_flash_n] = (short) cy;
             g_flash_tile[g_flash_n] = tile;
-            /* The room the local player is standing in turns inside out on the
-               pulse rather than emptying: it is the one mark on the sheet the
-               reader is looking FOR, and it is also the one with a figure beside
-               it and the reticle around it when the screen opens. A mark that
-               spent half its time as an ordinary room was the hardest thing on
-               the map to pick out of that pile. */
-            g_flash_alt[g_flash_n] =
-                (party & DT_SHIELD_SELF) ? DT_ROOM_HERE_INV : DT_ROOM;
             g_flash_n++;
         }
         if (lone >= 0)  paint_knight(cx, cy, knight_tiles(lone), 0);
@@ -944,10 +1057,13 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
         if (hover != 0 && room_model_object_name(hover, nm, (int) sizeof nm)) {
             for (nc = 0; nm[nc] != '\0'; nc++) { }
             ncol = hcx - nc / 2;
-            if (ncol + nc > MAP_TEXT_LEFT + MAP_TEXT_COLS)
-                ncol = MAP_TEXT_LEFT + MAP_TEXT_COLS - nc;
-            if (ncol < MAP_TEXT_LEFT) ncol = MAP_TEXT_LEFT;
-            text_print_str(ncol, hcy + MAP_ROOM_DROP, nm);
+            /* One cell wider at each end than the name, because the brackets
+               that close the plate need somewhere to go and a bracket half off
+               the sheet is worse than a label one cell off centre. */
+            if (ncol + nc + 1 > MAP_TEXT_LEFT + MAP_TEXT_COLS)
+                ncol = MAP_TEXT_LEFT + MAP_TEXT_COLS - nc - 1;
+            if (ncol < MAP_TEXT_LEFT + 1) ncol = MAP_TEXT_LEFT + 1;
+            cap_lay(ncol, hcy + MAP_ROOM_DROP, nm, nc);
         }
 
         /* The floor number ends three columns short of the drawing's right
@@ -1042,7 +1158,7 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
  |   map_model_clear_reveal, map_model_page, map_model_pages), dash_map.h,
  |   dash_view.h, menu.h, input.h, saturn_keyboard.h, soft_reset.h,
  |   console_view.h, title.h, room_art.h, display.h, app_state.h
- | Globals: g_difficulty, g_flash_x, g_flash_y, g_flash_tile, g_flash_alt, g_flash_n
+ | Globals: g_difficulty, g_flash_x, g_flash_y, g_flash_tile, g_flash_n
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -1268,10 +1384,20 @@ extern "C" void map_view_show(void) {
             int ph = (frame >> MAP_FLASH_SHIFT) & 1, i;
             if (ph != phase) {
                 phase = ph;
-                for (i = 0; i < g_flash_n; i++)
+                for (i = 0; i < g_flash_n; i++) {
+                    if (cap_covers(g_flash_x[i], g_flash_y[i])) continue;
                     dash_map_paint(g_flash_x[i], g_flash_y[i],
-                                   ph ? g_flash_tile[i] : g_flash_alt[i]);
+                                   ph ? g_flash_tile[i] : DT_ROOM);
+                }
             }
+        }
+        /* Counted from the caption being laid rather than off `frame`, so a
+           cursor moved during the off second gets its new label at once instead
+           of arriving into the gap the old one had left. */
+        {
+            int on = (g_cap_frame % (MAP_CAP_ON + MAP_CAP_OFF)) < MAP_CAP_ON;
+            if (on != g_cap_on) { g_cap_on = on; cap_show(on); }
+            g_cap_frame++;
         }
         frame++;
         menu_sync();

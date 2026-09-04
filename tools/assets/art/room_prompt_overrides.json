@@ -1,0 +1,43 @@
+{
+ "_comment": "Hand-written words for rooms no rule will get right, read by tools/gen_room_prompts.py. Keyed by plate name. 'text' replaces what the room's own title and prose would have contributed; keep it SHORT, a dozen words at most, because the prompt around it is only eight and a long override drowns the room the same way the old boilerplate did. 'setting' is optional and replaces the era phrase its genre would have given it, for the room whose light is not its genre's. 'shows' is optional and only changes the label a person reads in the review server. The scene tag and the tail are always appended, so an override cannot opt a room out of what every plate is held to. Say what IS in the room: the negative prompt handles what must not be, and a positive prompt that says 'no people' puts the word people into what is being sampled towards.",
+ "rooms": {
+  "seastlkr_254": {
+   "text": "cramped submersible cockpit, dials and switches, round porthole, dark water beyond",
+   "setting": "1970s science fiction paperback cover art, cold instrument glow",
+   "shows": "SCIMITAR (interior)"
+  },
+  "ballyhoo_62": {
+   "text": "circus high wire underfoot, open air all round, net far below, canvas roof overhead",
+   "setting": "circus poster art, warm gaslight",
+   "shows": "Walking a Tightrope"
+  },
+  "plntfall_44": {
+   "text": "narrow alcove, slot in the wall, panel of numbered buttons, moulded plastic",
+   "shows": "Miniaturization Booth"
+  },
+  "sorcerer_116": {
+   "text": "carnival midway of striped booths and sideshow stalls, strings of coloured bulbs, prize shelves, trodden sawdust",
+   "setting": "circus poster art, warm gaslight",
+   "negative": "crowd, people, queue, vendor, stallholder, spectators",
+   "shows": "Arcade"
+  },
+  "holywood_105": {
+   "text": "packed dirt floor underfoot, timber joists close overhead, ducts and pipes, dust and cobwebs",
+   "setting": "almost total darkness, unlit, black",
+   "style": "painted illustration",
+   "compose_from": "crawlspace.png",
+   "denoise": 0.6,
+   "negative": "furniture, chair, table, sofa, carpet, rug, lamp, lantern, wallpaper, skirting board, finished room, window, boarded window, boarded up, skylight, opening, hatch, hole, gap, basement, cellar, bright, white, daylight, sunlight, glare, overexposed, blown highlights, well lit, open space, shaft of light, sunbeam, god rays, light source, sky, rope, rigging, cables, wires, cobweb net, empty void, floating",
+   "shows": "Crawl Space, South"
+  },
+  "holywood_192": {
+   "text": "packed dirt floor underfoot, timber joists close overhead, ducts and pipes, dust and cobwebs",
+   "setting": "almost total darkness, unlit, black",
+   "style": "painted illustration",
+   "compose_from": "crawlspace.png",
+   "denoise": 0.6,
+   "negative": "furniture, chair, table, sofa, carpet, rug, lamp, lantern, wallpaper, skirting board, finished room, window, boarded window, boarded up, skylight, opening, hatch, hole, gap, basement, cellar, bright, white, daylight, sunlight, glare, overexposed, blown highlights, well lit, open space, shaft of light, sunbeam, god rays, light source, sky, rope, rigging, cables, wires, cobweb net, empty void, floating",
+   "shows": "Crawl Space, North"
+  }
+ }
+}

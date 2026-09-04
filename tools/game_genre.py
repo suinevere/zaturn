@@ -184,6 +184,150 @@ def images_for(stem):
     return GENRE_IMAGES.get(GAME_GENRE.get(stem), ())
 
 
+GENRE_SETTING = {
+    "FANTASY":    "pre-industrial, torchlit",
+    "SCIFI":      "1970s sci-fi",
+    "MYSTERY":    "1930s period",
+    "HORROR":     "damp, decaying",
+    "UNDERWATER": "cold blue-green light",
+    "PIRATE":     "18th century",
+    "ANCIENT":    "ancient stone, torchlit",
+    "MODERN":     "present day",
+    "MEDIEVAL":   "medieval",
+}
+"""GENRE_SETTING
+
+Description: The century each game is lit in, said in the prompt in place of
+    the bare genre word. A genre word on its own does nothing to a picture:
+    "scifi" was already the last token of every Planetfall prompt while the
+    model put a beige 1990s desktop in a Miniaturization Booth and a modern
+    office with double-glazing in the main Computer Room, and "fantasy" was in
+    Sorcerer's while the model filled its fairground arcade with lit video
+    game cabinets. The model was never told what century it was in.
+
+    These say an ERA and a LIGHT and nothing else, deliberately. The obvious
+    version says materials -- worn painted metal for SCIFI, stone and timber
+    for FANTASY -- and materials are a claim about what kind of place a room
+    is, which is the room's own business: Hitchhiker's is SCIFI and has a pub
+    and a country lane in it, both untagged, and neither wants painted metal.
+    An era composes with any room. A 1970s country lane is still a country
+    lane.
+
+    SAMPLER is absent on purpose, as it is from GENRE_IMAGES. An anthology is
+    several worlds in one story file and there is no one century to put it in.
+
+    Two or three words each. They were twice that and the whole run of
+    boilerplate came to 24 words against a median of 6 words of room, which at
+    CFG 7 is a prompt about lighting with a room mentioned in it.
+
+    UNDERWATER says a colour of light and not that a room is submerged. It said
+    "dim green underwater light" for one round and flooded the Scimitar's dry
+    cockpit, and most of both underwater games is above the waterline anyway --
+    Cutthroats is mainly an island and Seastalker mainly a dome interior.
+Author: suinevere
+"""
+
+
+GENRE_LOOK = {
+    "FANTASY":    {"style": "painted fantasy illustration"},
+    "SAMPLER":    {"style": "painted fantasy illustration"},
+    "ANCIENT":    {"style": "painted fantasy illustration"},
+    "PIRATE":     {"style": "painted fantasy illustration"},
+    "MEDIEVAL":   {"style": "painted fantasy illustration"},
+    "SCIFI":      {"style": "painted sci-fi cover art"},
+    "UNDERWATER": {"style": "painted sci-fi cover art"},
+    "MYSTERY":    {"style": "painted noir illustration"},
+    "HORROR":     {"style": "painted noir illustration"},
+    "MODERN":     {"style": "painted noir illustration"},
+}
+"""GENRE_LOOK
+
+Description: How each genre is drawn: the style words, and optionally the
+    checkpoint to draw it with. Three looks rather than nine, because the games
+    fall into three clusters and the tail genres are one game each -- 824 rooms
+    of adventure, 557 of science fiction, 378 of period crime. A look per genre
+    with one game behind it is a look nobody can judge.
+
+    "checkpoint" is absent from every entry on purpose. A checkpoint is the
+    strongest thing in this whole pipeline -- stronger than any wording, which
+    a session of arguing with a photorealism model established at length -- so
+    a second one is worth having, but only measured. Add
+    "checkpoint": "some_model" to a cluster once it is downloaded and
+    tools/probe_prompts.py --checkpoint has shown it is better; every plate of
+    that cluster then draws with it and the rest are untouched.
+Author: suinevere
+"""
+
+
+def look_for(stem):
+    """/*----------------------
+     | look_for
+     | Description: The style words and the checkpoint for one game's genre.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: GENRE_LOOK, GAME_GENRE
+     | Params: stem -- the story stem
+     | Returns: {"style": ..., "checkpoint": ...}, either possibly absent
+     ----------------------*/"""
+    return GENRE_LOOK.get(GAME_GENRE.get(stem), {})
+
+
+GAME_SETTING = {
+    "BALLYHOO": "circus, 1930s",
+    "MOONMIST": "cornish castle, 1980s",
+    "LURKING":  "1980s university, damp",
+    "INFIDEL":  "egyptian desert dig",
+    "STATFALL": "aboard a space station, 1970s sci-fi",
+    "PLNTFALL": "aboard a space station, 1970s sci-fi",
+    "SUSPENDD": "underground complex, 1970s sci-fi",
+    "STARCROS": "aboard a spacecraft, 1970s sci-fi",
+    "SEASTLKR": "undersea dome, cold blue-green light",
+}
+"""GAME_SETTING
+
+Description: The games whose genre does not say where they happen, and where
+    they happen. A genre is the coarsest thing true of a story and for most of
+    them it is enough, but Ballyhoo is a MYSTERY the way a circus is a mystery:
+    every room of it is under canvas or on the lot, and "1930s period" got a
+    suburban back yard for a room whose description mentions a tent -- the tent
+    having been dropped with the sentence that named it, because that sentence
+    also gave the exits.
+
+    Moonmist's is a correction rather than an addition: it is filed MYSTERY and
+    would be lit as the 1930s, and it is a house party in Cornwall in the
+    1980s.
+
+    The four science fiction entries say where and not only when, which the
+    genre phrase is forbidden to do. Stationfall's station is built like a
+    small town and its rooms say so -- a Rec Shop, a Theatre, a Mayor's Office
+    with Main Street below it -- and against that much civic vocabulary two
+    words of "1970s sci-fi" bought a street of houses and a giant stone head.
+    Saying the game happens aboard a station is not a claim about any one room
+    and so is safe here, where it would not be in GENRE_SETTING: Hitchhiker's
+    is the same genre and has a pub and a country lane in it.
+
+    Two or three words, like the genre ones, and for the same reason. This
+    replaces the genre phrase rather than joining it.
+Author: suinevere
+"""
+
+
+def setting_for(stem):
+    """/*----------------------
+     | setting_for
+     | Description: The era-and-place phrase for one game: its own if it has
+     |     one, otherwise its genre's, otherwise "".
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: GAME_SETTING, GENRE_SETTING, GAME_GENRE
+     | Params: stem -- the story stem
+     | Returns: a prompt fragment, possibly empty
+     ----------------------*/"""
+    if stem in GAME_SETTING:
+        return GAME_SETTING[stem]
+    return GENRE_SETTING.get(GAME_GENRE.get(stem), "")
+
+
 MAP_FILES = ("MAP.TGA", "MAP2.TGA", "MAP3.TGA", "MAP4.TGA")
 """MAP_FILES
 

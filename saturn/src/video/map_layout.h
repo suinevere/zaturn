@@ -135,6 +135,34 @@ static inline void map_layout_follow(int hx, int hy, int *sx, int *sy)
 }
 
 /*----------------------
+ | map_layout_clamp
+ | Description: Holds the crosshair inside a floor's own bounding box, so it
+ |   cannot be walked off into empty ground and lost -- at either limit it sits
+ |   on the outermost room of that floor rather than past it.
+ |
+ |   Both the cursor step and the floor change use this. They used to differ:
+ |   a step clamped, and a floor change threw the cursor away and re-centred it
+ |   on the new floor's box. That is what made paging lose your place -- you
+ |   could not follow a staircase up and look at where it came out, because the
+ |   moment you changed floor the map jumped somewhere else, and the atlas slides
+ |   the floors over each other precisely so that it does not have to.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: x0, x1, y0, y1 -- the box, inclusive; hx, hy -- the crosshair,
+ |   updated in place
+ | Returns: N/A
+ ----------------------*/
+static inline void map_layout_clamp(int x0, int x1, int y0, int y1,
+                                    int *hx, int *hy)
+{
+    if (*hx < x0) *hx = x0;
+    if (*hx > x1) *hx = x1;
+    if (*hy < y0) *hy = y0;
+    if (*hy > y1) *hy = y1;
+}
+
+/*----------------------
  | map_layout_knight
  | Description: Where the figure's top-left cell goes for a mark at (mx, my):
  |   to the left with one cell of clearance, so a link leaving west still shows
@@ -154,6 +182,37 @@ static inline void map_layout_knight(int mx, int my, int w, int *kx, int *ky)
     *kx = mx - 1 - w;
     if (*kx < MAP_CLIP_X0) *kx = mx + 2;
     *ky = my - 1;
+}
+
+/*----------------------
+ | MAP_OFFVIEW_NONE / MAP_OFFVIEW_RUN / MAP_OFFVIEW_GLYPH / map_layout_offview
+ | Description: Which of the map's two ways of saying "there is more that way"
+ |   an exit takes when its far end is not on screen: a run laid into the gutter
+ |   toward where the far room is drawn, or a U/D glyph beside the mark.
+ |
+ |   A staircase takes the glyph and must never take the run. It has no
+ |   direction on the page -- the room above may be drawn anywhere, or nowhere
+ |   -- so a run pointing west because that is where it happens to sit is a
+ |   corridor the player cannot walk, drawn in a direction the story never
+ |   offered.
+ |
+ |   Both passes ask this one question rather than each testing its own
+ |   condition, which is how the fault it fixes arose. The link pass gave every
+ |   ungathered exit to the run; the glyph pass declined any whose far room was
+ |   placed on this floor, on the assumption the link pass would draw it
+ |   properly -- true only while the far end was on screen. Between them, The
+ |   Lurking Horror's Renovated Cave drew a line running north out of the room
+ |   for an exit that goes DOWN, and drew no D at all. It was invisible until
+ |   enough rooms were placed for the far end of such an exit to be in the table
+ |   at all; before that the glyph pass had it to itself and was right.
+ | Author: suinevere
+ ----------------------*/
+enum { MAP_OFFVIEW_NONE = 0, MAP_OFFVIEW_RUN, MAP_OFFVIEW_GLYPH };
+
+static inline int map_layout_offview(int vertical, int on_screen)
+{
+    if (on_screen) return MAP_OFFVIEW_NONE;
+    return vertical ? MAP_OFFVIEW_GLYPH : MAP_OFFVIEW_RUN;
 }
 
 /*----------------------
@@ -200,6 +259,58 @@ static inline int map_layout_glyph(int mx, int my, int pdx, int pdy,
     for (i = 0; i < 4; i++) {
         cx = mx + DIAG[i][0];
         cy = my + DIAG[i][1];
+        if (map_layout_cell_free(cx, cy, taken)) { *gx = cx; *gy = cy; return 1; }
+    }
+    return 0;
+}
+
+/*----------------------
+ | MAP_ROOM_DROP
+ | Description: How far under the picked mark its name is captioned. Here
+ |   rather than beside the rest of the text rows in map_view.cxx, which depend
+ |   on party.h, because map_layout_updown has to keep the D off this row and a
+ |   host test has to be able to check that it does. Two: clear of the
+ |   reticle's own bottom brackets.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_ROOM_DROP 2
+
+/*----------------------
+ | map_layout_updown
+ | Description: Where a room's U or D goes: two cells to its left, one row up
+ |   for U and one down for D. The same two places every time, on every room, so
+ |   the reader learns them once -- and the same two places the compass rose
+ |   puts them, UP at the top of its left column and DOWN at the bottom.
+ |
+ |   Fixed, where the self-loop glyph still searches. map_layout_glyph aims two
+ |   cells along a preferred direction, which for a staircase was the direction
+ |   of the far room; between two rooms one cell apart that lands the letter
+ |   nearer the far room than the near one, and The Lurking Horror's Third Floor
+ |   put its U hard against the Roof, reading as the Roof's own exit.
+ |
+ |   The column is two out rather than one because one is the crosshair's: the
+ |   reticle is four brackets at the mark's diagonals, so a letter at a diagonal
+ |   is covered whenever the room is picked -- which is the room the reader is
+ |   asking about. The row is one off rather than two because two below is the
+ |   caption's, printed MAP_ROOM_DROP under the picked mark.
+ |
+ |   Declining is still a real outcome; the caller must handle it.
+ | Author: suinevere
+ | Dependencies: map_layout_cell_free
+ | Globals: N/A
+ | Params: mx, my -- the mark's cell; up -- nonzero for U; taken -- the
+ |   accumulated edge layer; gx, gy -- receive the cell
+ | Returns: 1 when a cell was found, 0 when every candidate was occupied
+ ----------------------*/
+static inline int map_layout_updown(int mx, int my, int up,
+    const unsigned short taken[][MAP_CELL_W], int *gx, int *gy)
+{
+    static const int OUT[4][2] = { { -2, 1 }, { -3, 1 }, { -2, 2 }, { -3, 2 } };
+    int i, dy = up ? -1 : 1;
+
+    for (i = 0; i < 4; i++) {
+        int cx = mx + OUT[i][0];
+        int cy = my + OUT[i][1] * dy;
         if (map_layout_cell_free(cx, cy, taken)) { *gx = cx; *gy = cy; return 1; }
     }
     return 0;

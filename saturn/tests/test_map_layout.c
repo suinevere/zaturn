@@ -20,7 +20,55 @@
 
 #define SPAN 24
 
+/*----------------------
+ | check_offview
+ | Description: Which pass owns an exit whose far end is not on screen.
+ |
+ |   The map has two ways to say "there is more that way": a run laid into the
+ |   gutter toward where the far room is drawn, and a U or D glyph beside the
+ |   mark. A staircase must take the second. It has no direction on the page --
+ |   the room above may be drawn anywhere or nowhere -- so a run pointing west
+ |   because that is where it happens to sit is a corridor the player cannot
+ |   walk, drawn in a direction the story never offered.
+ |
+ |   That is not hypothetical. The Lurking Horror's Renovated Cave goes DOWN to
+ |   Before the Altar, which sits six cells west and six north on the same
+ |   floor. The link pass handed it to the run, and the glyph pass skipped it
+ |   because the far room was placed and on this floor -- so the only thing
+ |   drawn was a line running north out of the room, for an exit that goes
+ |   down. It was invisible until a table filled in enough rooms for the far end
+ |   to be placed at all; before that the glyph pass drew it correctly.
+ | Author: suinevere
+ ----------------------*/
+static void check_offview(void) {
+    /* On screen: neither -- the ordinary link pass draws it end to end. */
+    assert(map_layout_offview(0, 1) == MAP_OFFVIEW_NONE);
+    assert(map_layout_offview(1, 1) == MAP_OFFVIEW_NONE);
+
+    /* Off screen and level: a run into the gutter, which is what says "this
+       corridor carries on past the edge". */
+    assert(map_layout_offview(0, 0) == MAP_OFFVIEW_RUN);
+
+    /* Off screen and vertical: the glyph, never the run. */
+    assert(map_layout_offview(1, 0) == MAP_OFFVIEW_GLYPH);
+
+    /* The two passes must not both claim it and must not both decline it: one
+       exit, one mark. */
+    {
+        int vert, on;
+        for (vert = 0; vert < 2; vert++)
+            for (on = 0; on < 2; on++) {
+                int k = map_layout_offview(vert, on);
+                assert(k == MAP_OFFVIEW_NONE || k == MAP_OFFVIEW_RUN ||
+                       k == MAP_OFFVIEW_GLYPH);
+                assert((k == MAP_OFFVIEW_RUN) == (!vert && !on));
+                assert((k == MAP_OFFVIEW_GLYPH) == (vert && !on));
+            }
+    }
+}
+
 int main(void) {
+    check_offview();
     int hx, hy, sx, sy;
 
     /* The viewport is what the constants say it is, and its centre is inside
@@ -207,6 +255,105 @@ int main(void) {
             assert(map_layout_cell_free(lo, bt + MAP_GUTTER, taken));
             assert(!map_layout_cell_free(lo, bt + MAP_GUTTER + 1, taken));
         }
+    }
+
+    /* The crosshair against a floor's bounding box. One rule for the cursor
+       step and the floor change, which is the point of it -- the floor change
+       used to re-centre instead, and paging threw away your place. */
+    {
+        int hx, hy;
+
+        /* Inside the box is left alone and says so. */
+        hx = 2; hy = -1;
+        map_layout_clamp(-4, 5, -3, 3, &hx, &hy);
+        assert(hx == 2 && hy == -1);
+
+        /* Outside on each side lands on the edge, not past it. */
+        hx = -9; hy = 0;
+        map_layout_clamp(-4, 5, -3, 3, &hx, &hy);
+        assert(hx == -4 && hy == 0);
+        hx = 40; hy = 0;
+        map_layout_clamp(-4, 5, -3, 3, &hx, &hy);
+        assert(hx == 5 && hy == 0);
+        hx = 0; hy = -9;
+        map_layout_clamp(-4, 5, -3, 3, &hx, &hy);
+        assert(hx == 0 && hy == -3);
+        hx = 0; hy = 40;
+        map_layout_clamp(-4, 5, -3, 3, &hx, &hy);
+        assert(hx == 0 && hy == 3);
+
+        /* Both axes at once, and a box one cell wide, which is what a floor
+           holding a single room gives. */
+        hx = -20; hy = 20;
+        map_layout_clamp(-4, 5, -3, 3, &hx, &hy);
+        assert(hx == -4 && hy == 3);
+        hx = 7; hy = 7;
+        map_layout_clamp(2, 2, 2, 2, &hx, &hy);
+        assert(hx == 2 && hy == 2);
+
+        /* Clamped, then followed: the pair the floor change runs, and the view
+           has to end up showing the cursor wherever the clamp put it. */
+        {
+            int sx = 0, sy = 0;
+            hx = 30; hy = -30;
+            map_layout_clamp(-4, 5, -3, 3, &hx, &hy);
+            map_layout_follow(hx, hy, &sx, &sy);
+            assert(map_layout_visible(hx - sx, hy - sy));
+        }
+    }
+
+    /* U and D go in the same two places on every room: two cells to the left,
+       one row up for U and one down for D -- where the compass rose puts them,
+       at the top and bottom of its left column. */
+    {
+        unsigned short taken[MAP_CELL_H][MAP_CELL_W];
+        int gx, gy, i, c;
+
+        for (i = 0; i < MAP_CELL_H; i++)
+            for (c = 0; c < MAP_CELL_W; c++) taken[i][c] = 0;
+
+        assert(map_layout_updown(20, 12, 1, taken, &gx, &gy) == 1);
+        assert(gx == 18 && gy == 11);
+        assert(map_layout_updown(20, 12, 0, taken, &gx, &gy) == 1);
+        assert(gx == 18 && gy == 13);
+
+        /* Clear of the crosshair, which is four brackets on the mark's own
+           diagonals. A letter at a diagonal is covered exactly when the room is
+           picked -- the room the reader is asking about. */
+        assert(!(gx == 20 - 1 && gy == 12 - 1));
+        assert(!(gx == 20 + 1 && gy == 12 + 1));
+
+        /* Clear of the caption too, which is printed MAP_ROOM_DROP rows under
+           the picked mark. */
+        assert(12 + MAP_ROOM_DROP != 11);
+        {
+            int uy, dy2;
+            map_layout_updown(20, 12, 1, taken, &gx, &uy);
+            map_layout_updown(20, 12, 0, taken, &gx, &dy2);
+            assert(uy != 12 + MAP_ROOM_DROP && dy2 != 12 + MAP_ROOM_DROP);
+        }
+
+        /* An occupied first choice steps further out along the same side
+           rather than crossing to the other one: a letter that jumped to the
+           right of the mark would read as a different room's. */
+        taken[11][18] = 1;
+        assert(map_layout_updown(20, 12, 1, taken, &gx, &gy) == 1);
+        assert(gx == 17 && gy == 11);
+        taken[11][17] = 1;
+        assert(map_layout_updown(20, 12, 1, taken, &gx, &gy) == 1);
+        assert(gx == 18 && gy == 10);
+
+        /* Every candidate occupied: decline rather than overwrite a line. */
+        taken[10][18] = 1;
+        taken[10][17] = 1;
+        assert(map_layout_updown(20, 12, 1, taken, &gx, &gy) == 0);
+
+        /* And the drawing's own edge is not free, so a room on the left rim
+           declines rather than writing outside the paper. */
+        for (i = 0; i < MAP_CELL_H; i++)
+            for (c = 0; c < MAP_CELL_W; c++) taken[i][c] = 0;
+        assert(map_layout_updown(MAP_CLIP_X0, 12, 1, taken, &gx, &gy) == 0);
+        assert(map_layout_updown(MAP_CLIP_X0, 12, 0, taken, &gx, &gy) == 0);
     }
 
     printf("test_map_layout: ok\n");

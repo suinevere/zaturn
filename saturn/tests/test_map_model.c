@@ -1069,6 +1069,290 @@ int main(void) {
         assert(saw_w);
     }
 
+    /* A staircase the story decides by running code still says there is a way
+       up. A three-byte direction property is a routine, so it names no
+       destination at all -- room_model records it as RM_EXIT_MAYBE with a
+       destination of zero -- and every such exit used to be dropped here, on
+       the reasonable-looking rule that an exit with no far end has nothing to
+       draw. It has: the map's U and D glyphs annotate the mark and claim
+       nothing about where the stair comes out, which is the whole reason the
+       glyph pass can already draw one for a staircase whose far end is off the
+       viewport. The Lurking Horror's Concrete Box goes up to the Basement
+       through one of these and showed no U at all.
+
+       Only the vertical ones. A flat exit with no destination has a direction
+       already, no far end for a run to reach, and no glyph of its own; letting
+       it through would only give the link pass a stub to draw toward a room it
+       cannot find. */
+    {
+        MapExit ex[RM_DIR_N];
+        int n, k, saw_up = 0, saw_west = 0;
+
+        assert(map_marks_bind(0, 0) == 0);
+        map_model_reset();
+        {
+            RoomModel box = mk(37);
+            link_kind(&box, RM_UP, 0, RM_EXIT_MAYBE);
+            link_kind(&box, RM_W, 0, RM_EXIT_MAYBE);
+            link_kind(&box, RM_N, 138, RM_EXIT_MAYBE);
+            map_model_enter(&box);
+        }
+
+        n = map_model_exits(37, ex, RM_DIR_N);
+        for (k = 0; k < n; k++) {
+            if (ex[k].dir == RM_UP) {
+                saw_up = 1;
+                assert(ex[k].kind == MAP_LINK_VERT);
+                assert(ex[k].dest == 0);
+                assert(ex[k].flags & MAP_EXIT_COND);
+                /* Not a self-loop: dest 0 is no destination, not this room. */
+                assert((ex[k].flags & MAP_EXIT_SELF) == 0);
+                assert((ex[k].flags & MAP_EXIT_ONEWAY) == 0);
+            }
+            if (ex[k].dir == RM_W) saw_west = 1;
+        }
+        assert(saw_up);
+        assert(!saw_west);
+    }
+
+    /* IN and OUT are not staircases. They sit past RM_UP in the direction
+       enum for no reason but the order the compass rose reads, and the kind
+       was taken from `d >= RM_UP`, so every one of them drew as a level
+       change: stair bars along the route and a letter beside the mark, with
+       the glyph pass reading that letter off the parity of the index and so
+       calling RM_OUT a D and RM_IN a U. Walking into a building puts you on
+       its ground floor, which is what gen_map_atlas.py's LEVEL_DIRS has said
+       since the floor pass was written.
+
+       Two halves, and this asserts both. A destination-less OUT is now flat,
+       so map_model_exits drops it and nothing is drawn -- The Lurking Horror's
+       Terminal Room, whose only two exits are both routines, was showing a
+       bare D. An OUT that names a room is flat too, so it draws as an ordinary
+       passage and the glyph pass declines it. UP and DOWN are untouched. */
+    {
+        MapExit ex[RM_DIR_N];
+        int n, k, saw_out = 0, saw_in = 0, saw_up = 0;
+
+        assert(map_marks_bind(0, 0) == 0);
+        map_model_reset();
+        {
+            RoomModel term = mk(176);
+            link_kind(&term, RM_OUT, 0, RM_EXIT_MAYBE);
+            link_kind(&term, RM_S, 0, RM_EXIT_MAYBE);
+            map_model_enter(&term);
+        }
+        n = map_model_exits(176, ex, RM_DIR_N);
+        for (k = 0; k < n; k++)
+            assert(ex[k].dir != RM_OUT && ex[k].dir != RM_S);
+
+        map_model_reset();
+        {
+            RoomModel hall = mk(60);
+            link1(&hall, RM_OUT, 61);
+            link1(&hall, RM_IN, 62);
+            link1(&hall, RM_UP, 63);
+            map_model_enter(&hall);
+        }
+        {
+            RoomModel yard = mk(61);
+            link1(&yard, RM_IN, 60);
+            map_model_enter(&yard);
+        }
+        {
+            RoomModel loft = mk(63);
+            link1(&loft, RM_DOWN, 60);
+            map_model_enter(&loft);
+        }
+
+        n = map_model_exits(60, ex, RM_DIR_N);
+        for (k = 0; k < n; k++) {
+            if (ex[k].dir == RM_OUT) {
+                saw_out = 1;
+                assert(ex[k].kind == MAP_LINK_FLAT);
+            }
+            if (ex[k].dir == RM_IN) {
+                saw_in = 1;
+                assert(ex[k].kind == MAP_LINK_FLAT);
+            }
+            if (ex[k].dir == RM_UP) {
+                saw_up = 1;
+                assert(ex[k].kind == MAP_LINK_VERT);
+            }
+        }
+        assert(saw_out && saw_in && saw_up);
+
+        /* map_model_link answers from the same rows, so it must agree: a way
+           out of a building is a road between two rooms, not a stair. */
+        assert(map_model_link(60, 61) == MAP_LINK_FLAT);
+        assert(map_model_link(60, 63) == MAP_LINK_VERT);
+    }
+
+    /* Two floors may stand on the same cell, and the crosshair uses that.
+
+       Only one floor is drawn at a time -- gather() and extent() both filter on
+       the page -- so a cell is owed to be unique within a floor and not across
+       the whole table, and the atlas slides the floors over each other on
+       purpose so that a staircase comes out at the coordinate it went in at.
+       The contest search enforced it globally, so every one of those coincident
+       cells was a contest and the room entered second was flung to a ring cell:
+       that is what put The Lurking Horror's Second Floor east of the Terminal
+       Room instead of south of it. It was already wrong before the floors were
+       aligned -- 135 rooms across the disc shared a cell with a room on another
+       floor and were being displaced for it.
+
+       The pair is looked up in the bound table rather than named, because which
+       rooms coincide is a property of a generated file and would rot. */
+    {
+        unsigned char hdr[0x18];
+        int r, q, lo = 0, hi = 0, lop = 0, hip = 0;
+
+        memset(hdr, 0, sizeof hdr);
+        hdr[0] = 3; hdr[2] = 0; hdr[3] = 88;
+        memcpy(hdr + 0x12, "840726", 6);
+        assert(map_atlas_bind(hdr, sizeof hdr) > 0);
+
+        for (r = 1; r < MAP_ROOM_MAX && !lo; r++) {
+            int ax, ay, ap;
+            if (!map_atlas_pos((unsigned short) r, &ax, &ay)) continue;
+            if (!map_atlas_page((unsigned short) r, &ap)) continue;
+            for (q = r + 1; q < MAP_ROOM_MAX; q++) {
+                int bx, by, bp;
+                if (!map_atlas_pos((unsigned short) q, &bx, &by)) continue;
+                if (!map_atlas_page((unsigned short) q, &bp)) continue;
+                if (ax != bx || ay != by || ap == bp) continue;
+                lo = r; hi = q; lop = ap; hip = bp;
+                break;
+            }
+        }
+        assert(lo && hi);
+
+        map_model_reset();
+        {
+            RoomModel a = mk((unsigned short) lo);
+            RoomModel b = mk((unsigned short) hi);
+            map_model_enter(&a);
+            map_model_enter(&b);
+        }
+        {
+            int ax, ay, bx, by, nx = 99, ny = 99;
+            assert(map_model_pos((unsigned short) lo, &ax, &ay));
+            assert(map_model_pos((unsigned short) hi, &bx, &by));
+            assert(map_model_page((unsigned short) lo) == lop);
+            assert(map_model_page((unsigned short) hi) == hip);
+            assert(ax == bx && ay == by);
+
+            /* And that is what the crosshair is for. Standing on one of them,
+               paging to the other's floor lands at distance zero: the room the
+               staircase reaches, already under the cursor.
+
+               A floor is routinely taller than the five rows the viewport has
+               -- The Lurking Horror's first is eleven -- so clamping into the
+               floor's bounding box can leave the crosshair on empty ground with
+               every room off screen, which reads as a floor holding nothing.
+               The nearest room is always something to look at. */
+            assert(map_model_nearest(hip, 0, 0, &nx, &ny));
+            assert(nx == 0 && ny == 0);
+        }
+
+        /* A floor with nothing placed on it answers no rather than zero, so the
+           caller can fall back rather than draw a cursor over bare ground. */
+        {
+            int nx = 99, ny = 99, pg, n = map_model_pages(), empty = -1;
+            for (pg = 0; pg < n; pg++) {
+                int ax, ay;
+                if (!map_model_nearest(pg, 0, 0, &ax, &ay)) { empty = pg; break; }
+            }
+            assert(empty >= 0);
+            assert(!map_model_nearest(empty, 0, 0, &nx, &ny));
+            assert(nx == 99 && ny == 99);
+        }
+
+        /* Within one floor a cell is still owed to be unique, which is the half
+           that must not be lost: two rooms of one drawn floor in one cell draw
+           one mark and lose the other. */
+        {
+            int wx, wy, nx, ny;
+            map_model_reset();
+            {
+                RoomModel woh = mk(180);
+                RoomModel noh = mk(81);
+                link1(&woh, RM_N, 81);
+                link1(&noh, RM_S, 180);
+                map_model_enter(&woh);
+                map_model_enter(&noh);
+            }
+            assert(map_model_pos(180, &wx, &wy));
+            assert(map_model_pos(81, &nx, &ny));
+            assert(map_model_page(180) == map_model_page(81));
+            assert(wx != nx || wy != ny);
+        }
+    }
+
+    /* What L and R follow. Page order cannot answer "which floor is above
+       this one" and no numbering of the pages could: a page index is one line
+       and a story's floors are a tree, so a level with three floors above it
+       gets at most one of them as its neighbour. The room knows -- up is the
+       floor its own staircase reaches. */
+    {
+        unsigned short up = 0, down = 0;
+
+        assert(map_marks_bind(0, 0) == 0);
+        assert(map_atlas_bind(0, 0) == 0);
+        map_model_reset();
+        {
+            RoomModel mid = mk(20);
+            RoomModel top = mk(30);
+            RoomModel bot = mk(40);
+            link1(&mid, RM_UP, 30);
+            link1(&mid, RM_DOWN, 40);
+            link1(&mid, RM_N, 50);
+            link1(&top, RM_DOWN, 20);
+            link1(&bot, RM_UP, 20);
+            map_model_enter(&mid);
+            map_model_enter(&top);
+            map_model_enter(&mid);
+            map_model_enter(&bot);
+            map_model_enter(&mid);
+        }
+        assert(map_model_climb(20, 1, &up) && up == 30);
+        assert(map_model_climb(20, 0, &down) && down == 40);
+        assert(map_model_climb(30, 0, &down) && down == 20);
+
+        /* No staircase that way is a real answer: the caller steps the page
+           index instead, which is all it ever had. */
+        assert(!map_model_climb(30, 1, &up));
+        assert(!map_model_climb(40, 0, &down));
+
+        /* A flat exit is not a staircase, however the rooms are drawn. */
+        {
+            MapExit ex[RM_DIR_N];
+            int n = map_model_exits(20, ex, RM_DIR_N), k, saw = 0;
+            for (k = 0; k < n; k++) if (ex[k].dir == RM_N) saw = 1;
+            assert(saw);
+        }
+        assert(!map_model_climb(50, 1, &up));
+
+        /* An unvisited far end is not somewhere to send the reader: the map
+           would page to a floor with nothing drawn on it. */
+        map_model_reset();
+        {
+            RoomModel lone = mk(20);
+            link1(&lone, RM_UP, 30);
+            map_model_enter(&lone);
+        }
+        assert(!map_model_visited(30));
+        assert(!map_model_climb(20, 1, &up));
+
+        /* And a staircase to itself goes nowhere. */
+        map_model_reset();
+        {
+            RoomModel loop = mk(20);
+            link1(&loop, RM_UP, 20);
+            map_model_enter(&loop);
+        }
+        assert(!map_model_climb(20, 1, &up));
+    }
+
     printf("test_map_model: ok\n");
     return 0;
 }

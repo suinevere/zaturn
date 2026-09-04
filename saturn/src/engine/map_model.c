@@ -217,9 +217,27 @@ static int dir_to_cur(const RoomModel *m) {
  | Returns: 1 when occupied, 0 otherwise
  ----------------------*/
 static int cell_taken(int x, int y, unsigned short self) {
-    int i;
-    for (i = 0; i < MAP_ROOM_MAX; i++)
-        if (g_vis[i] && i != (int) self && g_x[i] == x && g_y[i] == y) return 1;
+    int i, sp = 0, has_sp = map_atlas_page(self, &sp);
+    for (i = 0; i < MAP_ROOM_MAX; i++) {
+        int ip = 0;
+        if (!g_vis[i] || i == (int) self) continue;
+        if (g_x[i] != x || g_y[i] != y) continue;
+        /* Two floors may stand on the same cell. Only one is ever drawn --
+           gather() and extent() both filter on the page -- so a cell is owed to
+           be unique within a floor and not across the whole table, and the
+           atlas slides the floors over each other on purpose so that a
+           staircase comes out at the coordinate it went in at.
+
+           Asked of the table and not of map_model_page, which for a room the
+           atlas does not cover runs a breadth-first walk: this is called once
+           per ring cell of a contested placement, and a walk in that loop would
+           be paid hundreds of times over. A room the atlas does not place keeps
+           the whole-table rule, which is the conservative half and the one it
+           had before. */
+        if (has_sp && map_atlas_page((unsigned short) i, &ip) && ip != sp)
+            continue;
+        return 1;
+    }
     return 0;
 }
 
@@ -375,7 +393,7 @@ static void record_exits(unsigned short room, const RoomModel *m) {
         g_dest[room][d] = m->dest[d];
         g_kind[room][d] = (unsigned char)
             (m->exits[d] == RM_EXIT_NONE ? MAP_LINK_NONE
-             : (d >= RM_UP ? MAP_LINK_VERT : MAP_LINK_FLAT));
+             : (MAP_DIR_VERT(d) ? MAP_LINK_VERT : MAP_LINK_FLAT));
         if (m->exits[d] == RM_EXIT_MAYBE)
             g_cond[room] |= (unsigned short) (1u << d);
         if (!marked || m->exits[d] != RM_EXIT_MAYBE) continue;
@@ -635,7 +653,17 @@ int map_model_exits(unsigned short room, MapExit *out, int max) {
     for (d = 0; d < RM_DIR_N && n < max; d++) {
         unsigned short dest = g_dest[room][d];
         if (g_kind[room][d] == MAP_LINK_NONE) continue;
-        if (dest == 0 || dest >= MAP_ROOM_MAX) continue;
+        if (dest >= MAP_ROOM_MAX) continue;
+        /* A staircase the story decides by running code names no destination,
+           and it used to be dropped here with every other destination-less
+           exit. It still says there is a way up, which is all a U or a D
+           claims -- the glyph pass already draws one for a staircase whose far
+           end is merely off the viewport, and this is the same drawing with
+           less known about it. A FLAT exit with no destination is not the
+           same: it has its direction already, no far end for a run to reach
+           and no glyph of its own, so letting one through would give the link
+           pass a stub to lay toward a room it cannot find. */
+        if (dest == 0 && g_kind[room][d] != MAP_LINK_VERT) continue;
         out[n].dest  = dest;
         out[n].dir   = (unsigned char) d;
         out[n].kind  = g_kind[room][d];
@@ -771,6 +799,52 @@ static int page_via_routes(unsigned short room, int *page) {
         }
     }
     return 0;
+}
+
+/*----------------------
+ | map_model_climb
+ | Description: See map_model.h.
+ | Author: suinevere
+ | Dependencies: map_model_visited
+ | Globals: g_dest, g_kind
+ | Params: room -- object number; up -- nonzero for the floor above; dest --
+ |   receives the room the stair reaches
+ | Returns: 1 when the room has that staircase and its far end is placed
+ ----------------------*/
+int map_model_climb(unsigned short room, int up, unsigned short *dest) {
+    int d = up ? RM_UP : RM_DOWN;
+    unsigned short far;
+    if (room >= MAP_ROOM_MAX || !map_model_visited(room)) return 0;
+    far = g_dest[room][d];
+    if (g_kind[room][d] == MAP_LINK_NONE) return 0;
+    if (far == 0 || far >= MAP_ROOM_MAX || far == room) return 0;
+    if (!map_model_visited(far)) return 0;
+    *dest = far;
+    return 1;
+}
+
+/*----------------------
+ | map_model_nearest
+ | Description: See map_model.h.
+ | Author: suinevere
+ | Dependencies: map_model_offset, map_model_page
+ | Globals: N/A
+ | Params: page -- the floor; x, y -- the cell to search from; nx, ny -- receive
+ |   the room's offsets
+ | Returns: 1 when the floor holds a placed room, 0 otherwise
+ ----------------------*/
+int map_model_nearest(int page, int x, int y, int *nx, int *ny) {
+    int r, best = -1;
+    for (r = 1; r < MAP_ROOM_MAX; r++) {
+        int dx = 0, dy = 0, ax, ay, d;
+        if (!map_model_offset((unsigned short) r, &dx, &dy)) continue;
+        if (map_model_page((unsigned short) r) != page) continue;
+        ax = dx - x; if (ax < 0) ax = -ax;
+        ay = dy - y; if (ay < 0) ay = -ay;
+        d = (ax > ay) ? ax : ay;
+        if (best < 0 || d < best) { best = d; *nx = dx; *ny = dy; }
+    }
+    return best >= 0;
 }
 
 /*----------------------

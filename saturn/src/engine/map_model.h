@@ -155,13 +155,33 @@ int map_model_room_at(int index, unsigned short *room);
 
 /*----------------------
  | MAP_LINK_NONE .. MAP_LINK_VERT
- | Description: How two rooms are joined. VERT covers UP, DOWN, IN and OUT, so
- |   a staircase can be drawn as a level change rather than as a road.
+ | Description: How two rooms are joined. VERT is a staircase, drawn as a level
+ |   change rather than as a road: stair bars along the route, a U or a D
+ |   beside the mark, and no run into the gutter when the far end is off the
+ |   viewport, since a staircase has no direction on the page to run in.
  | Author: suinevere
  ----------------------*/
 #define MAP_LINK_NONE 0
 #define MAP_LINK_FLAT 1
 #define MAP_LINK_VERT 2
+
+/*----------------------
+ | MAP_DIR_VERT
+ | Description: Whether a direction changes floor, which is up and down and
+ |   nothing else. IN and OUT do not: walking into a building puts you on its
+ |   ground floor, not above or below it, and gen_map_atlas.py's LEVEL_DIRS has
+ |   said so since the floor pass was written.
+ |
+ |   This exists because the test it replaces was `d >= RM_UP`, and RM_IN and
+ |   RM_OUT sit past RM_UP in the direction enum for no reason but the order
+ |   the compass rose reads. That made every IN and OUT a staircase -- 520
+ |   across the disc drew stair bars and a letter -- and the glyph pass, which
+ |   took the letter from the parity of the index, called RM_OUT a D and RM_IN
+ |   a U. The Lurking Horror's Terminal Room, whose only two exits are both
+ |   routines, drew a bare D for `out`.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_DIR_VERT(d) ((d) == RM_UP || (d) == RM_DOWN)
 
 /*----------------------
  | MAP_EXIT_COND / MAP_EXIT_ONEWAY / MAP_EXIT_SELF / MAP_EXIT_BAGGAGE
@@ -208,6 +228,12 @@ typedef struct {
  |   ONEWAY is set only when the destination is itself placed. An unplaced room
  |   has no exits on record, so reading its silence as "no way back" would
  |   arrow every passage the moment it was first walked.
+ |
+ |   A vertical exit is reported even when its destination is zero, which is
+ |   what a direction property three bytes long -- a routine that decides at
+ |   run time -- leaves behind. The drawing has something to say about it: U
+ |   and D annotate the mark and claim nothing about the far end. Every other
+ |   destination-less exit is still dropped, having no far end and no glyph.
  | Author: suinevere
  | Dependencies: map_model_visited
  | Globals: g_dest, g_kind, g_cond
@@ -349,6 +375,58 @@ int map_model_clear_reveal(void);
  ----------------------*/
 int map_model_pages(void);
 int map_model_page(unsigned short room);
+
+/*----------------------
+ | map_model_nearest
+ | Description: The placed room on one floor closest to a given cell, as the
+ |   offsets from the player that map_model_offset answers in.
+ |
+ |   What the crosshair lands on when the floor changes. A floor is routinely
+ |   taller and wider than the viewport -- The Lurking Horror's first floor is
+ |   eleven rows against five -- so clamping the crosshair into that floor's
+ |   bounding box can leave it on empty ground with every room off screen, which
+ |   reads as a floor with nothing on it. Landing on the nearest room instead
+ |   means something is always drawn, and where the floors line up it means the
+ |   room the staircase reaches: page down from Second Floor and the crosshair
+ |   is already on Computer Center, distance zero.
+ |
+ |   Chebyshev, because the viewport is a rectangle and that is the metric in
+ |   which "will it be on screen" is one comparison. Ties go to the lowest
+ |   object number, so paging back and forth is stable.
+ | Author: suinevere
+ | Dependencies: map_model_offset, map_model_page
+ | Globals: N/A
+ | Params: page -- the floor; x, y -- the cell to search from; nx, ny -- receive
+ |   the room's offsets
+ | Returns: 1 when the floor holds a placed room, 0 when it holds none
+ ----------------------*/
+int map_model_nearest(int page, int x, int y, int *nx, int *ny);
+
+/*----------------------
+ | map_model_climb
+ | Description: The room a staircase out of `room` reaches, up or down. What
+ |   L and R follow.
+ |
+ |   Page order cannot answer this and no numbering of the pages ever could.
+ |   A page index is one line and a story's floors are a tree: The Lurking
+ |   Horror's ground level has three floors above it and three below, so at most
+ |   one of each can be the page next door however the floors are numbered.
+ |   Ordering them by drawn sheet then height leaves three of its fifteen
+ |   staircases running backwards -- Basement goes UP to the Computer Center and
+ |   the page number goes DOWN -- and ordering them by height first trades those
+ |   three for ten that skip. Both were built and measured before this was.
+ |
+ |   So the question is asked of the room and not of the atlas. The reader is
+ |   standing somewhere; up means the floor THAT room's stair reaches, which the
+ |   story states outright and no layout has to infer.
+ | Author: suinevere
+ | Dependencies: map_model_visited
+ | Globals: g_dest, g_kind
+ | Params: room -- object number; up -- nonzero for the floor above; dest --
+ |   receives the room the stair reaches
+ | Returns: 1 when the room has that staircase and its far end is placed
+ ----------------------*/
+int map_model_climb(unsigned short room, int up, unsigned short *dest);
 
 #define MAP_BLOB_MAGIC 0x4Du
 #define MAP_BLOB_MAX   (4u + 6u * MAP_ROOM_MAX)

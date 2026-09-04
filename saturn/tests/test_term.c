@@ -49,12 +49,14 @@ int main(void) {
     assert(used == ZATURN_RX_BUDGET);
     assert(drain_ready(&t) == 1000 - ZATURN_RX_BUDGET);
 
-    /* submit: echoes command into console, sends line + newline, resets keyboard */
+    /* submit: echoes command into console, sends line + newline, empties the
+       line and leaves the grid picker where the player left it */
     console_init(); term_init(&ts);
     console_write("> ", 2);                 /* simulate server's dangling prompt */
     {
         KeyboardState k;
         keyboard_reset(&k);
+        k.cursor_row = 2; k.cursor_col = 5;
         keyboard_type_char(&k, 'n');
         keyboard_type_char(&k, 'o');
         keyboard_type_char(&k, 'w');
@@ -63,7 +65,8 @@ int main(void) {
         term_submit_line(&t, &k);
         assert(m.tx_len == 4);
         assert(memcmp(m.tx, "now\n", 4) == 0);          /* sent line + \n */
-        assert(k.input_len == 0);                        /* keyboard reset */
+        assert(k.input_len == 0);                        /* line emptied */
+        assert(k.cursor_row == 2 && k.cursor_col == 5);  /* picker left alone */
         assert(strcmp(console_get_line(0), "> now") == 0); /* echoed onto the prompt */
     }
 

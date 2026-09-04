@@ -202,6 +202,35 @@ extern "C" void text_print_dim(int x, int y, const char *s)
     }
 }
 
+extern "C" void text_print_ink(int x, int y, const char *s, int slot)
+{
+    if (y < 0 || y >= TEXT_ROWS || x >= TEXT_COLS || s == nullptr) return;
+    if (x < 0) x = 0;
+
+    uint16_t bank = (slot >= 0 && slot < TEXT_PARTY_PALS)
+                    ? (uint16_t)((TEXT_PARTY_PAL0 + slot) << 12)
+                    : (uint16_t) TEXT_COLOR_BANK;
+    uint16_t *row = g_shadow[y];
+
+    for (int c = x; c < TEXT_COLS && *s != '\0'; c++)
+    {
+        uint16_t word = (uint16_t)((uint16_t)(uint8_t)(*s++) + TEXT_FONT_BANK) | bank;
+
+        if (row[c] != word)
+        {
+            row[c] = word;
+            mark_dirty(y);
+        }
+    }
+}
+
+extern "C" void text_set_party_ink(int slot, unsigned short rgb555)
+{
+    if (slot < 0 || slot >= TEXT_PARTY_PALS) return;
+    volatile unsigned short *cram = (volatile unsigned short *) VDP2_COLRAM;
+    cram[TEXT_PARTY_CRAM(slot)] = (unsigned short) (0x8000 | rgb555);
+}
+
 extern "C" void text_clear_line(int y)
 {
     if (y < 0 || y >= TEXT_ROWS) return;
@@ -281,6 +310,12 @@ extern "C" void text_map_init(void)
     // knows what colour the player picked; this only reserves the bank.
     SRL::CRAM::SetBankUsedState(TEXT_DIM_PAL,
                                 SRL::CRAM::TextureColorMode::Paletted16, true);
+    // And the four seat inks behind it, for the same reason and on the same
+    // terms: claimed here, written by whichever screen knows whose colour is
+    // whose (map_view.cxx is the only one so far).
+    for (int i = 0; i < TEXT_PARTY_PALS; i++)
+        SRL::CRAM::SetBankUsedState((uint16_t)(TEXT_PARTY_PAL0 + i),
+                                    SRL::CRAM::TextureColorMode::Paletted16, true);
 
     install_backslash_glyph();
 

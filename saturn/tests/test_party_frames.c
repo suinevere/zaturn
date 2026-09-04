@@ -30,7 +30,7 @@ void console_write(const char *str, unsigned int len) {
     g_console[g_console_len] = '\0';
 }
 
-void keyboard_reset(KeyboardState *k) { (void) k; }
+void keyboard_clear_line(KeyboardState *k) { (void) k; }
 
 static bool fake_ready(void *ctx) { (void) ctx; return g_wire_at < g_wire_len; }
 

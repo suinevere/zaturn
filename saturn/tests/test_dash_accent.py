@@ -224,14 +224,16 @@ def test_only_the_party_tiles_use_the_borrowed_slots():
     stone everywhere else, and would build."""
     e = enum_values()
     party = party_indices()
-    shield = e["DT_SHIELD0"]
+    hi, lo = e["DT_SHIELD_HI0"], e["DT_SHIELD_LO0"]
     px = tiles()
     for slot, ink in enumerate(party):
         drawn = (e["DT_KNIGHT0"] if slot == 0
                  else e["DT_KNIGHT_PEER0"] + (slot - 1) * KNIGHT_CELLS)
         allowed = set(range(drawn, drawn + KNIGHT_CELLS))
         for i, t in enumerate(px):
-            if shield <= i < shield + 16:
+            # The shield sets carry every seat's colour by construction; which
+            # quadrant is whose is test_the_shield_quarters_the_four_party_slots.
+            if hi <= i < hi + 16 or lo <= i < lo + 16:
                 continue
             if i in allowed:
                 assert ink in t, "figure tile %d is not drawn in slot %d" % (i, ink)
@@ -241,19 +243,28 @@ def test_only_the_party_tiles_use_the_borrowed_slots():
 
 def test_the_shield_quarters_the_four_party_slots():
     """One quadrant per seat, in the same order the tile set numbers them, so a
-    room two people share names the two."""
+    room two people share names the two. The quadrants are the blank interiors
+    of the grid drawn on the figure's shield, given in the 16x24 drawing's own
+    coordinates, and the lower pair straddles the boundary between the two cells
+    the shield falls across."""
     e = enum_values()
     inks = party_indices()
     px = tiles()
-    quad = [(2, 2), (4, 2), (2, 4), (4, 4)]
-    for mask in range(16):
-        t = px[e["DT_SHIELD0"] + mask]
-        for bit, (qx, qy) in enumerate(quad):
-            v = t[qy * 8 + qx]
-            if mask & (1 << bit):
-                assert v == inks[bit],                     "shield %d quadrant %d is entry %d, not %d" % (mask, bit, v, inks[bit])
-            else:
-                assert v not in inks,                     "shield %d claims quadrant %d nobody is in" % (mask, bit)
+    quad = [(1, 12), (4, 12), (1, 15), (4, 15)]
+    cells = {e["DT_SHIELD_HI0"]: 8, e["DT_SHIELD_LO0"]: 16}
+    for base, y0 in cells.items():
+        for mask in range(16):
+            t = px[base + mask]
+            for bit, (qx, qy) in enumerate(quad):
+                for y in range(qy, qy + 2):
+                    if not y0 <= y < y0 + 8:
+                        continue
+                    v = t[(y - y0) * 8 + qx]
+                    if mask & (1 << bit):
+                        assert v == inks[bit],                             "shield %d quadrant %d is entry %d, not %d" % (
+                                mask, bit, v, inks[bit])
+                    else:
+                        assert v not in inks,                             "shield %d claims quadrant %d nobody is in" % (mask, bit)
 
 
 def test_write_palette_does_not_exempt_the_borrowed_slots():

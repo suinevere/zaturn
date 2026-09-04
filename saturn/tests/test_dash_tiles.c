@@ -106,7 +106,7 @@ static int is_map_ink(int t) {
  | Returns: 1 for the peer figures, 0 otherwise
  ----------------------*/
 static int is_borrowed_ink(int t) {
-    return t >= DT_KNIGHT_PEER0 && t < DT_SHIELD0;
+    return t >= DT_KNIGHT_PEER0 && t < DT_ROOM_HERE_INV;
 }
 
 int main(void) {
@@ -316,8 +316,11 @@ int main(void) {
         assert(DT_GLYPH_D == 140);
         assert(DT_LOOP == 141);
         assert(DT_KNIGHT_PEER0 == 144);
-        assert(DT_SHIELD0 == 162);
-        assert(DT_N == 178);
+        assert(DT_ROOM_HERE_INV == 162);
+        assert(DT_KNIGHT_PARTY0 == 163);
+        assert(DT_SHIELD_HI0 == 169);
+        assert(DT_SHIELD_LO0 == 185);
+        assert(DT_N == 201);
 
         /* Mask 0 is never painted and stays blank in both sets. */
         for (y = 0; y < 8; y++)
@@ -418,11 +421,10 @@ int main(void) {
             for (x = 2; x <= 5; x++) assert(px(DT_ROOM, x, y) == fill);
     }
 
-    /* The party colours: one figure per seat and the shield they share when
-       two of them stand in one room. */
+    /* The party colours: one figure per seat, and the neutral figure with the
+       quartered shield that a room two of them stand in gets instead. */
     {
         int ink, mask, bit, cell;
-        static const int QUAD[4][2] = { { 2, 2 }, { 4, 2 }, { 2, 4 }, { 4, 4 } };
 
         /* Every figure is the same drawing -- same pixels lit, one entry each
            -- so the four are one person in four colours rather than four
@@ -450,33 +452,69 @@ int main(void) {
                 }
             }
 
-        /* The shield is the here-mark with its core quartered: a quadrant a
-           seat claims is that seat's own entry, one nobody claims is the core's
-           own, and the ring is untouched so a shared room still reads as a
-           room. */
-        for (mask = 0; mask < 16; mask++) {
-            int t = DT_SHIELD0 + mask;
-            for (x = 1; x <= 6; x++) {
-                assert(px(t, x, 0) == 0);
-                assert(px(t, x, 7) == 0);
-            }
-            assert(px(t, 1, 1) == px(DT_ROOM_HERE, 1, 1));
-            for (bit = 0; bit < 4; bit++) {
-                int qx = QUAD[bit][0], qy = QUAD[bit][1];
-                int want = px(DT_ROOM_HERE, qx, qy);
-                int got = px(t, qx, qy);
-                if (mask & (1 << bit)) assert(got != want);
-                else                   assert(got == want);
-                assert(px(t, qx + 1, qy + 1) == got);
-            }
+        /* The shared-room figure is the same drawing again in the neutral
+           passage ink -- one person, not a fifth one -- so that a room two
+           people are in is still the figure the map has always stood beside a
+           mark, wearing a shield that says who. */
+        for (cell = 0; cell < DT_KNIGHT_CELLS; cell++) {
+            int a = DT_KNIGHT0 + cell;
+            int b = DT_KNIGHT_PARTY0 + cell;
+            for (y = 0; y < 8; y++)
+                for (x = 0; x < 8; x++) {
+                    assert((px(a, x, y) != 0) == (px(b, x, y) != 0));
+                    if (px(b, x, y) != 0) assert(px(b, x, y) == DASH_PAL_LINE);
+                }
         }
 
-        /* Mask 0 is the here-mark exactly. It is never painted -- one occupant
-           keeps the mark it already had -- and the whole quadrant scheme rests
-           on the shield being that mark with quadrants added, so proving it
-           here is what makes the four comparisons above mean anything. */
-        assert(memcmp(dash_tile_data[DT_SHIELD0],
-                      dash_tile_data[DT_ROOM_HERE], 32) == 0);
+        /* The shield's four quadrants, in the drawing's own coordinates. Each
+           is 2x2 and the lower pair straddles the boundary between the two
+           cells the shield falls across, which is the whole reason there are
+           two mask sets and not one. */
+        for (mask = 0; mask < 16; mask++) {
+            static const int SQ[4][2] = { { 1, 12 }, { 4, 12 }, { 1, 15 }, { 4, 15 } };
+            static const int SEAT[4] = { DASH_PAL_PARTY0, DASH_PAL_PARTY1,
+                                         DASH_PAL_PARTY2, DASH_PAL_PARTY3 };
+            int hi = DT_SHIELD_HI0 + mask, lo = DT_SHIELD_LO0 + mask;
+            int hi0 = DT_KNIGHT_PARTY0 + DT_SHIELD_HI_CELL;
+            int lo0 = DT_KNIGHT_PARTY0 + DT_SHIELD_LO_CELL;
+            /* Every pixel that is not a claimed quadrant is the plain figure's,
+               so a mask tile is that figure with quadrants added and nothing
+               else -- which is what lets the other four cells come from the
+               plain set. */
+            for (y = 0; y < 8; y++)
+                for (x = 0; x < 8; x++) {
+                    int want_hi = px(hi0, x, y), want_lo = px(lo0, x, y);
+                    for (bit = 0; bit < 4; bit++) {
+                        int qx = SQ[bit][0], qy = SQ[bit][1];
+                        if (!(mask & (1 << bit))) continue;
+                        if (x < qx || x > qx + 1) continue;
+                        if (y + 8 >= qy && y + 8 <= qy + 1)  want_hi = SEAT[bit];
+                        if (y + 16 >= qy && y + 16 <= qy + 1) want_lo = SEAT[bit];
+                    }
+                    assert(px(hi, x, y) == want_hi);
+                    assert(px(lo, x, y) == want_lo);
+                }
+        }
+
+        /* Mask 0 is the plain figure exactly. It is never painted -- one
+           occupant gets their own coloured figure and a blank shield -- and the
+           whole scheme rests on a mask tile being that figure with quadrants
+           added, so proving it here is what makes the comparisons above mean
+           anything. */
+        assert(memcmp(dash_tile_data[DT_SHIELD_HI0],
+                      dash_tile_data[DT_KNIGHT_PARTY0 + DT_SHIELD_HI_CELL], 32) == 0);
+        assert(memcmp(dash_tile_data[DT_SHIELD_LO0],
+                      dash_tile_data[DT_KNIGHT_PARTY0 + DT_SHIELD_LO_CELL], 32) == 0);
+
+        /* And the here-mark's inverse really is its two entries exchanged: the
+           pulse it drives is only readable as one mark turning inside out if the
+           two halves are the same shape. */
+        for (y = 0; y < 8; y++)
+            for (x = 0; x < 8; x++) {
+                int a = px(DT_ROOM_HERE, x, y), b = px(DT_ROOM_HERE_INV, x, y);
+                assert((a != 0) == (b != 0));
+                if (a != 0) assert(a != b);
+            }
     }
 
     printf("test_dash_tiles: ok\n");

@@ -90,6 +90,21 @@ void text_print_str(int x, int y, const char *s);
 #define TEXT_DIM_CRAM (TEXT_DIM_PAL * 16 + 1)
 
 /*----------------------
+ | TEXT_PARTY_PAL0 / TEXT_PARTY_PALS / TEXT_PARTY_CRAM
+ | Description: Four more 4bpp palettes, one per seat, for text that has to be
+ |   drawn in a player's own colour rather than the one the display settings
+ |   chose -- the map's roster, whose names name the same people its shields and
+ |   figures do. They follow the dim ink at bank 3, and each carries its ink in
+ |   entry 1 exactly as palette 0 does, so a coloured cell differs from a plain
+ |   one by its palette bank alone: no second font, no tile writes, and one
+ |   bit-or per cell. Entries 48..111 of CRAM; the wallpaper starts at 256.
+ | Author: suinevere
+ ----------------------*/
+#define TEXT_PARTY_PAL0  3
+#define TEXT_PARTY_PALS  4
+#define TEXT_PARTY_CRAM(slot) (((TEXT_PARTY_PAL0) + (slot)) * 16 + 1)
+
+/*----------------------
  | text_print_dim
  | Description: text_print_str into the dim palette: the same glyphs, drawn from
  |   CRAM entry TEXT_DIM_CRAM instead of entry 1. Costs one bit-or per cell and
@@ -111,6 +126,36 @@ void text_print_str(int x, int y, const char *s);
  | Returns: N/A
  ----------------------*/
 void text_print_dim(int x, int y, const char *s);
+
+/*----------------------
+ | text_print_ink
+ | Description: text_print_str into one of the four party palettes, so a line
+ |   can be drawn in a seat's own colour. `slot` outside 0..TEXT_PARTY_PALS-1
+ |   falls back to the plain ink rather than reaching a palette nobody has
+ |   written, which is what a seat past the colours the map tells apart wants.
+ |   The colours themselves come from text_set_party_ink.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_shadow
+ | Params: x, y -- cell position; s -- the string; slot -- 0..3, or anything
+ |   else for the plain ink
+ | Returns: N/A
+ ----------------------*/
+void text_print_ink(int x, int y, const char *s, int slot);
+
+/*----------------------
+ | text_set_party_ink
+ | Description: Writes one party palette's glyph entry. Separate from
+ |   text_set_color because these are not the player's display settings: they
+ |   are whose-is-whose, chosen by whatever screen is showing several people at
+ |   once, and nothing rewrites them behind its back.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: slot -- 0..TEXT_PARTY_PALS-1; rgb555 -- the ink, without its MSB
+ | Returns: N/A
+ ----------------------*/
+void text_set_party_ink(int slot, unsigned short rgb555);
 
 /*----------------------
  | text_clear_line

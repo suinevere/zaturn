@@ -99,6 +99,25 @@ void keyboard_reset(KeyboardState *k) {
 }
 
 /*----------------------
+ | keyboard_clear_line
+ | Description: Empties the line and puts the caret at its start, leaving the
+ |   grid picker alone. The difference from keyboard_reset is the whole point:
+ |   sending a line is not a reason to move the cursor off the key the player is
+ |   standing on.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the input-line state to empty
+ | Returns: N/A
+ ----------------------*/
+void keyboard_clear_line(KeyboardState *k) {
+    k->input_len = 0;
+    k->input[0] = '\0';
+    k->cursor = 0;
+    k->submitted = 0;
+}
+
+/*----------------------
  | keyboard_load_line
  | Description: Replaces the line with `text` and puts the caret at its end, so
  |   the player carries on typing where the other interface left off. Truncates

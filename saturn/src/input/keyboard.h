@@ -59,6 +59,17 @@ void keyboard_reset(KeyboardState *k);
 void keyboard_move(KeyboardState *k, int dcol, int drow);
 
 /*----------------------
+ | keyboard_clear_line
+ | Description: Clears the line and caret and leaves the on-screen picker where
+ |   the player put it. What every "ready for the next command" path wants:
+ |   keyboard_reset also sends the picker back to the top-left corner, which on
+ |   the online terminal moved the cursor off the key the player was standing on
+ |   after every line they sent.
+ | Author: suinevere
+ ----------------------*/
+void keyboard_clear_line(KeyboardState *k);
+
+/*----------------------
  | keyboard_load_line
  | Description: Replaces the line with `text`, caret at its end. The command
  |   panel's counterpart to cp_load_line, so a command half-built in one

@@ -139,6 +139,16 @@ def match_tone(src_lum, ref_lum):
      |     distribution, by rank. Not a stretch and not a gamma: the shape of
      |     these histograms is the look, and only a rank mapping reproduces a
      |     shape.
+     |
+     |     The rank of a value is how many pixels are at or below it, not how
+     |     many are strictly below. The difference is only visible where values
+     |     tie, and in a rendered picture the brightest region is exactly where
+     |     they do: 461 of this plate's pixels sat at its maximum, and counting
+     |     strictly-below sent all 461 to the 99.4th percentile of the
+     |     reference instead of the 100th. Everything the reference had above
+     |     that -- its whole highlight, a quarter of its range -- was then
+     |     unreachable, and every flat bright area in every generated plate came
+     |     out dimmer than the frame it was graded against.
      | Author: suinevere
      | Dependencies: numpy
      | Globals: N/A
@@ -149,12 +159,111 @@ def match_tone(src_lum, ref_lum):
     flat = src_lum.ravel()
     src_sorted = np.sort(flat)
     ref_sorted = np.sort(np.asarray(ref_lum).ravel())
-    rank = np.clip(np.searchsorted(src_sorted, flat, side="left"), 0, len(src_sorted) - 1)
-    pos = (rank / max(1, len(src_sorted) - 1)) * (len(ref_sorted) - 1)
+    below = np.searchsorted(src_sorted, flat, side="right")
+    pos = (below - 1).clip(0) / max(1, len(src_sorted) - 1) * (len(ref_sorted) - 1)
     return np.interp(pos, np.arange(len(ref_sorted)), ref_sorted).reshape(src_lum.shape)
 
 
-def stylise(image, index, grain=0.0):
+def lift_gain(ref, lift):
+    """/*----------------------
+     | lift_gain
+     | Description: The factor that opens a reference's ramp up beyond the
+     |     colours the reference itself holds.
+     |
+     |     ramp_of can only ever return a colour the reference already uses, and
+     |     the reference's brightest is dark: BMIN_07's is 5-bit r8 g10 b13 of
+     |     31, which cgl_palette hands to the Saturn CLUT unscaled, so the
+     |     console shows what the extraction shows. A plate matched faithfully
+     |     to one of these is therefore capped at about a quarter of the range
+     |     the hardware can display, however well it is matched -- which is
+     |     correct, and is not always what the picture needs.
+     |
+     |     Scales the ramp's colours rather than the matched luminance, because
+     |     scaling luminance cannot pass a cap that is in the ramp. Linear and
+     |     per-channel, so the reference's hue and its black point both survive:
+     |     0 stays 0, and the ratios between channels are untouched.
+     | Author: suinevere
+     | Dependencies: numpy
+     | Globals: N/A
+     | Params: ref -- the reference frame; lift -- 0 for the reference's own
+     |     range, 1 to put its brightest colour at full scale
+     | Returns: the multiplier
+     ----------------------*/"""
+    if lift <= 0:
+        return 1.0
+    top = float(luminance(ref).max())
+    if top <= 0:
+        return 1.0
+    return 1.0 + float(lift) * (255.0 / top - 1.0)
+
+
+TARGET_MEAN = 24.0
+"""TARGET_MEAN
+
+Description: The mean luminance a finished plate is aimed at, and the one
+    number that decides how bright the generated art is.
+
+    Twenty-four, to sit inside the brightness the original disc actually has.
+    Its 74 frames run from a mean of 7.4 to 74.2, with a mean-of-means of 18.8,
+    a median of 14.3 and a p90 of 36.4 -- so 24 is squarely among them rather
+    than above them, where 40 was. It is also exactly where the Advent river
+    plate already sits, which is the one held up as looking right, so aiming
+    here darkens the bright plates towards the disc without touching the dark
+    blue ones: those are dark because their reference is dark and the lift is
+    already at its ceiling, and lowering the target cannot push them further.
+Author: suinevere
+"""
+
+MARGIN = 0.06
+"""MARGIN
+
+Description: How much of each edge of a generated plate is thrown away before
+    it is styled.
+
+    Diffusion models sign their work. Two of the first hundred plates came back
+    with a fake artist's signature along the bottom edge -- text, which is the
+    one thing a room background must not carry, since the game draws its own
+    over it -- and the negative prompt cannot be relied on to stop it at the
+    CFG 2.5 the checkpoint requires. The mark measured 18 pixels of 384, inside
+    the bottom 4.9%, so six per cent clears it with room to spare. Taken off
+    every edge rather than the bottom alone so the 4:3 the screen wants
+    survives, and it costs a border a background does not need.
+Author: suinevere
+"""
+
+
+def lift_for(index, cache={}):
+    """/*----------------------
+     | lift_for
+     | Description: The lift that lands a plate graded against one reference at
+     |     TARGET_MEAN.
+     |
+     |     Derived here rather than written into each plate's manifest entry,
+     |     which is where it used to live. A stored lift is a copy of an answer
+     |     to a question the target asks, so changing the target left every
+     |     plate already drawn at the old brightness with nothing to say so --
+     |     and the only way to re-grade them was to rewrite the manifest. As a
+     |     function of the reference it is recomputed on every rebuild, and the
+     |     fingerprint that decides whether a plate needs restyling includes
+     |     TARGET_MEAN, so moving the target restyles exactly what it changes.
+     | Author: suinevere
+     | Dependencies: numpy
+     | Globals: TARGET_MEAN
+     | Params: index -- the reference picture index
+     | Returns: a lift in 0..1
+     ----------------------*/"""
+    if index not in cache:
+        ref, _n = reference(index)
+        lum = luminance(ref)
+        mean, top = float(lum.mean()), float(lum.max())
+        span = 255.0 / top - 1.0 if top > 0 else 0.0
+        cache[index] = (0.0 if mean <= 0 or span <= 0
+                        else round(max(0.0, min(1.0,
+                                                (TARGET_MEAN / mean - 1.0) / span)), 3))
+    return cache[index]
+
+
+def stylise(image, index, grain=0.0, lift=None, margin=MARGIN):
     """/*----------------------
      | stylise
      | Description: One new picture, put into the style of the frame it
@@ -165,19 +274,30 @@ def stylise(image, index, grain=0.0):
      |     and carry sensor noise the ramp cannot invent; a little added before
      |     quantising survives posterisation and reads as film, while too much
      |     simply spends colours on speckle.
+     |
+     |     Lift is optional and off by default, and is the one thing here that
+     |     deliberately does not reproduce the original: see lift_gain.
      | Author: suinevere
      | Dependencies: numpy, PIL
      | Globals: WIDTH, HEIGHT
      | Params: image -- a PIL image; index -- the reference picture index;
-     |     grain -- standard deviation of noise added before quantising
+     |     grain -- standard deviation of noise added before quantising;
+     |     lift -- 0 to hold the reference's own range, 1 to open it to full
+     |     scale, None to derive it from TARGET_MEAN
      | Returns: (paletted PIL image, palette as 256 RGB triples)
      ----------------------*/"""
     ref, ncol = reference(index)
-    small = np.asarray(image.convert("RGB").resize((WIDTH, HEIGHT), Image.LANCZOS))
+    if lift is None:
+        lift = lift_for(index)
+    src = image.convert("RGB")
+    if margin > 0:
+        dx, dy = int(src.width * margin), int(src.height * margin)
+        src = src.crop((dx, dy, src.width - dx, src.height - dy))
+    small = np.asarray(src.resize((WIDTH, HEIGHT), Image.LANCZOS))
     lum = match_tone(luminance(small), luminance(ref))
     if grain > 0:
         lum = lum + np.random.default_rng(0).normal(0, grain, lum.shape)
-    out = ramp_of(ref)[np.clip(lum, 0, 255).astype(np.uint8)]
+    out = ramp_of(ref)[np.clip(lum, 0, 255).astype(np.uint8)] * lift_gain(ref, lift)
     q = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)).quantize(
         colors=ncol, method=Image.MEDIANCUT)
     pal = list(q.getpalette() or [])

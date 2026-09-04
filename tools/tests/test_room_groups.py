@@ -241,8 +241,14 @@ class ImageLooksTest(unittest.TestCase):
     def test_no_picture_is_left_out_of_every_list(self):
         """45 of the 74 had never been used once, which is what one picture per
         scene buys you."""
+        import art_frames
+        # A plate drawn FOR a room is picked by that room's own record and needs
+        # no scene to be reachable -- and 951 of the 1,931 rooms carry no scene
+        # tag at all, so requiring one of those would be requiring a tag that
+        # does not exist.
+        byroom = {int(f["index"]) for f in art_frames.frames() if "game" in f}
         listed = {i for v in self.looks.scene_images().values() for i in v}
-        missing = sorted({i["index"] for i in self.pool["images"]} - listed)
+        missing = sorted({i["index"] for i in self.pool["images"]} - listed - byroom)
         self.assertEqual(missing, [], f"pictures nothing will ever pick: {missing}")
 
     def test_no_one_picture_carries_the_disc(self):
@@ -264,13 +270,24 @@ class ImageLooksTest(unittest.TestCase):
                 used.add(s["image"])
         self.assertGreaterEqual(len(used), 55, f"only {len(used)} of 74 pictures used")
 
-    def test_a_strongly_measured_scene_is_never_spread(self):
-        """Four of four Zork I FOREST rooms took picture 3; that is a count,
-        not a taste, and no judgement in image_looks may overrule it."""
+    def test_no_game_is_offered_a_zork_one_picture_for_a_scene_that_has_art(self):
+        """The thirty other games borrowed Zork I's 74 because there was
+        nothing else. A picture drawn FOR a scene beats one that merely does
+        not contradict it, so once a scene has its own the borrowed ones stop
+        being offered -- and Zork I keeps every one of them, because its table
+        is measured and never comes through the guesser at all."""
         d = self.pool["scene_defaults"]
-        for rank in range(6):
-            self.assertEqual(self.guess.picture("FOREST", d, rank),
-                             d["FOREST"]["image"])
+        drawn = {i["index"] for i in self.pool["images"] if i["index"] > 74}
+        self.assertTrue(drawn, "nothing has been generated -- this proves nothing")
+        import scene_vocab as vocab
+        for scene in vocab.SCENES:
+            have = self.looks.room_images(scene)
+            if not (set(have) & drawn):
+                continue
+            for rank in range(6):
+                got = self.guess.picture(scene, d, rank)
+                self.assertGreater(got, 74,
+                                   f"{scene} was offered Zork I picture {got}")
 
     def test_a_weak_scene_is_spread(self):
         d = self.pool["scene_defaults"]
@@ -280,26 +297,34 @@ class ImageLooksTest(unittest.TestCase):
     def test_a_scene_measured_on_one_room_is_not_trusted_outright(self):
         """KITCHEN, PARLOR and ROAD are one Zork I room each, so each agreed
         with itself 100% and outranked everything -- which put a dim Victorian
-        kitchen into the Bridge of the Heart of Gold."""
+        kitchen into the Bridge of the Heart of Gold. Nothing is trusted
+        outright any more, but the property that caught it is worth keeping:
+        no scene may answer with one picture for every area."""
         d = self.pool["scene_defaults"]
         for scene in ("KITCHEN", "PARLOR", "ROAD"):
-            self.assertLess(d[scene]["n"], self.guess.MIN_ROOMS, f"{scene} grew")
+            self.assertEqual(d[scene]["n"], 1, f"{scene} is no longer one room")
             got = {self.guess.picture(scene, d, r) for r in range(4)}
             self.assertGreater(len(got), 1, f"{scene} is still trusted on one room")
 
-    def test_the_genre_narrows_a_guess(self):
+    def test_the_genre_stands_aside_where_it_has_nothing_to_say(self):
+        """The genre lists name Zork I's pictures, and a scene with art of its
+        own is no longer offered those -- so the narrowing finds no overlap and
+        stands aside. That is the same rule as below reached from the other
+        end, not a failure: a list that agrees with none of a scene's pictures
+        is not a reason to give the room no picture."""
         d = self.pool["scene_defaults"]
         scifi = set(genre_vocab.images_for("HITCHHKR"))
         self.assertTrue(scifi)
         for r in range(4):
-            self.assertIn(self.guess.picture("KITCHEN", d, r, scifi), scifi)
+            got = self.guess.picture("KITCHEN", d, r, scifi)
+            self.assertIn(got, self.looks.room_images("KITCHEN"))
 
     def test_the_genre_never_overrules_a_scene_it_disagrees_with(self):
         """A forest in a science fiction story is still a forest."""
         d = self.pool["scene_defaults"]
         scifi = set(genre_vocab.images_for("HITCHHKR"))
         got = self.guess.picture("FOREST", d, 0, scifi)
-        self.assertEqual(got, d["FOREST"]["image"])
+        self.assertIn(got, self.looks.room_images("FOREST"))
 
     def test_every_genre_picture_pool_names_real_pictures(self):
         valid = {i["index"] for i in self.pool["images"]}

@@ -34,6 +34,7 @@
  | Globals: MARGIN, _WORD_RE
  ----------------------*/"""
 import collections
+import zlib
 import pathlib
 import re
 import sys
@@ -152,34 +153,21 @@ def _spread(scene, adj, rooms):
         filled |= set(round_)
 
 
-STRONG = 60
-MIN_ROOMS = 3
-"""STRONG / MIN_ROOMS
-
-Description: What it takes for a scene's Zork I measurement to outrank
-    spreading: that share of its rooms agreed on one picture, over at least
-    that many rooms. At or above both the scene keeps its one picture
-    everywhere, because four of four FOREST rooms taking picture 3 is not a
-    thing to improve on.
-
-    The room count is the half that is easy to leave out and costly to. KITCHEN,
-    PARLOR and ROAD are each ONE Zork I room, so each was 100% agreed with
-    itself and outranked everything -- which is how Hitchhiker's Bridge, Vogon
-    hold and inside of a sperm whale all came to show a dim Victorian kitchen.
-    One room is not evidence of a rule; it is one room.
-Author: suinevere
-"""
-
-
 def picture(scene, defaults, rank, allowed=()):
     """/*----------------------
      | picture
      | Description: Which picture a room of one scene gets, given how many
-     |     areas of that scene came before it. A scene Zork I agreed strongly
-     |     about keeps its measured picture for every room; anything weaker is
-     |     spread across the pictures that actually depict the scene, one per
-     |     area, so an area stays visually of a piece while the next area of
-     |     the same kind looks different.
+     |     areas of that scene came before it: one of the pictures drawn for
+     |     that scene, spread one per area, so an area stays visually of a piece
+     |     while the next area of the same kind looks different.
+     |
+     |     Nothing is pinned any more. A scene Zork I agreed strongly about used
+     |     to keep its measured picture for every room of every game, on the
+     |     reasoning that four of four FOREST rooms taking picture 3 is not a
+     |     thing to improve on -- which is true of Zork I, and Zork I's table is
+     |     measured and never comes through here. Applied to the other thirty it
+     |     meant seventy-one maze rooms across many games showing one picture
+     |     because one game's maze was coherent.
      |
      |     Per area rather than per room on purpose. Rotating room by room
      |     would make a corridor change its walls at every step, which is worse
@@ -189,9 +177,12 @@ def picture(scene, defaults, rank, allowed=()):
      |     genre, and only when something survives the narrowing -- a forest in
      |     a science fiction story is still a forest, and a genre that agrees
      |     with none of a scene's pictures has nothing to say about that scene.
+     |     The genre lists name Zork I's pictures, so for a scene that has art
+     |     of its own the narrowing now finds no overlap and stands aside, which
+     |     is that same rule reached from the other direction.
      | Author: suinevere
      | Dependencies: image_looks
-     | Globals: STRONG
+     | Globals: N/A
      | Params: scene -- the scene name; defaults -- the catalogue's
      |     scene_defaults; rank -- how many areas of this scene came first;
      |     allowed -- the genre's pictures, narrowing the choice when the two
@@ -199,11 +190,7 @@ def picture(scene, defaults, rank, allowed=()):
      | Returns: a picture index, or 0 when the scene has none
      ----------------------*/"""
     d = defaults.get(scene) or {}
-    measured = d.get("image", 0) if d.get("source") == "measured" else 0
-    n, sup = d.get("n", 0), d.get("image_support", 0)
-    if measured and n >= MIN_ROOMS and (100 * sup) // n >= STRONG:
-        return measured
-    have = image_looks.images_for(scene, measured or None)
+    have = image_looks.room_images(scene)
     if not have:
         return d.get("image", 0)
     if allowed:
@@ -280,10 +267,11 @@ def suggestions(stem, pool=None, areas=None):
     genre_imgs = set(genre_vocab.images_for(stem))
     rank = {}
     seen = collections.Counter()
+    offset = zlib.crc32(stem.encode("utf-8"))
     for a in sorted(areas, key=lambda a: a["id"]):
         names = collections.Counter(scene[o] for o in a["rooms"] if scene.get(o))
         s = names.most_common(1)[0][0] if names else None
-        rank[a["id"]] = seen[s]
+        rank[a["id"]] = seen[s] + offset
         seen[s] += 1
 
     by_id = {n: a["id"] for n, a in enumerate(areas)}

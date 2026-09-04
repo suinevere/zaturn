@@ -386,7 +386,7 @@ def main(argv):
              " | Author: suinevere",
              " ----------------------*/",
              "typedef struct {",
-             "    unsigned char image;",
+             "    unsigned short image;",
              "    unsigned char track;",
              "    unsigned char se_bank;",
              "} Presentation;",

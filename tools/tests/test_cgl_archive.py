@@ -97,25 +97,61 @@ class PackTest(unittest.TestCase):
         self.assertEqual(cgl_archive.pack([]), ([], []))
 
 
+class KeyTest(unittest.TestCase):
+    """An archive is read whole and held resident, so what it costs is paid back
+    only if the rooms that share it are rooms the player walks between. Zork I
+    got that by making each archive a place and giving each place its own track;
+    all 54 of its archive crossings are track changes."""
+
+    def test_an_archive_never_spans_two_keys(self):
+        recs = [cgl_encode.record(p, x) for p, x in frames(6)]
+        keys = ["cellar", "cellar", "maze", "maze", "maze", "river"]
+        archives, placements = cgl_archive.pack(recs, keys=keys)
+        seen = {}
+        for (a, _o, _l), k in zip(placements, keys):
+            self.assertEqual(seen.setdefault(a, k), k,
+                             f"archive {a} holds two areas")
+        self.assertEqual(len(archives), 3)
+
+    def test_the_cap_still_splits_one_key(self):
+        """A key too big for one archive is split rather than allowed to grow:
+        the budget is a hard limit and the area is a preference."""
+        recs = [cgl_encode.record(p, x) for p, x in frames(4)]
+        archives, placements = cgl_archive.pack(
+            recs, cap=len(recs[0]) * 2 + 1, keys=["maze"] * 4)
+        self.assertEqual(len(archives), 2)
+        self.assertEqual([a for a, _o, _l in placements], [0, 0, 1, 1])
+
+    def test_no_keys_packs_purely_by_size(self):
+        recs = [cgl_encode.record(p, x) for p, x in frames(4)]
+        self.assertEqual(cgl_archive.pack(recs), cgl_archive.pack(recs, keys=None))
+
+
 class StemTest(unittest.TestCase):
     def test_stems_are_lettered(self):
-        self.assertEqual(cgl_archive.stems("GEN", 3), ["GENA", "GENB", "GENC"])
+        self.assertEqual(cgl_archive.stems("GEN", 3), ["GENAA", "GENAB", "GENAC"])
 
     def test_a_stem_too_long_for_load_area_is_refused(self):
         with self.assertRaises(ValueError):
             cgl_archive.stems("GENERATED", 1)
 
-    def test_running_out_of_letters_is_refused(self):
+    def test_the_suffix_rolls_past_the_first_letter(self):
+        """A picture per room is about 140 archives; a single letter ran out at
+        34 and stopped a run that had already been drawn."""
+        self.assertEqual(cgl_archive.stems("GEN", 27)[26], "GENBA")
+        self.assertEqual(len(set(cgl_archive.stems("GEN", 200))), 200)
+
+    def test_running_out_of_names_is_refused(self):
         with self.assertRaises(ValueError):
-            cgl_archive.stems("GEN", 27)
+            cgl_archive.stems("GEN", 677)
 
 
 class BuildTest(unittest.TestCase):
     def test_build_verifies_and_names_every_frame(self):
         blobs, rows, sums = cgl_archive.build(frames(3), "GEN")
-        self.assertEqual(list(blobs), ["GENA"])
-        self.assertEqual([r["archive"] for r in rows], ["GENA"] * 3)
-        self.assertEqual(set(sums), {"GENA"})
+        self.assertEqual(list(blobs), ["GENAA"])
+        self.assertEqual([r["archive"] for r in rows], ["GENAA"] * 3)
+        self.assertEqual(set(sums), {"GENAA"})
 
     def test_build_is_deterministic(self):
         """The manifest is committed and the archive is not, so a second run on

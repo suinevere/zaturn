@@ -218,7 +218,7 @@ static int map_ink_is_red(unsigned short c)
  |   the cursor is on runs straight down through its own name, and letters
  |   crossing a groove read as neither. The cells the label covers are therefore
  |   cleared to bare paper and closed with a bracket at each end -- see
- |   MAP_CAP_ON -- and the whole plate steps aside for a second in four so the
+ |   MAP_CAP_ON -- and the whole plate steps aside for a third of the time so the
  |   drawing it is standing on can be read. The label is laid again from scratch
  |   every time the cursor moves, since draw_once opens with menu_clear.
  |
@@ -305,7 +305,7 @@ static int           g_flash_n;
 /*----------------------
  | MAP_CAP_ON / MAP_CAP_OFF / MAP_CAP_MAX
  | Description: How long the room caption stands and how long it stands down,
- |   in frames -- three seconds and one at 60Hz -- and the most cells its plate
+ |   in frames -- one second and a half at 60Hz -- and the most cells its plate
  |   can cover, which is the drawing's whole width.
  |
  |   The label is centred on the room it names, so it lands on top of whatever
@@ -313,13 +313,12 @@ static int           g_flash_n;
  |   running down through its own name. Moving the label off the room it names
  |   is worse than the overlap, so instead the cells it covers are cleared to
  |   bare paper with a bracket at each end, and the whole thing steps aside for
- |   one second in four and puts the drawing back. What is hidden is never
- |   hidden for long enough to be missed, and it is never hidden by letters
- |   crossing a line.
+ |   a third of the time and puts the drawing back. Neither the name nor what it
+ |   covers is ever gone for long enough to be waited for.
  | Author: suinevere
  ----------------------*/
-#define MAP_CAP_ON  180
-#define MAP_CAP_OFF 60
+#define MAP_CAP_ON  60
+#define MAP_CAP_OFF 30
 #define MAP_CAP_MAX MAP_TEXT_COLS
 
 /*----------------------

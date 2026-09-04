@@ -112,8 +112,9 @@ static int g_sheet = 0;
  | MapInk
  | Description: The five colours one sheet gives the map: its labels, the ink
  |   its passages and glyphs are drawn in, the fill in the middle of a location
- |   mark, the local player's own colour for their figure and their quadrant of
- |   a shared room, and the colour the first other seat falls back to when the
+ |   mark, the local player's own colour for their figure, their roster line and
+ |   their quadrant of a shared room's shield, and the colour the first other
+ |   seat falls back to when the
  |   player already holds its red. The crosshair is not among them -- it keeps
  |   the accent and is red on all four sheets.
  |
@@ -212,10 +213,13 @@ static int map_ink_is_red(unsigned short c)
  |   else means looking away from the cursor and back.
  |
  |   It is drawn over the map rather than beside it, which is what a caption
- |   does. The text layer is above the tile layer, so a passage running under
- |   the label is covered for that row and nothing is corrupted; the label is
- |   redrawn from scratch every time the cursor moves, since draw_once opens
- |   with menu_clear.
+ |   does. The text layer is above the tile layer, so the label is never
+ |   corrupted by what it lands on; but a passage running south out of the room
+ |   the cursor is on runs straight down through its own name, and letters
+ |   crossing a groove read as neither. The cells the label covers are therefore
+ |   cleared to bare paper -- see MAP_CAP_ON -- and the whole plate steps aside
+ |   for a third of the time so the drawing it is standing on can be read. The label is laid again from scratch
+ |   every time the cursor moves, since draw_once opens with menu_clear.
  |
  |   The roster and the floor number share the row directly below the grid --
  |   row twenty-four, the last of MAP.TGA's solid band; row twenty-six, which is
@@ -290,16 +294,125 @@ static short g_slot[MAP_ROOM_MAX];
  |   frame loop can pulse them without repeating the room and link walk. Each
  |   alternates between its own tile and DT_ROOM, so a pulsing mark reads as a
  |   room that is being pointed at rather than as one blinking out of existence.
- |
- |   A mark the crosshair is over is left out of this list: the pick has to win
- |   its own cell, and a mark that pulsed under the cursor would spend half its
- |   time denying it had been picked.
  | Author: suinevere
  ----------------------*/
 static short         g_flash_x[MAP_FLASH_MAX];
 static short         g_flash_y[MAP_FLASH_MAX];
 static unsigned char g_flash_tile[MAP_FLASH_MAX];
 static int           g_flash_n;
+
+/*----------------------
+ | MAP_CAP_ON / MAP_CAP_OFF / MAP_CAP_MAX
+ | Description: How long the room caption stands and how long it stands down,
+ |   in frames -- one second and a half at 60Hz -- and the most cells its plate
+ |   can cover, which is the drawing's whole width.
+ |
+ |   The label is centred on the room it names, so it lands on top of whatever
+ |   the map drew there; a room with a passage leaving south has that passage
+ |   running down through its own name. Moving the label off the room it names
+ |   is worse than the overlap, so instead the cells it covers are cleared to
+ |   bare paper, and the whole thing steps aside for a third of the time and
+ |   puts the drawing back. Neither the name nor what it
+ |   covers is ever gone for long enough to be waited for.
+ | Author: suinevere
+ ----------------------*/
+#define MAP_CAP_ON  60
+#define MAP_CAP_OFF 30
+#define MAP_CAP_MAX MAP_TEXT_COLS
+
+/*----------------------
+ | g_cap_x / g_cap_y / g_cap_n / g_cap_text / g_cap_under / g_cap_frame /
+ | g_cap_on
+ | Description: The caption as laid: the cell its left bracket went in, its row,
+ |   how many cells the plate covers, the name itself, and the tiles that were
+ |   under it, so the blink can put the drawing back and take it away again
+ |   without repeating the room and link walk. g_cap_n is zero when there is no
+ |   caption on screen, which is what makes the blink inert on a cursor sitting
+ |   over empty ground.
+ | Author: suinevere
+ ----------------------*/
+static short         g_cap_x, g_cap_y, g_cap_n;
+static char          g_cap_text[MAP_CAP_MAX];
+static unsigned char g_cap_under[MAP_CAP_MAX];
+static int           g_cap_frame;
+static int           g_cap_on;
+
+/*----------------------
+ | cap_show
+ | Description: Puts the caption up or takes it down. Up is the plate -- the
+ |   drawing cleared to bare paper -- and the name over it; down is the tiles that
+ |   were there before and spaces where the letters were. Both write the same
+ |   cells, so the two are exact inverses of each other and a blink cannot leak.
+ | Author: suinevere
+ | Dependencies: dash_map.h, text_map.h
+ | Globals: g_cap_x, g_cap_y, g_cap_n, g_cap_text, g_cap_under
+ | Params: on -- non-zero to show the caption, zero to hide it
+ | Returns: N/A
+ ----------------------*/
+static void cap_show(int on)
+{
+    int i;
+    if (g_cap_n <= 0) return;
+    if (on) {
+        for (i = 0; i < g_cap_n; i++) dash_map_paint(g_cap_x + i, g_cap_y, DT_BLANK);
+        text_print_str(g_cap_x, g_cap_y, g_cap_text);
+    } else {
+        char blank[MAP_CAP_MAX + 1];
+        for (i = 0; i < g_cap_n; i++) {
+            dash_map_paint(g_cap_x + i, g_cap_y, g_cap_under[i]);
+            blank[i] = ' ';
+        }
+        blank[i] = '\0';
+        text_print_str(g_cap_x, g_cap_y, blank);
+    }
+}
+
+/*----------------------
+ | cap_covers
+ | Description: Whether a cell is under the caption's plate right now. The
+ |   pulse asks before repainting a player's mark: a mark two rows below the
+ |   room the cursor is on falls inside the label, and one that kept pulsing
+ |   there would punch a hole through it every half second.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cap_on, g_cap_x, g_cap_y, g_cap_n
+ | Params: x, y -- a cell
+ | Returns: 1 when the caption is up and covering it, 0 otherwise
+ ----------------------*/
+static int cap_covers(int x, int y)
+{
+    return g_cap_on && g_cap_n > 0 && y == g_cap_y &&
+           x >= g_cap_x && x < g_cap_x + g_cap_n;
+}
+
+/*----------------------
+ | cap_lay
+ | Description: Records where the caption is going and what it is covering, then
+ |   shows it. Reading the cells back out of the shadow rather than recomputing
+ |   them is what lets the blink restore a groove, a mark, a glyph or bare paper
+ |   without knowing which of those it is putting back.
+ | Author: suinevere
+ | Dependencies: dash_map.h (dash_cell)
+ | Globals: g_cap_*
+ | Params: col, row -- where the name's first letter goes; nm, nc -- the name
+ |   and its length
+ | Returns: N/A
+ ----------------------*/
+static void cap_lay(int col, int row, const char *nm, int nc)
+{
+    int i;
+    if (nc > MAP_CAP_MAX - 3) nc = MAP_CAP_MAX - 3;
+    for (i = 0; i < nc; i++) g_cap_text[i] = nm[i];
+    g_cap_text[nc] = '\0';
+    g_cap_x = (short) (col - 1);
+    g_cap_y = (short) row;
+    g_cap_n = (short) (nc + 2);
+    for (i = 0; i < g_cap_n; i++)
+        g_cap_under[i] = dash_cell(g_cap_x + i, g_cap_y);
+    g_cap_frame = 0;
+    g_cap_on = 1;
+    cap_show(1);
+}
 
 /*----------------------
  | gather
@@ -487,7 +600,12 @@ static int party_one(int mask)
  |   One figure per person on the map, each in its own colour, so the roster
  |   below and the drawing above name the same people. Which colour is which
  |   ink is the tile set's business, not this function's: the caller hands over
- |   the first tile of one of the four drawings.
+ |   the first tile of one of the five drawings.
+ |
+ |   A room two or more people share gets one figure between them -- there is no
+ |   space beside a cell for a second -- drawn in the neutral ink, with the four
+ |   quadrants of the shield on its arm filled in the colours of whoever is
+ |   standing there. That is `mask`.
  |
  |   It is painted after the links and before the crosshair, so it covers a
  |   groove running under it and the cursor covers it. A figure that a link was
@@ -496,17 +614,26 @@ static int party_one(int mask)
  | Dependencies: dash_map.h, map_layout.h
  | Globals: N/A
  | Params: mx, my -- the cell holding the mark; base -- the first of the six
- |   tiles of one figure
+ |   tiles of one figure; mask -- the occupancy to quarter its shield by, or 0
+ |   to leave the shield blank
  | Returns: N/A
  ----------------------*/
-static void paint_knight(int mx, int my, int base)
+static void paint_knight(int mx, int my, int base, int mask)
 {
     int kx, ky, tx, ty;
     map_layout_knight(mx, my, DT_KNIGHT_W, &kx, &ky);
     for (ty = 0; ty < DT_KNIGHT_H; ty++)
-        for (tx = 0; tx < DT_KNIGHT_W; tx++)
-            dash_map_paint(kx + tx, ky + ty,
-                           (unsigned char) (base + ty * DT_KNIGHT_W + tx));
+        for (tx = 0; tx < DT_KNIGHT_W; tx++) {
+            int cell = ty * DT_KNIGHT_W + tx;
+            int t = base + cell;
+            /* The two cells the shield falls across come from the mask sets
+               instead, which carry the same figure with its quadrants filled. */
+            if (mask != 0) {
+                if      (cell == DT_SHIELD_HI_CELL) t = DT_SHIELD_HI0 + mask;
+                else if (cell == DT_SHIELD_LO_CELL) t = DT_SHIELD_LO0 + mask;
+            }
+            dash_map_paint(kx + tx, ky + ty, (unsigned char) t);
+        }
 }
 
 /*----------------------
@@ -572,6 +699,11 @@ static int seat_line(int seat, char *line, int cap)
  |   naming where somebody else is standing costs no traffic and works for a
  |   room this map has never drawn -- which on a difficulty that shows only what
  |   has been walked into is most of them.
+ |
+ |   Each line is written in that seat's own colour, which is the same colour
+ |   their figure is drawn in and the same quadrant colour their shield takes in
+ |   a shared room. A roster that named people the drawing above could not be
+ |   matched to was a legend with nothing to look up.
  | Author: suinevere
  | Dependencies: party.h, room_model.h, text_map.h, map_model.h, seat_line
  | Globals: N/A
@@ -590,12 +722,15 @@ static void draw_players(void)
         room_model_object_name(map_model_current(), line + k,
                                (int) sizeof line - k);
     }
-    text_print_str(MAP_TEXT_LEFT, row--, line);
+    text_print_ink(MAP_TEXT_LEFT, row--, line, 0);
 
     for (i = PARTY_SEATS - 1; i >= 0 && row >= MAP_ROW_TOP; i--) {
+        int slot = peer_slot(i);
         if (i == self) continue;
         if (!seat_line(i, line, (int) sizeof line)) continue;
-        text_print_str(MAP_TEXT_LEFT, row--, line);
+        /* A seat past the three colours the map tells apart has none, and
+           text_print_ink reads that -1 as the plain ink. */
+        text_print_ink(MAP_TEXT_LEFT, row--, line, slot < 0 ? -1 : slot + 1);
     }
 }
 
@@ -757,6 +892,10 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
     menu_clear();
     dash_map_begin();
     g_flash_n = 0;
+    /* Dropped before anything is painted, so a cursor that has moved onto empty
+       ground leaves the blink with nothing to restore rather than putting the
+       last room's cells back over the new drawing. cap_lay sets it again. */
+    g_cap_n = 0;
 
     // No ground is painted. The map's ground is the parchment on NBG0, or the
     // tan back colour where there is no parchment, and every cell this layer
@@ -856,13 +995,17 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
         unsigned char tile = DT_ROOM;
         int flash = 0;
 
-        /* One occupant keeps the mark the map has always drawn and takes a
-           figure in their own colour beside it; two or more take the quartered
-           shield, because two figures do not fit beside one cell and a room
-           two people are in has to say which two. */
-        if (lone == 0)     { tile = DT_ROOM_HERE; flash = 1; }
-        else if (lone > 0) { tile = DT_ROOM_PEER; flash = 1; }
-        else if (party)    { tile = (unsigned char) (DT_SHIELD0 + party); flash = 1; }
+        /* Every occupied room keeps the mark the map has always drawn -- one
+           occupant or four, the cell says only "somebody is standing here", and
+           it is the figure beside it that says who. The mark used to be
+           quartered for a shared room, which put four colours in one cell that
+           is eight pixels across and already carries a ring, a core, a pulse and
+           whatever grooves run under it; the shield the figure is holding has
+           room for the same four and nothing else to say. */
+        if (party) {
+            tile = (party & DT_SHIELD_SELF) ? DT_ROOM_HERE : DT_ROOM_PEER;
+            flash = 1;
+        }
         /* The pick recolours an ordinary room and leaves a player's mark alone.
            The crosshair opens sitting on the local player, so a pick that
            overrode every mark would hide the one thing the screen is for and
@@ -881,7 +1024,8 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
             g_flash_tile[g_flash_n] = tile;
             g_flash_n++;
         }
-        if (lone >= 0) paint_knight(cx, cy, knight_tiles(lone));
+        if (lone >= 0)  paint_knight(cx, cy, knight_tiles(lone), 0);
+        else if (party) paint_knight(cx, cy, DT_KNIGHT_PARTY0, party);
     }
 
     dash_map_paint(hcx - 1, hcy - 1, DT_XHAIR_TL);
@@ -909,7 +1053,7 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
             if (ncol + nc > MAP_TEXT_LEFT + MAP_TEXT_COLS)
                 ncol = MAP_TEXT_LEFT + MAP_TEXT_COLS - nc;
             if (ncol < MAP_TEXT_LEFT) ncol = MAP_TEXT_LEFT;
-            text_print_str(ncol, hcy + MAP_ROOM_DROP, nm);
+            cap_lay(ncol, hcy + MAP_ROOM_DROP, nm, nc);
         }
 
         /* The floor number ends three columns short of the drawing's right
@@ -1115,12 +1259,20 @@ extern "C" void map_view_show(void) {
     // it IS the ink is the one with nothing of its own to be read against.
     {
         MapInk ink;
+        unsigned short seat0;
         map_ink(&ink);
+        seat0 = map_ink_is_red(ink.party) ? ink.clash : MAP_INK_RED;
         text_set_color(ink.text, MAP_GROUND_555);
         dash_map_ink(ink.line, ink.fill);
-        dash_map_party(ink.party,
-                       map_ink_is_red(ink.party) ? ink.clash : MAP_INK_RED,
-                       MAP_INK_GREEN, MAP_INK_BLUE);
+        dash_map_party(ink.party, seat0, MAP_INK_GREEN, MAP_INK_BLUE);
+        /* The same four colours again on the text layer, so the roster's names
+           are written in the inks their figures and shields are drawn in. Four
+           palettes rather than four fonts: text_print_ink moves a cell onto one
+           with a bit-or and no VRAM traffic at all. */
+        text_set_party_ink(0, ink.party);
+        text_set_party_ink(1, seat0);
+        text_set_party_ink(2, MAP_INK_GREEN);
+        text_set_party_ink(3, MAP_INK_BLUE);
     }
     if (g_difficulty == DIFF_EASY) map_model_reveal_atlas();
     else                           map_model_clear_reveal();
@@ -1222,10 +1374,20 @@ extern "C" void map_view_show(void) {
             int ph = (frame >> MAP_FLASH_SHIFT) & 1, i;
             if (ph != phase) {
                 phase = ph;
-                for (i = 0; i < g_flash_n; i++)
+                for (i = 0; i < g_flash_n; i++) {
+                    if (cap_covers(g_flash_x[i], g_flash_y[i])) continue;
                     dash_map_paint(g_flash_x[i], g_flash_y[i],
                                    ph ? g_flash_tile[i] : DT_ROOM);
+                }
             }
+        }
+        /* Counted from the caption being laid rather than off `frame`, so a
+           cursor moved during the off second gets its new label at once instead
+           of arriving into the gap the old one had left. */
+        {
+            int on = (g_cap_frame % (MAP_CAP_ON + MAP_CAP_OFF)) < MAP_CAP_ON;
+            if (on != g_cap_on) { g_cap_on = on; cap_show(on); }
+            g_cap_frame++;
         }
         frame++;
         menu_sync();

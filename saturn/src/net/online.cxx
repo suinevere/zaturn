@@ -26,6 +26,7 @@
 #include "game_catalog.h"
 #ifdef NETBIN
 #include "command_view.h"
+#include "map_view.h"
 #include "netbin_pages.h"
 #endif
 extern "C" {
@@ -556,6 +557,18 @@ void online_mode(void) {
         DictionaryWord* selected = nullptr; int cw_len = 0;
         if (panel) command_edit(k, cpanel, *netbin_room(), g_online_ta, ke, cw);
         else       typeahead_edit(k, g_online_ta, sug_index, sug_last, ke, pad, selected, cw_len);
+        /* The panel's Map row. Spent here for the same reason the pause menu is
+           run from this loop and not from inside the editor: the map owns the
+           screen while it is up, and this is the only place that can give it and
+           take it back. */
+        if (cpanel.action == CP_ACT_MAP) {
+            cpanel.action = CP_ACT_NONE;
+            map_view_show();
+            mode_toggle_reset();
+            menu_clear();
+            SRL::Core::Synchronize();
+            continue;
+        }
 #else
         DictionaryWord* selected; int cw_len;
         typeahead_edit(k, g_online_ta, sug_index, sug_last, ke, pad, selected, cw_len);
@@ -574,7 +587,7 @@ void online_mode(void) {
 #else
                 confirm_return_to_title("reboot back to the title screen?");
 #endif
-                keyboard_reset(&k);
+                keyboard_clear_line(&k);
 #ifdef NETBIN
                 // The confirm ran its own poll loop, so the toggle button could
                 // have been pressed and released entirely while it owned the

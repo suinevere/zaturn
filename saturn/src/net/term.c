@@ -242,9 +242,12 @@ int term_service(TermState *t, const cui_transport_t *tr, int max_bytes) {
  | term_submit_line
  | Description: Sends the keyboard's current line to the server, echoing it onto
  |   the prompt line first (there is no server echo) and appending a newline both
- |   on screen and on the wire, then resets the keyboard for the next line.
+ |   on screen and on the wire, then empties the line for the next one. The line
+ |   only: keyboard_reset would also send the grid picker back to its top-left
+ |   corner, so every command the player sent moved the cursor off the key they
+ |   were standing on.
  | Author: suinevere
- | Dependencies: console.h, keyboard (keyboard_reset), the transport send callback
+ | Dependencies: console.h, keyboard (keyboard_clear_line), the transport send callback
  | Globals: N/A
  | Params: tr -- transport to send on; k -- keyboard state holding the line
  | Returns: N/A
@@ -257,5 +260,5 @@ void term_submit_line(const cui_transport_t *tr, KeyboardState *k) {
     if (len > 0)
         cui_transport_send(tr, (const uint8_t*)k->input, len);
     cui_transport_send(tr, (const uint8_t*)"\n", 1);
-    keyboard_reset(k);
+    keyboard_clear_line(k);
 }

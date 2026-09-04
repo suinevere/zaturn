@@ -13,7 +13,7 @@ import random
 
 from PIL import Image
 
-N = 178
+N = 200
 SEED = 20260828
 
 # Palette index by role. The blue channel runs two steps above red and green
@@ -185,13 +185,31 @@ KNIGHT_H = 3
 # too, whose figure it is is the only thing the drawing has to say.
 KNIGHT_INK = PAL_PARTY[0]
 
-# One figure per seat, and the four quadrants of the shared-room shield in the
-# same order: the local player, then the three others. A shield's upper-left
-# quadrant is always the player's own colour and the other three are fixed to a
-# seat, so a room holding two people says which two rather than only that it
-# holds more than one.
+# One figure per seat, and the four quadrants of the shield the figure is
+# already carrying in the same order: the local player, then the three others.
+# The upper-left quadrant is always the player's own colour and the other three
+# are fixed to a seat, so a room holding two people says which two rather than
+# only that it holds more than one.
+#
+# The quadrants are the four blank 2x2 interiors of the grid drawn on the
+# shield's face in KNIGHT.PNG, given in the 16x24 drawing's own coordinates. The
+# grid is why the drawing has one: a quartered shield is where a party of four
+# can be named without a second figure and without colouring the room mark,
+# which has four other things to say already.
 SHIELD_INK = PAL_PARTY
-SHIELD_QUAD = ((2, 2), (4, 2), (2, 4), (4, 4))
+SHIELD_QUAD = ((1, 12), (4, 12), (1, 15), (4, 15))
+
+# The two cells of the six the shield falls across -- the lower-left pair, since
+# the shield is on the figure's left arm and spans the bar between them. Only
+# these two get a copy per mask; the other four are the same however many people
+# are standing in the room.
+SHIELD_CELLS = (2, 4)
+
+# The ink a shared room's figure is drawn in. Not a seat colour: with two or
+# more people on one cell there is one figure between them and its shield is
+# what says whose, so the body takes the map's own passage ink, which is chosen
+# per sheet to be readable on the paper and belongs to nobody.
+KNIGHT_PARTY_INK = PAL_LINE
 
 
 def rgb555(c):
@@ -474,18 +492,33 @@ def build():
     knight = Image.open(KNIGHT_PNG).convert("RGBA")
     assert knight.size == (KNIGHT_W * 8, KNIGHT_H * 8), knight.size
 
-    def knight_set(ink):
+    def knight_cell(ink, cell, mask=0):
+        """One cell of the figure, drawn in one palette entry, with the shield
+        quadrants `mask` names filled in their own seats' colours. Cells are
+        row-major, so cell = ty * KNIGHT_W + tx."""
+        ty, tx = cell // KNIGHT_W, cell % KNIGHT_W
+        t = blank()
+        for y in range(8):
+            for x in range(8):
+                if knight.getpixel((tx * 8 + x, ty * 8 + y))[3] > 128:
+                    t[y][x] = ink
+        for bit in range(4):
+            if not mask & (1 << bit):
+                continue
+            qx, qy = SHIELD_QUAD[bit]
+            for y in range(qy, qy + 2):
+                for x in range(qx, qx + 2):
+                    # A quadrant straddles the cell boundary between the two
+                    # shield cells, so each cell takes only the half of it that
+                    # falls inside its own eight pixels.
+                    if y // 8 == ty and x // 8 == tx:
+                        t[y - ty * 8][x - tx * 8] = SHIELD_INK[bit]
+        return t
+
+    def knight_set(ink, mask=0):
         """The figure cut into cells row-major, drawn in one palette entry."""
-        out = []
-        for ty in range(KNIGHT_H):
-            for tx in range(KNIGHT_W):
-                t = blank()
-                for y in range(8):
-                    for x in range(8):
-                        if knight.getpixel((tx * 8 + x, ty * 8 + y))[3] > 128:
-                            t[y][x] = ink
-                out.append(t)
-        return out
+        return [knight_cell(ink, cell, mask)
+                for cell in range(KNIGHT_W * KNIGHT_H)]
 
     tiles.extend(knight_set(KNIGHT_INK))                        # DT_KNIGHT0+i
 
@@ -534,23 +567,20 @@ def build():
     for ink in PAL_PARTY[1:]:
         tiles.extend(knight_set(ink))                           # DT_KNIGHT_PEER0
 
-    # The shared-room shield, indexed by which seats are standing in the room:
-    # bit 0 the local player, bits 1..3 the other three in seat order. It is the
-    # here-mark with its core quartered, so a room two people are in still reads
-    # as a room. A quadrant nobody claims keeps the core's own entry, which is
-    # what makes one filled quadrant a colour rather than a pattern.
+    # The figure a shared room gets: one drawing in the neutral ink, and then a
+    # copy of each of the two cells its shield crosses per occupancy mask -- bit
+    # 0 the local player, bits 1..3 the other three in seat order. Two cells per
+    # mask rather than six, because the other four are the same whoever is
+    # standing there.
     #
     # Mask 0 and the four single-bit masks are never painted -- one occupant
-    # gets a figure and the mark it already had -- but they exist so the mask
-    # indexes the set directly, the same bargain DT_LINK0's mask 0 makes.
-    for mask in range(16):
-        t = solid(MARK_HERE_RING, 1, 1, 6, 6)
-        t = solid(MARK_HERE_CORE, 2, 2, 5, 5, base=t)
-        for bit in range(4):
-            if mask & (1 << bit):
-                qx, qy = SHIELD_QUAD[bit]
-                t = solid(SHIELD_INK[bit], qx, qy, qx + 1, qy + 1, base=t)
-        tiles.append(t)                                         # DT_SHIELD0+mask
+    # gets their own coloured figure and a blank shield -- but they exist so the
+    # mask indexes the set directly, the same bargain DT_LINK0's mask 0 makes.
+    tiles.extend(knight_set(KNIGHT_PARTY_INK))                  # DT_KNIGHT_PARTY0
+    for cell in SHIELD_CELLS:
+        for mask in range(16):
+            tiles.append(knight_cell(KNIGHT_PARTY_INK, cell, mask))
+                                                    # DT_SHIELD_HI0 / DT_SHIELD_LO0
 
     assert len(tiles) == N, len(tiles)
     return tiles

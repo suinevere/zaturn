@@ -31,9 +31,9 @@ void console_write(const char *text, unsigned int len) {
     g_console[g_console_len] = '\0';
 }
 
-/* --- keyboard stub: term_submit_line resets the line, and nothing here calls
+/* --- keyboard stub: term_submit_line clears the line, and nothing here calls
        it, but the object still needs the symbol. --------------------------- */
-void keyboard_reset(KeyboardState *k) { (void) k; }
+void keyboard_clear_line(KeyboardState *k) { (void) k; }
 
 /* --- mock transport: hands out a fixed byte string ------------------------ */
 static const uint8_t *g_rx;

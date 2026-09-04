@@ -68,24 +68,53 @@ static const char *CV_BORDER = "+-------------+---------------+--------+";
 #define CV_LIST_ROW0 1
 
 /*----------------------
- | CV_CMD_N / CV_CMD_ROW
+ | CV_CMD_INVENT .. CV_CMD_N / CV_CMD_ROW
  | Description: The fixed command module's entries, in display order, and how
  |   many. Every one routes to a mechanism that already exists, so none of them
  |   needs a new path to the interpreter.
+ |
+ |   Map is the one that is not a command at all: it opens the map screen, which
+ |   is why it is the only entry with no word to submit and the only one that can
+ |   be missing -- see cv_cmd_count.
  | Author: suinevere
  ----------------------*/
-#define CV_CMD_N 5
-static const char *CV_CMD_ROW[CV_CMD_N] = { "invent", "look", "save", "load", "quit" };
+enum { CV_CMD_INVENT = 0, CV_CMD_LOOK, CV_CMD_MAP,
+       CV_CMD_SAVE, CV_CMD_LOAD, CV_CMD_QUIT, CV_CMD_N };
+static const char *CV_CMD_ROW[CV_CMD_N] = { "invent", "look", "map", "save", "load", "quit" };
 
 /*----------------------
  | CV_CMD_WORD
  | Description: The command each CV_CMD_ROW entry actually submits, which differs
  |   from the display text where the interpreter's verb is not the label: "invent"
  |   submits "inventory", and "load" submits "restore" -- the z-machine's load verb,
- |   the same word the physical Load key and the options-menu Load Game send.
+ |   the same word the physical Load key and the options-menu Load Game send. Map
+ |   submits nothing; its entry is empty and cv_cmd_accept never reaches it.
  | Author: suinevere
  ----------------------*/
-static const char *CV_CMD_WORD[CV_CMD_N] = { "inventory", "look", "save", "restore", "quit" };
+static const char *CV_CMD_WORD[CV_CMD_N] = { "inventory", "look", "",
+                                             "save", "restore", "quit" };
+
+/*----------------------
+ | cv_cmd_count / cv_cmd_entry
+ | Description: How many rows the command module shows, and which entry a row
+ |   holds. Hard hides the map -- exactly as the pause menu does, for the same
+ |   reason: a difficulty that shows the player only the rooms they have walked
+ |   into does not hand them the sheet -- and it is the only entry that ever goes,
+ |   so hiding it is one row off the count and a single skip in the index.
+ | Author: suinevere
+ | Dependencies: app_state.h (g_difficulty)
+ | Globals: g_difficulty
+ | Params: row -- 0..cv_cmd_count()-1
+ | Returns: the row count, or the CV_CMD_* entry that row holds
+ ----------------------*/
+static int cv_cmd_count(void) {
+    return (g_difficulty == DIFF_HARD) ? CV_CMD_N - 1 : CV_CMD_N;
+}
+
+static int cv_cmd_entry(int row) {
+    if (g_difficulty == DIFF_HARD && row >= CV_CMD_MAP) row++;
+    return row;
+}
 
 /*----------------------
  | CV_VERB_CORE
@@ -753,7 +782,7 @@ static void cv_draw_word_row(int row, const CommandPanel &p, const CommandWords 
 static void cv_draw_cmd_row(int row, const CommandPanel &p, int y) {
     int x = CV_CMD_X + 1;
     char field[8];
-    int used = cv_pad_field(CV_CMD_ROW[row], field);
+    int used = cv_pad_field(CV_CMD_ROW[cv_cmd_entry(row)], field);
     text_print_dim(x, y, field);
     if (used > 0 && p.box == CP_BOX_CMD && p.cursor == row) {
         field[used] = '\0';
@@ -972,9 +1001,12 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
         exits = m.exits;
         if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
 
-        /* The rose owns all seven rows; the word and command modules take the
-           five between its corner rows, which is what leaves their lists
-           vertically centred against it. */
+        /* The rose owns all seven rows; the word module takes the five between
+           its corner rows, which is what leaves that list vertically centred
+           against it. The command module starts on the same row so focus
+           crossing sideways arrives at the height it left from, and runs one
+           row further down when it is carrying the map. */
+        int ncmd = cv_cmd_count();
         for (row = 0; row < CR_ROWS; row++) {
             int y = content0 + row;
             int inner = row - CV_LIST_ROW0;
@@ -982,13 +1014,9 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
             if (!dash) text_print(0, y, "|");
             cv_draw_rose_row(row, exits, y, sel);
             if (!dash) text_print(14, y, "|");
-            if (inner >= 0 && inner < CP_WORD_ROWS) {
-                cv_draw_word_row(inner, p, w, y);
-                if (!dash) text_print(30, y, "|");
-                cv_draw_cmd_row(inner, p, y);
-            } else {
-                if (!dash) text_print(30, y, "|");
-            }
+            if (inner >= 0 && inner < CP_WORD_ROWS) cv_draw_word_row(inner, p, w, y);
+            if (!dash) text_print(30, y, "|");
+            if (inner >= 0 && inner < ncmd) cv_draw_cmd_row(inner, p, y);
             if (!dash) text_print(39, y, "|");
         }
     }
@@ -1086,7 +1114,7 @@ static void cv_word_dpad(CommandPanel &p, const unsigned char *exits, int ncand)
 
 /*----------------------
  | cv_cmd_dpad
- | Description: Walks the command module's single column of five entries, and
+ | Description: Walks the command module's single column of entries, and
  |   carries focus back into the word module on a press against its left edge.
  |   It is the rightmost module, so a press against that side does nothing.
  | Author: suinevere
@@ -1098,8 +1126,10 @@ static void cv_word_dpad(CommandPanel &p, const unsigned char *exits, int ncand)
  ----------------------*/
 static void cv_cmd_dpad(CommandPanel &p, int ncand) {
     int row = p.cursor;
-    if (pad_fired(Button::Up))   cp_move(&p, -1, CV_CMD_N);
-    if (pad_fired(Button::Down)) cp_move(&p,  1, CV_CMD_N);
+    if (pad_fired(Button::Up))   cp_move(&p, -1, cv_cmd_count());
+    if (pad_fired(Button::Down)) cp_move(&p,  1, cv_cmd_count());
+    /* The word list is the shorter of the two, so the row the cursor left from
+       may not exist in it; cp_word_enter clamps to what is showing. */
     if (pad_fired(Button::Left)) cp_word_enter(&p, row, 1, ncand);
 }
 
@@ -1183,11 +1213,12 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
  | cv_cmd_accept
  | Description: Type Word in the command module: overwrites the sentence in
  |   progress with the selected entry's submit word and marks it submitted --
- |   these are whole standalone commands, not sentence-slot picks. "invent" is
- |   the one exception: with a model that actually holds carried objects there is
- |   a set to browse, so it opens the overlay; with nothing carried -- or no
- |   model at all -- it falls through and submits "inventory" like a typed
- |   command and lets the game answer.
+ |   these are whole standalone commands, not sentence-slot picks. Two entries are
+ |   not: "invent" opens the inventory overlay when the model actually holds
+ |   carried objects, and falls through to submit "inventory" like a typed command
+ |   when it does not -- with nothing carried, or no model at all, the game's own
+ |   answer is the better one. "map" opens a screen and submits nothing, so it
+ |   only records the request; see CP_ACT_MAP.
  | Author: suinevere
  | Dependencies: command_panel.h, room_model.h
  | Globals: N/A
@@ -1196,16 +1227,26 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
  ----------------------*/
 static void cv_cmd_accept(CommandPanel &p, const RoomModel &m) {
     const char *cmd;
+    int entry;
     int i = 0;
+    if (p.cursor < 0 || p.cursor >= cv_cmd_count()) return;
+    entry = cv_cmd_entry(p.cursor);
     /* Browse only when there is something to browse. An empty box tells the
        player nothing; the game's own "You are empty-handed" tells them the
        thing they asked. It also keeps the netbin honest, where the model is
        bound to a static story and can never have an inventory to show. */
-    if (p.cursor == 0 && room_model_available() && m.ncarried > 0) {
+    if (entry == CV_CMD_INVENT && room_model_available() && m.ncarried > 0) {
         cp_overlay_open(&p);
         return;
     }
-    cmd = CV_CMD_WORD[p.cursor];
+    /* The map is a screen, not a command. It is left as a request for the frame
+       loop hosting the panel, which owns the fade around it and is the only
+       thing that can hand the display over and take it back. */
+    if (entry == CV_CMD_MAP) {
+        p.action = CP_ACT_MAP;
+        return;
+    }
+    cmd = CV_CMD_WORD[entry];
     while (cmd[i] != '\0' && i < CP_LINE_MAX - 1) { p.line[i] = cmd[i]; i++; }
     p.line[i] = '\0';
     p.line_len = i;

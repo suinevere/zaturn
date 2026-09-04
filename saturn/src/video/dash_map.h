@@ -85,13 +85,17 @@ extern "C" {
  |   drawings rather than one recoloured, because two people can stand on the
  |   map at once and a tile carries its palette entry in its own pixels.
  |
- |   DT_SHIELD0 is sixteen marks indexed by which seats are standing in one
- |   room: bit 0 the local player, bits 1..3 the others in seat order. The
- |   here-mark with its core quartered, one quadrant per seat, so a room two
- |   people share says which two. Only masks with more than one bit are ever
- |   painted -- one occupant gets a figure beside the mark it already had -- and
- |   the rest exist so the mask indexes the set directly, the same bargain
- |   DT_LINK0's mask 0 makes.
+ |   DT_KNIGHT_PARTY0 is a fifth copy of the figure in the neutral passage ink,
+ |   for a room more than one player is standing in: there is one figure between
+ |   them and the shield on its arm is what says whose. DT_SHIELD_HI0 and
+ |   DT_SHIELD_LO0 are sixteen copies each of the two cells that shield falls
+ |   across, indexed by which seats are in the room -- bit 0 the local player,
+ |   bits 1..3 the others in seat order -- with the named quadrants filled in
+ |   their own colours. Two cells per mask and not six, because the rest of the
+ |   drawing is the same whoever is standing there. Only masks with more than one
+ |   bit are ever painted -- one occupant gets their own coloured figure and a
+ |   blank shield -- and the rest exist so the mask indexes the set directly, the
+ |   same bargain DT_LINK0's mask 0 makes.
  | Author: suinevere
  ----------------------*/
 enum {
@@ -128,9 +132,22 @@ enum {
     DT_LOOP,
     DT_BAGGAGE_H, DT_BAGGAGE_V,
     DT_KNIGHT_PEER0,
-    DT_SHIELD0 = DT_KNIGHT_PEER0 + 18,
-    DT_N = DT_SHIELD0 + 16
+    DT_KNIGHT_PARTY0 = DT_KNIGHT_PEER0 + 18,
+    DT_SHIELD_HI0 = DT_KNIGHT_PARTY0 + 6,
+    DT_SHIELD_LO0 = DT_SHIELD_HI0 + 16,
+    DT_N = DT_SHIELD_LO0 + 16
 };
+
+/*----------------------
+ | DT_SHIELD_HI_CELL / DT_SHIELD_LO_CELL
+ | Description: Which two of a figure's six cells the shield falls across, as
+ |   row-major indices, so a caller that is painting one knows when to reach for
+ |   a mask tile instead of the plain set. Kept in step with SHIELD_CELLS in
+ |   tools/gen_dash_tiles.py.
+ | Author: suinevere
+ ----------------------*/
+#define DT_SHIELD_HI_CELL 2
+#define DT_SHIELD_LO_CELL 4
 
 /*----------------------
  | DT_KNIGHT_W / DT_KNIGHT_H

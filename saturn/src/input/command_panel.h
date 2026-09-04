@@ -46,6 +46,17 @@ enum { CP_BOX_TRAVEL = 0, CP_BOX_WORD, CP_BOX_CMD, CP_BOX_N };
 enum { CP_SLOT_VERB = 0, CP_SLOT_NOUN, CP_SLOT_PREP, CP_SLOT_NOUN2, CP_SLOT_DONE };
 
 /*----------------------
+ | CP_ACT_NONE / CP_ACT_MAP
+ | Description: A screen the command module asks for that is not a command to
+ |   the story. The panel cannot open one itself -- the map runs its own loop and
+ |   owns the whole display while it is up, and the fade around it belongs to
+ |   whichever frame loop is hosting the panel -- so the request is left in
+ |   CommandPanel::action for that loop to spend and clear.
+ | Author: suinevere
+ ----------------------*/
+enum { CP_ACT_NONE = 0, CP_ACT_MAP };
+
+/*----------------------
  | CommandPanel
  | Description: One prompt's panel state.
  | Author: suinevere
@@ -66,6 +77,7 @@ typedef struct {
     int  line_len;
     int  submitted;
     int  overlay;   /* 1 while the inventory overlay is up */
+    int  action;    /* CP_ACT_* the host loop owes, CP_ACT_NONE when none */
 } CommandPanel;
 
 /*----------------------

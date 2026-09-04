@@ -48,6 +48,7 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 #include "map_atlas.h"
 #include "map_marks.h"
 #include "save_ui.h"
+#include "map_view.h"
 #include "soft_reset.h"
 #include "title.h"   /* title_bg_fade_engaged */
 extern "C" {
@@ -719,6 +720,21 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         if (g_kbd_visible && g_cmd_mode == IFACE_PANEL) {
             CommandWords cw;
             command_edit(k, cpanel, *room_model_get(), g_typeahead_root, ke, cw);
+            /* The panel's Map row, spent here rather than where it is set: the
+               map owns the whole display while it is up and fades itself both
+               ways, so it needs the same black either side of it that the pause
+               menu's own Map row gets -- and only the loop can ramp down before
+               it and owe the ramp back up after. */
+            if (cpanel.action == CP_ACT_MAP) {
+                cpanel.action = CP_ACT_NONE;
+                item_art_hide();
+                menu_ramp_down();
+                map_view_show();
+                mode_toggle_reset();
+                menu_clear();
+                reveal_owed = true;
+                continue;
+            }
             pad_scroll_update();
             render_console();
             render_command_panel(cpanel, *room_model_get(), cw);

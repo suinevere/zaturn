@@ -74,6 +74,7 @@ void cp_init(CommandPanel *p) {
     p->box = CP_BOX_WORD;
     p->cursor = 0;
     p->top = 0;
+    p->action = CP_ACT_NONE;
     cp_reset(p);
 }
 

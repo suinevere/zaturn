@@ -98,6 +98,55 @@ void dash_tint(unsigned short bg555);
 unsigned short dash_tint_current(void);
 
 /*----------------------
+ | dash_map_ink
+ | Description: Gives the map's own two colours to CRAM, untinted: the ink every
+ |   passage, arrow, glyph and stub is drawn in, and the fill in the middle of
+ |   an ordinary location mark. Which two depends on the sheet -- see
+ |   DASH_PAL_LINE in dash_tiles.h.
+ |
+ |   Written straight rather than through the ramp for the reason the accent
+ |   already was: these are colours, not stone, and bending them toward the
+ |   paper they have to be found on is exactly what would hide them.
+ |
+ |   Both are ramp entries the rest of the time, so this is a loan that the next
+ |   dash_tint calls in. Call it AFTER the dash_tint that sets the map's ground,
+ |   since that rewrites all sixteen entries from the ramp, and let the
+ |   dash_tint on the way out put the stone back.
+ | Author: suinevere
+ | Dependencies: dash_tiles.h, SRL
+ | Globals: N/A
+ | Params: line, fill -- packed RGB555 with or without the opaque bit, which is
+ |   set here either way
+ | Returns: N/A
+ ----------------------*/
+void dash_map_ink(unsigned short line, unsigned short fill);
+
+/*----------------------
+ | dash_map_party
+ | Description: Gives the map's four seat colours to CRAM, untinted: the four
+ |   borrowed slots the figures and the shared-room shield are drawn in, the
+ |   local player's first. The crosshair is not among them -- it keeps the
+ |   accent, which is red on every sheet and needs no writing here.
+ |
+ |   Separate from dash_map_ink because the two answer different questions. The
+ |   ink is a property of the paper -- what reads as a drawing on it -- and the
+ |   seat colours are a property of the party, which the paper has no say in
+ |   beyond the one clash rule the caller applies.
+ |
+ |   Same loan, same terms: call it after the map's dash_tint and let the
+ |   dash_tint on the way out put the stone back.
+ | Author: suinevere
+ | Dependencies: dash_tiles.h, SRL
+ | Globals: N/A
+ | Params: self -- the local player's colour; p0, p1, p2 -- the other three
+ |   seats', in seat order. All packed RGB555 with or without the opaque bit,
+ |   which is set here either way
+ | Returns: N/A
+ ----------------------*/
+void dash_map_party(unsigned short self, unsigned short p0,
+                    unsigned short p1, unsigned short p2);
+
+/*----------------------
  | dash_hold
  | Description: Claims the dashboard panel for one frame with the variant and
  |   top-edge row the strip's renderers would have asked for, choosing between

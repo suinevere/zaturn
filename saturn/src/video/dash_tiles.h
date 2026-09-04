@@ -29,10 +29,12 @@ extern const unsigned short dash_palette[16];
  | DASH_PAL_ACCENT
  | Description: The one palette entry that is a colour rather than a step of
  |   the stone ramp, and the one write_palette copies to CRAM untouched instead
- |   of bending toward the background's hue and brightness. Only the map's
- |   crosshair is drawn in it. The slot is free because nothing else can reach
- |   it: the marble caps its veins two steps below and every frame, rule and
- |   mark names an entry on either side of it.
+ |   of bending toward the background's hue and brightness. The map's crosshair
+ |   is the only thing drawn in it, and it is red on every sheet and in every
+ |   party -- the cursor is the one mark on the screen whose colour a reader
+ |   never has to work out. The slot is free because nothing else can reach it:
+ |   the marble caps its veins two steps below and every frame, rule and mark
+ |   names an entry on either side of it.
  |
  |   Owned by tools/gen_dash_tiles.py, which sets dash_palette[] from its own
  |   PAL_ACCENT; the two are held together by tests/test_dash_accent.py, since
@@ -41,6 +43,58 @@ extern const unsigned short dash_palette[16];
  | Author: suinevere
  ----------------------*/
 #define DASH_PAL_ACCENT 14
+
+/*----------------------
+ | DASH_PAL_PARTY0 .. DASH_PAL_PARTY3
+ | Description: The four seats' colours on the map, the local player's first.
+ |   BORROWED, not reserved: they are ordinary points of the stone ramp in
+ |   dash_palette and carry a colour only for as long as the map screen is up,
+ |   which is between dash_map_ink and the dash_tint that closes the screen.
+ |
+ |   Borrowing is what there is. The accent is the only entry nothing on the
+ |   stone reaches and it is spent on the crosshair, which has to stay red
+ |   whatever the party is doing; the map needs four more, one per seat. It is
+ |   safe because the map paints no stone: outside these four its own tiles
+ |   reach entries 0, 1, 2, 12, 13, 14 and 15 and nothing else, so 3..11 are
+ |   unreachable for as long as it is drawn. Entry 4 is reachable by nothing
+ |   anywhere; 3 is a groove and 5 and 6 are marble body, which is why the
+ |   restore on the way out is part of the design rather than tidiness.
+ |
+ |   Kept in step with PAL_PARTY in tools/gen_dash_tiles.py by
+ |   tests/test_dash_accent.py, for the reason the accent is: a drift would
+ |   build and link and quietly paint one player's figure in stone grey.
+ | Author: suinevere
+ ----------------------*/
+#define DASH_PAL_PARTY0 3
+#define DASH_PAL_PARTY1 4
+#define DASH_PAL_PARTY2 5
+#define DASH_PAL_PARTY3 6
+
+/*----------------------
+ | DASH_PAL_LINE / DASH_PAL_FILL
+ | Description: The map's own two colours: the ink every passage, arrow, glyph
+ |   and stub is drawn in, and the fill in the middle of an ordinary location
+ |   mark. Set per sheet by dash_map_ink, because Infocom's four sheets are
+ |   paper of four different colours and what reads as a drawing on tan does not
+ |   on white or on black.
+ |
+ |   They are two entries and not one on purpose. The location's fill used to BE
+ |   the line entry, which made "the passages are brown" and "the rooms are
+ |   filled black" the same sentence; they are now separate and a sheet may
+ |   answer them differently.
+ |
+ |   DASH_PAL_LINE is a real map entry -- the grooves have always been drawn in
+ |   it -- and is merely written rather than taken off the tinted ramp while the
+ |   map is up. DASH_PAL_FILL is borrowed the way the party slots are: entry 7
+ |   is the marble's frame rim, which the map never paints. Both go back to the
+ |   ramp on the dash_tint that closes the screen.
+ |
+ |   Kept in step with PAL_LINE and PAL_FILL in tools/gen_dash_tiles.py by
+ |   tests/test_dash_accent.py.
+ | Author: suinevere
+ ----------------------*/
+#define DASH_PAL_LINE 1
+#define DASH_PAL_FILL 7
 
 #ifdef __cplusplus
 }

@@ -138,6 +138,22 @@ const char *pres_area_name(int area);
  ----------------------*/
 const char *pres_map_bg(unsigned int release, const char *serial);
 
+/*----------------------
+ | pres_map_bg_index
+ | Description: The same answer as pres_map_bg, as the sheet's own number
+ |   rather than its filename. The map draws its ink in a colour chosen by which
+ |   sheet is under it -- dark ink on the two pale papers, red on the dark one,
+ |   the player's own font colour on the fourth -- and comparing filenames to
+ |   decide that would put the same four names in a second place.
+ | Author: suinevere
+ | Dependencies: game_presentation.inc
+ | Globals: GAME_PRES_MAP
+ | Params: release -- Z-machine release; serial -- 6-char serial
+ | Returns: 0..PRES_MAP_BG_N-1; 0 for a story with no row, which is the sheet
+ |   pres_map_bg falls back to
+ ----------------------*/
+int pres_map_bg_index(unsigned int release, const char *serial);
+
 #ifdef __cplusplus
 }
 #endif

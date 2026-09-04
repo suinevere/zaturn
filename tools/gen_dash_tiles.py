@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 142 8x8 4bpp tiles
+"""Emit saturn/src/video/dash_tiles.c: the input dashboard's 178 8x8 4bpp tiles
 and its 16-entry RGB555 palette. Deterministic -- the marble is seeded noise and
 the one imported bitmap is a file in the tree, so re-running reproduces the same
 file byte for byte.
@@ -13,7 +13,7 @@ import random
 
 from PIL import Image
 
-N = 144
+N = 178
 SEED = 20260828
 
 # Palette index by role. The blue channel runs two steps above red and green
@@ -51,6 +51,25 @@ PALETTE = [
 # than a point on the grey ramp. Kept in step with DASH_PAL_ACCENT in
 # video/dash_tiles.h by tests/test_dash_accent.py.
 PAL_ACCENT = 14
+
+# The four seats' colours: the local player's first, then the other three. The
+# accent is not among them -- it stays the crosshair's alone, always red, so the
+# cursor is one thing on the screen whose colour never depends on the sheet or
+# on who else is playing.
+#
+# All four are BORROWED rather than reserved. They stay ordinary points of the
+# ramp in dash_palette and are only ever a colour for as long as the map screen
+# is up: map_view calls dash_map_party after dash_tint, and the dash_tint on the
+# way out puts the ramp back.
+#
+# The borrow is safe because the map paints no stone. Outside these four and
+# PAL_FILL its own tiles reach only entries 0, 1, 2, 12, 13, 14 and 15 --
+# dash_map_begin clears every other cell to DT_BLANK and the screen draws no box
+# -- so 3..11 are unreachable for as long as it is drawn, and these are four of
+# them. Entry 4 is reachable by nothing at all, anywhere; 3 is a groove and 5 and
+# 6 are marble body, which is why the restore on the way out is part of the
+# design and not tidiness.
+PAL_PARTY = (3, 4, 5, 6)
 
 FRAME = [7, 3, 2, 13]
 
@@ -110,6 +129,26 @@ MARK_RING = 13
 MARK_HERE_RING = 15
 MARK_HERE_CORE = 12
 
+# The map names two of its own entries and sets them per sheet, the way it sets
+# the party colours: the ink every line, arrow, glyph and stub is drawn in, and
+# the fill in the middle of an ordinary location mark.
+#
+# They have to be two entries and not one. Infocom's sheets are paper of four
+# different colours -- tan, cream, white, black -- and what reads as a drawing
+# on one does not on the next, so the passages take dark brown on the two
+# parchments, grey on the white sheet and the player's own font colour on the
+# black one; the locations stay filled solid whatever the passages do. Sharing
+# MARK_DARK, which is what DT_ROOM's core used to be, made the two the same
+# colour by construction.
+#
+# PAL_LINE is a genuine map entry -- the grooves are drawn in it and always
+# were -- and is merely written per sheet instead of taken off the tinted ramp.
+# PAL_FILL is borrowed like the party slots: entry 7 is the marble's frame rim,
+# which the map never paints, and dash_tint puts it back on the way out.
+PAL_LINE = MARK_DARK
+PAL_FILL = 7
+MARK_FILL = PAL_FILL
+
 # The map now has four kinds of mark to tell apart on one greyscale ramp bent to
 # a single tan, which is one more than lightness alone carries, so the two new
 # ones differ in shape as well as in value: the crosshair's pick inverts the
@@ -139,9 +178,20 @@ XHAIR_ARM = 5
 KNIGHT_PNG = "tools/assets/png/KNIGHT.PNG"
 KNIGHT_W = 2
 KNIGHT_H = 3
-# Drawn in the ink the grooves and room cores already use, so the figure reads as
-# part of the drawing rather than as something pasted over it.
-KNIGHT_INK = MARK_DARK
+# Drawn in the first party slot, which is the colour the map gives the local
+# player: black on the two parchments, red on the dark sheet, and their own font
+# colour on the fourth. It used to be the grooves' own ink, which said nothing
+# about whose figure it was -- and now that the other seats stand on the map
+# too, whose figure it is is the only thing the drawing has to say.
+KNIGHT_INK = PAL_PARTY[0]
+
+# One figure per seat, and the four quadrants of the shared-room shield in the
+# same order: the local player, then the three others. A shield's upper-left
+# quadrant is always the player's own colour and the other three are fixed to a
+# seat, so a room holding two people says which two rather than only that it
+# holds more than one.
+SHIELD_INK = PAL_PARTY
+SHIELD_QUAD = ((2, 2), (4, 2), (2, 4), (4, 4))
 
 
 def rgb555(c):
@@ -351,7 +401,7 @@ def build():
     tiles.append(ground)
 
     room = solid(MARK_RING, 1, 1, 6, 6)
-    room = solid(MARK_DARK, 2, 2, 5, 5, base=room)
+    room = solid(MARK_FILL, 2, 2, 5, 5, base=room)
     tiles.append(room)                                          # DT_ROOM
 
     here = solid(MARK_HERE_RING, 1, 1, 6, 6)
@@ -423,14 +473,21 @@ def build():
     # it.
     knight = Image.open(KNIGHT_PNG).convert("RGBA")
     assert knight.size == (KNIGHT_W * 8, KNIGHT_H * 8), knight.size
-    for ty in range(KNIGHT_H):
-        for tx in range(KNIGHT_W):
-            t = blank()
-            for y in range(8):
-                for x in range(8):
-                    if knight.getpixel((tx * 8 + x, ty * 8 + y))[3] > 128:
-                        t[y][x] = KNIGHT_INK
-            tiles.append(t)                                     # DT_KNIGHT0+i
+
+    def knight_set(ink):
+        """The figure cut into cells row-major, drawn in one palette entry."""
+        out = []
+        for ty in range(KNIGHT_H):
+            for tx in range(KNIGHT_W):
+                t = blank()
+                for y in range(8):
+                    for x in range(8):
+                        if knight.getpixel((tx * 8 + x, ty * 8 + y))[3] > 128:
+                            t[y][x] = ink
+                out.append(t)
+        return out
+
+    tiles.extend(knight_set(KNIGHT_INK))                        # DT_KNIGHT0+i
 
     # The dashed set, index for index with DT_LINK0. Same arms, stippled along
     # each arm's own axis, so a dashed run and a solid one meet cleanly where
@@ -470,6 +527,30 @@ def build():
     baggage_h = bitmap(BAGGAGE_H, MARK_DARK)
     tiles.append(baggage_h)                                     # DT_BAGGAGE_H
     tiles.append(rot_cw(baggage_h))                             # DT_BAGGAGE_V
+
+    # The same figure again in each other seat's colour. Three copies of one
+    # drawing rather than one copy recoloured, because two people can be on the
+    # map at once and a tile carries its palette entry in its pixels.
+    for ink in PAL_PARTY[1:]:
+        tiles.extend(knight_set(ink))                           # DT_KNIGHT_PEER0
+
+    # The shared-room shield, indexed by which seats are standing in the room:
+    # bit 0 the local player, bits 1..3 the other three in seat order. It is the
+    # here-mark with its core quartered, so a room two people are in still reads
+    # as a room. A quadrant nobody claims keeps the core's own entry, which is
+    # what makes one filled quadrant a colour rather than a pattern.
+    #
+    # Mask 0 and the four single-bit masks are never painted -- one occupant
+    # gets a figure and the mark it already had -- but they exist so the mask
+    # indexes the set directly, the same bargain DT_LINK0's mask 0 makes.
+    for mask in range(16):
+        t = solid(MARK_HERE_RING, 1, 1, 6, 6)
+        t = solid(MARK_HERE_CORE, 2, 2, 5, 5, base=t)
+        for bit in range(4):
+            if mask & (1 << bit):
+                qx, qy = SHIELD_QUAD[bit]
+                t = solid(SHIELD_INK[bit], qx, qy, qx + 1, qy + 1, base=t)
+        tiles.append(t)                                         # DT_SHIELD0+mask
 
     assert len(tiles) == N, len(tiles)
     return tiles

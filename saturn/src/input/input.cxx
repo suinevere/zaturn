@@ -92,8 +92,10 @@ static const int PAD_SCROLL_RATE  = 4;
 
 /*----------------------
  | face_button
- | Description: Indexes a fixed {A,B,C,X} table by the currently-mapped button
- |   number for face-action `action`.
+ | Description: Indexes a fixed {A,B,C,Y} table by the currently-mapped button
+ |   number for face-action `action`. The fourth button is Y, not X, because
+ |   controls.xls puts Space there; the stored numbers are indices into this table,
+ |   so a save written before the change now reads its slot-3 action as Y.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
@@ -101,7 +103,7 @@ static const int PAD_SCROLL_RATE  = 4;
  | Returns: the Button currently assigned to that action
  ----------------------*/
 Button face_button(int action) {
-    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C, Button::X };
+    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C, Button::Y };
     return BTN[g_face_btn[action]];
 }
 
@@ -115,10 +117,10 @@ Button face_button(int action) {
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
- | Returns: "A", "B", "C" or "X"
+ | Returns: "A", "B", "C" or "Y"
  ----------------------*/
 const char *face_btn_name(int action) {
-    static const char *N[FA_BTN_N] = { "A", "B", "C", "X" };
+    static const char *N[FA_BTN_N] = { "A", "B", "C", "Y" };
     return N[g_face_btn[action]];
 }
 
@@ -199,11 +201,29 @@ static bool g_mtog_was = false;
 static bool g_mtog_spent = false;
 
 /*----------------------
+ | toggle_btn_free
+ | Description: Whether `b` carries no face action, which is what a toggle button
+ |   needs: mode_toggle_fired claims a clean tap, and a button that also types
+ |   cannot spare one. Z always qualifies; Y only until a face action moves onto
+ |   it, which the default Space now does.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_face_btn
+ | Params: b -- the candidate toggle button
+ | Returns: true when no face action is mapped to it
+ ----------------------*/
+static bool toggle_btn_free(Button b) {
+    for (int a = 0; a < FA_N; a++) if (face_button(a) == b) return false;
+    return true;
+}
+
+/*----------------------
  | mode_toggle_fired
  | Description: Reports a tap of the toggle button -- pressed and released with
- |   no direction or shoulder held in between. Y and Z do nothing on their own
- |   today, they only shift the chord slots, so a tap is free to claim; a press
- |   that fires a chord is marked spent and never reports.
+ |   no direction or shoulder held in between -- provided that button types
+ |   nothing (toggle_btn_free). A press that fires a chord is marked spent and
+ |   never reports. Z always qualifies; Y stopped qualifying when Space moved onto
+ |   it, so a Y toggle is inert until the player moves Space off Y.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_pad, g_toggle_btn, g_mtog_was, g_mtog_spent
@@ -212,6 +232,7 @@ static bool g_mtog_spent = false;
  ----------------------*/
 bool mode_toggle_fired(void) {
     Button b = (g_toggle_btn == 1) ? Button::Y : Button::Z;
+    if (!toggle_btn_free(b)) return false;
     bool now = g_pad->IsHeld(b);
     bool other = g_pad->IsHeld(Button::Up) || g_pad->IsHeld(Button::Down) ||
                  g_pad->IsHeld(Button::Left) || g_pad->IsHeld(Button::Right) ||

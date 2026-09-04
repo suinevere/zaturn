@@ -40,6 +40,7 @@ extern "C" int vsnprintf(char *, size_t, const char *, va_list);
 #include "dash_view.h"
 #include "text_map.h"
 #include "input.h"
+#include "controller.h"
 #include "menu.h"
 #include "menu_pages.h"
 #include "room_model.h"
@@ -603,6 +604,8 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
         if (pad && g_pad->AnyPressed()) g_kbd_visible = true;
         pad_repeat_update();
         chord_tick();
+        controller_tick();
+        controller_feed_key(ke);
 
         /* g_menu_reopen is the pause menu coming back after the save or restore
            it sent, which the interpreter ran in a turn of its own -- so the two

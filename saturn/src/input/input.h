@@ -83,7 +83,7 @@ extern MultiPad *g_pad;
 // ---- configurable controller mapping ---------------------------------------
 // Two tied groups the player can remap (Options > Controller > Configure):
 //   Group 1 (face buttons): Accept, Backspace/Cancel, Type-letter and Space --
-//     always a permutation of {A,B,C,X}; reassigning one swaps with whoever held
+//     always a permutation of {A,B,C,Y}; reassigning one swaps with whoever held
 //     that button ("alternate when changed").
 //   Group 2 (shift chords): Autocomplete, Recall, Home/End, Line, Cursor-move and
 //     Page -- each in one of eight slots {L/R, Z+Up/Dn, Z+L/R, Z+Left/Right,
@@ -96,6 +96,13 @@ extern MultiPad *g_pad;
 // button like the other three -- on the on-screen keyboard it enters a space, or
 // accepts the showing completion and adds one -- and a player who has moved
 // Type-letter off C has no way to reason about why Space alone cannot move.
+//
+// The group's fourth button is Y, not X: controls.xls puts Space on Y. That frees
+// X, so SL_XUD no longer overlaps a typing button, and moves the overlap onto Y,
+// where the default Page (Y+Up/Dn) and Home/End (Y+Left/Right) chords now sit
+// under the Space button the same way Recall used to sit under X. It also costs
+// the Y option on the Panel/Keyboard toggle, which needs a button that types
+// nothing; see toggle_btn_free in input.cxx.
 enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_N };
 enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
 
@@ -118,12 +125,11 @@ enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
 // the slot list is persisted by index, and inserting in the middle would silently
 // re-read every stored chord as its neighbour.
 //
-// X carries a chord *and* stays the default Space button, which is the one overlap
-// in the set: in the Command Panel interface Space has no job, so X is free, but in
-// the Keyboard interface X+Up both types a space and recalls. Harmless in practice
-// -- history_load overwrites the whole input line, so the stray space is gone the
-// same frame -- and remappable either way. Y and Z, by contrast, do nothing alone;
-// see mode_toggle_fired, which claims a clean tap of one of them.
+// Y carries chords *and* is the default Space button, which is the one overlap in
+// the set: in the Command Panel interface Space has no job, so Y is free, but in
+// the Keyboard interface Y+Up both types a space and pages. Harmless in practice
+// -- the scroll redraws over the stray space's frame -- and remappable either way.
+// Z alone does nothing; see mode_toggle_fired, which claims a clean tap of it.
 enum { SL_LR, SL_ZUD, SL_ZLRt, SL_ZLRd, SL_YUD, SL_YLRd, SL_YLRt, SL_XUD, SL_N };
 
 /*----------------------
@@ -150,7 +156,7 @@ extern int g_chord_slot[CA_N];
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
- | Returns: the Button (A, B, C or X) currently assigned to that action
+ | Returns: the Button (A, B, C or Y) currently assigned to that action
  ----------------------*/
 Button face_button(int action);
 
@@ -162,7 +168,7 @@ Button face_button(int action);
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
- | Returns: "A", "B", "C" or "X"
+ | Returns: "A", "B", "C" or "Y"
  ----------------------*/
 const char *face_btn_name(int action);
 
@@ -368,12 +374,12 @@ bool chord_shift_held(void);
  | face_assign
  | Description: Assigns face-action `a` to button `b`. If another action already
  |   holds `b`, that action takes over whatever button `a` previously had (a
- |   swap), keeping the four face actions a permutation of {A,B,C,X}.
+ |   swap), keeping the four face actions a permutation of {A,B,C,Y}.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: a -- the face action being reassigned; b -- the button
- |   (0=A, 1=B, 2=C, 3=X) to give it
+ |   (0=A, 1=B, 2=C, 3=Y) to give it
  | Returns: N/A
  ----------------------*/
 void face_assign(int a, int b);

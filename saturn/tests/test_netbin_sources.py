@@ -43,6 +43,7 @@ EXPECTED = {
     "src/menu/menu_layout.c",
     "src/menu/options.cxx",
     "src/input/input.cxx",
+    "src/input/controller.cxx",
     "src/input/saturn_keyboard.cxx",
     "src/input/keyboard.c",
     "src/input/numpad.c",

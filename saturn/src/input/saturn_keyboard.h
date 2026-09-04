@@ -19,7 +19,7 @@ extern "C" {
  |   the editing/navigation keys, TAB (accept completion), CLEAR (Ctrl+C),
  |   CTRL_LEFT/RIGHT (word caret), CTRL_UP/DOWN (one-line scroll), DELETE, and the
  |   mapped function keys F2..F12
- |   (F1/F4/F7/F8 have no role and stay unreported). Insert is not an event: it is
+ |   (F1/F4/F7 have no role and stay unreported). Insert is not an event: it is
  |   a latched toggle handled inside saturn_keyboard_poll, like Caps and Num.
  | Author: suinevere
  ----------------------*/
@@ -45,11 +45,13 @@ typedef enum {
     SATURN_KEY_CTRL_DOWN,   /* Ctrl+Down: scroll the console down one line */
     SATURN_KEY_DELETE,      /* Delete: remove the character at the caret */
     /* Function keys, in the order the game uses them. Only the mapped ones are
-       here -- F1/F4/F7/F8 have no role, so they stay unreported. */
+       here -- F1/F4/F7 have no role, so they stay unreported. F8 opens the map,
+       which is the keyboard cell controls.xls fills in on the Actions sheet. */
     SATURN_KEY_F2,
     SATURN_KEY_F3,
     SATURN_KEY_F5,
     SATURN_KEY_F6,
+    SATURN_KEY_F8,
     SATURN_KEY_F9,
     SATURN_KEY_F10,
     SATURN_KEY_F11,

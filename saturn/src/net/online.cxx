@@ -22,6 +22,7 @@
 #include "menu.h"
 #include "console_view.h"
 #include "input.h"
+#include "controller.h"
 #include "soft_reset.h"
 #include "game_catalog.h"
 #ifdef NETBIN
@@ -491,6 +492,8 @@ void online_mode(void) {
         if (pad && g_pad->AnyPressed()) g_kbd_visible = true;
         pad_repeat_update();
         chord_tick();
+        controller_tick();
+        controller_feed_key(ke);
 
         bool lr = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R);
         lr_hold = lr ? (lr_hold + 1) : 0;

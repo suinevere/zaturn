@@ -28,6 +28,7 @@
 #include "menu.h"
 #include "options.h"
 #include "input.h"
+#include "controller.h"
 #include "console_view.h"
 #include "app_state.h"
 #include "saturn_keyboard.h"
@@ -257,6 +258,7 @@ int main(void) {
 
     static MultiPad pads;
     g_pad = &pads;
+    controller_init();
 
     display_defaults(&g_display);
     options_load();

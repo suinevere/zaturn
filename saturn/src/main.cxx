@@ -664,13 +664,30 @@ int main(void) {
 
     uint8_t *story = nullptr;
     uint32_t len = 0;
+    // Set when a read completed but what came back was not a story, so the
+    // failure notice below can say which of the two it was. A short read and a
+    // full read of the wrong bytes need different fixes and look identical from
+    // the outside.
+    bool bad_header = false;
+    // Set when the heap could not hold the image, with what was asked for and
+    // what was free. Not a retryable condition and not a CD one: every attempt
+    // after the first asks the same allocator for the same bytes and is told the
+    // same thing, so the loop is left at once rather than spending three hundred
+    // attempts at eight fields each -- forty seconds of LOADING standing still,
+    // which is indistinguishable from a hang and was reported as one.
+    uint32_t oom_want = 0, oom_free = 0;
     for (int attempt = 0; attempt < 300 && story == nullptr; attempt++) {
         SRL::Cd::File f(game_file);
         int32_t bytes = f.Size.Bytes;
         int32_t ssz   = f.Size.SectorSize;
         if (ssz == 2048 && bytes > 0 && bytes <= 0x40000) {
             uint8_t *buf = (uint8_t *) SRL::Memory::HighWorkRam::Malloc((uint32_t) bytes);
-            if (buf != nullptr && f.Open()) {
+            if (buf == nullptr) {
+                oom_want = (uint32_t) bytes;
+                oom_free = (uint32_t) SRL::Memory::HighWorkRam::GetFreeSpace();
+                break;
+            }
+            if (f.Open()) {
                 // A chunk at a time rather than one Read of the whole story:
                 // the same sectors in the same order at no cost, but with a
                 // Synchronize between each pair, so the loading screen keeps
@@ -686,9 +703,31 @@ int main(void) {
                     SRL::Core::Synchronize();
                 }
                 f.Close();
-                if (got == bytes) { story = buf; len = (uint32_t) bytes; break; }
+                // The header, not merely the byte count. A story that reached
+                // the interpreter and was refused there halted the machine on
+                // "only version 3 is supported, this is 32" -- 32 being a space,
+                // so what had been read was text rather than a story -- and that
+                // is a message about the wrong thing, printed from a place with
+                // no way back. The size guard above cannot catch it: the note in
+                // saturn_read_story_prefix that the GFS size read can come back
+                // garbage on a first access is exactly why this loop retries,
+                // and a garbage size inside the plausible range buys a complete,
+                // successful read of something that is not the file asked for.
+                //
+                // Two fields, because one is not enough to tell a story from a
+                // coincidence: the version byte, and the length word at 0x1A,
+                // which is in words for a v3 image and so covers no more than
+                // the file itself. Every story on the disc satisfies both; the
+                // test that says so is saturn/tests/test_story_header.py.
+                if (got == bytes) {
+                    int32_t hdr_len = (int32_t) (((buf[0x1a] << 8) | buf[0x1b]) * 2);
+                    if (buf[0] == 3 && hdr_len > 0 && hdr_len <= bytes) {
+                        story = buf; len = (uint32_t) bytes; break;
+                    }
+                    bad_header = true;
+                }
             }
-            if (buf != nullptr) { SRL::Memory::HighWorkRam::Free(buf); }
+            SRL::Memory::HighWorkRam::Free(buf);
         }
         for (int i = 0; i < 8; i++) { SRL::Core::Synchronize(); }
     }
@@ -697,13 +736,24 @@ int main(void) {
         // only its own word to take off before the halt notice is written where
         // it stood.
         menu_clear();
+        // The heap is its own answer and needs its own sentence. It is not a CD
+        // fault at all, and the two numbers are the whole diagnosis: what the
+        // image wanted against what was free when it asked. __heap_start moves
+        // with the program image, so the second number falls every time the
+        // build grows -- which is how the largest story on the disc came to stop
+        // loading without one line of its own path changing.
+        if (oom_want != 0) {
+            saturn_die("Out of memory loading %s: wants %u bytes, %u free",
+                       game_file, (unsigned int) oom_want, (unsigned int) oom_free);
+        }
         // Which of the two it was, because they need different fixes and the
         // screen is the only place this can be read: "dir LOST" means the /Z3
         // record was never captured, so the open resolved against whatever GFS
         // was pointing at; "dir ok" means the record was there and the read
         // itself failed, which is a disc or drive problem instead.
-        saturn_die("Could not load %s from CD (Z3 dir %s)",
-                   game_file, g_z3_dir_valid ? "ok" : "LOST");
+        saturn_die("Could not load %s from CD (Z3 dir %s, %s)",
+                   game_file, g_z3_dir_valid ? "ok" : "LOST",
+                   bad_header ? "read the wrong file" : "read failed");
     }
 
     mojo_boot(story, len, seed);

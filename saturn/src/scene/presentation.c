@@ -45,7 +45,13 @@ int pres_of_room(unsigned int release, const char *serial, unsigned int obj,
     int g = pres_game_index(release, serial);
     if (g < 0 || obj >= 256 || out == 0) return 0;
     {
-        const Presentation *p = &GAME_PRES_MAP[g].rooms[obj];
+        /* A byte per room naming a slot in the one shared pool, rather than a
+           record per room: thirty-one games' worth of per-room records repeat
+           down to under two hundred distinct ones, and the table is .rodata,
+           which the story image has to fit in the heap behind. Slot 0 is the
+           unauthored record, so the image test below reads exactly as it did
+           when every room carried its own copy. */
+        const Presentation *p = &PRES_POOL[GAME_PRES_MAP[g].rooms[obj]];
         if (p->image == 0) return 0;
         *out = *p;
         return 1;

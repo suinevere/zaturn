@@ -43,7 +43,7 @@ typedef struct {
 typedef struct {
     unsigned short release;
     const char *serial;
-    const Presentation *rooms;
+    const unsigned char *rooms;
     unsigned char map_bg;
 } GamePresMap;
 

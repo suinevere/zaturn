@@ -371,6 +371,36 @@ def main(argv):
                              f"which is neither silence nor a disc track")
         pres[obj] = (image, track, SE_BANKS.index(sat["se_bank"]))
 
+    # One shared pool of every distinct room presentation on the disc, and a
+    # byte per room per game naming a slot in it. Three quarters of the 7,936
+    # per-room entries are the same all-zero "unauthored" record and the rest
+    # repeat heavily -- thirty-one games draw their pictures, tracks and effect
+    # banks from one supply -- so the full tables spent thirty-one kilobytes of
+    # .rodata saying under two hundred distinct things. That matters beyond
+    # tidiness: __heap_start follows the program image, so every byte of table
+    # is a byte the largest story cannot have, and this table growing is what
+    # stopped The Lurking Horror loading (see saturn/tests/test_hwram_budget.py).
+    #
+    # Slot 0 is the unauthored record, so a zeroed index means what a zeroed
+    # entry used to and pres_of_room's test is unchanged.
+    pool = [(0, 0, 0)]
+    slot = {(0, 0, 0): 0}
+    tables = ([("ZORK1", pres)] +
+              [(stem, rows) for stem, _release, _serial, rows in assigned])
+    for _stem, rows in tables:
+        for rec in rows:
+            rec = tuple(rec)
+            if rec not in slot:
+                slot[rec] = len(pool)
+                pool.append(rec)
+    # A slot is a byte. Two hundred distinct records is not near it, but the
+    # supply grows every time a picture is added and the failure would otherwise
+    # be a silent wrap to the wrong room's presentation.
+    if len(pool) > 256:
+        raise SystemExit(f"{len(pool)} distinct room presentations, more than "
+                         "a byte of index can name -- widen GAME_PRES_* to "
+                         "unsigned short and PRES_POOL_N with it")
+
     lines = ["/*----------------------",
              " | game_presentation.inc",
              " | Description: GENERATED FILE -- do not edit by hand; produced by",
@@ -398,10 +428,11 @@ def main(argv):
              "typedef struct {",
              "    unsigned short release;",
              "    const char *serial;",
-             "    const Presentation *rooms;",
+             "    const unsigned char *rooms;",
              "    unsigned char map_bg;",
              "} GamePresMap;",
              f"#define PRES_GAME_N {1 + len(assigned)}",
+             f"#define PRES_POOL_N {len(pool)}",
              f"#define PRES_MAP_BG_N {len(genre_vocab.MAP_FILES)}",
              f"#define PRES_FRAME_N {len(frames)}",
              f"#define PRES_AREA_N {len(areas)}",
@@ -417,16 +448,16 @@ def main(argv):
     for area, off, ln in frames:
         lines.append(f"    {{ {area}, {off}UL, {ln}UL }},")
     lines.append("};")
-    lines.append("static const Presentation GAME_PRES_ZORK1[256] = {")
-    for i in range(0, 256, 4):
-        chunk = ", ".join(f"{{ {a}, {b}, {c} }}" for a, b, c in pres[i:i + 4])
+    lines.append("static const Presentation PRES_POOL[PRES_POOL_N] = {")
+    for i in range(0, len(pool), 4):
+        chunk = ", ".join(f"{{ {a}, {b}, {c} }}" for a, b, c in pool[i:i + 4])
         lines.append(f"    {chunk},")
     lines.append("};")
-    for stem, _release, _serial, rows in assigned:
-        lines.append(f"static const Presentation GAME_PRES_{stem}[256] = {{")
-        for i in range(0, 256, 4):
-            chunk = ", ".join(f"{{ {a}, {b}, {c} }}" for a, b, c in rows[i:i + 4])
-            lines.append(f"    {chunk},")
+    for stem, rows in tables:
+        lines.append(f"static const unsigned char GAME_PRES_{stem}[256] = {{")
+        idx = [slot[tuple(r)] for r in rows]
+        for i in range(0, 256, 16):
+            lines.append("    " + ", ".join(str(v) for v in idx[i:i + 16]) + ",")
         lines.append("};")
     lines.append("static const GamePresMap GAME_PRES_MAP[PRES_GAME_N] = {")
     lines.append(f'    {{ {RELEASE}, "{SERIAL}", GAME_PRES_ZORK1, '

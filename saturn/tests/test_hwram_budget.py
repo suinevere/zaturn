@@ -265,6 +265,44 @@ def test_each_claimant_fits_the_heap_alone():
         f"{heap}-byte heap. The title screen would be black on a cold boot.")
 
 
+STORY_HEADROOM = 16 * 1024
+
+
+def test_the_largest_story_leaves_room_to_run_in():
+    """Fitting is not the same as working, and this is the gap that let a
+    regression through green.
+
+    test_each_claimant_fits_the_heap_alone asks only whether the image fits at
+    all. It went on passing while the heap fell far enough that the largest
+    story left almost nothing behind it -- and a story that fits with nothing
+    behind it is a game that loads and then cannot do anything that costs a
+    byte: no PCM slice off a .BLB, no item picture, no save or restore scratch,
+    which alone is roughly twelve kilobytes of dynamic memory.
+
+    STORY_HEADROOM is a floor rather than a measurement of any one claimant on
+    purpose. What is resident alongside the story changes with the screen; what
+    does not change is that a build leaving less than this behind the biggest
+    story is one where the next kilobyte added to the program image stops that
+    story loading outright, and the symptom then is forty seconds of LOADING
+    standing still (see main.cxx's oom_want).
+
+    If this fails, the heap moved, not the story: __heap_start follows .bss, so
+    it is the program image that grew. Find it in the link map rather than
+    raising the floor.
+    """
+    heap = heap_bytes()
+    if heap is None:
+        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+    require_full_library()
+    name, size = stories()[0]
+    assert size + STORY_HEADROOM <= heap, (
+        f"{name} ({size} bytes) leaves only {heap - size} bytes of the "
+        f"{heap}-byte heap behind it, under the {STORY_HEADROOM}-byte floor. "
+        "The program image has grown; __heap_start moves with it. Trim the "
+        "image -- the link map names the .rodata that did it -- or this story "
+        "loads with nothing left to run in.")
+
+
 def test_title_wallpaper_needs_the_story_gone():
     """The second half of why the release is mandatory, and the half that is
     visible without picking anything.

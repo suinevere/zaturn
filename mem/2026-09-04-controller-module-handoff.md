@@ -50,14 +50,12 @@ Two things are guesses rather than measurements, both flagged in the source:
 
 ## Things that will bite
 
-**The module is live but nothing consumes it.** `controller_tick` runs every frame
-in both game loops (`saturn_glue.cxx`, `online.cxx`) and `controller_init` runs at
-both boots, so the classification, the action edges and the cursor are all real and
-current. No view reads them yet. A mouse plugged in today moves a cursor nobody
-draws and clicks nothing. That is the next phase, and it is the larger half: the
-console's scroll arrows, the on-screen keyboard's keys and the command panel's Map
-entry each have to hit-test `controller_pointer()` and call
-`controller_pointer_consume()` when they take the click.
+**The module is live, and PARTLY consumed.** `controller_tick` runs every frame in
+both game loops (`saturn_glue.cxx`, `online.cxx`) and `controller_init` runs at both
+boots. Two views read it since [[controls-page-and-gun-targeting-handoff]]: the
+console's scroll markers and the room picture's edge. The on-screen keyboard's keys
+and the command panel's own rows still do not, so a mouse or gun cannot yet type or
+pick a word.
 
 **`controller_tick` must stay after `pad_repeat_update` and `chord_tick`, and must
 never call them.** It reads the pad through `pad_fired`/`chord_fired` instead of

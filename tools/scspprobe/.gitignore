@@ -1,0 +1,7 @@
+BuildDrop/
+cd/data/0.bin
+src/scsp.*
+src/synth*
+src/tracker.*
+src/music_synth_data.*
+src/*.o

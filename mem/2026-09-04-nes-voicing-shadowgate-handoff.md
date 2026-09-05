@@ -295,9 +295,11 @@ voices.
 
 ## Open, in the order they matter
 
-1. **The band profile is within a point on every band that carries the tune**,
-   and the level has a fine control now: `SCSP_NOISE_TRIM` attenuates in TL steps
-   of 0.375 dB, which is how the drum sits between DISDL's 6 dB steps. What is
+1. **STALE -- see [[hihat-crunch-handoff]].** `SCSP_NOISE_TRIM` was never a
+   working fine control: an unguarded `#define` in `scsp.h` overrode the `-D`
+   every sweep passed, so the sweep that chose 5 compiled one binary five times.
+   The knob is now the noise table's amplitude. The rest of this item stood:
+   **the band profile is within a point on every band that carries the tune**. What is
    left is 1-8 kHz running about 15 per cent hot in power -- 7.6 / 7.2 / 7.7
    against 6.8 / 6.6 / 6.3 -- which is roughly one more TL step. Worth a single
    probe run if anyone cares; it is well inside what one MP3 of one performance

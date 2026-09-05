@@ -120,7 +120,8 @@ def main():
     args = ap.parse_args()
 
     song = mid2pat.convert(args.midi, args.grid, 0, args.max_rows,
-                           args.no_drums, args.bpm, args.fold_octaves)
+                           args.no_drums, args.bpm, args.fold_octaves,
+                           args.drums_tab, args.tab_beats)
 
     buf = render(song["cells"], song["speed"], song["frac"],
                  song["ch_wave"], args.seconds)

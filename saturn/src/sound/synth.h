@@ -10,6 +10,11 @@
 #ifndef SYNTH_H
 #define SYNTH_H
 
+/* Included, not merely declared as a dependency: SYNTH_WAVE_NOISE is defined
+   in terms of SCSP_NOISE_WAVE, so a translation unit that reaches for it
+   without scsp.h already in scope does not compile. */
+#include "scsp.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -18,22 +23,30 @@ extern "C" {
  | SYNTH_WAVE_*
  | Description: The four generated waveforms, in the order scsp_upload_wave
  |   receives them, so the index is both the instrument and its place in the
- |   waveform area.
+ |   waveform area. Named for the NES voices they carry: three pulse duties and
+ |   the 2A03's stepped triangle. tools/assets/genwaves.py --voice smooth puts
+ |   band-limited equivalents in the same four slots without changing these
+ |   names, since the roles do not change with the shapes.
  | Author: suinevere
  ----------------------*/
-#define SYNTH_WAVE_SQUARE   0
-#define SYNTH_WAVE_PULSE    1
+#define SYNTH_WAVE_PULSE12  0
+#define SYNTH_WAVE_PULSE25  1
 #define SYNTH_WAVE_TRIANGLE 2
-#define SYNTH_WAVE_SAW      3
+#define SYNTH_WAVE_PULSE50  3
 
 /*----------------------
  | SYNTH_WAVE_NOISE
- | Description: The percussion voice. One past the generated waveforms because
- |   it is not one of them: the SCSP makes noise internally, so this index
- |   names no waveform data and costs no sound RAM.
+ | Description: The percussion voice, and a real waveform: a slice of the
+ |   2A03's own 15-bit noise shift register, sixteen times the length of a
+ |   tonal table because it is not a cycle of anything. The chip's internal
+ |   noise generator was used here and cost no sound RAM at all, but it has one
+ |   setting and the SCSP has no filter -- the slot registers stop at 0x16 --
+ |   so how bright the percussion is could not be chosen. Held as a waveform,
+ |   the note it is keyed at picks the shift register's clock rate, which is
+ |   what the NES does with its sixteen periods.
  | Author: suinevere
  ----------------------*/
-#define SYNTH_WAVE_NOISE    4
+#define SYNTH_WAVE_NOISE    SCSP_NOISE_WAVE
 
 /*----------------------
  | synth_pitch
@@ -59,8 +72,9 @@ unsigned short synth_pitch(int semitone, int octave);
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: index -- a SYNTH_WAVE_* value; out -- buffer of at least len bytes;
- |   len -- samples to generate
+ | Params: index -- a SYNTH_WAVE_* value other than SYNTH_WAVE_NOISE, which is
+ |   too long to resample and is uploaded whole; out -- buffer of at least len
+ |   bytes; len -- samples to generate
  | Returns: N/A
  ----------------------*/
 void synth_wave_build(int index, signed char *out, int len);

@@ -37,8 +37,70 @@ extern "C" {
  |   buzz that made this sound like a PC speaker.
  | Author: suinevere
  ----------------------*/
-#define SCSP_WAVES    4
+#define SCSP_WAVES    5
 #define SCSP_WAVE_MAX 256
+
+/*----------------------
+ | SCSP_NOISE_WAVE / SCSP_NOISE_LEN / SCSP_WAVE_BYTES
+ | Description: The fifth waveform is the percussion voice, and it is longer
+ |   than the four tonal ones because it is not a cycle of anything -- it is a
+ |   slice of the 2A03's noise shift register, and one pass at the rate a drum
+ |   is keyed at has to outlast the gap between two hits or the repeat is heard
+ |   as a pitch. The chip's own noise generator was used here until a recording
+ |   showed it peaking at 4 kHz and still bright at 15 kHz where the NES peaks
+ |   at 2 kHz and rolls off; it has one setting and the SCSP has no filter --
+ |   the slot registers stop at 0x16 -- so the brightness has to come from the
+ |   rate the sequence is played at, which is what the NES's sixteen clock
+ |   periods do. SCSP_WAVE_BYTES is the whole area, which is what the caller
+ |   must leave free at wave_sa.
+ | Author: suinevere
+ ----------------------*/
+#define SCSP_NOISE_WAVE  4
+#define SCSP_NOISE_LEN   4096
+#define SCSP_WAVE_BYTES  ((SCSP_WAVES - 1) * SCSP_WAVE_MAX + SCSP_NOISE_LEN)
+
+/*----------------------
+ | SCSP_NOISE_RUN / SCSP_NOISE_STRIDE
+ | Description: Where in the percussion table each hit starts. The chip restarts
+ |   a slot from SA every key-on, so without this every strike replays the same
+ |   bytes -- 176 byte-identical hits in a 23.6-second loop, which the ear hears
+ |   as one pitched click repeating rather than as noise. Measured: successive
+ |   hits correlated 0.797 against the NES original's 0.486. RUN is how much of
+ |   the table one hit can read before its envelope has ended, so the start may
+ |   move anywhere in the rest; STRIDE is how far it moves each time, chosen odd
+ |   and coprime with the sixteen-row drum pattern so a given slice does not land
+ |   on the same beat twice. tools/assets/genwaves.py holds the same two numbers
+ |   and saturn/tests/test_noise_table.py fails if they drift apart.
+ | Author: suinevere
+ ----------------------*/
+#define SCSP_NOISE_RUN     1024
+#define SCSP_NOISE_STRIDE  293
+
+/*----------------------
+ | SCSP_KEY_SETTLE
+ | Description: How long to wait between keying a percussion voice off and on
+ |   again. The chip re-strikes a slot only on a KYONB transition and walks all
+ |   thirty-two slots once per output sample, so two KYONEX pulses a few
+ |   instructions apart land in the same pass, the key-off is never seen, and the
+ |   strike is silent. Measured on the chip: with no wait, one strike sounded in
+ |   four seconds where thirty were scheduled; with a two-hundred iteration wait,
+ |   all thirty did. This is comfortably more, and costs one wait per drum hit --
+ |   at most one per V-blank -- in a handler that has 16.7 ms.
+ | Author: suinevere
+ ----------------------*/
+#define SCSP_KEY_SETTLE    256
+
+/*----------------------
+ | SCSP_NOISE_TRIM
+ | Description: A fine attenuation on the percussion voice, in TL steps of about
+ |   0.375 dB (register 0x0C, bits 7-0). DISDL has eight steps of 6 dB and the
+ |   drum wants to sit between two of them: at 7 it measures 8.7 / 9.6 per cent
+ |   of the mix in the 2-4 and 4-8 kHz bands against the original's 6.6 / 6.3,
+ |   and at 6 it measures 4.6 / 4.7 -- one too loud, one too quiet, and both the
+ |   same distance out. This is the 1.9 dB between them.
+ | Author: suinevere
+ ----------------------*/
+#define SCSP_NOISE_TRIM    5
 
 /*----------------------
  | SCSP_REG_WORDS
@@ -102,7 +164,7 @@ void scsp_enable_output(void);
  | Dependencies: N/A
  | Globals: N/A
  | Params: index -- 0..SCSP_WAVES-1; data -- signed 8-bit samples; len -- up to
- |   SCSP_WAVE_MAX
+ |   SCSP_WAVE_MAX, or SCSP_NOISE_LEN for SCSP_NOISE_WAVE
  | Returns: N/A
  ----------------------*/
 void scsp_upload_wave(int index, const signed char *data, int len);
@@ -110,27 +172,19 @@ void scsp_upload_wave(int index, const signed char *data, int len);
 /*----------------------
  | scsp_key_on
  | Description: Starts a voice on a waveform at a pitch and level, looping in
- |   hardware so the note holds with no further writes.
+ |   hardware so the note holds with no further writes. percussive picks the
+ |   envelope: a pitched note sustains until the tracker keys it off, and a drum
+ |   is never keyed off at all -- the pattern data only ever strikes it -- so it
+ |   has to decay to silence by itself or the first hit latches on and every
+ |   note afterwards plays under it.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: voice -- 0..SCSP_VOICES-1; pitch -- packed OCT/FNS word; wave --
- |   waveform index; level -- 0..7
+ |   waveform index; level -- 0..7; percussive -- nonzero to decay by itself
  | Returns: N/A
  ----------------------*/
-void scsp_key_on(int voice, unsigned short pitch, int wave, int level);
-
-/*----------------------
- | scsp_key_on_noise
- | Description: Starts a voice on the SCSP's internal noise generator, which
- |   needs no waveform data at all -- the percussion voice.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: voice -- 0..SCSP_VOICES-1; level -- 0..7
- | Returns: N/A
- ----------------------*/
-void scsp_key_on_noise(int voice, int level);
+void scsp_key_on(int voice, unsigned short pitch, int wave, int level, int percussive);
 
 /*----------------------
  | scsp_key_off

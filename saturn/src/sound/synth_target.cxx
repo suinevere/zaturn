@@ -3,7 +3,9 @@
  | Description: Binds the synth to real hardware and drives it from V-blank.
  |   Two addresses matter: the SCSP register window at 0x25B00000 and the
  |   waveform area at 0x25A70000, high in sound RAM and clear of the region the
- |   SGL sound driver allocates from the bottom.
+ |   SGL sound driver allocates from the bottom. SCSP_WAVE_BYTES of the 64 KB
+ |   above that address are used -- 5 KB once the percussion waveform is counted
+ |   -- out of the 512 KB the chip has.
  | Author: suinevere
  | Dependencies: srl.hpp, synth.h, synth_target.h
  ----------------------*/

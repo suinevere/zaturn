@@ -14,6 +14,7 @@
      gcc -O2 -I saturn/src -I saturn/src/sound -o /tmp/t_note \
          saturn/tests/test_synth_note.c saturn/src/sound/synth.c \
          saturn/src/sound/scsp.c saturn/src/sound/tracker.c \
+         saturn/src/sound/synth_waves.c \
          saturn/src/sound/music_synth_data.c && /tmp/t_note
 */
 #include "../src/sound/synth.h"
@@ -52,75 +53,62 @@ static void test_out_of_range_inputs_are_clamped(void) {
     assert(synth_pitch(0, -99) == synth_pitch(0, -8));
 }
 
-static int half_mean(const signed char *w, int from, int to) {
+static int mean_of(const signed char *w, int from, int to) {
     int sum = 0;
     for (int i = from; i < to; i++) sum += w[i];
     return sum / (to - from);
 }
 
-static void test_square_is_positive_then_negative(void) {
-    /* Band-limited now, so individual samples ring around the edges and the
-       old sample-by-sample sign test no longer describes it. What still holds
-       is the shape in the mean. */
-    signed char w[SCSP_WAVE_MAX];
-    synth_wave_build(SYNTH_WAVE_SQUARE, w, SCSP_WAVE_MAX);
-    assert(half_mean(w, 0, SCSP_WAVE_MAX / 2) > 40);
-    assert(half_mean(w, SCSP_WAVE_MAX / 2, SCSP_WAVE_MAX) < -40);
+static int distinct_levels(const signed char *w, int len) {
+    int seen[256];
+    int n = 0;
+    for (int i = 0; i < 256; i++) seen[i] = 0;
+    for (int i = 0; i < len; i++) {
+        int k = w[i] + 128;
+        if (!seen[k]) { seen[k] = 1; n++; }
+    }
+    return n;
 }
 
-static void test_pulse_is_high_for_about_a_quarter(void) {
+static void test_pulse_duties_are_an_eighth_a_quarter_and_a_half(void) {
+    /* The three duty cycles are most of what makes a pulse channel sound like
+       an NES: 12.5% is the thin nasal lead, 50% the fat one. Each is checked by
+       where its high portion ends. */
     signed char w[SCSP_WAVE_MAX];
-    synth_wave_build(SYNTH_WAVE_PULSE, w, SCSP_WAVE_MAX);
-    assert(half_mean(w, 0, SCSP_WAVE_MAX / 4) > 20);
-    assert(half_mean(w, SCSP_WAVE_MAX / 2, SCSP_WAVE_MAX) < 0);
+    const int L = SCSP_WAVE_MAX;
+
+    synth_wave_build(SYNTH_WAVE_PULSE12, w, L);
+    assert(mean_of(w, 0, L / 8) > 90);
+    assert(mean_of(w, L / 8, L) < -80);
+
+    synth_wave_build(SYNTH_WAVE_PULSE25, w, L);
+    assert(mean_of(w, 0, L / 4) > 90);
+    assert(mean_of(w, L / 4, L) < -80);
+
+    synth_wave_build(SYNTH_WAVE_PULSE50, w, L);
+    assert(mean_of(w, 0, L / 2) > 90);
+    assert(mean_of(w, L / 2, L) < -90);
 }
 
-static void test_triangle_peaks_near_the_middle(void) {
+static void test_triangle_is_a_sixteen_level_staircase(void) {
+    /* The 2A03's triangle steps through 16 levels, and that coarse staircase is
+       exactly why NES bass sounds hollow and gritty rather than smooth. A
+       mathematically clean triangle would use every level the byte allows and
+       would not sound like an NES at all, so the level count is the assertion
+       that matters here. */
     signed char w[SCSP_WAVE_MAX];
     synth_wave_build(SYNTH_WAVE_TRIANGLE, w, SCSP_WAVE_MAX);
-    int peak = 0, at = 0;
-    for (int i = 0; i < SCSP_WAVE_MAX; i++)
-        if (w[i] > peak) { peak = w[i]; at = i; }
-    assert(peak > 60);
-    assert(at > SCSP_WAVE_MAX / 8 && at < SCSP_WAVE_MAX / 2);
+    assert(distinct_levels(w, SCSP_WAVE_MAX) <= 16);
+    assert(w[0] > 90);
+    assert(w[SCSP_WAVE_MAX / 2] < -90);
 }
 
-static void test_saw_sweeps_across_its_range(void) {
+static void test_pulses_are_two_level(void) {
     signed char w[SCSP_WAVE_MAX];
-    int lo = 127, hi = -128;
-    synth_wave_build(SYNTH_WAVE_SAW, w, SCSP_WAVE_MAX);
-    for (int i = 0; i < SCSP_WAVE_MAX; i++) {
-        if (w[i] < lo) lo = w[i];
-        if (w[i] > hi) hi = w[i];
-    }
-    assert(hi > 60 && lo < -60);
-}
-
-static void test_every_waveform_is_band_limited(void) {
-    /* The point of the additive rebuild. A hard-edged square jumps 200 counts
-       between two adjacent samples, and every harmonic above half the playback
-       rate folds back as an inharmonic whine -- the buzz. A waveform built from
-       a bounded number of harmonics cannot step that far. */
     for (int k = 0; k < 4; k++) {
-        signed char w[SCSP_WAVE_MAX];
-        int worst = 0;
+        if (k == SYNTH_WAVE_TRIANGLE) continue;
         synth_wave_build(k, w, SCSP_WAVE_MAX);
-        for (int i = 1; i < SCSP_WAVE_MAX; i++) {
-            int d = w[i] - w[i - 1];
-            if (d < 0) d = -d;
-            if (d > worst) worst = d;
-        }
-        assert(worst < 60);
-    }
-}
-
-static void test_every_waveform_is_roughly_dc_free(void) {
-    for (int k = 0; k < 4; k++) {
-        signed char w[SCSP_WAVE_MAX];
-        int sum = 0;
-        synth_wave_build(k, w, SCSP_WAVE_MAX);
-        for (int i = 0; i < SCSP_WAVE_MAX; i++) sum += w[i];
-        assert(sum > -400 && sum < 400);
+        assert(distinct_levels(w, SCSP_WAVE_MAX) == 2);
     }
 }
 
@@ -130,12 +118,9 @@ int main(void) {
     test_negative_octaves_wrap_into_four_bits();
     test_octave_and_semitone_combine();
     test_out_of_range_inputs_are_clamped();
-    test_square_is_positive_then_negative();
-    test_pulse_is_high_for_about_a_quarter();
-    test_triangle_peaks_near_the_middle();
-    test_saw_sweeps_across_its_range();
-    test_every_waveform_is_band_limited();
-    test_every_waveform_is_roughly_dc_free();
+    test_pulse_duties_are_an_eighth_a_quarter_and_a_half();
+    test_triangle_is_a_sixteen_level_staircase();
+    test_pulses_are_two_level();
     printf("test_synth_note: all passed\n");
     return 0;
 }

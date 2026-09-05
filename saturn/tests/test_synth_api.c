@@ -12,6 +12,7 @@
      gcc -O2 -I saturn/src -I saturn/src/sound -o /tmp/t_api \
          saturn/tests/test_synth_api.c saturn/src/sound/synth.c \
          saturn/src/sound/scsp.c saturn/src/sound/tracker.c \
+         saturn/src/sound/synth_waves.c \
          saturn/src/sound/music_synth_data.c && /tmp/t_api
 */
 #include "../src/sound/synth.h"
@@ -20,24 +21,33 @@
 #include <assert.h>
 
 static unsigned short g_regs[SCSP_REG_WORDS];
-static signed char    g_wave[SCSP_WAVES * SCSP_WAVE_MAX];
+static signed char    g_wave[SCSP_WAVE_BYTES];
 
 #define SLOT_WORD(voice, off) g_regs[(SCSP_SLOT_FIRST + (voice)) * 16 + ((off) / 2)]
 
 static void bind_fresh(void) {
     for (int i = 0; i < SCSP_REG_WORDS; i++) g_regs[i] = 0;
-    for (int i = 0; i < SCSP_WAVES * SCSP_WAVE_MAX; i++) g_wave[i] = 0;
+    for (int i = 0; i < SCSP_WAVE_BYTES; i++) g_wave[i] = 0;
     synth_bind(g_regs, g_wave, 0x70000UL);
     synth_init();
 }
 
-static void test_init_uploads_four_waveforms(void) {
+static void test_init_uploads_every_waveform_including_the_long_one(void) {
+    /* The percussion table is sixteen times the length of a tonal one, so its
+       tail is the part a fixed-stride upload would silently drop -- and a
+       half-written noise table still sounds like noise for the first
+       sixteenth of every hit. */
     bind_fresh();
     int nonzero = 0;
-    for (int w = 0; w < SCSP_WAVES; w++)
+    for (int w = 0; w < SCSP_NOISE_WAVE; w++)
         for (int i = 0; i < SCSP_WAVE_MAX; i++)
             if (g_wave[w * SCSP_WAVE_MAX + i] != 0) { nonzero++; break; }
-    assert(nonzero == SCSP_WAVES);
+    assert(nonzero == SCSP_NOISE_WAVE);
+
+    int noise = 0;
+    for (int i = 0; i < SCSP_NOISE_LEN; i++)
+        if (g_wave[SCSP_NOISE_WAVE * SCSP_WAVE_MAX + i] != 0) noise++;
+    assert(noise == SCSP_NOISE_LEN);
 }
 
 static void test_init_leaves_the_slots_silent(void) {
@@ -90,13 +100,17 @@ static void test_level_zero_is_silence(void) {
     assert((SLOT_WORD(0, 0x16) >> 13) == 0);
 }
 
-static void test_noise_wave_reaches_the_noise_generator(void) {
-    /* Waveform index 4 is one past the generated set, and the SCSP makes that
-       one itself -- so the voice must come up with SSCTL set to noise rather
-       than pointed at waveform memory it does not have. */
+static void test_the_percussion_voice_decays_and_a_note_does_not(void) {
+    /* Both are ordinary waveforms now, so nothing about the slot distinguishes
+       them except the envelope -- and the pattern data never keys a drum off,
+       so a drum that does not decay is a hiss under the rest of the tune for
+       the rest of the session. */
     bind_fresh();
-    synth_note_on(0, 0, 0, SYNTH_WAVE_NOISE, 7);
-    assert((SLOT_WORD(0, 0x00) & (3u << 7)) == (1u << 7));
+    synth_note_on(0, 10, -2, SYNTH_WAVE_NOISE, 7);
+    assert(((SLOT_WORD(0, 0x08) >> 6) & 0x1F) != 0);
+
+    synth_note_on(1, 0, 0, SYNTH_WAVE_PULSE50, 7);
+    assert(((SLOT_WORD(1, 0x08) >> 6) & 0x1F) == 0);
 }
 
 static void test_gating_defers_to_cd_audio(void) {
@@ -105,14 +119,14 @@ static void test_gating_defers_to_cd_audio(void) {
 }
 
 int main(void) {
-    test_init_uploads_four_waveforms();
+    test_init_uploads_every_waveform_including_the_long_one();
     test_init_leaves_the_slots_silent();
     test_start_then_tick_keys_a_voice_on();
     test_tick_while_stopped_writes_nothing();
     test_stop_keys_every_voice_off();
     test_level_scales_sounding_voices_without_restarting_them();
     test_level_zero_is_silence();
-    test_noise_wave_reaches_the_noise_generator();
+    test_the_percussion_voice_decays_and_a_note_does_not();
     test_gating_defers_to_cd_audio();
     printf("test_synth_api: all passed\n");
     return 0;

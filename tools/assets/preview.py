@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Render a MIDI through the Saturn synth's model and write a WAV to listen to.
 
-This is the fast half of the loop. It imports mid2pat and runs the SAME
-conversion the build uses, then plays the resulting pattern data through a
-software model of what the SCSP does with it -- the same waveform tables, the
-same note-to-pitch maths, the same row timing, the same per-voice levels. So
-what you hear is what the conversion will sound like, in about a second,
-instead of building a disc image and booting an emulator.
+This is the fast half of the loop. It calls mid2pat.convert, which is literally
+the function the build emits its C from, then plays the resulting pattern data
+through a software model of what the SCSP does with it -- the same waveform
+tables, the same note-to-pitch maths, the same row timing, the same per-voice
+levels. So what you hear is what the conversion will sound like, in about a
+second, instead of building a disc image and booting an emulator.
 
 It is a model, not the chip. It does not reproduce the SCSP's envelope rates,
 its interpolation, or its output filtering, so treat it as a preview for
@@ -32,7 +32,12 @@ BASE_HZ = RATE / float(mid2pat.CHANNELS and 256)
 
 
 def voice_tables():
-    return [genwaves.build(k) for k in range(4)]
+    """The same tables the build uploads: four tonal, then the percussion one.
+
+    The percussion table is a different length from the others, so a voice's
+    phase wraps at its own table's end rather than at a shared constant.
+    """
+    return [genwaves.build(k) for k in range(4)] + [genwaves.build_noise()]
 
 
 def render(cells, speed, frac, ch_wave, seconds):
@@ -47,8 +52,11 @@ def render(cells, speed, frac, ch_wave, seconds):
     step = [0.0] * nvoices
     amp = [0.0] * nvoices
     wave_of = [0] * nvoices
-    noise_env = [0.0] * nvoices
-    rnd = 12345
+    env = [1.0] * nvoices
+    # Where the next percussion hit starts, as scsp.c rotates it: the chip
+    # restarts a slot from its start address every key-on, so a fixed one would
+    # replay the same bytes on every strike.
+    noise_start = 0
 
     pos = 0.0
     for row in cells:
@@ -66,26 +74,36 @@ def render(cells, speed, frac, ch_wave, seconds):
             vol = wv & 0x0F
             # DISDL is three bits in roughly 6 dB steps; 7 is full output.
             amp[ch] = 0.0 if vol == 0 else 2.0 ** (min(7, vol) - 7)
-            if wave_of[ch] >= 4:
-                noise_env[ch] = 1.0
+            # Table samples per output sample. The engine's OCT 0 semitone 0 is
+            # one table sample per output sample whatever the table's length.
+            step[ch] = 2.0 ** (semi / 12.0 + octv)
+            env[ch] = 1.0
+            if wave_of[ch] == mid2pat.WAVE_NOISE:
+                phase[ch] = float(noise_start)
+                noise_start += genwaves.NOISE_STRIDE
+                if noise_start + genwaves.NOISE_RUN > genwaves.NOISE_LEN:
+                    noise_start = 0
             else:
-                hz = BASE_HZ * (2.0 ** (semi / 12.0)) * (2.0 ** octv)
-                step[ch] = 256.0 * hz / RATE
+                phase[ch] = 0.0
         for i in range(start, end):
             acc = 0.0
             for ch in range(nvoices):
-                if amp[ch] <= 0.0:
+                if amp[ch] <= 0.0 or env[ch] <= 0.0005:
                     continue
-                if wave_of[ch] >= 4:
-                    if noise_env[ch] > 0.0:
-                        rnd = (rnd * 1103515245 + 12345) & 0x7FFFFFFF
-                        acc += ((rnd >> 16) / 16384.0 - 1.0) * 100.0 * amp[ch] * noise_env[ch]
-                        noise_env[ch] *= 0.9993
-                else:
-                    phase[ch] += step[ch]
-                    if phase[ch] >= 256.0:
-                        phase[ch] -= 256.0
-                    acc += waves[wave_of[ch]][int(phase[ch])] * amp[ch]
+                table = waves[wave_of[ch]]
+                phase[ch] += step[ch]
+                if phase[ch] >= len(table):
+                    phase[ch] -= len(table)
+                acc += table[int(phase[ch])] * amp[ch] * env[ch]
+                # The percussion voice decays by itself: the pattern data never
+                # keys it off, so the chip's envelope has to end the hit.
+                if wave_of[ch] == mid2pat.WAVE_NOISE:
+                    # Half-life about 4 ms, measured off the chip. The 22 ms this
+                    # used to be barely showed while the drum was quiet and the
+                    # drum was not sounding on hardware at all; at full output it
+                    # made the model's percussion five times longer than the
+                    # machine's and swamped everything else in it.
+                    env[ch] *= 0.9961
             buf[i] = acc
         pos += samples_per_row
         if pos >= total:
@@ -97,56 +115,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("midi")
     ap.add_argument("wav")
-    ap.add_argument("--grid", type=int, default=16)
     ap.add_argument("--seconds", type=float, default=30.0)
-    ap.add_argument("--no-drums", action="store_true")
+    mid2pat.add_shared_arguments(ap)
     args = ap.parse_args()
 
-    division, tempo, events = mid2pat.read_midi(args.midi)
-    has_drums = (not args.no_drums
-                 and any(e[3] == mid2pat.DRUM_MIDI_CHANNEL and e[2] for e in events))
-    tonal_slots = mid2pat.CHANNELS - 1 if has_drums else mid2pat.CHANNELS
-    ch_wave = mid2pat.CH_WAVE_DRUMS if has_drums else mid2pat.CH_WAVE_TONAL
+    song = mid2pat.convert(args.midi, args.grid, 0, args.max_rows,
+                           args.no_drums, args.bpm, args.fold_octaves)
 
-    bpm = 60000000.0 / tempo
-    frames = (60.0 / bpm) * (4.0 / args.grid) * 60.0
-    speed = max(1, int(frames))
-    frac = int(round((frames - speed) * 256))
-    if frac > 255:
-        speed, frac = speed + 1, 0
-
-    tonal, hits = mid2pat.grid_rows(division, events, args.grid, has_drums)
-    played = [p for r in tonal for p in r]
-    lowest, highest = min(played), max(played)
-    shift = 0
-    while (lowest + shift - mid2pat.BASE_MIDI) + 24 < mid2pat.MIN_INDEX:
-        shift += 12
-    while (highest + shift - mid2pat.BASE_MIDI) + 24 > mid2pat.MAX_INDEX:
-        shift -= 12
-
-    cells = []
-    previous = [None] * mid2pat.CHANNELS
-    for pitches, hit in zip(tonal, hits):
-        picked = mid2pat.assign(pitches, tonal_slots)
-        row = []
-        for ch in range(tonal_slots):
-            pitch = picked[ch]
-            if pitch is None:
-                row.append((1, 0) if previous[ch] is not None else (0, 0))
-            elif pitch != previous[ch]:
-                idx = (pitch + shift - mid2pat.BASE_MIDI) + 24
-                idx = max(mid2pat.MIN_INDEX, min(mid2pat.MAX_INDEX, idx))
-                row.append((idx + 2, (ch_wave[ch] << 4) | mid2pat.CH_VOL[ch]))
-            else:
-                row.append((0, 0))
-            previous[ch] = pitch
-        if has_drums:
-            last = mid2pat.CHANNELS - 1
-            row.append((mid2pat.DRUM_NOTE,
-                        (ch_wave[last] << 4) | mid2pat.CH_VOL[last]) if hit else (0, 0))
-        cells.append(row)
-
-    buf = render(cells, speed, frac, ch_wave, args.seconds)
+    buf = render(song["cells"], song["speed"], song["frac"],
+                 song["ch_wave"], args.seconds)
     peak = max(1.0, max(abs(x) for x in buf))
     with wave.open(args.wav, "wb") as w:
         w.setnchannels(1)
@@ -155,7 +132,8 @@ def main():
         w.writeframes(b"".join(struct.pack("<h", int(x / peak * 26000)) for x in buf))
 
     print("%.1f BPM, speed %d+%d/256, %s, transpose %+d"
-          % (bpm, speed, frac, "drums on noise" if has_drums else "no drums", shift))
+          % (song["bpm"], song["speed"], song["frac"],
+             "drums on noise" if song["has_drums"] else "no drums", song["shift"]))
     print("wrote %s (%.1f s)" % (args.wav, len(buf) / float(RATE)))
 
 

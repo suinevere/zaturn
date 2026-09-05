@@ -30,6 +30,13 @@ inaudible on its own and leaves the music in tune with itself. MIDI note 53 is
 the engine's octave 0, semitone 0. The engine cannot represent an octave below
 -2, so the piece is transposed up in whole octaves until its lowest note fits.
 
+Register and voicing. Three tonal voices is fewer than a sequence usually
+assumes, and two options exist for saying so. --fold-octaves collapses a note
+doubled at the octave to one voice, which is what a sequencer's thickening of a
+bass line costs here; --bpm overrides the file's declared tempo, for a sequence
+transcribed at the wrong speed. Both were needed for the Shadowgate entryway
+theme and both are off by default.
+
 Usage:
   python tools/assets/mid2pat.py IN.mid OUT.c --name "Title" --source "Credit"
 """
@@ -39,21 +46,50 @@ ROWS_PER_PATTERN = 16
 CHANNELS = 4
 DRUM_MIDI_CHANNEL = 9
 
-# Waveform and volume per synth channel: bass on the triangle, lead on the
-# pulse, inner part on the square, and the last channel on the chip's noise
-# generator when the piece has drums (saw otherwise).
-CH_WAVE_TONAL = [2, 1, 0, 3]
-CH_WAVE_DRUMS = [2, 1, 0, 4]
-CH_VOL = [6, 4, 3, 5]
-WAVE_NAMES = ["SYNTH_WAVE_SQUARE", "SYNTH_WAVE_PULSE", "SYNTH_WAVE_TRIANGLE",
-              "SYNTH_WAVE_SAW", "SYNTH_WAVE_NOISE"]
+# Waveform and volume per synth channel, following how an NES is scored: the
+# bass on the triangle, the lead on the 50% square, the harmony on a 25% pulse,
+# and drums on the noise generator when the piece has any (a 12.5% pulse
+# otherwise). The lead's duty is measured, not chosen: a recording of the NES
+# Shadowgate entryway theme has odd harmonics only, at 0.29 / 0.18 / 0.13 of
+# the fundamental, which is the 50% square's 0.33 / 0.20 / 0.14 and not the
+# 25% pulse, whose second harmonic at 0.71 the original does not have at all.
+# Its bass matches the triangle's 0.11 / 0.04 / 0.02 exactly.
+CH_WAVE_TONAL = [2, 3, 1, 0]
+CH_WAVE_DRUMS = [2, 3, 1, 4]
+# Swept against the octave-band profile of a recording of the NES original
+# rather than chosen: bass one DISDL step above the lead, harmony one below,
+# drums with the bass. DISDL is three bits in roughly 6 dB steps, so the old
+# [6, 4, 3, 5] put the bass at four times the lead, which measured 51 per cent
+# of our energy in the bass octave against the original's 30 and left the
+# melody band at 11 against its 23. The drum sits at full output with a fine trim
+# on top of it -- see SCSP_NOISE_TRIM -- because DISDL's steps are 6 dB and the
+# right level is between two of them: 6 measures 4.6 / 4.7 per cent in the 2-4
+# and 4-8 kHz bands against the original's 6.6 / 6.3, and 7 measures 8.7 / 9.6,
+# equally wrong either way. Every level here is measured on the chip rather than
+# in the model, and re-measured after anything that changes what a voice
+# carries: this was swept five times, and the first four answers were wrong
+# because the voices were not yet carrying what they carry now -- the last one
+# because most of the drum strikes were not sounding at all.
+CH_VOL = [6, 5, 4, 7]
+WAVE_NAMES = ["SYNTH_WAVE_PULSE12", "SYNTH_WAVE_PULSE25",
+              "SYNTH_WAVE_TRIANGLE", "SYNTH_WAVE_PULSE50", "SYNTH_WAVE_NOISE"]
+WAVE_NOISE = 4
 
 BASE_MIDI = 53
 MIN_INDEX = 0
 MAX_INDEX = (7 + 2) * 12 + 11
-# Any note byte will do for the noise voice -- the synth ignores pitch when the
-# waveform is the noise generator -- but it must be >= 2 to read as a key-on.
-DRUM_NOTE = 26
+# The note the percussion voice is struck at, and it is not arbitrary any more:
+# the noise waveform is a slice of the 2A03's shift register at two samples per
+# bit, so the note picks the rate that sequence is clocked at, which is what the
+# NES does with its sixteen periods. Index 10 is semitone 10 of octave -2, which
+# plays the table at 0.446 samples per output sample -- 9825 bits per second.
+# Measured on the chip, not in the model, and the two disagree: the offline
+# model picks 9.9 kbit/s and the SCSP picks 15.6, because the chip interpolates
+# between table samples and that darkens the result further. Index 18 is
+# semitone 6 of octave -1, which is 15,592 bits per second. Recording six rates
+# and scoring each against the NES original over 1.5-15 kHz: 0.149 here, against
+# 0.179 either side of it and 0.49 for the chip's own noise generator.
+DRUM_NOTE = 20
 
 
 def read_midi(path):
@@ -127,14 +163,26 @@ def read_midi(path):
 
 
 def grid_rows(division, events, grid, drums):
-    """Per row: the set of sounding pitches, and whether a drum was struck."""
+    """Per row: what each MIDI channel is sounding, and whether a drum was hit.
+
+    Kept per channel rather than merged into one set, because which part a note
+    belongs to is information the merge throws away and the octave fold needs:
+    a bass pedalling on G3 under a melody on G4 is two parts an octave apart,
+    not one part doubled.
+    """
     ticks_per_row = max(1, (division * 4) // grid)
-    total = (max(e[0] for e in events) // ticks_per_row) + 1
-    tonal, hits = [], []
-    live, active = {}, set()
+    # Round to the nearest row rather than the one a note starts inside. A hit
+    # one tick early -- which is how this sequence writes some of its 32nd-note
+    # drum figures, at tick 14 of a 15-tick row -- otherwise falls back onto the
+    # row before it and lands on top of the hit already there, so a fast double
+    # is heard as a single strike, and only sometimes.
+    half = ticks_per_row // 2
+    total = ((max(e[0] for e in events) + half) // ticks_per_row) + 1
+    parts, hits = [], []
+    live, active = {}, {}
     idx = 0
     for row in range(total):
-        limit = (row + 1) * ticks_per_row
+        limit = (row + 1) * ticks_per_row - half
         hit = False
         while idx < len(events) and events[idx][0] < limit:
             _, pitch, on, chan = events[idx]
@@ -144,15 +192,23 @@ def grid_rows(division, events, grid, drums):
                     hit = True
                 continue
             if on:
-                active.add(pitch)
-                live[pitch] = live.get(pitch, 0) + 1
+                active.setdefault(chan, set()).add(pitch)
+                live[(chan, pitch)] = live.get((chan, pitch), 0) + 1
             else:
-                live[pitch] = live.get(pitch, 0) - 1
-                if live[pitch] <= 0:
-                    active.discard(pitch)
-        tonal.append(set(active))
+                live[(chan, pitch)] = live.get((chan, pitch), 0) - 1
+                if live[(chan, pitch)] <= 0:
+                    active.get(chan, set()).discard(pitch)
+        parts.append({c: set(p) for c, p in active.items() if p})
         hits.append(hit)
-    return tonal, hits
+    return parts, hits
+
+
+def sounding(parts_row):
+    """Every pitch in a row, whichever part it came from."""
+    out = set()
+    for pitches in parts_row.values():
+        out |= pitches
+    return out
 
 
 def assign(pitches, slots):
@@ -172,45 +228,138 @@ def assign(pitches, slots):
     return picks[:slots]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("midi")
-    ap.add_argument("out")
-    ap.add_argument("--name", default="")
-    ap.add_argument("--source", default="")
-    ap.add_argument("--grid", type=int, default=16, help="notes per whole note")
-    ap.add_argument("--speed", type=int, default=0,
-                    help="whole V-blanks per row; 0 derives it from the tempo")
-    ap.add_argument("--max-rows", type=int, default=0, help="0 = whole piece")
-    ap.add_argument("--no-drums", action="store_true",
-                    help="drop MIDI channel 10 instead of playing it as noise")
-    args = ap.parse_args()
+def fold_octaves(pitches, mode):
+    """Collapse exact octave doublings to one note, keeping the named member.
 
-    division, tempo, events = read_midi(args.midi)
+    A pitch and the same pitch an octave away are one line played twice, and on
+    three monophonic voices the second copy costs a whole part. The NES original
+    of the Shadowgate entryway theme plays its bass line once, at G3; the fan
+    sequence of it doubles every bass note an octave below, which is where our
+    render put most of its energy and the original has almost none.
+
+    Called with one MIDI channel's notes, never with a whole row merged. Two
+    parts an octave apart are not a doubling, and folding across them eats the
+    lower one: that tune's bass pedals on G3 under a melody that sits on G4, so
+    a merged fold deleted the bass wherever the two lined up and left the melody
+    as the lowest note in the row -- which then went to the bass voice, moving
+    the tune onto the triangle and back several times a bar.
+    """
+    if mode == "off" or len(pitches) < 2:
+        return pitches
+    keep = set(pitches)
+    for p in pitches:
+        other = p + 12 if mode == "up" else p - 12
+        if other in pitches:
+            keep.discard(p)
+    return keep
+
+
+def plan_parts(parts, slots):
+    """Which source part each voice should follow, or None to reduce by pitch.
+
+    One voice per part is what an arranger does, and it is the only reduction
+    that keeps a line on the same voice from one row to the next. Reducing by
+    pitch order instead re-decides every row, so two parts that cross -- or a
+    melody and its own delayed echo, which cross constantly -- get swapped
+    between voices several times a bar. That is what the Shadowgate sequence
+    does: its second pulse part is the first delayed by three sixteenths, and
+    taking the higher of the two each row made the lead hop between the line and
+    its echo.
+
+    It only applies when the parts really are lines. A part sounding two notes
+    at once is a reduction problem in itself, and a piece with more parts than
+    voices has to drop one; both keep the pitch-order rule. Call after folding
+    octaves, since that is what makes an octave-doubled bass monophonic.
+    """
+    heard = {}
+    for row in parts:
+        for chan, pitches in row.items():
+            if len(pitches) > 1:
+                return None
+            heard.setdefault(chan, []).extend(pitches)
+    heard = {c: v for c, v in heard.items() if v}
+    if not heard or len(heard) > slots:
+        return None
+    median = {c: sorted(v)[len(v) // 2] for c, v in heard.items()}
+    # The lowest part takes the bass voice; the rest fill the melodic voices
+    # from the top down. Parts of equal register are ordered by channel, which
+    # is the order a sequence writes its lead in before its answering line.
+    ranked = sorted(median, key=lambda c: (median[c], c))
+    lanes = [ranked[0]] + sorted(ranked[1:], key=lambda c: (-median[c], c))
+    return (lanes + [None] * slots)[:slots]
+
+
+def echo_delay(parts, lead, answer, max_shift=16):
+    """The row delay at which one part is another repeated, or None.
+
+    Two melodic parts can be two instruments or one instrument heard twice. The
+    NES answers a pulse line with the same line delayed, played on its other
+    pulse channel at the same duty, and a recording of the entryway theme
+    measures both as 50% squares -- h2 0.14 / h3 0.31 against the square's
+    0.00 / 0.33, where a 25% pulse would show h2 0.71. Giving the answer a duty
+    of its own turns an echo into a second instrument shadowing the first, which
+    is heard as a chorus on the lead rather than as a repeat of it.
+    """
+    a = [max(r[lead]) if r.get(lead) else None for r in parts]
+    b = [max(r[answer]) if r.get(answer) else None for r in parts]
+    for k in range(1, max_shift + 1):
+        pairs = [(a[i - k], b[i]) for i in range(k, len(b))]
+        pairs = [q for q in pairs if q != (None, None)]
+        if len(pairs) >= 16 and all(x == y for x, y in pairs):
+            return k
+    return None
+
+
+def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
+            bpm_override=0.0, fold="off"):
+    """Run the whole reduction and return everything both callers need.
+
+    The offline preview renders from this, and the build emits C from it, so
+    what is heard in a second is what the disc will play. They used to each
+    walk the events themselves, which is a drift the preview cannot report.
+    """
+    division, tempo, events = read_midi(midi)
     if not events:
         raise SystemExit("no notes found")
 
-    has_drums = (not args.no_drums
+    has_drums = (not no_drums
                  and any(e[3] == DRUM_MIDI_CHANNEL and e[2] for e in events))
     tonal_slots = CHANNELS - 1 if has_drums else CHANNELS
     ch_wave = CH_WAVE_DRUMS if has_drums else CH_WAVE_TONAL
 
-    bpm = 60000000.0 / tempo
-    frames = (60.0 / bpm) * (4.0 / args.grid) * 60.0
-    if args.speed:
-        speed, frac = args.speed, 0
+    bpm = bpm_override if bpm_override > 0 else 60000000.0 / tempo
+    frames = (60.0 / bpm) * (4.0 / grid) * 60.0
+    if speed_arg:
+        speed, frac = speed_arg, 0
     else:
         speed = max(1, int(frames))
         frac = int(round((frames - speed) * 256))
         if frac > 255:
             speed, frac = speed + 1, 0
 
-    tonal, hits = grid_rows(division, events, args.grid, has_drums)
-    if args.max_rows:
-        tonal, hits = tonal[:args.max_rows], hits[:args.max_rows]
-    while len(tonal) % ROWS_PER_PATTERN:
-        tonal.append(set())
+    parts, hits = grid_rows(division, events, grid, has_drums)
+    parts = [{c: fold_octaves(p, fold) for c, p in row.items()} for row in parts]
+    if max_rows:
+        parts, hits = parts[:max_rows], hits[:max_rows]
+    while len(parts) % ROWS_PER_PATTERN:
+        parts.append({})
         hits.append(False)
+    lanes = plan_parts(parts, tonal_slots)
+    tonal = [sounding(row) for row in parts]
+
+    # A part that is another part repeated is the same instrument heard twice,
+    # so it takes that instrument's waveform rather than one of its own.
+    ch_wave, echoes = list(ch_wave), []
+    if lanes:
+        for j in range(2, tonal_slots):
+            for i in range(1, j):
+                if lanes[i] is None or lanes[j] is None:
+                    continue
+                delay = echo_delay(parts, lanes[i], lanes[j])
+                if delay:
+                    ch_wave[j] = ch_wave[i]
+                    echoes.append((lanes[j], lanes[i], delay))
+                    break
 
     played = [p for r in tonal for p in r]
     lowest = min(played) if played else BASE_MIDI
@@ -224,10 +373,11 @@ def main():
     cells = []
     previous = [None] * CHANNELS
     thick = 0
-    for pitches, hit in zip(tonal, hits):
+    for row, pitches, hit in zip(parts, tonal, hits):
         if len(pitches) > tonal_slots:
             thick += 1
-        picked = assign(pitches, tonal_slots)
+        picked = ([max(row[c]) if c is not None and row.get(c) else None for c in lanes]
+                  if lanes else assign(pitches, tonal_slots))
         row = []
         for ch in range(tonal_slots):
             pitch = picked[ch]
@@ -245,6 +395,50 @@ def main():
             row.append((DRUM_NOTE, (ch_wave[last] << 4) | CH_VOL[last])
                        if hit else (0, 0))
         cells.append(row)
+
+    return {"cells": cells, "speed": speed, "frac": frac, "bpm": bpm,
+            "frames": frames,
+            "has_drums": has_drums, "tonal_slots": tonal_slots,
+            "lanes": lanes, "echoes": echoes,
+            "ch_wave": ch_wave, "shift": shift, "thick": thick}
+
+
+def add_shared_arguments(ap):
+    """The options that change the conversion, so both entry points take them."""
+    ap.add_argument("--grid", type=int, default=16, help="notes per whole note")
+    ap.add_argument("--bpm", type=float, default=0.0,
+                    help="override the file's tempo; 0 uses what it declares")
+    ap.add_argument("--max-rows", type=int, default=0, help="0 = whole piece")
+    ap.add_argument("--no-drums", action="store_true",
+                    help="drop MIDI channel 10 instead of playing it as noise")
+    ap.add_argument("--fold-octaves", choices=("off", "up", "down"), default="off",
+                    help="collapse exact octave doublings, keeping the upper "
+                         "member (up) or the lower (down)")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("midi")
+    ap.add_argument("out")
+    ap.add_argument("--name", default="")
+    ap.add_argument("--source", default="")
+    ap.add_argument("--speed", type=int, default=0,
+                    help="whole V-blanks per row; 0 derives it from the tempo")
+    add_shared_arguments(ap)
+    args = ap.parse_args()
+
+    song = convert(args.midi, args.grid, args.speed, args.max_rows,
+                   args.no_drums, args.bpm, args.fold_octaves)
+    cells = song["cells"]
+    speed, frac, bpm = song["speed"], song["frac"], song["bpm"]
+    has_drums, ch_wave, shift = song["has_drums"], song["ch_wave"], song["shift"]
+    reduction = ("one voice per part, following MIDI channels %s"
+                 % ", ".join(str(c) for c in song["lanes"] if c is not None)
+                 if song["lanes"] else
+                 "outer voices by pitch at each row, the parts not being single lines")
+    for answer, lead, delay in song["echoes"]:
+        reduction += ("; channel %d is channel %d repeated %d rows later and takes "
+                      "its waveform" % (answer, lead, delay))
 
     patterns, order, seen = [], [], {}
     for i in range(0, len(cells), ROWS_PER_PATTERN):
@@ -266,7 +460,10 @@ def main():
             body.append("    " + " ".join("{ %3d, 0x%02X }," % (a, b) for a, b in row))
 
     out = pathlib.Path(args.out)
+    command = " ".join(["tools/assets/mid2pat.py"]
+                       + [a if " " not in a else '"%s"' % a for a in sys.argv[1:]])
     fields = {
+        "command": command,
         "name": args.name or pathlib.Path(args.midi).stem,
         "source": args.source,
         "patterns": len(patterns),
@@ -276,6 +473,7 @@ def main():
         "frac": frac,
         "shift": shift,
         "grid": args.grid,
+        "reduction": reduction,
         "cells": "\n".join(body),
         "order": ",\n    ".join(", ".join("%d" % o for o in order[i:i + 16])
                                 for i in range(0, len(order), 16)),
@@ -290,10 +488,16 @@ def main():
     size = len(patterns) * ROWS_PER_PATTERN * CHANNELS * 2 + len(order)
     print("rows=%d patterns=%d (deduped from %d)" % (len(cells), len(patterns), len(order)))
     print("tempo=%.1f BPM -> %.3f frames/row -> speed=%d + %d/256 -> %.0f s total"
-          % (bpm, frames, speed, frac, len(cells) * (speed + frac / 256.0) / 60.0))
+          % (bpm, song["frames"], speed, frac,
+             len(cells) * (speed + frac / 256.0) / 60.0))
     print("drums=%s  tonal voices=%d  transpose=%+d semitones"
-          % ("noise voice" if has_drums else "none", tonal_slots, shift))
-    print("rows with more tonal parts than channels: %d of %d" % (thick, len(cells)))
+          % ("noise voice" if has_drums else "none", song["tonal_slots"], shift))
+    print("reduction=%s" % reduction)
+    for answer, lead, delay in song["echoes"]:
+        print("MIDI channel %d is channel %d repeated %d rows later: same instrument"
+              % (answer, lead, delay))
+    print("rows with more tonal parts than channels: %d of %d"
+          % (song["thick"], len(cells)))
     print("pattern data = %d bytes" % size)
     print("wrote %s and %s" % (out, out.with_suffix(".h")))
     return 0
@@ -351,11 +555,13 @@ const TrackerSong *music_synth_song(void);
 
 TEMPLATE = '''/*----------------------
  | music_synth_data.c
- | Description: %(name)s, converted from MIDI by tools/assets/mid2pat.py --
- |   do not hand-edit, re-run the converter.
+ | Description: %(name)s, converted from MIDI -- do not hand-edit, re-run the
+ |   converter. The settings are not guessable from the result, so the exact
+ |   command is here:
+ |     %(command)s
  |   Credit: %(source)s
- |   Reduced to %(channels)d monophonic voices on a 1/%(grid)d note grid, keeping the
- |   outer parts at each row, and transposed %(shift)+d semitones so the lowest note
+ |   Reduced to %(channels)d monophonic voices on a 1/%(grid)d note grid --
+ |   %(reduction)s -- and transposed %(shift)+d semitones so the lowest note
  |   is representable. Identical patterns are collapsed and referenced from the
  |   order list, which is where most of the size saving is.
  | Author: suinevere

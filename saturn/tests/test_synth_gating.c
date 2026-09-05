@@ -10,6 +10,7 @@
      gcc -O2 -I saturn/src -I saturn/src/sound -o /tmp/t_gate \
          saturn/tests/test_synth_gating.c saturn/src/sound/synth.c \
          saturn/src/sound/scsp.c saturn/src/sound/tracker.c \
+         saturn/src/sound/synth_waves.c \
          saturn/src/sound/music_synth_data.c && /tmp/t_gate
 */
 #include "../src/sound/synth.h"

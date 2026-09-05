@@ -156,6 +156,23 @@ void controller_tick(void);
 int controller_fired(DevAction a, int dir);
 
 /*----------------------
+ | controller_any_fired
+ | Description: Whether any device this module reads produced anything at all this
+ |   frame -- a mouse button, the mouse's Blue button, a gun trigger on screen or
+ |   off it, a keyboard key already fed in. What a "press any key" prompt needs,
+ |   and deliberately not the same question as any one action: a prompt that only
+ |   accepts the four buttons someone thought of is a prompt that strands whoever
+ |   is holding something else. The pad is not in here -- callers pair this with
+ |   g_pad->AnyPressed(), which already covers all thirteen of its buttons.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: nonzero if anything fired
+ ----------------------*/
+int controller_any_fired(void);
+
+/*----------------------
  | controller_kind
  | Description: The DevKind on `port`, or DEV_NONE when that port is empty,
  |   unrecognised, or reporting the wedged id 0x00.
@@ -231,6 +248,18 @@ void controller_feed_key(SaturnKeyEvent ke);
 void controller_pointer_consume(void);
 
 /*----------------------
+ | controller_pointer_flush
+ | Description: Discards a pending pointer edge and this frame's action edges, for
+ |   a screen that would otherwise inherit the click that opened it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void controller_pointer_flush(void);
+
+/*----------------------
  | controller_twin_set
  | Description: Turns the Twin Stick profile on or off. A Twin Stick reports the
  |   same id 0x02 as a control pad and cannot be told apart from one, so this is
@@ -278,6 +307,110 @@ void controller_mouse_mode_set(int on);
  | Returns: nonzero when a stick or D-pad is driving the cursor
  ----------------------*/
 int controller_mouse_mode_get(void);
+
+/*----------------------
+ | CSRC_DPAD / CSRC_STICK / CSRC_N
+ | Description: Which input drives the cursor while Mouse Mode is on. The two
+ |   values are what they read from -- the digital direction bits, or an analogue
+ |   axis pair -- not what they are called: a 3D Control Pad calls its axes the
+ |   Analogue Stick and a Mission Stick calls the same reading its Left Stick, so
+ |   the *names* come from controller_cursor_src_name and differ per device.
+ | Author: suinevere
+ ----------------------*/
+enum { CSRC_DPAD = 0, CSRC_STICK, CSRC_N };
+
+/*----------------------
+ | controller_cursor_src_count
+ | Description: How many cursor sources device `k` offers: 0 when it has no cursor
+ |   of its own to steer, 1 when it has exactly one (show it, do not offer to
+ |   change it), 2 when the player can pick.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the device kind
+ | Returns: 0, 1 or 2
+ ----------------------*/
+int controller_cursor_src_count(DevKind k);
+
+/*----------------------
+ | controller_cursor_src_name
+ | Description: What device `k` calls cursor source `src` -- "D-Pad" and
+ |   "Analogue Stick" on a 3D Control Pad, "D-Pad" and "Left Stick" on a Mission
+ |   Stick, "Left Stick" alone on a Twin Stick. Naming the reading rather than the
+ |   register is the whole point: a player looking for a stick on the box should
+ |   find the same word in the menu.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the device kind; src -- CSRC_DPAD or CSRC_STICK
+ | Returns: the display string, or "" when that device has no such source
+ ----------------------*/
+const char *controller_cursor_src_name(DevKind k, int src);
+
+/*----------------------
+ | controller_cursor_src_set / controller_cursor_src_get
+ | Description: Set or read which source drives the cursor for device `k`.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the device kind; src -- CSRC_DPAD or CSRC_STICK
+ | Returns: get returns the current source
+ ----------------------*/
+void controller_cursor_src_set(DevKind k, int src);
+int  controller_cursor_src_get(DevKind k);
+
+/*----------------------
+ | controller_dpad_is_cursor
+ | Description: Whether the D-pad is currently steering the cursor rather than
+ |   stepping a selection -- Mouse Mode on, and some attached device pointed at its
+ |   digital directions. Gameplay reads this through pad_fired, which refuses the
+ |   four direction buttons while it is true, so the D-pad does one job at a time.
+ |   Menus are deliberately outside it: they read the pad directly and still need
+ |   the D-pad to navigate.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: nonzero while the D-pad belongs to the cursor
+ ----------------------*/
+int controller_dpad_is_cursor(void);
+
+/*----------------------
+ | CTL_MOUSE_SPEED_N
+ | Description: How many mouse speeds there are to step through.
+ | Author: suinevere
+ ----------------------*/
+#define CTL_MOUSE_SPEED_N 5
+
+/*----------------------
+ | controller_mouse_speed_set / controller_mouse_speed_get
+ | Description: Set or read how far the cursor travels per unit the mouse reports,
+ |   as an index into CTL_MOUSE_SPEED_N steps. A Saturn mouse counts far finer than
+ |   a 320-pixel screen wants, so this is a divisor and a low index is slow.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: n -- 0 to CTL_MOUSE_SPEED_N - 1, clamped
+ | Returns: get returns the current index
+ ----------------------*/
+void controller_mouse_speed_set(int n);
+int  controller_mouse_speed_get(void);
+
+/*----------------------
+ | controller_mouse_raw
+ | Description: The first attached mouse's raw SMPC report bytes, and the x/y
+ |   fields SRL reads out of it. Exists because SGL's peripheral decoder is only in
+ |   the precompiled LIBSGL.A: nothing in the headers says whether a mouse's
+ |   movement lands in PerPoint's x/y or stays in the report's own bytes, and two
+ |   guesses at it have now been wrong. Shown on the mouse's Mouse Mode sheet so
+ |   one run settles it.
+ | Author: suinevere
+ | Dependencies: SRL (Input::Management)
+ | Globals: N/A
+ | Params: b -- receives report bytes 2 to 7; xy -- receives PerPoint's x and y
+ | Returns: nonzero if a mouse was found
+ ----------------------*/
+int controller_mouse_raw(int *b, int *xy);
 
 /*----------------------
  | controller_wedged

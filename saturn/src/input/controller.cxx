@@ -51,15 +51,79 @@ static const int AXIS_DELAY = 30;
 static const int AXIS_RATE  = 4;
 
 /*----------------------
- | CURSOR_STEP / CURSOR_DIV
- | Description: Pixels the cursor moves per frame at full stick deflection, and
- |   the divisor applied to a mouse's reported delta. The mouse divisor exists
- |   because the Saturn mouse reports a raw count per frame that is far finer than
- |   a 320-pixel screen wants.
+ | CURSOR_STEP_MIN / CURSOR_STEP_MAX / CURSOR_RAMP
+ | Description: How far the cursor moves per frame, and how quickly a held
+ |   direction works its way from the first to the second. Starting at one pixel is
+ |   what makes a digital direction usable for pointing at a character cell at all;
+ |   without the ramp above it, crossing the screen takes five seconds. CURSOR_RAMP
+ |   is frames of holding per extra pixel.
  | Author: suinevere
  ----------------------*/
-static const int CURSOR_STEP = 4;
-static const int CURSOR_DIV  = 2;
+static const int CURSOR_STEP_MIN = 1;
+static const int CURSOR_STEP_MAX = 7;
+static const int CURSOR_RAMP     = 6;
+
+/*----------------------
+ | MOUSE_ACCEL_KNEE
+ | Description: The reported distance at which a mouse's own acceleration doubles
+ |   its travel. Below it the cursor tracks the hand one-to-one so a cell can be
+ |   picked; above it a flick crosses the screen. Larger is less acceleration.
+ | Author: suinevere
+ ----------------------*/
+static const int MOUSE_ACCEL_KNEE = 48;
+
+/*----------------------
+ | MOUSE_TRAVEL_MAX
+ | Description: The most the cursor moves in one frame however hard the mouse is
+ |   thrown. Without a bound the acceleration curve turns a fast flick into half
+ |   the screen in a sixtieth of a second, which does not read as speed -- it reads
+ |   as the cursor jumping.
+ | Author: suinevere
+ ----------------------*/
+static const int MOUSE_TRAVEL_MAX = 40;
+
+/*----------------------
+ | g_mouse_last / g_mouse_seen / MOUSE_JUMP_MAX
+ | Description: The previous frame's raw mouse reading per port, and whether one
+ |   has been taken yet. The Saturn mouse reports a running total rather than a
+ |   per-frame delta -- the number stays where the hand left it -- so the movement
+ |   this frame is the difference against last frame, and a reading that never
+ |   changes is a hand that is not moving. Reading the raw value as the delta is
+ |   what made the cursor slide on until the mouse was carried back to where it
+ |   started; taking that difference without minding the wrap is what made it snap
+ |   to an edge. See mouse_delta.
+ | Author: suinevere
+ ----------------------*/
+static int16_t g_mouse_last[PORT_N][2];
+static uint8_t g_mouse_seen[PORT_N];
+
+/*----------------------
+ | mouse_delta
+ | Description: This frame's movement on one axis: the difference against last
+ |   frame, read back into a signed byte. The running total the mouse reports
+ |   counts in a byte and wraps, so a plain subtraction across the wrap reads -255
+ |   for a movement of one and threw the cursor at whichever edge it was nearest --
+ |   the snap to the top or bottom of a box. Masking first is right whatever width
+ |   the counter really is, and bounds a single frame to +-127 as a side effect,
+ |   which is far more than a hand covers in a sixtieth of a second.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: now -- this frame's reading; last -- the previous one
+ | Returns: the signed movement
+ ----------------------*/
+static int mouse_delta(int now, int last) {
+    int d = (now - last) & 0xFF;
+    return d > 127 ? d - 256 : d;
+}
+
+/*----------------------
+ | g_dpad_held
+ | Description: Frames the current digital direction has been held, which is what
+ |   the cursor's ramp is measured in. Reset the moment nothing is held.
+ | Author: suinevere
+ ----------------------*/
+static int g_dpad_held = 0;
 
 /*----------------------
  | TWIN_TRIG_L / TWIN_TRIG_R / TWIN_TOP_L / TWIN_TOP_R
@@ -73,6 +137,66 @@ static const Button TWIN_TRIG_L = Button::L;
 static const Button TWIN_TRIG_R = Button::R;
 static const Button TWIN_TOP_L  = Button::A;
 static const Button TWIN_TOP_R  = Button::C;
+
+/*----------------------
+ | CSRC_NAME
+ | Description: What each device calls its two cursor sources, indexed
+ |   [DevKind][CSRC_*]. An empty string means that device has no such source: a
+ |   Twin Stick has no D-pad to speak of -- the digital directions *are* its left
+ |   stick -- and a control pad has no axis at all.
+ | Author: suinevere
+ ----------------------*/
+static const char *const CSRC_NAME[DEV_KIND_N][CSRC_N] = {
+    { "",           ""               },  /* DEV_NONE   */
+    { "D-Pad",      ""               },  /* DEV_PAD    */
+    { "D-Pad",      "Left Stick"     },  /* DEV_FLIGHT */
+    { "D-Pad",      "Analogue Stick" },  /* DEV_ANALOG */
+    { "",           ""               },  /* DEV_MOUSE  */
+    { "Left Stick", ""               },  /* DEV_TWIN   */
+    { "",           ""               },  /* DEV_GUN    */
+    { "",           ""               },  /* DEV_KBD    */
+};
+
+/*----------------------
+ | g_cursor_src
+ | Description: The chosen cursor source per device. Defaulted to the stick where
+ |   a device has one, because that is what the workbook's Mouse Mode sheet names
+ |   for the two devices that do.
+ | Author: suinevere
+ ----------------------*/
+static uint8_t g_cursor_src[DEV_KIND_N] = {
+    CSRC_DPAD,  /* DEV_NONE   */
+    CSRC_DPAD,  /* DEV_PAD    */
+    CSRC_STICK, /* DEV_FLIGHT */
+    CSRC_STICK, /* DEV_ANALOG */
+    CSRC_DPAD,  /* DEV_MOUSE  */
+    CSRC_DPAD,  /* DEV_TWIN   */
+    CSRC_DPAD,  /* DEV_GUN    */
+    CSRC_DPAD,  /* DEV_KBD    */
+};
+
+/*----------------------
+ | MOUSE_GAIN / MOUSE_GAIN_UNIT / g_mouse_speed
+ | Description: How far the cursor travels per count the mouse reports, as a
+ |   fraction over MOUSE_GAIN_UNIT, and the step in force. These were divisors
+ |   while the reading was being taken as a running total, where the numbers were
+ |   enormous; against a real per-frame delta the same divisors left the cursor
+ |   barely able to cross the screen, so they are gains now.
+ | Author: suinevere
+ ----------------------*/
+static const int MOUSE_GAIN[CTL_MOUSE_SPEED_N] = { 2, 3, 4, 6, 9 };
+static const int MOUSE_GAIN_UNIT = 4;
+static int g_mouse_speed = 2;
+
+/*----------------------
+ | g_mouse_rem
+ | Description: The sub-pixel remainder each axis is carrying. Without it the
+ |   gain's integer division throws away every movement too small to make a whole
+ |   pixel, which at any gain below 1 is most of a slow hand -- the cursor reads as
+ |   having no resolution rather than as being slow.
+ | Author: suinevere
+ ----------------------*/
+static int g_mouse_rem[2];
 
 /*----------------------
  | g_fired
@@ -295,6 +419,53 @@ static int axis_dir(int v) {
 }
 
 /*----------------------
+ | axis_travel
+ | Description: How far the cursor should move this frame for one axis reading:
+ |   nothing inside the dead zone, then proportional to deflection up to
+ |   CURSOR_STEP_MAX. This is where an analogue stick stops behaving like a
+ |   D-pad -- axis_dir throws the magnitude away, which is right for a scroll edge
+ |   and wrong for a cursor.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: v -- the raw axis value, 0 to 255
+ | Returns: signed pixels for this frame
+ ----------------------*/
+static int axis_travel(int v) {
+    int d = v - AXIS_MID;
+    int a = d < 0 ? -d : d;
+    if (a <= AXIS_DEAD) return 0;
+    a -= AXIS_DEAD;
+    int span = 128 - AXIS_DEAD;
+    int step = CURSOR_STEP_MIN + (a * (CURSOR_STEP_MAX - CURSOR_STEP_MIN)) / span;
+    if (step > CURSOR_STEP_MAX) step = CURSOR_STEP_MAX;
+    return d < 0 ? -step : step;
+}
+
+/*----------------------
+ | mouse_travel
+ | Description: Applies the mouse's acceleration curve and speed gain to one
+ |   reported axis, carrying the sub-pixel remainder so nothing is lost to the
+ |   division. The quadratic term is what makes a slow hand precise and a fast one
+ |   quick; without it the only choice is one or the other.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_mouse_speed, g_mouse_rem
+ | Params: d -- the reported movement on one axis; axis -- 0 for X, 1 for Y
+ | Returns: whole pixels to move this frame
+ ----------------------*/
+static int mouse_travel(int d, int axis) {
+    int a = d < 0 ? -d : d;
+    int scaled = d + (d * a) / MOUSE_ACCEL_KNEE;
+    int num = scaled * MOUSE_GAIN[g_mouse_speed] + g_mouse_rem[axis];
+    int px  = num / MOUSE_GAIN_UNIT;
+    g_mouse_rem[axis] = num - px * MOUSE_GAIN_UNIT;
+    if (px >  MOUSE_TRAVEL_MAX) { px =  MOUSE_TRAVEL_MAX; g_mouse_rem[axis] = 0; }
+    if (px < -MOUSE_TRAVEL_MAX) { px = -MOUSE_TRAVEL_MAX; g_mouse_rem[axis] = 0; }
+    return px;
+}
+
+/*----------------------
  | axis_step
  | Description: Advances one axis's repeat state and reports whether it fires this
  |   frame -- once on the frame it leaves the dead zone, then again on each repeat
@@ -357,6 +528,8 @@ static void pointer_fire(int button) {
  |   actions by delegating to the existing remappable mapping -- face_button for
  |   the four typing actions, chord_fired for recall and the three scrolling rows
  |   -- so the pad has exactly one mapping and the Controls page still owns it.
+ |   Reads edges rather than repeat state, because this runs on screens that never
+ |   advance the repeat timers.
  | Author: suinevere
  | Dependencies: input.h
  | Globals: g_pad
@@ -368,11 +541,19 @@ static void read_pad_family(void) {
 
     if (g_pad->WasPressed(Button::START)) mark(DA_MENU, 0);
 
-    if (pad_fired(face_button(FA_TYPE)))   mark(DA_LETTER, 0);
-    if (pad_fired(face_button(FA_BACK)))   mark(DA_BACK,   0);
-    if (pad_fired(face_button(FA_SPACE)))  mark(DA_SPACE,  0);
-    if (pad_fired(face_button(FA_ACCEPT))) mark(DA_ACCEPT, 0);
+    /* Edges, not pad_fired: this runs on screens that never call
+       pad_repeat_update -- every menu, and the title -- where pad_fired reports
+       whatever the last screen that did call it left in the repeat table. A flag
+       stuck true there makes controller_any_fired true on every frame forever,
+       which is a title screen that cannot be waited on. An edge needs no timer. */
+    if (g_pad->WasPressed(face_button(FA_TYPE)))   mark(DA_LETTER, 0);
+    if (g_pad->WasPressed(face_button(FA_BACK)))   mark(DA_BACK,   0);
+    if (g_pad->WasPressed(face_button(FA_SPACE)))  mark(DA_SPACE,  0);
+    if (g_pad->WasPressed(face_button(FA_ACCEPT))) mark(DA_ACCEPT, 0);
 
+    /* The chords have no edge-only form, so they are gated on having been ticked
+       this frame instead. */
+    if (!chord_ticked()) return;
     for (int d = -1; d <= 1; d += 2) {
         if (chord_fired(CA_RECALL,  d)) mark(DA_RECALL, d);
         if (chord_fired(CA_LINE,    d)) mark(DA_SCROLL, d);
@@ -429,18 +610,55 @@ static void read_sticks(int port, DevKind kind) {
         if (sx) mark(DA_PAGE,    sx);
     }
 
-    if (g_mouse_mode && (dx || dy)) {
-        g_ptr.x = (int16_t) (g_ptr.x + dx * CURSOR_STEP);
-        g_ptr.y = (int16_t) (g_ptr.y + dy * CURSOR_STEP);
-        clamp_cursor();
+    if (g_mouse_mode && g_cursor_src[kind] == CSRC_STICK) {
+        int tx = axis_travel(x);
+        int ty = axis_travel(y);
+        if (tx || ty) {
+            g_ptr.x = (int16_t) (g_ptr.x + tx);
+            g_ptr.y = (int16_t) (g_ptr.y + ty);
+            clamp_cursor();
+        }
     }
 }
 
 /*----------------------
+ | read_dpad_cursor
+ | Description: Drives the cursor from the D-pad while Mouse Mode is on, which is
+ |   the control pad's and the twin stick's cell on that sheet -- neither reports
+ |   an axis, so neither reaches read_sticks, and without this a pad in Mouse Mode
+ |   shows a cursor that cannot be moved. A held direction accelerates: one pixel a
+ |   frame to begin with, so a cell can be picked at all, working up to
+ |   CURSOR_STEP_MAX so the far corner is still reachable.
+ | Author: suinevere
+ | Dependencies: input.h
+ | Globals: g_pad, g_ptr
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void read_dpad_cursor(void) {
+    if (g_pad == nullptr) return;
+    int dx = g_pad->IsHeld(Button::Right) ? 1 : g_pad->IsHeld(Button::Left) ? -1 : 0;
+    int dy = g_pad->IsHeld(Button::Down)  ? 1 : g_pad->IsHeld(Button::Up)   ? -1 : 0;
+    if (!dx && !dy) { g_dpad_held = 0; return; }
+    int step = CURSOR_STEP_MIN + g_dpad_held / CURSOR_RAMP;
+    if (step > CURSOR_STEP_MAX) step = CURSOR_STEP_MAX;
+    g_dpad_held++;
+    g_ptr.x = (int16_t) (g_ptr.x + dx * step);
+    g_ptr.y = (int16_t) (g_ptr.y + dy * step);
+    clamp_cursor();
+}
+
+/*----------------------
  | read_mouse
- | Description: Accumulates a mouse's relative movement into the cursor and turns
- |   its three buttons into pointer clicks; its Start button is the Static sheet's
- |   "Blue button" and opens the menu.
+ | Description: Moves the cursor by however far the mouse has travelled since last
+ |   frame and turns its three buttons into pointer clicks; its Start button is the
+ |   Static sheet's "Blue button" and opens the menu.
+ |
+ |   Two things about the reading, both measured rather than assumed. It is a
+ |   running total, not a per-frame delta, so the movement is the difference
+ |   against last frame -- taken as a delta it kept pushing the cursor until the
+ |   mouse was carried back to where it started. And Y is added, not subtracted:
+ |   the reported sign already runs the way the screen does.
  | Author: suinevere
  | Dependencies: SRL (Input::Pointer)
  | Globals: g_ptr
@@ -453,12 +671,20 @@ static void read_mouse(int port) {
     if (!m.IsConnected()) return;
 
     SRL::Math::Types::Vector2D d = m.GetPosition();
-    int dx = (int) d.X.As<int16_t>();
-    int dy = (int) d.Y.As<int16_t>();
+    int px = (int) d.X.As<int16_t>();
+    int py = (int) d.Y.As<int16_t>();
+    int dx = 0, dy = 0;
+    if (g_mouse_seen[port]) {
+        dx = mouse_delta(px, (int) g_mouse_last[port][0]);
+        dy = mouse_delta(py, (int) g_mouse_last[port][1]);
+    }
+    g_mouse_last[port][0] = (int16_t) px;
+    g_mouse_last[port][1] = (int16_t) py;
+    g_mouse_seen[port] = 1;
 
     if (dx || dy) {
-        g_ptr.x = (int16_t) (g_ptr.x + dx / CURSOR_DIV);
-        g_ptr.y = (int16_t) (g_ptr.y - dy / CURSOR_DIV);
+        g_ptr.x = (int16_t) (g_ptr.x + mouse_travel(dx, 0));
+        g_ptr.y = (int16_t) (g_ptr.y + mouse_travel(dy, 1));
         clamp_cursor();
     }
 
@@ -497,6 +723,7 @@ static void read_gun(int port) {
     if (!off) {
         g_ptr.x = (int16_t) px;
         g_ptr.y = (int16_t) py;
+        clamp_cursor();
     }
 
     if (!off && g.IsHeld(G::Button::Trigger)) g_ptr.held = 1;
@@ -552,7 +779,10 @@ void controller_tick(void) {
 
     if (saw_pad)  read_pad_family();
     if (saw_twin) read_twin();
-    if (g_mouse_mode && (saw_stick || saw_pad)) g_ptr.valid = 1;
+    if (g_mouse_mode && (saw_stick || saw_pad)) {
+        g_ptr.valid = 1;
+        if (controller_dpad_is_cursor()) read_dpad_cursor();
+    }
 }
 
 /*----------------------
@@ -586,6 +816,49 @@ int controller_fired(DevAction a, int dir) {
 }
 
 /*----------------------
+ | controller_mouse_raw
+ | Description: Copies the first mouse port's report bytes 2 to 7 and the x/y
+ |   PerPoint claims, for the readout on the Mouse Mode sheet.
+ | Author: suinevere
+ | Dependencies: SRL (Input::Management)
+ | Globals: N/A
+ | Params: b -- six ints, report bytes 2..7; xy -- two ints, PerPoint x and y
+ | Returns: 1 if a mouse was found, 0 otherwise
+ ----------------------*/
+int controller_mouse_raw(int *b, int *xy) {
+    for (int p = 0; p < PORT_N; p++) {
+        if (controller_kind(p) != DEV_MOUSE) continue;
+        const uint8_t *raw = (const uint8_t *) SRL::Input::Management::GetRawData(p);
+        if (raw == nullptr) return 0;
+        for (int i = 0; i < 6; i++) b[i] = raw[2 + i];
+        SRL::Input::Pointer m(p);
+        SRL::Math::Types::Vector2D d = m.GetPosition();
+        xy[0] = (int) d.X.As<int16_t>();
+        xy[1] = (int) d.Y.As<int16_t>();
+        return 1;
+    }
+    return 0;
+}
+
+/*----------------------
+ | controller_any_fired
+ | Description: Any action edge this frame, or a pointing device's click. The two
+ |   together are the whole set: an off-screen gun shot marks DA_ACCEPT and sets no
+ |   click, an on-screen one sets a click, and every other device marks an action.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_fired, g_ptr
+ | Params: N/A
+ | Returns: nonzero if anything fired
+ ----------------------*/
+int controller_any_fired(void) {
+    if (g_ptr.valid && g_ptr.hot) return 1;
+    for (int a = 0; a < DA_N; a++)
+        if (g_fired[a][0] || g_fired[a][1] || g_fired[a][2]) return 1;
+    return 0;
+}
+
+/*----------------------
  | controller_pointer
  | Description: Hands back the module's pointer state.
  | Author: suinevere
@@ -595,6 +868,25 @@ int controller_fired(DevAction a, int dir) {
  | Returns: the DevPointer, valid until the next controller_tick
  ----------------------*/
 const DevPointer *controller_pointer(void) { return &g_ptr; }
+
+/*----------------------
+ | controller_pointer_flush
+ | Description: Discards a pending pointer edge. Call where a screen begins and
+ |   would otherwise inherit the click that opened it -- the same debt
+ |   mode_toggle_reset settles for the L+R combo. Without it the click that
+ |   dismissed the title arrives again as the first frame of the menu behind it and
+ |   picks whatever the cursor happens to be over.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_ptr, g_ptr_fallback
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void controller_pointer_flush(void) {
+    g_ptr.hot = 0;
+    g_ptr_fallback = -1;
+    for (int a = 0; a < DA_N; a++) g_fired[a][0] = g_fired[a][1] = g_fired[a][2] = 0;
+}
 
 /*----------------------
  | controller_pointer_consume
@@ -634,6 +926,113 @@ void controller_twin_set(int on) { g_twin = on ? 1 : 0; }
  | Returns: the current setting
  ----------------------*/
 int controller_twin_get(void) { return g_twin; }
+
+/*----------------------
+ | controller_cursor_src_count
+ | Description: Counts the non-empty names device `k` has in CSRC_NAME.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the device kind
+ | Returns: 0, 1 or 2
+ ----------------------*/
+int controller_cursor_src_count(DevKind k) {
+    if (k < 0 || k >= DEV_KIND_N) return 0;
+    int n = 0;
+    for (int i = 0; i < CSRC_N; i++) if (CSRC_NAME[k][i][0] != 0) n++;
+    return n;
+}
+
+/*----------------------
+ | controller_cursor_src_name
+ | Description: Indexes CSRC_NAME.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the device kind; src -- CSRC_DPAD or CSRC_STICK
+ | Returns: the name, or "" when that device has no such source
+ ----------------------*/
+const char *controller_cursor_src_name(DevKind k, int src) {
+    if (k < 0 || k >= DEV_KIND_N || src < 0 || src >= CSRC_N) return "";
+    return CSRC_NAME[k][src];
+}
+
+/*----------------------
+ | controller_cursor_src_set
+ | Description: Stores the cursor source for one device, refusing a source that
+ |   device does not have so a stored value can never name an empty name.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cursor_src
+ | Params: k -- the device kind; src -- CSRC_DPAD or CSRC_STICK
+ | Returns: N/A
+ ----------------------*/
+void controller_cursor_src_set(DevKind k, int src) {
+    if (k < 0 || k >= DEV_KIND_N || src < 0 || src >= CSRC_N) return;
+    if (CSRC_NAME[k][src][0] == 0) return;
+    g_cursor_src[k] = (uint8_t) src;
+}
+
+/*----------------------
+ | controller_cursor_src_get
+ | Description: Reads the cursor source for one device.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cursor_src
+ | Params: k -- the device kind
+ | Returns: CSRC_DPAD or CSRC_STICK
+ ----------------------*/
+int controller_cursor_src_get(DevKind k) {
+    if (k < 0 || k >= DEV_KIND_N) return CSRC_DPAD;
+    return g_cursor_src[k];
+}
+
+/*----------------------
+ | controller_dpad_is_cursor
+ | Description: True while Mouse Mode is on and some attached device is pointed at
+ |   its digital directions -- a control pad always is, having nothing else, and a
+ |   Twin Stick always is, its directions being what it calls the left stick.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_mouse_mode, g_cursor_src
+ | Params: N/A
+ | Returns: nonzero while the D-pad belongs to the cursor
+ ----------------------*/
+int controller_dpad_is_cursor(void) {
+    if (!g_mouse_mode) return 0;
+    for (int p = 0; p < PORT_N; p++) {
+        DevKind k = controller_kind(p);
+        if (controller_cursor_src_count(k) == 0) continue;
+        if (g_cursor_src[k] == CSRC_DPAD) return 1;
+    }
+    return 0;
+}
+
+/*----------------------
+ | controller_mouse_speed_set
+ | Description: Stores the mouse speed step, clamped into range.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_mouse_speed
+ | Params: n -- the step
+ | Returns: N/A
+ ----------------------*/
+void controller_mouse_speed_set(int n) {
+    if (n < 0) n = 0;
+    if (n >= CTL_MOUSE_SPEED_N) n = CTL_MOUSE_SPEED_N - 1;
+    g_mouse_speed = n;
+}
+
+/*----------------------
+ | controller_mouse_speed_get
+ | Description: Reads the mouse speed step.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_mouse_speed
+ | Params: N/A
+ | Returns: the step
+ ----------------------*/
+int controller_mouse_speed_get(void) { return g_mouse_speed; }
 
 /*----------------------
  | controller_mouse_mode_set
@@ -698,6 +1097,9 @@ void controller_init(void) {
     for (int a = 0; a < DA_N; a++) g_fired[a][0] = g_fired[a][1] = g_fired[a][2] = 0;
     for (int p = 0; p < PORT_N; p++) { g_axis[p][0] = AxisRep{0, 0}; g_axis[p][1] = AxisRep{0, 0}; }
     for (int i = 0; i < DEV_HOLD_N; i++) g_hold[i] = HoldRep{0, -1};
+    for (int p = 0; p < PORT_N; p++) { g_mouse_seen[p] = 0; g_mouse_last[p][0] = 0; g_mouse_last[p][1] = 0; }
+    g_mouse_rem[0] = g_mouse_rem[1] = 0;
+    g_dpad_held = 0;
     g_ptr = DevPointer{0, 0, 0, 0,
                        (int16_t) (g_bound_w / 2), (int16_t) (g_bound_h / 2),
                        0, 0, DEV_BTN_LEFT};

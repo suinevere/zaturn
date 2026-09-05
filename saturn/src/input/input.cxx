@@ -9,6 +9,7 @@
  ----------------------*/
 
 #include "input.h"
+#include "controller.h"
 
 /*----------------------
  | g_pad
@@ -228,6 +229,29 @@ struct ChordRep { int dir; int timer; bool fired; };
 static ChordRep g_chordrep[SL_N];
 
 /*----------------------
+ | g_chord_ticked
+ | Description: Whether chord_tick has run since the last time anyone asked. The
+ |   chord state is a per-frame result, and the screens that do not tick it -- every
+ |   menu, and the title -- would otherwise read whatever the last screen that did
+ |   left behind.
+ | Author: suinevere
+ ----------------------*/
+static bool g_chord_ticked = false;
+
+/*----------------------
+ | chord_ticked
+ | Description: Whether chord_tick ran this frame, clearing the flag as it reports
+ |   so each frame answers once. A caller that reads chord_fired without this is
+ |   reading a stale frame's result on any screen that does not tick.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_chord_ticked
+ | Params: N/A
+ | Returns: true if chord_tick has run since the last call
+ ----------------------*/
+bool chord_ticked(void);
+
+/*----------------------
  | chord_tick
  | Description: For each of the SL_N slots, reads slot_raw and compares it to the
  |   slot's stored direction: idle resets the timer and clears fired; a changed
@@ -240,7 +264,14 @@ static ChordRep g_chordrep[SL_N];
  | Params: N/A
  | Returns: N/A
  ----------------------*/
+bool chord_ticked(void) {
+    bool r = g_chord_ticked;
+    g_chord_ticked = false;
+    return r;
+}
+
 void chord_tick(void) {
+    g_chord_ticked = true;
     for (int s = 0; s < SL_N; s++) {
         int d = slot_raw(s);
         ChordRep &r = g_chordrep[s];
@@ -335,16 +366,50 @@ void pad_repeat_update(void) {
 }
 
 /*----------------------
+ | is_direction
+ | Description: Whether `b` is one of the four D-pad directions.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: b -- the button to test
+ | Returns: true for Up, Down, Left or Right
+ ----------------------*/
+static bool is_direction(Button b) {
+    return b == Button::Up || b == Button::Down ||
+           b == Button::Left || b == Button::Right;
+}
+
+/*----------------------
  | pad_fired
  | Description: Looks `b` up in g_padrep; if tracked, returns its repeat-aware
- |   fired flag, otherwise falls back to a plain WasPressed edge.
+ |   fired flag, otherwise falls back to a plain WasPressed edge -- except that the
+ |   four directions report nothing while the D-pad is steering the cursor, so it
+ |   does one job at a time. Menus are unaffected: they read the pad directly, and
+ |   still need the D-pad to navigate.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: g_pad
+ | Params: b -- the button to check
+ | Returns: true if it fired (pressed or repeated) this frame
+ ----------------------*/
+bool pad_fired(Button b) {
+    if (controller_dpad_is_cursor() && is_direction(b)) return false;
+    return pad_fired_raw(b);
+}
+
+/*----------------------
+ | pad_fired_raw
+ | Description: pad_fired without the Mouse Mode gate, for the one screen that
+ |   wants the D-pad whatever the cursor is doing: the map owns the whole display
+ |   and has a crosshair of its own, so a pad in Mouse Mode must still be able to
+ |   drive it.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_pad
  | Params: b -- the button to check
  | Returns: true if it fired (pressed or repeated) this frame
  ----------------------*/
-bool pad_fired(Button b) {
+bool pad_fired_raw(Button b) {
     for (auto &r : g_padrep) if (r.btn == b) return r.fired;
     return g_pad->WasPressed(b);
 }

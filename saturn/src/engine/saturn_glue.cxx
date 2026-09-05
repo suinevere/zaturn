@@ -638,7 +638,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             if (!menu_back) menu_ramp_down();
             else            reveal_owed = false;   // the debt is the menu's now
             int om = options_menu();
-            mode_toggle_reset();
+            mode_toggle_reset(); controller_pointer_flush();
             if (om != OM_SAVE && om != OM_RESTORE) music_resume();
             ensure_typeahead();
             typeahead_scan_screen(g_typeahead_root);
@@ -680,7 +680,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             item_art_hide();
             menu_ramp_down();
             keyboard_controls_page();
-            mode_toggle_reset();
+            mode_toggle_reset(); controller_pointer_flush();
             menu_clear();
             reveal_owed = true;
             continue;
@@ -690,7 +690,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
                 item_art_hide();
                 menu_ramp_down();
                 sound_options_page();
-                mode_toggle_reset();
+                mode_toggle_reset(); controller_pointer_flush();
                 menu_clear();
                 reveal_owed = true;
             }
@@ -740,7 +740,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
                 item_art_hide();
                 menu_ramp_down();
                 map_view_show();
-                mode_toggle_reset();
+                mode_toggle_reset(); controller_pointer_flush();
                 menu_clear();
                 reveal_owed = true;
                 continue;
@@ -753,7 +753,6 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             if (cpanel.action == CP_ACT_SWAP) { cpanel.action = CP_ACT_NONE; panel_swap = true; continue; }
             pad_scroll_update();
             render_console();
-            console_pointer_scroll();
             render_command_panel(cpanel, *room_model_get(), cw);
         } else {
             DictionaryWord* selected; int cw_len;
@@ -763,6 +762,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             render_console();
             render_keyboard(k, selected, cw_len);
         }
+        /* Outside the branch, because both interfaces show the same scroll
+           markers and the same cursor: a mouse does not stop existing because the
+           player is typing. Both run after render_console, which is what places
+           the markers this one hit-tests. */
+        console_pointer_scroll();
+        render_pointer();
         // The frame is composed but not yet pushed, which is exactly what the
         // ramp wants: its own first Synchronize is what carries it to VRAM,
         // under the black the menu left behind. Every other frame just syncs.
@@ -795,13 +800,13 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
       // loop's own render one frame sooner without it.
       if (is_reboot_command(k.input)) {
           confirm_return_to_title("reboot back to the title screen?");
-          mode_toggle_reset();
+          mode_toggle_reset(); controller_pointer_flush();
           k.input_len = 0; k.input[0] = '\0'; k.cursor = 0; k.submitted = 0;
           continue;
       }
       if (is_quit_command(k.input)) {
           confirm_return_to_title("quit back to the title screen?");
-          mode_toggle_reset();
+          mode_toggle_reset(); controller_pointer_flush();
           k.input_len = 0; k.input[0] = '\0'; k.cursor = 0; k.submitted = 0;
           continue;
       }

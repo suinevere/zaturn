@@ -133,8 +133,9 @@ static bool online_cancel_requested(void) {
  ----------------------*/
 static void online_wait_any(void) {
     for (;;) {
-        if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::B) ||
-            g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START)) return;
+        /* Any button on anything, matching menu_wait: four of the pad's thirteen
+           and no other device is not what "any" means. */
+        if (g_pad->AnyPressed() || controller_any_fired()) return;
         if (saturn_keyboard_poll().kind != SATURN_KEY_NONE) return;
         menu_sync();
     }
@@ -427,7 +428,7 @@ void online_mode(void) {
 #ifdef NETBIN
     CommandPanel cpanel; cp_init(&cpanel);
     g_cmd_mode = g_cmd_iface;
-    mode_toggle_reset();
+    mode_toggle_reset(); controller_pointer_flush();
     /* The rose can show this game's real exits, but only the exits: the story
        is the one in .rodata and the game is on the server, so its room contents
        are whatever Zork shipped with and its inventory is a guess. Ask for the
@@ -526,7 +527,7 @@ void online_mode(void) {
             menu_set_service(nullptr, nullptr);
             /* The toggle button can be pressed and released entirely while the
                menu owns the screen -- see mode_toggle_reset in input.h. */
-            mode_toggle_reset();
+            mode_toggle_reset(); controller_pointer_flush();
             menu_clear();
             SRL::Core::Synchronize();
             /* Room text is the parser's own state and the parser is on the
@@ -574,7 +575,7 @@ void online_mode(void) {
         if (cpanel.action == CP_ACT_MAP) {
             cpanel.action = CP_ACT_NONE;
             map_view_show();
-            mode_toggle_reset();
+            mode_toggle_reset(); controller_pointer_flush();
             menu_clear();
             SRL::Core::Synchronize();
             continue;
@@ -608,7 +609,7 @@ void online_mode(void) {
                 // The confirm ran its own poll loop, so the toggle button could
                 // have been pressed and released entirely while it owned the
                 // screen -- see mode_toggle_reset in input.h.
-                mode_toggle_reset();
+                mode_toggle_reset(); controller_pointer_flush();
 #endif
                 online_settle_input();
             } else {
@@ -630,6 +631,7 @@ void online_mode(void) {
 
         render_console();
         console_pointer_scroll();
+        render_pointer();
 #ifdef NETBIN
         if (panel) render_command_panel(cpanel, *netbin_room(), cw);
         else       render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);

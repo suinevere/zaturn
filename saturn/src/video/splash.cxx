@@ -38,6 +38,7 @@
 #include "online.h"
 #include "boot_music.h"
 #include "input.h"
+#include "controller.h"
 #include "saturn_keyboard.h"
 #include "console_view.h"
 #include <srl.hpp>
@@ -156,11 +157,11 @@ static void splash_set_step(int step) {
 
 /*----------------------
  | splash_skip_pressed
- | Description: True on any gamepad button or any keyboard key this frame -- the
- |   "I have seen this logo, move on" signal. Deliberately the widest possible
- |   test (AnyPressed covers the d-pad and START as well as the face buttons),
- |   since a player reaching for a way past a logo should not have to find a
- |   particular button. Edge-triggered, matching title_and_seed, so a button left
+ | Description: True on any button of anything this frame -- pad, keyboard, mouse
+ |   or light gun, on screen or off it. The "I have seen this logo, move on"
+ |   signal, and deliberately the widest test there is, since a player reaching for
+ |   a way past a logo should not have to find a particular button, or a particular
+ |   controller. Edge-triggered, matching title_and_seed, so a button left
  |   held from one screen does not carry into the next.
  | Author: suinevere
  | Dependencies: input.h, saturn_keyboard.h
@@ -169,7 +170,12 @@ static void splash_set_step(int step) {
  | Returns: true if the splash should be cut short
  ----------------------*/
 static bool splash_skip_pressed(void) {
+    /* Ticked here rather than by the caller: the splash's loops synchronize
+       directly and reach nothing else that would advance the module, and a mouse
+       or a gun held over a logo has to count as a press like anything else. */
+    controller_tick();
     if (g_pad && g_pad->AnyPressed()) return true;
+    if (controller_any_fired()) return true;
     return saturn_keyboard_poll().kind != SATURN_KEY_NONE;
 }
 

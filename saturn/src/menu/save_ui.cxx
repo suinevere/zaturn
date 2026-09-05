@@ -193,7 +193,7 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 if (g_pad->WasPressed(Button::Down)) sel = (sel + 1) % SAVE_SLOTS;
                 if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                     || g_pad->WasPressed(Button::START)) pick = true;
-                if (g_pad->WasPressed(Button::B)) cancel = true;
+                if (g_pad->WasPressed(Button::B) || menu_pointer_back()) cancel = true;
             }
             last_sel = sel;   // after every move, so no exit path has to remember to
             if (cancel) { if (g_menu_page_fade) menu_fade_out(g_menu_page_fade); return 0; }
@@ -545,7 +545,7 @@ void save_space_warn(void) {
         if (ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE) return;
         if (ke.kind != SATURN_KEY_CHAR) {
             if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)) SYS_Exit(0);
-            if (g_pad->WasPressed(Button::B)) return;
+            if (g_pad->WasPressed(Button::B) || menu_pointer_back()) return;
         }
 
         menu_clear();

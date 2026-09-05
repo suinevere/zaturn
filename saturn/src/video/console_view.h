@@ -133,6 +133,19 @@ int console_screen_rows(void);
 bool console_pointer_scroll(void);
 
 /*----------------------
+ | render_pointer
+ | Description: Paints or hides the one-cell pointer cursor for whichever mouse,
+ |   light gun or Mouse Mode stick is driving. Call once per input frame, before
+ |   the Synchronize that flushes the text layer.
+ | Author: suinevere
+ | Dependencies: controller.h, text_map.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void render_pointer(void);
+
+/*----------------------
  | console_strip_shift
  | Description: How far up, in pixels, the NBG0 wallpaper sits while the
  |   gamepad's input strip is on screen. The strip's marble covers its two

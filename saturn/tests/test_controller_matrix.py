@@ -40,6 +40,28 @@ def _read(p):
     return p.read_text(encoding="utf-8", errors="replace")
 
 
+def _nocomments(src):
+    """Strip C comments, so a test cannot be satisfied -- or defeated -- by prose
+    that merely names the thing it is checking for. Written as a scan rather than
+    a regex because the block form nests no better either way and the line form
+    needs an escape this file would rather not carry."""
+    out = []
+    i, n = 0, len(src)
+    while i < n:
+        if src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            out.append(" ")
+        elif src.startswith("//", i):
+            j = src.find("\n", i + 2)
+            i = n if j < 0 else j
+            out.append(" ")
+        else:
+            out.append(src[i])
+            i += 1
+    return "".join(out)
+
+
 def _body(src, fn):
     """The text of function `fn`, from its opening brace to the matching close."""
     m = re.search(r"\b%s\s*\([^)]*\)\s*\{" % re.escape(fn), src)
@@ -193,19 +215,57 @@ def test_static_row_matches_the_workbook():
 
 
 def test_sheets_applicable_per_device():
-    """"if applicable": the mouse is always a cursor (that sheet's "N/A (no mouse
-    on/off)"), and neither the light gun nor the twin stick has a Scrolling
-    column."""
-    tbl = _table(_read(MENU_PAGES), "CTL_DEV")
+    """"if applicable": neither the light gun nor the twin stick has a Scrolling
+    column, and the mouse's Mouse Mode sheet carries a speed but no on/off, which
+    is that sheet's "N/A (no mouse on/off)"."""
+    src = _read(MENU_PAGES)
+    tbl = _table(src, "CTL_DEV")
     rows = {}
     for line in tbl.splitlines():
         if "DEV_" in line and "{" in line:
             key = line[line.index("DEV_"):].split()[0].strip("*/ ")
             rows[key] = line
-    assert "CSB_MOUSE" not in rows["DEV_MOUSE"], "the mouse gained a Mouse Mode sheet"
     assert "CSB_SCR" not in rows["DEV_GUN"], "the light gun gained a Scrolling sheet"
     assert "CSB_SCR" not in rows["DEV_TWIN"], "the twin stick gained a Scrolling sheet"
     assert "CSB_MOUSE" in rows["DEV_PAD"], "the pad lost its Mouse Mode sheet"
+    body = _body(src, "ctl_sheet_rows")
+    mouse = body[body.index("k == DEV_MOUSE && sheet == CS_MOUSE"):]
+    assert "CK_MSPEED" in mouse, "the mouse lost its speed row"
+    assert "CK_MMODE" not in mouse, "the mouse gained a Mouse Mode on/off it cannot have"
+
+
+def test_cursor_source_is_named_per_device():
+    """The naming is the point: a 3D Control Pad calls it the Analogue Stick and a
+    Mission Stick calls the same reading its Left Stick."""
+    tbl = _table(_read(SRC), "CSRC_NAME")
+    for want in ('"D-Pad"', '"Left Stick"', '"Analogue Stick"'):
+        assert want in tbl, "CSRC_NAME lost %s" % want
+
+
+def test_dpad_is_gated_while_it_steers_the_cursor():
+    """One job at a time: with Mouse Mode on and the D-pad chosen, the four
+    directions must stop stepping selections."""
+    body = _body(_read(INPUT_CXX), "pad_fired")
+    assert "controller_dpad_is_cursor" in body, "pad_fired no longer gates directions"
+    assert "is_direction" in body, "the gate no longer distinguishes directions"
+    raw = _body(_read(INPUT_CXX), "pad_fired_raw")
+    assert "controller_dpad_is_cursor" not in raw, "the ungated read gained the gate"
+
+
+def test_mouse_y_is_not_inverted():
+    """Measured on hardware: the reported sign already runs the way the screen
+    does, and negating it moved the cursor up when the hand went down."""
+    body = _body(_read(SRC), "read_mouse")
+    assert "g_ptr.y + mouse_travel(dy," in body, "mouse Y is negated again"
+    assert "g_ptr.y - " not in body, "mouse Y is negated again"
+
+
+def test_pointer_reaches_menus():
+    """A menu runs its own loop and never reaches the game loop's tick, so without
+    this the cursor freezes the moment a menu opens."""
+    body = _body(_read(ROOT / "src" / "menu" / "menu.cxx"), "menu_sync")
+    assert "controller_tick" in body, "menus no longer tick the controller"
+    assert "render_pointer" in body, "menus no longer draw the cursor"
 
 
 def test_sheets_are_separate_configuration_groups():
@@ -253,6 +313,169 @@ def test_picture_edge_moves():
     assert "RM_EXIT_OPEN" in body, "the edge shot no longer checks the exit"
     assert "controller_pointer_consume" in body, "the shot is not consumed"
     assert "room_model_dir_word" in body, "the edge shot submits no direction"
+
+
+def test_a_cursor_is_actually_drawn():
+    """The pointer is useless if nothing paints it: render_pointer must place a
+    cell through the text layer's cursor overlay."""
+    body = _body(_read(ROOT / "src" / "video" / "console_view.cxx"), "render_pointer")
+    assert "text_cursor_set" in body, "render_pointer paints nothing"
+    assert "text_cursor_off" in body, "the cursor is never taken away"
+    assert "controller_pointer" in body, "render_pointer reads no pointer"
+
+
+def test_cursor_overlay_paints_after_the_block_copy():
+    """The copy is what restores the character under the cursor, so the cursor has
+    to go down after it or it erases itself."""
+    body = _body(_read(ROOT / "src" / "video" / "text_map.cxx"), "text_flush")
+    copy = body.index("for (int i = 0; i < longs; i++)")
+    paint = body.index("g_cur_word")
+    assert paint > copy, "the cursor is painted before the block copy erases it"
+
+
+def test_mouse_mode_is_reachable():
+    """A Mouse Mode nothing can switch on is a cursor that never moves."""
+    src = _read(ROOT / "src" / "menu" / "menu_pages.cxx")
+    assert "controller_mouse_mode_set" in src, "no Mouse Mode toggle on the Controls page"
+    assert "controller_twin_set" in src, "no Twin Stick toggle on the Controls page"
+
+
+def test_every_pointing_device_updates_its_cell():
+    """col/row come from clamp_cursor, so any reader that moves the cursor has to
+    call it -- the gun sets absolute coordinates and once did not."""
+    src = _read(SRC)
+    for fn in ("read_gun", "read_mouse", "read_sticks", "read_dpad_cursor"):
+        body = _body(src, fn)
+        assert "clamp_cursor" in body, "%s moves the cursor without recomputing its cell" % fn
+
+
+def test_cursor_is_an_arrow_with_a_top_left_tip():
+    """An arrow, not a reticle, and its tip is the cell's own origin so what the
+    player aims at and what the program selects are the same pixel."""
+    src = _read(ROOT / "src" / "video" / "text_map.cxx")
+    tbl = _table(src, "CURSOR_ARROW_FILL")
+    assert "0x80" in tbl, "the arrow lost its top-left tip pixel"
+    assert "install_cursor_glyph" in src, "the arrow glyph is never installed"
+    body = _body(_read(ROOT / "src" / "video" / "console_view.cxx"), "render_pointer")
+    assert "TEXT_CURSOR_CH" in body, "render_pointer does not draw the arrow"
+
+
+def test_any_button_dismisses_a_prompt():
+    """"press any key" has to mean any key on anything, including a gun fired off
+    screen, which sets no click and only an action."""
+    body = _body(_read(ROOT / "src" / "menu" / "menu.cxx"), "menu_wait")
+    assert "AnyPressed" in body, "menu_wait no longer takes every pad button"
+    assert "controller_any_fired" in body, "menu_wait no longer takes other devices"
+    any_body = _body(_read(SRC), "controller_any_fired")
+    assert "g_ptr.hot" in any_body, "a pointing device's click no longer counts"
+    assert "g_fired" in any_body, "an off-screen gun shot no longer counts"
+
+
+def test_the_cursor_accelerates():
+    """Constant speed is unusable for pointing and too slow for crossing: every
+    source ramps or scales."""
+    src = _read(SRC)
+    dpad = _body(src, "read_dpad_cursor")
+    assert "g_dpad_held" in dpad, "a held direction no longer accelerates"
+    travel = _body(src, "axis_travel")
+    assert "CURSOR_STEP_MAX" in travel, "the stick no longer scales with deflection"
+    mouse = _body(src, "mouse_travel")
+    assert "MOUSE_ACCEL_KNEE" in mouse, "the mouse no longer accelerates"
+
+
+def test_mouse_reading_is_a_position_not_a_delta():
+    """Measured: the Saturn mouse reports a running total, so the movement is the
+    difference against last frame. Read raw, the cursor slid on until the mouse was
+    carried back to where it started."""
+    body = _body(_read(SRC), "read_mouse")
+    assert "g_mouse_last" in body, "the mouse reading is being taken as a delta again"
+    assert "g_mouse_seen" in body, "the first reading is not seeded, so it jumps"
+    assert "mouse_delta" in body, "the difference is being taken without minding the wrap"
+
+
+def test_the_mouse_wrap_cannot_fling_the_cursor():
+    """The counter wraps in a byte, so a plain subtraction across the wrap reads
+    -255 for a movement of one and throws the cursor at the nearest edge."""
+    body = _body(_read(SRC), "mouse_delta")
+    assert "0xFF" in body, "the difference is no longer masked to the counter's width"
+    assert "256" in body, "the masked difference is no longer read back as signed"
+
+
+def test_slow_mouse_movement_is_not_thrown_away():
+    """Integer division at any gain below 1 discards every movement too small to
+    make a whole pixel, which reads as the cursor having no resolution."""
+    body = _body(_read(SRC), "mouse_travel")
+    assert "g_mouse_rem" in body, "the sub-pixel remainder is no longer carried"
+    assert "MOUSE_TRAVEL_MAX" in body, "one frame's travel is no longer bounded"
+
+
+def test_every_press_any_prompt_takes_every_device():
+    """One narrow wait strands whoever is holding the wrong thing, so all four are
+    checked together rather than each being remembered separately."""
+    for path, fn in (
+        (ROOT / "src" / "menu" / "menu.cxx", "menu_wait"),
+        (ROOT / "src" / "video" / "splash.cxx", "splash_skip_pressed"),
+        (ROOT / "src" / "net" / "online.cxx", "online_wait_any"),
+    ):
+        body = _body(_read(path), fn)
+        assert "AnyPressed" in body, "%s takes only some pad buttons" % fn
+        assert "controller_any_fired" in body, "%s takes no other device" % fn
+    title = _read(ROOT / "src" / "video" / "title.cxx")
+    assert "controller_any_fired" in title, "the title takes no other device"
+    assert "WasPressed(Button::C) || g_pad->WasPressed(Button::START)" not in title,         "the title still has its own four-button test"
+
+
+def test_accept_spans_the_two_buttons_the_layouts_disagree_about():
+    """SRL calls the digital A, C and B bits Left, Right and Middle -- flags bits
+    2, 1, 0 -- while the hardware's own order for that byte is Left, Right, Middle
+    at bits 0, 1, 2. The two disagree about the outer buttons and agree about the
+    right one, so accept takes both of the first pair and back takes only Right."""
+    act = _nocomments(_body(_read(ROOT / "src" / "menu" / "menu.cxx"), "menu_pointer_act"))
+    assert "DEV_BTN_LEFT" in act and "DEV_BTN_MIDDLE" in act,         "accept no longer spans both buttons the two layouts disagree about"
+    assert "DEV_BTN_RIGHT" not in act, "accept claims the button back needs"
+    back = _nocomments(_body(_read(ROOT / "src" / "menu" / "menu.cxx"), "menu_pointer_back"))
+    assert "DEV_BTN_RIGHT" in back, "back no longer reads the right button"
+
+
+def test_menus_can_be_backed_out_of_with_a_click():
+    """Every list and page that takes a pad B takes a right click too."""
+    for path, fn in (
+        (ROOT / "src" / "menu" / "menu.cxx", "select_at"),
+        (ROOT / "src" / "menu" / "menu_pages.cxx", "controls_page"),
+        (ROOT / "src" / "menu" / "menu_pages.cxx", "controls_sheet_page"),
+        (ROOT / "src" / "menu" / "menu_pages.cxx", "options_menu"),
+    ):
+        body = _nocomments(_body(_read(path), fn))
+        assert "menu_pointer_back" in body, "%s cannot be backed out of with a click" % fn
+
+
+def test_pad_actions_do_not_read_stale_repeat_state():
+    """controller_tick runs from menu_sync, and no menu or the title advances the
+    repeat timers. Reading pad_fired there returns whatever the last screen that
+    did advance them left behind -- one flag stuck true makes controller_any_fired
+    true on every frame, which is a title screen that cannot be waited on."""
+    body = _nocomments(_body(_read(SRC), "read_pad_family"))
+    assert "pad_fired" not in body, "the pad's actions read repeat state again"
+    assert "WasPressed" in body, "the pad's actions no longer read an edge"
+    assert "chord_ticked" in body, "the chords are not gated on having been ticked"
+
+
+def test_a_click_does_not_leak_into_the_next_screen():
+    """The pad's stale edge passes with a Synchronize; the pointer's is module
+    state that only clears on the next tick, so it has to be discarded by hand."""
+    body = _body(_read(ROOT / "src" / "menu" / "menu.cxx"), "select_at")
+    assert "controller_pointer_flush" in body, "a list can inherit the click that opened it"
+    for path in (ROOT / "src" / "engine" / "saturn_glue.cxx",
+                 ROOT / "src" / "net" / "online.cxx"):
+        src = _nocomments(_read(path))
+        assert src.count("mode_toggle_reset()") == src.count("controller_pointer_flush()"),             "a modal settles the combo latch without settling the pointer's"
+
+
+def test_generic_list_takes_a_click():
+    """select_at is the mode menu, the game picker and the save pickers at once."""
+    body = _body(_read(ROOT / "src" / "menu" / "menu.cxx"), "select_at")
+    assert "menu_pointer_row" in body, "the generic list has no hover"
+    assert "menu_pointer_act" in body, "the generic list takes no click"
 
 
 def main():

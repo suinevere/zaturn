@@ -15,6 +15,8 @@
 #include "text_map.h"
 
 #include "menu.h"
+#include "controller.h"
+#include "console_view.h"
 #include "app_state.h"
 #include "console_view.h"
 #include "input.h"
@@ -78,8 +80,65 @@ void menu_sync(void) {
     sound_service();
     music_tick();
 #endif
+    /* Menus run their own loops and never reach the game loop's tick, so without
+       this the pointer would freeze the moment a menu opened -- which is exactly
+       what a player reaching for the mouse in a menu would see. Drawn after the
+       page has composed its frame and before the Synchronize that flushes it. */
+    controller_tick();
+    render_pointer();
     dash_hold_any();
     SRL::Core::Synchronize();
+}
+
+/*----------------------
+ | menu_pointer_act / menu_pointer_back
+ | Description: A pointing device's click in the terms every menu page already
+ |   works in: act is the Accept it reads from A/C, back the Cancel it reads from
+ |   B. Pages OR them into their own, so a mouse reaches the same code the pad does
+ |   rather than a second path beside it.
+ |
+ |   Act takes SRL's Left *or* its Middle, and back takes only its Right. That is
+ |   not hedging, it is the one split the two candidate layouts agree on. SRL calls
+ |   the digital A, C and B trigger bits Left, Right and Middle -- bits 2, 1 and 0
+ |   of the mouse's flags byte -- while the hardware's own order for that byte is
+ |   Left, Right, Middle at bits 0, 1 and 2. Lay those over each other and the two
+ |   disagree about which of the outer buttons is which, but both put the *right*
+ |   button on the same bit. So Right is safe to give a meaning of its own, and the
+ |   other two are safe only together.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: true on the frame that button edges down
+ ----------------------*/
+bool menu_pointer_act(void) {
+    const DevPointer *p = controller_pointer();
+    return p->valid && p->hot &&
+           (p->button == DEV_BTN_LEFT || p->button == DEV_BTN_MIDDLE);
+}
+
+bool menu_pointer_back(void) {
+    const DevPointer *p = controller_pointer();
+    return p->valid && p->hot && p->button == DEV_BTN_RIGHT;
+}
+
+/*----------------------
+ | menu_pointer_row
+ | Description: Which of `n` rows laid out one per line from `y0` the cursor is
+ |   over, or -1 when it is over none of them or no pointing device is driving.
+ |   Pages that draw their selectable rows contiguously can move `sel` with this
+ |   in one call; pages that interleave unselectable rows cannot, and must not try.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: N/A
+ | Params: y0 -- the first row's cell row; n -- how many rows follow it
+ | Returns: 0 to n-1, or -1
+ ----------------------*/
+int menu_pointer_row(int y0, int n) {
+    const DevPointer *p = controller_pointer();
+    if (!p->valid) return -1;
+    int i = p->row - y0;
+    return (i >= 0 && i < n) ? i : -1;
 }
 
 #ifdef NETBIN
@@ -635,8 +694,13 @@ void menu_text(int x0, int w, int y, int pad, const char *text) {
 void menu_wait(void) {
     menu_sync();
     for (;;) {
-        if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::B) ||
-            g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START)) return;
+        /* Any button on anything: AnyPressed covers all thirteen of the pad's
+           rather than the four somebody thought of, and controller_any_fired the
+           mouse's three plus its Blue button and the gun's trigger, on screen or
+           off it. A prompt that says "any key" and means four stranded whoever
+           was holding something else. */
+        if (g_pad->AnyPressed()) return;
+        if (controller_any_fired()) return;
         if (saturn_keyboard_poll().kind != SATURN_KEY_NONE) return;
         menu_sync();
     }
@@ -733,14 +797,31 @@ static int select_at(const char *title, const char *const *items, int count,
     int x0, y0, w, h;
     menu_box_fit(title, content_w, rows, &x0, &y0, &w, &h);
 
+    int last_hov = -1;
     SRL::Core::Synchronize();   // consume any stale button/key edge
+    /* The pad's stale edge passes with that Synchronize; the pointer's does not,
+       being module state that only clears on the next tick. Without this the click
+       that dismissed the title arrives here as the first frame's pick. */
+    controller_pointer_flush();
     for (;;) {
         check_soft_reset();   // A+B+C+Start -> back to the title screen
         if (g_pad->WasPressed(Button::Up))    sel = (sel - 1 + count) % count;
         if (g_pad->WasPressed(Button::Down))  sel = (sel + 1) % count;
         bool pick = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                  || g_pad->WasPressed(Button::START);
-        bool cancel = allow_cancel && g_pad->WasPressed(Button::B);
+        /* The window's rows sit one per line from y0 + 4, so the cursor's row is
+           the visible row and `top` turns that into an item. Hover only on a frame
+           the pointer moved, so a resting cursor does not pin the selection; a
+           click always takes what it is over. This is the generic list, so wiring
+           it here is what gives the mode menu, the game picker and the save
+           pickers a mouse at once. */
+        int vis_n = count - top; if (vis_n > VIS) vis_n = VIS;
+        int hov = menu_pointer_row(y0 + 4, vis_n);
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = top + hov;
+        last_hov = hov;
+        if (clicked) pick = true;
+        bool cancel = allow_cancel && (g_pad->WasPressed(Button::B) || menu_pointer_back());
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         if (ke.kind == SATURN_KEY_ENTER) pick = true;

@@ -23,6 +23,7 @@
 #include "menu.h"
 #include "console_view.h"
 #include "input.h"
+#include "controller.h"
 #include "soft_reset.h"
 #include "saturn_keyboard.h"
 #include "game_catalog.h"
@@ -1190,9 +1191,11 @@ int title_and_seed(void) {
             slNMIRequest();
             while (1) {}
         }
+        /* Any button on anything, the same set the splash and menu_wait take:
+           the prompt says any button and four of the pad's thirteen is not that,
+           let alone a mouse click or a gun fired at or past the screen. */
         bool advance =
-            g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::B) ||
-            g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START) ||
+            g_pad->AnyPressed() || controller_any_fired() ||
             (saturn_keyboard_poll().kind != SATURN_KEY_NONE);
         if (advance) break;
         title_draw_art();

@@ -102,6 +102,55 @@ does not mention. Each is listed with what shipped instead.
   it is held.
 - **A shot at the room picture's edge is a move**, taken only where the compass
   rose is already showing that exit, so Hard cannot be read through the gun.
+- **The D-pad does one job at a time.** With Mouse Mode on and the D-pad chosen as
+  the cursor source, `pad_fired` refuses the four directions, so they steer the
+  cursor instead of stepping a selection. Menus are outside the gate -- they read
+  the pad directly and still need it to navigate -- and so is the map, which owns
+  the whole display and steers a crosshair of its own (`pad_fired_raw`).
+- **Which input drives the cursor is per device, and so is what it is called.**
+  A 3D Control Pad offers "D-Pad" or "Analogue Stick", a Mission Stick "D-Pad" or
+  "Left Stick", a control pad only "D-Pad", a Twin Stick only "Left Stick" -- its
+  digital directions *are* its left stick. The table is `CSRC_NAME` in
+  `controller.cxx`.
+- **The mouse reports a running total in a wrapping byte, not a per-frame delta.**
+  Movement is the difference against last frame, masked to the counter's width and
+  read back signed (`mouse_delta`). Taking the raw value slid the cursor on until
+  the mouse was carried back to where it started; taking the difference without
+  minding the wrap read -255 for a movement of one and snapped the cursor to
+  whichever edge was nearest. Y is added, not subtracted -- the reported sign
+  already runs the way the screen does.
+- **The mouse has a speed setting** on its own Mouse Mode sheet (that sheet has no
+  on/off, which is the cell's "N/A"), five gain steps with 1:1 in the middle. Below
+  1:1 the integer division would throw away every movement too small to make a
+  whole pixel, so the sub-pixel remainder is carried; above it, one frame's travel
+  is capped, because an unbounded acceleration curve turns a flick into half the
+  screen in a sixtieth of a second and that reads as jumping, not as speed.
+- **The pointer is an arrow whose tip is the cell's own top-left pixel**, so what
+  the player aims at and what the program selects are the same place. It is a font
+  tile patched into an unused control code (`TEXT_CURSOR_CH`), the same trick the
+  backslash glyph uses, so the cursor is one ordinary character cell and needs no
+  sprite layer of its own. Two inks -- body and outline -- so it stays readable
+  over text, over marble and over a picture.
+- **Every cursor source accelerates.** A held D-pad direction starts at one pixel a
+  frame, so a single cell can be picked at all, and works up to seven; an analogue
+  stick scales with how far it is pushed rather than being collapsed to a
+  direction; and the mouse has a quadratic curve so a slow hand is precise and a
+  flick crosses the screen.
+- **"Press any key" means any key on anything** -- all thirteen pad buttons, any
+  keyboard key, any mouse button including the Blue one, and a gun trigger whether
+  the shot lands on screen or off it.
+- **The cursor works in menus.** `menu_sync` ticks the controller and draws the
+  pointer, because a menu runs its own loop and never reaches the game loop's tick.
+  Hover highlights, **left or middle click accepts, right click goes back**, wired
+  into the generic list picker (which is the mode menu, the game picker and the
+  save pickers at once), the Options menu, both Controls pages and the save UI.
+
+  Accept spans two buttons on purpose. SRL calls the digital A, C and B trigger
+  bits Left, Right and Middle -- flags bits 2, 1 and 0 -- while the mouse's own
+  order for that byte is Left, Right, Middle at bits 0, 1 and 2. The two layouts
+  disagree about which of the outer buttons is which and agree about the right one,
+  so Right is safe to give a meaning of its own and the other two are safe only
+  together.
 
 ## Two things in the module that hardware has not confirmed
 

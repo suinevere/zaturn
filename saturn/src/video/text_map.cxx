@@ -247,6 +247,39 @@ extern "C" void text_clear_line(int y)
     }
 }
 
+/*----------------------
+ | g_cur_x / g_cur_y / g_cur_word
+ | Description: The one overlay cell the pointer cursor occupies, and the pattern
+ |   word to paint there. It is deliberately not part of the shadow: the shadow is
+ |   what the program composed, and the cursor is painted over the top of it at
+ |   flush time so the character underneath comes back by itself the moment the
+ |   cursor moves off. g_cur_x < 0 means no cursor.
+ | Author: suinevere
+ ----------------------*/
+static int      g_cur_x = -1;
+static int      g_cur_y = -1;
+static uint16_t g_cur_word = 0;
+
+extern "C" void text_cursor_set(int x, int y, char ch)
+{
+    if (x < 0 || y < 0 || x >= TEXT_COLS || y >= TEXT_ROWS) { text_cursor_off(); return; }
+    uint16_t word = (uint16_t)((uint16_t)(uint8_t) ch + TEXT_FONT_BANK) | TEXT_COLOR_BANK;
+    if (g_cur_x == x && g_cur_y == y && g_cur_word == word) return;
+    if (g_cur_x >= 0) mark_dirty(g_cur_y);
+    g_cur_x = x;
+    g_cur_y = y;
+    g_cur_word = word;
+    mark_dirty(y);
+}
+
+extern "C" void text_cursor_off(void)
+{
+    if (g_cur_x < 0) return;
+    mark_dirty(g_cur_y);
+    g_cur_x = -1;
+    g_cur_y = -1;
+}
+
 extern "C" void text_flush(void)
 {
     if (g_dirty_top > g_dirty_bottom) return;
@@ -257,6 +290,15 @@ extern "C" void text_flush(void)
 
     for (int i = 0; i < longs; i++) *dst++ = *src++;
 
+    /* After the block copy, never inside it: the copy has just laid the composed
+       frame down over wherever the cursor was, which is exactly how the character
+       under it is restored, and painting the cursor first would only erase it. */
+    if (g_cur_x >= 0 && g_cur_y >= g_dirty_top && g_cur_y <= g_dirty_bottom)
+    {
+        volatile uint16_t *cell = (volatile uint16_t *) TEXT_VRAM_MAP;
+        cell[g_cur_y * TEXT_COLS + g_cur_x] = g_cur_word;
+    }
+
     g_dirty_top    = TEXT_ROWS;
     g_dirty_bottom = -1;
 }
@@ -264,6 +306,84 @@ extern "C" void text_flush(void)
 extern "C" void text_on_flush(void (*fn)(void))
 {
     g_on_flush = fn;
+}
+
+/*----------------------
+ | CURSOR_ARROW
+ | Description: The pointer's 8x8 bitmap, one byte per row, high bit leftmost. The
+ |   tip is the top-left pixel deliberately: that pixel is the cell's own origin,
+ |   so the arrow points at exactly the cell a hit test resolves to and there is no
+ |   offset between what the player aims at and what the program selects.
+ |
+ |   Two inks. The 1 bits are the arrow's body and the 2 bits its outline, so the
+ |   shape stays readable over text, over marble and over a room picture rather
+ |   than only over the one of them it was drawn against.
+ | Author: suinevere
+ ----------------------*/
+static const unsigned char CURSOR_ARROW_FILL[8] = {
+    0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xF0, 0x98
+};
+static const unsigned char CURSOR_ARROW_EDGE[8] = {
+    0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x0E, 0x64
+};
+
+/*----------------------
+ | glyph_ink
+ | Description: The palette nibble this font draws with, read off a glyph known to
+ |   have ink in it rather than assumed. The font is whatever SGL uploaded, so its
+ |   ink index is not this program's to choose.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: the 4-bit ink value, or 15 if the sampled glyph is somehow blank
+ ----------------------*/
+static unsigned char glyph_ink(void)
+{
+    volatile unsigned char *g = font_tile('|');
+    for (int i = 0; i < 32; i++)
+    {
+        unsigned char b = g[i];
+        if (b >> 4)   return (unsigned char) (b >> 4);
+        if (b & 0x0f) return (unsigned char) (b & 0x0f);
+    }
+    return 15;
+}
+
+/*----------------------
+ | install_cursor_glyph
+ | Description: Paints CURSOR_ARROW into the font at TEXT_CURSOR_CH, a control code
+ |   nothing prints, so the pointer is one ordinary character cell and rides the
+ |   text layer's existing flush instead of needing a sprite of its own.
+ |
+ |   4bpp, two pixels per byte, high nibble leftmost. The outline uses ink minus
+ |   one, which on any ramp-ordered palette is a neighbouring shade -- enough to
+ |   separate the arrow from what is under it without claiming a palette slot.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void install_cursor_glyph(void)
+{
+    volatile unsigned char *t = font_tile(TEXT_CURSOR_CH);
+    unsigned char ink  = glyph_ink();
+    unsigned char edge = (unsigned char) (ink > 1 ? ink - 1 : ink + 1);
+
+    for (int r = 0; r < 8; r++)
+    {
+        for (int b = 0; b < 4; b++)
+        {
+            unsigned char hi = 0, lo = 0;
+            int px = b * 2;
+            if      (CURSOR_ARROW_FILL[r] & (0x80 >> px))       hi = ink;
+            else if (CURSOR_ARROW_EDGE[r] & (0x80 >> px))       hi = edge;
+            if      (CURSOR_ARROW_FILL[r] & (0x80 >> (px + 1))) lo = ink;
+            else if (CURSOR_ARROW_EDGE[r] & (0x80 >> (px + 1))) lo = edge;
+            t[r * 4 + b] = (unsigned char) ((hi << 4) | lo);
+        }
+    }
 }
 
 /*----------------------
@@ -318,6 +438,7 @@ extern "C" void text_map_init(void)
                                     SRL::CRAM::TextureColorMode::Paletted16, true);
 
     install_backslash_glyph();
+    install_cursor_glyph();
 
     for (int y = 0; y < TEXT_ROWS; y++)
         for (int x = 0; x < TEXT_COLS; x++) g_shadow[y][x] = TEXT_BLANK;

@@ -221,12 +221,13 @@ static void network_page(void) {
 /*----------------------
  | CK_FACE / CK_CHORD / CK_FIXED / CtlRow
  | Description: One row of a configuration sheet: an editable face-button or
- |   shift-chord binding, or a fixed one the device itself decides. `idx` is the
- |   FA_ or CA_ action for the first two and unused for the third, whose value is
- |   the literal in `fixed`.
+ |   shift-chord binding, a fixed one the device itself decides, or one of the two
+ |   on/off switches (Mouse Mode, Twin Stick profile). `idx` is the FA_ or CA_
+ |   action for the first two and unused for the rest; a CK_FIXED row's value is
+ |   the literal in `fixed` and a switch row's is read live.
  | Author: suinevere
  ----------------------*/
-enum { CK_FACE, CK_CHORD, CK_FIXED };
+enum { CK_FACE, CK_CHORD, CK_FIXED, CK_MMODE, CK_TWIN, CK_CSRC, CK_MSPEED };
 struct CtlRow {
     unsigned char kind;
     unsigned char idx;
@@ -263,7 +264,7 @@ static const DevCfg CTL_DEV[DEV_KIND_N] = {
     { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_PAD    */
     { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_FLIGHT */
     { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_ANALOG */
-    { CSB_ACT|CSB_SCR,           "Blue button" },   /* DEV_MOUSE  */
+    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Blue button" },   /* DEV_MOUSE  */
     { CSB_ACT|CSB_MOUSE,         "Start"       },   /* DEV_TWIN   */
     { CSB_ACT,                   "Button"      },   /* DEV_GUN    */
     { CSB_ACT,                   "ESC"         },   /* DEV_KBD    */
@@ -336,11 +337,10 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
             out[n++] = CtlRow{ CK_CHORD, CA_PAGE, "Page Up/Down", 0 };
             out[n++] = CtlRow{ CK_CHORD, CA_HOMEEND, "Home/End", 0 };
         } else {
-            const char *sel = (k == DEV_FLIGHT) ? "Right Stick" : "D-pad";
-            const char *cur = (k == DEV_FLIGHT) ? "Right Stick"
-                            : (k == DEV_ANALOG) ? "Analogue Stick" : "D-pad";
-            out[n++] = CtlRow{ CK_FIXED, 0, "Move Selection", sel };
-            out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", cur };
+            out[n++] = CtlRow{ CK_MMODE, 0, "Mouse Mode", 0 };
+            out[n++] = CtlRow{ CK_CSRC, 0, "Cursor Move",
+                               controller_cursor_src_name(k, controller_cursor_src_get(k)) };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Move Selection", "D-Pad" };
         }
         return n;
     }
@@ -364,8 +364,9 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
             out[n++] = CtlRow{ CK_FIXED, 0, "Space", "Top Trigger R" };
             out[n++] = CtlRow{ CK_FIXED, 0, "Accept", "Top Trigger L" };
         } else if (sheet == CS_MOUSE) {
-            out[n++] = CtlRow{ CK_FIXED, 0, "Move Selection", "Left Stick" };
-            out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", "Left Stick" };
+            out[n++] = CtlRow{ CK_MMODE, 0, "Mouse Mode", 0 };
+            out[n++] = CtlRow{ CK_CSRC, 0, "Cursor Move",
+                               controller_cursor_src_name(k, controller_cursor_src_get(k)) };
         }
     } else if (k == DEV_GUN) {
         if (sheet == CS_ACTIONS) {
@@ -377,6 +378,30 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
         }
     } else if (k == DEV_KBD) {
         if (sheet == CS_ACTIONS) out[n++] = CtlRow{ CK_FIXED, 0, "Map", "F8" };
+    }
+    /* The mouse is always a cursor, which is that sheet's "N/A (no mouse on/off)",
+       so its Mouse Mode page carries the one thing it does want set instead. */
+    if (k == DEV_MOUSE && sheet == CS_MOUSE) {
+        static char speed[4];
+        speed[0] = (char) ('1' + controller_mouse_speed_get());
+        speed[1] = 0;
+        out[n++] = CtlRow{ CK_MSPEED, 0, "Speed", speed };
+        out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", "Movement" };
+        /* A live readout of what the mouse is actually reporting. SGL's decoder is
+           only in LIBSGL.A, so nothing says whether the movement lands in
+           PerPoint's x/y or stays in the report's own bytes -- this is how that
+           gets answered rather than guessed at a third time. */
+        static char raw0[20], raw1[20], raw2[20];
+        int b[6], xy[2];
+        if (controller_mouse_raw(b, xy)) {
+            SRL::string f;
+            f.snprintfEx(raw0, sizeof raw0, "%d %d %d", b[0], b[1], b[2]);
+            f.snprintfEx(raw1, sizeof raw1, "%d %d %d", b[3], b[4], b[5]);
+            f.snprintfEx(raw2, sizeof raw2, "%d %d", xy[0], xy[1]);
+            out[n++] = CtlRow{ CK_FIXED, 0, "Report 2-4", raw0 };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Report 5-7", raw1 };
+            out[n++] = CtlRow{ CK_FIXED, 0, "PerPoint x y", raw2 };
+        }
     }
     return n;
 }
@@ -394,7 +419,9 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
 static const char *ctl_row_value(const CtlRow &r) {
     if (r.kind == CK_FACE)  return face_btn_name(r.idx);
     if (r.kind == CK_CHORD) return slot_name(g_chord_slot[r.idx]);
-    return r.fixed;
+    if (r.kind == CK_MMODE) return controller_mouse_mode_get() ? "On" : "Off";
+    if (r.kind == CK_TWIN)  return controller_twin_get() ? "On" : "Off";
+    return r.fixed;   /* CK_CSRC and CK_MSPEED resolve theirs at build time */
 }
 
 /*----------------------
@@ -439,26 +466,41 @@ static void controls_sheet_page(DevKind dev, int sheet) {
     menu_sync();
     bool need_fade_in = true;
     int sel = 0;
+    int last_hov = -1;
     for (;;) {
         CtlRow rows[CTL_SHEET_MAX];
         int nrows = ctl_sheet_rows(dev, sheet, rows);
         int r_back = nrows;
         if (sel < 0 || sel > r_back) sel = 0;
+        int fx, fy, fw, fh;
+        menu_box_fit(CS_NAME[sheet], CTL_ROW_W, CTL_SHEET_MAX + 5, &fx, &fy, &fw, &fh);
+        int y_back = fy + 4 + CTL_SHEET_MAX + 1;
         SaturnKeyEvent ke = saturn_keyboard_poll();
         pad_repeat_update();
         bool up    = g_pad->WasPressed(Button::Up)    || ke.kind == SATURN_KEY_UP;
         bool down  = g_pad->WasPressed(Button::Down)  || ke.kind == SATURN_KEY_DOWN;
         bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
         bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
+        /* Hover moves the cursor row, but only on a frame the pointer actually
+           moved: holding still over a row must not pin `sel` there and lock the
+           D-pad out of the page. A click is the exception -- it always lands on
+           what it is pointing at, never on whatever the pad last left selected. */
+        int hov = menu_pointer_row(fy + 5, nrows);
+        if (hov < 0 && menu_pointer_row(y_back, 1) == 0) hov = r_back;
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
         bool act   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
-                   || ke.kind == SATURN_KEY_ENTER;
-        bool back  = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
+                   || ke.kind == SATURN_KEY_ENTER || clicked;
+        bool back  = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE
+                   || menu_pointer_back();
         bool done  = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (back || done) break;
         if (up)   sel = (sel - 1 + r_back + 1) % (r_back + 1);
         if (down) sel = (sel + 1) % (r_back + 1);
         if (sel == r_back) { if (act) break; }
-        else if (left || right) {
+        else if (left || right || (act && (rows[sel].kind == CK_MMODE ||
+                                           rows[sel].kind == CK_CSRC))) {
             const CtlRow &r = rows[sel];
             if (r.kind == CK_FACE) {
                 int n = right ? (g_face_btn[r.idx] + 1) % FA_BTN_N
@@ -468,13 +510,19 @@ static void controls_sheet_page(DevKind dev, int sheet) {
                 int n = right ? (g_chord_slot[r.idx] + 1) % SL_N
                               : (g_chord_slot[r.idx] + SL_N - 1) % SL_N;
                 chord_assign(r.idx, n);
+            } else if (r.kind == CK_MMODE) {
+                controller_mouse_mode_set(!controller_mouse_mode_get());
+            } else if (r.kind == CK_CSRC) {
+                if (controller_cursor_src_count(dev) > 1)
+                    controller_cursor_src_set(dev, controller_cursor_src_get(dev) == CSRC_DPAD
+                                                   ? CSRC_STICK : CSRC_DPAD);
+            } else if (r.kind == CK_MSPEED) {
+                controller_mouse_speed_set(controller_mouse_speed_get() + (right ? 1 : -1));
             }
         }
 
         nrows = ctl_sheet_rows(dev, sheet, rows);
         menu_clear();
-        int fx, fy, fw, fh;
-        menu_box_fit(CS_NAME[sheet], CTL_ROW_W, CTL_SHEET_MAX + 5, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, CS_NAME[sheet]);
         int y = fy + 3;
         menu_text(fx, fw, y++, 0, controller_kind_name(dev));
@@ -482,7 +530,7 @@ static void controls_sheet_page(DevKind dev, int sheet) {
         for (int i = 0; i < nrows; i++)
             menu_rowf(fx, fw, y++, sel == i, CTL_ROW_W, "   %s%s",
                       menu_pad(rows[i].label, CTL_LABEL_W), ctl_row_value(rows[i]));
-        y = fy + 4 + CTL_SHEET_MAX + 1;
+        y = y_back;
         menu_row(fx, fw, y++, sel == r_back, CTL_ROW_W, "   Back");
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
@@ -501,7 +549,10 @@ static void controls_sheet_page(DevKind dev, int sheet) {
  |   change for the session. Under those sits the workbook's Static sheet, printed
  |   rather than offered, and then one submenu row per sheet the current device
  |   configures. Keyboard Caps is here because it stopped being a pad binding: a
- |   modifier the player cannot see the state of is not worth a combo.
+ |   modifier the player cannot see the state of is not worth a combo. Twin Stick
+ |   is here rather than in a submenu because it decides what the Device row can
+ |   page to at all -- a Twin Stick reports the same id as a control pad, so
+ |   nothing else can make one appear.
  |
  |   Snapshots g_face_btn/g_chord_slot/g_cmd_iface on entry so Cancel (or
  |   B/Backspace) restores them verbatim, including edits made two levels down in
@@ -540,6 +591,7 @@ static bool controls_page(void) {
     for (int a = 0; a < CA_N; a++) s_chord[a] = g_chord_slot[a];
     static int last_dev = 0;
     int sel = 0;
+    int last_hov = -1;
     bool switched = false;
     for (;;) {
         DevKind devs[DEV_KIND_N];
@@ -551,12 +603,20 @@ static bool controls_page(void) {
             if (CTL_DEV[dev].sheets & (1 << s)) sheets[nsheet++] = s;
         const int R_DEV = 0, R_IFACE = 1;
         int r_sheet0 = 2;
-        int r_caps   = r_sheet0 + nsheet;
+        int r_twin   = r_sheet0 + nsheet;
+        int r_caps   = r_twin + 1;
         int r_reset  = r_caps + 1;
         int r_done   = r_caps + 2;
         int r_cancel = r_caps + 3;
         int nrows    = r_caps + 4;
         if (sel < 0 || sel >= nrows) sel = 0;
+        int fx, fy, fw, fh;
+        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 13, &fx, &fy, &fw, &fh);
+        /* The one place this page's row positions are written down, so the
+           pointer hit-test and the draw below cannot drift apart. */
+        int y_dev = fy + 3, y_iface = fy + 4, y_sheet0 = fy + 9;
+        int y_twin = fy + 9 + CS_N, y_caps = y_twin + 1;
+        int y_reset = y_twin + 3, y_done = y_twin + 4, y_cancel = y_twin + 5;
 
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
@@ -566,9 +626,27 @@ static bool controls_page(void) {
         bool down  = g_pad->WasPressed(Button::Down)  || ke.kind == SATURN_KEY_DOWN;
         bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
         bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
+        /* Hover, only on a frame the pointer moved: a cursor resting on a row
+           must not pin `sel` and lock the D-pad out of the page. A click is the
+           exception -- it lands on what it points at, not on whatever the pad
+           last left selected. */
+        int hov = -1;
+        if      (menu_pointer_row(y_dev, 1) == 0)    hov = R_DEV;
+        else if (menu_pointer_row(y_iface, 1) == 0)  hov = R_IFACE;
+        else if (menu_pointer_row(y_sheet0, nsheet) >= 0)
+             hov = r_sheet0 + menu_pointer_row(y_sheet0, nsheet);
+        else if (menu_pointer_row(y_twin, 1) == 0)   hov = r_twin;
+        else if (menu_pointer_row(y_caps, 1) == 0)   hov = r_caps;
+        else if (menu_pointer_row(y_reset, 1) == 0)  hov = r_reset;
+        else if (menu_pointer_row(y_done, 1) == 0)   hov = r_done;
+        else if (menu_pointer_row(y_cancel, 1) == 0) hov = r_cancel;
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
         bool act   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
-                   || ke.kind == SATURN_KEY_ENTER;
-        bool back  = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
+                   || ke.kind == SATURN_KEY_ENTER || clicked;
+        bool back  = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE
+                   || menu_pointer_back();
         bool done  = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (back) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
@@ -587,6 +665,7 @@ static bool controls_page(void) {
             break; } }
         else if (sel == r_reset) { if (act) mapping_reset_defaults(); }
         else if (sel == r_caps) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
+        else if (sel == r_twin) { if (left || right || act) controller_twin_set(!controller_twin_get()); }
         else if (sel == R_DEV) {
             if (left)  last_dev = (last_dev - 1 + ndev) % ndev;
             if (right) last_dev = (last_dev + 1) % ndev;
@@ -602,10 +681,8 @@ static bool controls_page(void) {
         }
 
         menu_clear();
-        int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 12, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
-        int y = fy + 3;
+        int y = y_dev;
         menu_rowf(fx, fw, y++, sel == R_DEV, CTL_ROW_W, "   Device:     %s %s %s",
                   ndev > 1 ? "<" : " ",
                   menu_pad(controller_kind_name(dev), CTL_DEV_W),
@@ -622,7 +699,9 @@ static bool controls_page(void) {
         for (int i = 0; i < nsheet; i++)
             menu_rowf(fx, fw, y++, sel == r_sheet0 + i, CTL_ROW_W, "   %s...",
                       CS_NAME[sheets[i]]);
-        y = fy + 9 + CS_N;
+        y = y_twin;
+        menu_rowf(fx, fw, y++, sel == r_twin, CTL_ROW_W, "   Twin Stick: %s",
+                  controller_twin_get() ? "On" : "Off");
         menu_rowf(fx, fw, y++, sel == r_caps, CTL_ROW_W, "   Keyboard Caps: %s",
                   keyboard_get_caps() ? "On" : "Off");
         y++;
@@ -1600,12 +1679,20 @@ int options_menu(void) {
     int result = OM_NONE;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
+    int last_hov = -1;
     for (;;) {
         check_soft_reset();
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         if (g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + nitems) % nitems;
         if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % nitems;
+        /* The rows are drawn one per line from y0 + 4, so the cursor's row is the
+           item index outright. Hover only on a frame the pointer moved, so a
+           resting cursor does not pin `sel`; a click always takes what it is over. */
+        int hov = menu_pointer_row(y0 + 4, nitems);
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
         bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
         bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
         bool digit = menu_digit_row(ke, nitems, sel, left, right);
@@ -1613,9 +1700,10 @@ int options_menu(void) {
         last_item = item;   // every frame, so no exit path has to remember to
         bool act = digit
                  || g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
-                 || ke.kind == SATURN_KEY_ENTER;
+                 || ke.kind == SATURN_KEY_ENTER || clicked;
         bool back = g_pad->WasPressed(Button::B) || g_pad->WasPressed(Button::START)
-                  || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE;
+                  || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE
+                  || menu_pointer_back();
         if (back) break;
         if (act) {
             if (item == OI_RESUME) break;   // OM_NONE: exactly what backing out does

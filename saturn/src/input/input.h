@@ -251,6 +251,20 @@ void mode_toggle_reset(void);
 void chord_tick(void);
 
 /*----------------------
+ | chord_ticked
+ | Description: Whether chord_tick ran this frame, clearing the flag as it reports.
+ |   Anything reading chord_fired from a screen that might not tick -- a menu, the
+ |   title -- has to gate on this, or it reads whatever the last screen that did
+ |   tick left behind, forever.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: true if chord_tick has run since the last call
+ ----------------------*/
+bool chord_ticked(void);
+
+/*----------------------
  | chord_fired
  | Description: Whether chord action `action` (one of the CA_* constants) fired
  |   in direction `dir` (-1 or +1) on the frame chord_tick was last called.
@@ -299,6 +313,18 @@ void pad_repeat_update(void);
  | Returns: true if it fired (pressed or repeated) this frame
  ----------------------*/
 bool pad_fired(Button b);
+
+/*----------------------
+ | pad_fired_raw
+ | Description: pad_fired without the Mouse Mode gate on the four directions, for
+ |   the map, which owns the whole display and steers a crosshair of its own.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: b -- the button to check
+ | Returns: true if it fired (pressed or repeated) this frame
+ ----------------------*/
+bool pad_fired_raw(Button b);
 
 /*----------------------
  | scroll_handle_key

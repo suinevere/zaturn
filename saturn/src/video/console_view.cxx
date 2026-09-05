@@ -365,6 +365,26 @@ bool console_pointer_scroll(void) {
 }
 
 /*----------------------
+ | render_pointer
+ | Description: Paints the arrow wherever a mouse, a light gun or a stick in Mouse
+ |   Mode is pointing, and takes it away when no pointing device is driving. Call
+ |   once per input frame, after the frame's text has been composed: the cursor is
+ |   an overlay text_flush paints last, so it does not matter what is drawn under
+ |   it, only that this runs before the Synchronize that flushes. It does not
+ |   blink -- an arrow is its own signal, and a blinking pointer reads as a fault.
+ | Author: suinevere
+ | Dependencies: controller.h, text_map.h
+ | Globals: N/A (the blink counter is function-static)
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void render_pointer(void) {
+    const DevPointer *p = controller_pointer();
+    if (!p->valid) { text_cursor_off(); return; }
+    text_cursor_set(p->col, p->row, TEXT_CURSOR_CH);
+}
+
+/*----------------------
  | console_scroll_to_output
  | Description: Computes how many lines the turn just emitted from the delta
  |   against g_output_start (using the monotonic total-lines counter so this

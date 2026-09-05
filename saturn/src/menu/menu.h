@@ -65,6 +65,23 @@ extern int g_menu_backing_depth;
  ----------------------*/
 void menu_sync(void);
 
+/*----------------------
+ | menu_pointer_act / menu_pointer_back / menu_pointer_row
+ | Description: A pointing device in menu terms: act is a left or middle click,
+ |   back a right one, and menu_pointer_row says which of `n` rows laid out one per
+ |   line from `y0` the cursor is over (-1 for none). Pages OR the first two into
+ |   their own act/back so a mouse reaches the same code the pad does. See the
+ |   implementation for why act takes two buttons and back exactly one.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: N/A
+ | Params: y0 -- the first row's cell row; n -- how many rows follow it
+ | Returns: act/back are true on the click edge; row is 0..n-1 or -1
+ ----------------------*/
+bool menu_pointer_act(void);
+bool menu_pointer_back(void);
+int  menu_pointer_row(int y0, int n);
+
 #ifdef NETBIN
 /*----------------------
  | MenuServiceFn

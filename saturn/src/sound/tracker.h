@@ -31,7 +31,12 @@ typedef struct {
  | Description: A song: a flat cell array addressed as
  |   cells[(pattern * rows + row) * channels + channel], an order list of
  |   pattern indices, the order index to jump back to when the order runs out,
- |   and the number of ticks each row is held for.
+ |   and how long a row is held: speed whole V-blanks plus speed_frac 256ths of
+ |   one. The fraction exists because a row lasts an integer number of frames
+ |   but music does not: at 165 BPM a sixteenth note is 5.45 frames, and
+ |   rounding that to 5 or 6 runs the piece 9 per cent fast or slow. The
+ |   remainder is carried between rows instead, so the average row length is
+ |   right even though no single row is.
  | Author: suinevere
  ----------------------*/
 typedef struct {
@@ -42,6 +47,7 @@ typedef struct {
     unsigned char        order_len;
     unsigned char        loop_to;
     unsigned char        speed;
+    unsigned char        speed_frac;
 } TrackerSong;
 
 /*----------------------

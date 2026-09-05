@@ -17,6 +17,7 @@
          saturn/src/sound/music_synth_data.c && /tmp/t_note
 */
 #include "../src/sound/synth.h"
+#include "../src/sound/scsp.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -51,45 +52,75 @@ static void test_out_of_range_inputs_are_clamped(void) {
     assert(synth_pitch(0, -99) == synth_pitch(0, -8));
 }
 
-static void test_square_is_half_high_half_low(void) {
-    signed char w[64];
-    synth_wave_build(SYNTH_WAVE_SQUARE, w, 64);
-    assert(w[0] > 0 && w[31] > 0);
-    assert(w[32] < 0 && w[63] < 0);
+static int half_mean(const signed char *w, int from, int to) {
+    int sum = 0;
+    for (int i = from; i < to; i++) sum += w[i];
+    return sum / (to - from);
 }
 
-static void test_pulse_is_a_quarter_high(void) {
-    signed char w[64];
-    synth_wave_build(SYNTH_WAVE_PULSE, w, 64);
-    assert(w[0] > 0 && w[15] > 0);
-    assert(w[16] < 0 && w[63] < 0);
+static void test_square_is_positive_then_negative(void) {
+    /* Band-limited now, so individual samples ring around the edges and the
+       old sample-by-sample sign test no longer describes it. What still holds
+       is the shape in the mean. */
+    signed char w[SCSP_WAVE_MAX];
+    synth_wave_build(SYNTH_WAVE_SQUARE, w, SCSP_WAVE_MAX);
+    assert(half_mean(w, 0, SCSP_WAVE_MAX / 2) > 40);
+    assert(half_mean(w, SCSP_WAVE_MAX / 2, SCSP_WAVE_MAX) < -40);
 }
 
-static void test_triangle_peaks_in_the_middle(void) {
-    signed char w[64];
-    synth_wave_build(SYNTH_WAVE_TRIANGLE, w, 64);
-    assert(w[32] > w[0]);
-    assert(w[32] > w[63]);
-    for (int i = 1; i <= 32; i++) assert(w[i] >= w[i - 1]);
-    for (int i = 33; i < 64; i++) assert(w[i] <= w[i - 1]);
+static void test_pulse_is_high_for_about_a_quarter(void) {
+    signed char w[SCSP_WAVE_MAX];
+    synth_wave_build(SYNTH_WAVE_PULSE, w, SCSP_WAVE_MAX);
+    assert(half_mean(w, 0, SCSP_WAVE_MAX / 4) > 20);
+    assert(half_mean(w, SCSP_WAVE_MAX / 2, SCSP_WAVE_MAX) < 0);
 }
 
-static void test_saw_rises_monotonically(void) {
-    signed char w[64];
-    synth_wave_build(SYNTH_WAVE_SAW, w, 64);
-    for (int i = 1; i < 64; i++) assert(w[i] >= w[i - 1]);
-    assert(w[0] < 0);
-    assert(w[63] > 0);
+static void test_triangle_peaks_near_the_middle(void) {
+    signed char w[SCSP_WAVE_MAX];
+    synth_wave_build(SYNTH_WAVE_TRIANGLE, w, SCSP_WAVE_MAX);
+    int peak = 0, at = 0;
+    for (int i = 0; i < SCSP_WAVE_MAX; i++)
+        if (w[i] > peak) { peak = w[i]; at = i; }
+    assert(peak > 60);
+    assert(at > SCSP_WAVE_MAX / 8 && at < SCSP_WAVE_MAX / 2);
+}
+
+static void test_saw_sweeps_across_its_range(void) {
+    signed char w[SCSP_WAVE_MAX];
+    int lo = 127, hi = -128;
+    synth_wave_build(SYNTH_WAVE_SAW, w, SCSP_WAVE_MAX);
+    for (int i = 0; i < SCSP_WAVE_MAX; i++) {
+        if (w[i] < lo) lo = w[i];
+        if (w[i] > hi) hi = w[i];
+    }
+    assert(hi > 60 && lo < -60);
+}
+
+static void test_every_waveform_is_band_limited(void) {
+    /* The point of the additive rebuild. A hard-edged square jumps 200 counts
+       between two adjacent samples, and every harmonic above half the playback
+       rate folds back as an inharmonic whine -- the buzz. A waveform built from
+       a bounded number of harmonics cannot step that far. */
+    for (int k = 0; k < 4; k++) {
+        signed char w[SCSP_WAVE_MAX];
+        int worst = 0;
+        synth_wave_build(k, w, SCSP_WAVE_MAX);
+        for (int i = 1; i < SCSP_WAVE_MAX; i++) {
+            int d = w[i] - w[i - 1];
+            if (d < 0) d = -d;
+            if (d > worst) worst = d;
+        }
+        assert(worst < 60);
+    }
 }
 
 static void test_every_waveform_is_roughly_dc_free(void) {
-    /* A waveform with a DC offset wastes headroom and thumps on key-on. */
     for (int k = 0; k < 4; k++) {
-        signed char w[64];
+        signed char w[SCSP_WAVE_MAX];
         int sum = 0;
-        synth_wave_build(k, w, 64);
-        for (int i = 0; i < 64; i++) sum += w[i];
-        assert(sum > -260 && sum < 260);
+        synth_wave_build(k, w, SCSP_WAVE_MAX);
+        for (int i = 0; i < SCSP_WAVE_MAX; i++) sum += w[i];
+        assert(sum > -400 && sum < 400);
     }
 }
 
@@ -99,10 +130,11 @@ int main(void) {
     test_negative_octaves_wrap_into_four_bits();
     test_octave_and_semitone_combine();
     test_out_of_range_inputs_are_clamped();
-    test_square_is_half_high_half_low();
-    test_pulse_is_a_quarter_high();
-    test_triangle_peaks_in_the_middle();
-    test_saw_rises_monotonically();
+    test_square_is_positive_then_negative();
+    test_pulse_is_high_for_about_a_quarter();
+    test_triangle_peaks_near_the_middle();
+    test_saw_sweeps_across_its_range();
+    test_every_waveform_is_band_limited();
     test_every_waveform_is_roughly_dc_free();
     printf("test_synth_note: all passed\n");
     return 0;

@@ -2,7 +2,10 @@
  | tracker.c
  | Description: Implementation of the sequencer. The tick counter counts down
  |   to zero rather than up to speed, so a row plays on the tick that reaches
- |   it and the first tick after a start plays row zero.
+ |   it and the first tick after a start plays row zero. The fractional part of
+ |   the row length accumulates in g_frac and spends itself as a whole extra
+ |   frame whenever it passes 256, which is how a 5.45-frame row is played by a
+ |   counter that only understands whole frames.
  | Author: suinevere
  | Dependencies: tracker.h
  ----------------------*/
@@ -14,6 +17,7 @@ static int                g_playing;
 static int                g_order;
 static int                g_row;
 static int                g_countdown;
+static int                g_frac;
 
 void tracker_start(const TrackerSong *song, TrackerSink sink) {
     g_song = song;
@@ -21,6 +25,7 @@ void tracker_start(const TrackerSong *song, TrackerSink sink) {
     g_order = 0;
     g_row = 0;
     g_countdown = 0;
+    g_frac = 0;
     g_playing = (song != 0 && sink != 0 && song->order_len > 0 && song->rows > 0);
 }
 
@@ -56,6 +61,11 @@ void tracker_tick(void) {
     }
 
     g_countdown = (s->speed > 0) ? s->speed - 1 : 0;
+    g_frac += s->speed_frac;
+    if (g_frac >= 256) {
+        g_frac -= 256;
+        g_countdown++;
+    }
     g_row++;
     if (g_row >= s->rows) {
         g_row = 0;

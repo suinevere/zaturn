@@ -50,6 +50,7 @@ static TrackerSong song(unsigned char speed, unsigned char loop_to) {
     s.order_len = 2;
     s.loop_to = loop_to;
     s.speed = speed;
+    s.speed_frac = 0;
     return s;
 }
 
@@ -143,6 +144,42 @@ static void test_tick_before_start_is_harmless(void) {
     assert(g_n == 0);
 }
 
+
+static int rows_played(TrackerSong *s, int ticks) {
+    g_n = 0;
+    tracker_start(s, sink);
+    for (int i = 0; i < ticks; i++) tracker_tick();
+    int played = 0;
+    for (int i = 0; i < g_n; i++) if (g_ev[i].ch == 0) played++;
+    return played;
+}
+
+static void test_fractional_speed_averages_out(void) {
+    /* A row lasts a whole number of frames but music does not: at 165 BPM a
+       sixteenth is 5.45 frames. speed 5 + frac 116/256 averages 5.453, so over
+       600 ticks about 110 rows play where a plain speed of 5 plays 120 -- the
+       9 per cent this exists to remove.
+       Channel 0 fires on three of the fixture's four rows (the fourth holds),
+       so its event count is three quarters of the rows: 90 against about 82. */
+    TrackerSong plain = song(5, 0);
+    int whole = rows_played(&plain, 600);
+    assert(whole == 90);
+
+    TrackerSong s = song(5, 0);
+    s.speed_frac = 116;
+    int frac = rows_played(&s, 600);
+    assert(frac < whole);
+    assert(frac >= 80 && frac <= 85);
+}
+
+static void test_zero_fraction_is_exactly_the_old_behaviour(void) {
+    /* 400 ticks at speed 4 is 100 rows, three quarters of which sound on
+       channel 0. A song that sets no fraction must tick exactly as before. */
+    TrackerSong s = song(4, 0);
+    s.speed_frac = 0;
+    assert(rows_played(&s, 400) == 75);
+}
+
 int main(void) {
     test_first_tick_plays_row_zero();
     test_hold_emits_nothing();
@@ -152,6 +189,8 @@ int main(void) {
     test_end_of_song_returns_to_the_loop_point();
     test_stop_silences_and_stays_stopped();
     test_tick_before_start_is_harmless();
+    test_fractional_speed_averages_out();
+    test_zero_fraction_is_exactly_the_old_behaviour();
     printf("test_tracker: all passed\n");
     return 0;
 }

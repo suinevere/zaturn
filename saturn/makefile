@@ -103,6 +103,7 @@ SOURCES = src/main_netbin.cxx \
           src/engine/app_state.cxx \
           src/sound/scsp.c \
           src/sound/synth.c \
+          src/sound/synth_waves.c \
           src/sound/tracker.c \
           src/sound/music_synth_data.c \
           src/sound/synth_target.cxx

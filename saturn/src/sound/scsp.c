@@ -9,6 +9,20 @@
  ----------------------*/
 #include "scsp.h"
 
+/*----------------------
+ | SCSP_EG_SUSTAINED / SCSP_EG_PERCUSSIVE / SCSP_EG_PERCUSSIVE_DL
+ | Description: Two envelopes. A pitched note sustains until the tracker keys it
+ |   off, so its decay rate is zero. A drum has no key-off -- the pattern data
+ |   only ever strikes it -- so it must decay to silence by itself, or the first
+ |   hit latches the noise generator on and every note afterwards plays under a
+ |   continuous hiss. D1R is the decay rate (higher is faster) and DL the level
+ |   it decays to, set to full attenuation so the hit ends.
+ | Author: suinevere
+ ----------------------*/
+#define SCSP_EG_SUSTAINED       0x001F
+#define SCSP_EG_PERCUSSIVE      0xFE1F
+#define SCSP_EG_PERCUSSIVE_DL   0x03FF
+
 static volatile unsigned short *g_regs;
 static volatile signed char    *g_wave;
 static unsigned long            g_wave_sa;
@@ -53,8 +67,8 @@ void scsp_key_on(int voice, unsigned short pitch, int wave, int level) {
     s[0x02 / 2] = (unsigned short)(sa & 0xFFFFu);
     s[0x04 / 2] = 0;
     s[0x06 / 2] = (unsigned short)(g_wave_len[wave] - 1);
-    s[0x08 / 2] = 0x001F;
-    s[0x0A / 2] = 0x001F;
+    s[0x08 / 2] = SCSP_EG_SUSTAINED;
+    s[0x0A / 2] = SCSP_EG_SUSTAINED;
     s[0x0C / 2] = 0x0000;
     s[0x0E / 2] = 0x0000;
     s[0x10 / 2] = pitch;
@@ -75,8 +89,8 @@ void scsp_key_on_noise(int voice, int level) {
     s[0x02 / 2] = 0x0000;
     s[0x04 / 2] = 0x0000;
     s[0x06 / 2] = 0x0000;
-    s[0x08 / 2] = 0x001F;
-    s[0x0A / 2] = 0x001F;
+    s[0x08 / 2] = SCSP_EG_PERCUSSIVE;
+    s[0x0A / 2] = SCSP_EG_PERCUSSIVE_DL;
     s[0x0C / 2] = 0x0000;
     s[0x0E / 2] = 0x0000;
     s[0x10 / 2] = 0x0000;

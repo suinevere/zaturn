@@ -10,6 +10,14 @@
 #include "scsp.h"
 
 /*----------------------
+ | SYNTH_WAVE_TABLE
+ | Description: The band-limited waveform tables, generated offline by
+ |   tools/assets/genwaves.py into synth_waves.c.
+ | Author: suinevere
+ ----------------------*/
+extern const signed char SYNTH_WAVE_TABLE[4][SCSP_WAVE_MAX];
+
+/*----------------------
  | SYNTH_FNS
  | Description: Sega's published FNS value per semitone, C through B.
  | Author: suinevere
@@ -19,13 +27,7 @@ static const unsigned short SYNTH_FNS[12] = {
     0x1A8, 0x1FE, 0x25A, 0x2BA, 0x321, 0x38D
 };
 
-/*----------------------
- | SYNTH_AMP
- | Description: Peak sample value for the generated waveforms. Short of 127 so
- |   four voices summing in the SCSP mixer have somewhere to go.
- | Author: suinevere
- ----------------------*/
-#define SYNTH_AMP 100
+
 
 unsigned short synth_pitch(int semitone, int octave) {
     if (semitone < 0) semitone = 0;
@@ -36,24 +38,10 @@ unsigned short synth_pitch(int semitone, int octave) {
 }
 
 void synth_wave_build(int index, signed char *out, int len) {
-    int half = len / 2;
-    int quarter = len / 4;
-
-    for (int i = 0; i < len; i++) {
-        int v = 0;
-        if (index == SYNTH_WAVE_SQUARE) {
-            v = (i < half) ? SYNTH_AMP : -SYNTH_AMP;
-        } else if (index == SYNTH_WAVE_PULSE) {
-            v = (i < quarter) ? (SYNTH_AMP * 3 / 4) : -(SYNTH_AMP / 4);
-        } else if (index == SYNTH_WAVE_TRIANGLE) {
-            v = (i <= half)
-                ? (-SYNTH_AMP + (2 * SYNTH_AMP * i) / half)
-                : (SYNTH_AMP - (2 * SYNTH_AMP * (i - half)) / (len - half));
-        } else {
-            v = -SYNTH_AMP + (2 * SYNTH_AMP * i) / (len - 1);
-        }
-        out[i] = (signed char) v;
-    }
+    int i;
+    if (index < 0 || index >= SCSP_WAVES) index = 0;
+    for (i = 0; i < len; i++)
+        out[i] = SYNTH_WAVE_TABLE[index][(i * SCSP_WAVE_MAX) / len % SCSP_WAVE_MAX];
 }
 
 #include "tracker.h"

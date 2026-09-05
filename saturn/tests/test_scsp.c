@@ -34,11 +34,13 @@ static void test_key_on_writes_the_documented_words(void) {
     scsp_upload_wave(1, wave, 64);
     scsp_key_on(0, 0x02BA, 1, 7);
 
-    /* SA = 0x70000 + 1 * 64 = 0x70040, so the high nibble is 7 and the low
-       word is 0x0040. LPCTL = normal loop (bit5), PCM8B (bit4), KYONB (bit11)
-       and KYONEX (bit12) all set by the end of the sequence. */
+    /* SA = 0x70000 + one waveform's worth, so the high nibble is 7 and the low
+       word follows the table size -- derived rather than spelled out, because
+       hard-coding it is what broke this test when the tables grew from 64 to
+       256 samples. LPCTL = normal loop (bit5), PCM8B (bit4), KYONB (bit11) and
+       KYONEX (bit12) are all set by the end of the sequence. */
     assert(SLOT_WORD(0, 0x00) == 0x1837);
-    assert(SLOT_WORD(0, 0x02) == 0x0040);
+    assert(SLOT_WORD(0, 0x02) == (unsigned short)((0x70000UL + SCSP_WAVE_MAX) & 0xFFFF));
     assert(SLOT_WORD(0, 0x04) == 0x0000);
     assert(SLOT_WORD(0, 0x06) == 63);
     assert(SLOT_WORD(0, 0x10) == 0x02BA);
@@ -123,6 +125,28 @@ static void test_enable_output_raises_master_volume_only(void) {
     assert((g_regs[0x400 / 2] & 0xFFF0) == 0x0300);
 }
 
+
+static void test_noise_decays_but_a_pitched_note_sustains(void) {
+    /* The drum voice is only ever struck -- the pattern data emits no key-off
+       for it -- so its envelope has to end the sound by itself. A pitched note
+       is the opposite: it must hold until the tracker releases it. D1R (bits
+       10-6 of register 0x08) is the decay rate, so it must be zero for a note
+       and non-zero for a drum. Getting this backwards latches the noise
+       generator on at the first hit and buries the music under a hiss. */
+    signed char wave[64];
+    for (int i = 0; i < 64; i++) wave[i] = 0;
+    reset();
+    scsp_upload_wave(0, wave, 64);
+
+    scsp_key_on(0, 0x0000, 0, 7);
+    assert(((SLOT_WORD(0, 0x08) >> 6) & 0x1F) == 0);
+
+    scsp_key_on_noise(1, 7);
+    assert(((SLOT_WORD(1, 0x08) >> 6) & 0x1F) != 0);
+    /* and it must decay all the way down, not to a floor it holds at */
+    assert(((SLOT_WORD(1, 0x0A) >> 5) & 0x1F) == 0x1F);
+}
+
 int main(void) {
     test_key_on_writes_the_documented_words();
     test_key_on_targets_slot_28_upwards();
@@ -132,6 +156,7 @@ int main(void) {
     test_upload_copies_into_its_own_wave_area();
     test_silence_zeroes_only_owned_slots();
     test_enable_output_raises_master_volume_only();
+    test_noise_decays_but_a_pitched_note_sustains();
     printf("test_scsp: all passed\n");
     return 0;
 }

@@ -29,13 +29,16 @@ extern "C" {
 
 /*----------------------
  | SCSP_WAVES / SCSP_WAVE_MAX
- | Description: Four waveforms, 64 samples each, laid end to end in the
- |   waveform area. 64 samples at OCT 0 sounds 44100/64 = 689 Hz, so the pitch
- |   register does the rest.
+ | Description: Four waveforms, 256 samples each, laid end to end in the
+ |   waveform area. 256 samples at OCT 0 sounds 44100/256 = 172 Hz, about F3,
+ |   which puts the tables where a bass line lives and leaves the pitch register
+ |   to carry everything upward. The length is what gives an additive waveform
+ |   room for its harmonics: at 64 samples a hard-edged square aliased into the
+ |   buzz that made this sound like a PC speaker.
  | Author: suinevere
  ----------------------*/
 #define SCSP_WAVES    4
-#define SCSP_WAVE_MAX 64
+#define SCSP_WAVE_MAX 256
 
 /*----------------------
  | SCSP_REG_WORDS

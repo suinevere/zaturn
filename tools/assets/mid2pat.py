@@ -45,6 +45,21 @@ import argparse, struct, sys, pathlib
 ROWS_PER_PATTERN = 16
 CHANNELS = 4
 DRUM_MIDI_CHANNEL = 9
+DRUM_SNARE_NOTE = 38          # GM acoustic snare, the "sharp tap" of the pair
+# A drum tablature, when one is given, replaces the sequence's drum channel
+# outright: one line a bar, four beats a bar, four slots a beat, and the
+# characters h (closed hat), s (snare), k (kick) and . (rest). Slashes are
+# decoration and are stripped, so a bar may be written "sss./h.ss/s.hh/.h.h"
+# or as sixteen characters. A trailing "xN" repeats the bar. The drums are the
+# one part of this arrangement not taken from the MIDI, because the fan
+# sequence's drum channel plays about fifty strikes a statement more than the
+# recording does and the owner is authoring the part by ear instead.
+TAB_ROWS_PER_BEAT = 8
+TAB_KINDS = {"h": "hat", "s": "snare", "k": "kick"}
+# A slot written as three of the same letter is a triplet: three strikes on
+# consecutive thirty-seconds rather than one on the sixteenth, which is the
+# fast figure this arrangement is built on and the one the owner asked to keep.
+# It runs half a slot into the next one, so the next slot has to be a rest.
 
 # Waveform and volume per synth channel, following how an NES is scored: the
 # bass on the triangle, the lead on the 50% square, the harmony on a 25% pulse,
@@ -61,16 +76,57 @@ CH_WAVE_DRUMS = [2, 3, 1, 4]
 # drums with the bass. DISDL is three bits in roughly 6 dB steps, so the old
 # [6, 4, 3, 5] put the bass at four times the lead, which measured 51 per cent
 # of our energy in the bass octave against the original's 30 and left the
-# melody band at 11 against its 23. The drum sits at full output with a fine trim
-# on top of it -- see SCSP_NOISE_TRIM -- because DISDL's steps are 6 dB and the
-# right level is between two of them: 6 measures 4.6 / 4.7 per cent in the 2-4
-# and 4-8 kHz bands against the original's 6.6 / 6.3, and 7 measures 8.7 / 9.6,
-# equally wrong either way. Every level here is measured on the chip rather than
+# melody band at 11 against its 23. The drum came off full output when its
+# envelope was slowed to the length of the original's: a strike that lasts fifty
+# milliseconds instead of ten carries far more energy, and at 7 it buried the
+# tune. The trim between this step and the next is not a register but the
+# amplitude the noise table is written at; see NOISE_AMP in
+# tools/assets/genwaves.py. Every level here is measured on the chip rather than
 # in the model, and re-measured after anything that changes what a voice
-# carries: this was swept five times, and the first four answers were wrong
-# because the voices were not yet carrying what they carry now -- the last one
-# because most of the drum strikes were not sounding at all.
-CH_VOL = [6, 5, 4, 7]
+# carries: this has now been swept six times, and every earlier answer was wrong
+# for a reason that was not the level.
+CH_VOL = [6, 5, 4, 6]
+# A drum strike that does not land on an eighth note is emitted one DISDL step
+# down. Measured, not stylistic: over the rows this arrangement strikes, the
+# high-band flux of a recording of the NES original sits 8.0 dB below the eighth
+# for a strike on the sixteenth between two of them and 9.4 dB below for one on a
+# thirty-second, while ours sat at 0.3 and 1.7 -- flat. That is what "too much
+# hi-hat" is. The sequence does carry the accent in its velocities, but only as
+# 100 against 96 and 83, which is 1.6 dB and cannot survive a 6 dB step, so the
+# accent is taken from the beat instead. One step is the nearest the chip has to
+# the 8 dB measured; there is no per-strike trim finer than DISDL.
+DRUM_UNACCENTED_DROP = 1
+# The drum notes that ring rather than stop. Everything the sequence writes is
+# played by one voice with one envelope, so an open hat and a crash sounded
+# exactly like a closed hat -- the owner's report was that ours is "all one
+# tone". These two keep the same waveform and rate and take the long envelope
+# instead, which is the only thing the NES could have varied either: one noise
+# channel, one period per hit, and a decay it can make as long as it likes.
+# The two taps. This arrangement's recurring figure is three strikes carrying a
+# closed hat and then one or two carrying only a snare -- "three bright taps
+# then a quick sharp tap", as the owner put it -- and on a machine with one
+# noise channel the difference between them is the rate the shift register is
+# clocked at, which is what the sixteen NES periods are for. Measured on a
+# recording of the original as the 8-16 kHz share against the 2-5 kHz share of
+# each strike: a row carrying a hat reads 0.27 and a row carrying only a snare
+# reads 0.15, while ours read 0.28 for both, which is the "all one tone" the
+# owner heard. The snare-only rows are therefore struck at a lower note.
+#
+# How much lower was swept on the chip, scored inside 2-8 kHz where this
+# engine's noise actually lives -- the 8-16 kHz band is mostly the pulse
+# voices' harmonics here, because the shift register's own band ends at
+# 7.8 kHz, and scoring there moved almost nothing. Separation of hat from
+# snare, as centroid and as the 5-8 kHz share against the 2-3.5 kHz share:
+# the original is +74 Hz and 1.13x; 0 / 3 / 6 / 10 semitones give -53 Hz 0.96x,
+# -50 Hz 0.95x, -26 Hz 0.99x and +61 Hz 1.13x. The measured difference between
+# the two taps is small -- this is one noise channel, not two drums.
+DRUM_DARK_SEMITONES = 10
+# A snare inside a fast figure -- a triplet or a double, anything with another
+# strike on the row beside it -- is darkened less, so it keeps some crunch. Ten
+# semitones down suits a snare standing alone and makes a triplet dull, which is
+# what the owner heard: the fast figures are the ones carrying the character and
+# they lose most by being taken off the top of the shift register's range.
+DRUM_FAST_SEMITONES = 3
 WAVE_NAMES = ["SYNTH_WAVE_PULSE12", "SYNTH_WAVE_PULSE25",
               "SYNTH_WAVE_TRIANGLE", "SYNTH_WAVE_PULSE50", "SYNTH_WAVE_NOISE"]
 WAVE_NOISE = 4
@@ -162,13 +218,95 @@ def read_midi(path):
     return division, tempo, events
 
 
+def read_drum_tab(path, beats_per_bar=4):
+    """Parse a drum tablature into one kind-or-None per thirty-second row.
+
+    A beat is written as four slots (sixteenths) or as eight (thirty-seconds),
+    and which one is in use is read from the group's own length, so a part with
+    a fast figure in it can be written out literally rather than through a
+    token. At four slots a beat, three of the same letter is one slot struck
+    three times on consecutive thirty-seconds -- the triplet this arrangement
+    is built on. Slashes are beat boundaries and are not optional at four slots
+    a beat: a beat ending "hh" beside one starting "h" is otherwise three
+    letters in a row and cannot be told from a triplet.
+    """
+    rows = []
+    for raw in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        repeat = 1
+        if "x" in line:
+            body, _, count = line.rpartition("x")
+            if count.strip().isdigit():
+                line, repeat = body, int(count.strip())
+        groups = [g for g in line.split("/") if g.strip()] if "/" in line else [line]
+        if len(groups) != beats_per_bar:
+            raise SystemExit("drum tab: %r has %d beats, need %d a bar"
+                             % (raw.strip(), len(groups), beats_per_bar))
+        bar = []
+        for gi, group in enumerate(groups):
+            chars = [c for c in group if c in TAB_KINDS or c == "."]
+            beat = [None] * TAB_ROWS_PER_BEAT
+            if len(chars) == TAB_ROWS_PER_BEAT:
+                for i, c in enumerate(chars):
+                    beat[i] = TAB_KINDS.get(c)
+            else:
+                slots, i = [], 0
+                while i < len(chars):
+                    c = chars[i]
+                    if c in TAB_KINDS and chars[i:i + 3] == [c, c, c]:
+                        slots.append((TAB_KINDS[c], 3)); i += 3
+                    else:
+                        slots.append((TAB_KINDS.get(c), 1)); i += 1
+                if len(slots) != TAB_ROWS_PER_BEAT // 2:
+                    raise SystemExit(
+                        "drum tab: %r beat %d reads as %d slots, need %d "
+                        "(a triplet counts as one) or %d written out"
+                        % (raw.strip(), gi + 1, len(slots),
+                           TAB_ROWS_PER_BEAT // 2, TAB_ROWS_PER_BEAT))
+                for j, (kind, span) in enumerate(slots):
+                    if kind is None:
+                        continue
+                    for k in range(span):
+                        r = j * 2 + k
+                        if r < TAB_ROWS_PER_BEAT:
+                            beat[r] = kind
+                        # A triplet in the last slot runs past the beat; it is
+                        # truncated rather than refused, because a bar may well
+                        # end on one and whatever the next beat opens with
+                        # should win.
+            bar.extend(beat)
+        want = beats_per_bar * TAB_ROWS_PER_BEAT
+        bar = bar[:want]
+        for _ in range(repeat):
+            rows.extend(bar)
+    return rows
+
+
+def tab_hits(rows_of_kinds, rows, grid):
+    """The tablature is already one entry a thirty-second, which is the grid the
+    converter runs on; anything coarser gets the strike on its first row."""
+    step = max(1, 32 // grid)
+    note = {"snare": DRUM_SNARE_NOTE, "hat": 42, "kick": 36}
+    out = []
+    for r in range(rows):
+        src = r * step
+        kind = rows_of_kinds[src] if src < len(rows_of_kinds) else None
+        out.append({note[kind]} if kind else set())
+    return out
+
+
 def grid_rows(division, events, grid, drums):
     """Per row: what each MIDI channel is sounding, and whether a drum was hit.
 
     Kept per channel rather than merged into one set, because which part a note
     belongs to is information the merge throws away and the octave fold needs:
     a bass pedalling on G3 under a melody on G4 is two parts an octave apart,
-    not one part doubled.
+    not one part doubled. A row's drums come back as the set of drum notes on
+    it rather than a flag, because open hat and crash are struck differently
+    from the rest; an empty set is falsy, so a caller that only asks whether
+    the row is struck reads the same as before.
     """
     ticks_per_row = max(1, (division * 4) // grid)
     # Round to the nearest row rather than the one a note starts inside. A hit
@@ -183,13 +321,13 @@ def grid_rows(division, events, grid, drums):
     idx = 0
     for row in range(total):
         limit = (row + 1) * ticks_per_row - half
-        hit = False
+        hit = set()
         while idx < len(events) and events[idx][0] < limit:
             _, pitch, on, chan = events[idx]
             idx += 1
             if chan == DRUM_MIDI_CHANNEL:
                 if on and drums:
-                    hit = True
+                    hit.add(pitch)
                 continue
             if on:
                 active.setdefault(chan, set()).add(pitch)
@@ -311,7 +449,7 @@ def echo_delay(parts, lead, answer, max_shift=16):
 
 
 def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
-            bpm_override=0.0, fold="off"):
+            bpm_override=0.0, fold="off", drum_tab=None, tab_beats=4):
     """Run the whole reduction and return everything both callers need.
 
     The offline preview renders from this, and the build emits C from it, so
@@ -323,7 +461,8 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
         raise SystemExit("no notes found")
 
     has_drums = (not no_drums
-                 and any(e[3] == DRUM_MIDI_CHANNEL and e[2] for e in events))
+                 and (bool(drum_tab)
+                      or any(e[3] == DRUM_MIDI_CHANNEL and e[2] for e in events)))
     tonal_slots = CHANNELS - 1 if has_drums else CHANNELS
     ch_wave = CH_WAVE_DRUMS if has_drums else CH_WAVE_TONAL
 
@@ -337,13 +476,15 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
         if frac > 255:
             speed, frac = speed + 1, 0
 
-    parts, hits = grid_rows(division, events, grid, has_drums)
+    parts, hits = grid_rows(division, events, grid, has_drums and not drum_tab)
     parts = [{c: fold_octaves(p, fold) for c, p in row.items()} for row in parts]
     if max_rows:
         parts, hits = parts[:max_rows], hits[:max_rows]
     while len(parts) % ROWS_PER_PATTERN:
         parts.append({})
-        hits.append(False)
+        hits.append(set())
+    if drum_tab:
+        hits = tab_hits(read_drum_tab(drum_tab, tab_beats), len(parts), grid)
     lanes = plan_parts(parts, tonal_slots)
     tonal = [sounding(row) for row in parts]
 
@@ -373,7 +514,7 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
     cells = []
     previous = [None] * CHANNELS
     thick = 0
-    for row, pitches, hit in zip(parts, tonal, hits):
+    for r, (row, pitches, hit) in enumerate(zip(parts, tonal, hits)):
         if len(pitches) > tonal_slots:
             thick += 1
         picked = ([max(row[c]) if c is not None and row.get(c) else None for c in lanes]
@@ -392,7 +533,23 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             previous[ch] = pitch
         if has_drums:
             last = CHANNELS - 1
-            row.append((DRUM_NOTE, (ch_wave[last] << 4) | CH_VOL[last])
+            # A strike with another beside it is part of a fast run -- a triplet
+            # or a double -- and is treated differently twice over. It keeps the
+            # accent, because the beat rule exists for a lone strike off the beat
+            # and applied to a triplet it takes the second and third strikes 6 dB
+            # down and the figure stops reading as a triplet at all: measured
+            # against the recording, the original's runs 2.73 / 1.93 / 1.19 where
+            # ours ran 2.52 / 0.67 / 1.08. And it is darkened less, because ten
+            # semitones suits a snare standing alone and makes a fast figure dull.
+            fast = ((r + 1 < len(hits) and hits[r + 1])
+                    or (r > 0 and hits[r - 1]))
+            on_beat = fast or (r % max(1, grid // 8)) == 0
+            vol = CH_VOL[last] - (0 if on_beat else DRUM_UNACCENTED_DROP)
+            vol = max(0, min(7, vol))
+            snare = hit and not (hit - {DRUM_SNARE_NOTE})
+            drop = (DRUM_FAST_SEMITONES if fast else DRUM_DARK_SEMITONES) if snare else 0
+            note = DRUM_NOTE - drop
+            row.append((note, (ch_wave[last] << 4) | vol)
                        if hit else (0, 0))
         cells.append(row)
 
@@ -409,6 +566,11 @@ def add_shared_arguments(ap):
     ap.add_argument("--bpm", type=float, default=0.0,
                     help="override the file's tempo; 0 uses what it declares")
     ap.add_argument("--max-rows", type=int, default=0, help="0 = whole piece")
+    ap.add_argument("--drums-tab",
+                    help="a drum tablature to play instead of the sequence's "
+                         "drum channel; one line a bar, beats separated by /")
+    ap.add_argument("--tab-beats", type=int, default=4,
+                    help="beats in a tablature bar: 3 for 3/4, 4 for 4/4")
     ap.add_argument("--no-drums", action="store_true",
                     help="drop MIDI channel 10 instead of playing it as noise")
     ap.add_argument("--fold-octaves", choices=("off", "up", "down"), default="off",
@@ -428,7 +590,8 @@ def main():
     args = ap.parse_args()
 
     song = convert(args.midi, args.grid, args.speed, args.max_rows,
-                   args.no_drums, args.bpm, args.fold_octaves)
+                   args.no_drums, args.bpm, args.fold_octaves, args.drums_tab,
+                   args.tab_beats)
     cells = song["cells"]
     speed, frac, bpm = song["speed"], song["frac"], song["bpm"]
     has_drums, ch_wave, shift = song["has_drums"], song["ch_wave"], song["shift"]

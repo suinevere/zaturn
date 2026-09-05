@@ -90,17 +90,34 @@ extern "C" {
  ----------------------*/
 #define SCSP_KEY_SETTLE    256
 
+/* TL, the per-slot attenuator (register 0x0C, bits 7-0), is written as zero and
+   the drum's fine level lives in its waveform table instead -- see NOISE_AMP in
+   tools/assets/genwaves.py. TL does work, but not as a calibrated scale:
+   recorded off the chip at 0 / 5 / 37 / 120, the drum's 4-8 kHz power goes
+   10340 / 7732 / 3122 / 2814, so it is worth about 5.7 dB in total and is
+   already clamped by 37 -- nothing like the 0.375 dB a step its eight bits
+   suggest. The table's amplitude is exact by construction, is the same number
+   the offline preview model uses, and halving it reproduces one DISDL step to
+   the digit. A `SCSP_NOISE_TRIM` constant lived here claiming the 0.375 dB
+   scale; it was never measured, because an unguarded `#define` in this header
+   silently overrode every -D the sweep passed on the command line. */
+
 /*----------------------
- | SCSP_NOISE_TRIM
- | Description: A fine attenuation on the percussion voice, in TL steps of about
- |   0.375 dB (register 0x0C, bits 7-0). DISDL has eight steps of 6 dB and the
- |   drum wants to sit between two of them: at 7 it measures 8.7 / 9.6 per cent
- |   of the mix in the 2-4 and 4-8 kHz bands against the original's 6.6 / 6.3,
- |   and at 6 it measures 4.6 / 4.7 -- one too loud, one too quiet, and both the
- |   same distance out. This is the 1.9 dB between them.
+ | SCSP_EG_PERC_D1R
+ | Description: The decay rate of the percussion envelope, register 0x08 bits
+ |   10-6. Higher is faster, and the scale is geometric -- four steps is about
+ |   a factor of two in time. This is how long a drum strike lasts, and it is
+ |   the whole difference between a hat and a tick: at 24 the strike was gone
+ |   inside 10 ms, where the NES original's burst is still at half power 30 ms
+ |   in and audible past 60. Measured on the chip against a recording of the
+ |   original, not read off a rate table. Cannot be slowed without limit -- the
+ |   strike has to be over before the next one, and the closest pair in this
+ |   tune is three frames, 50 ms.
  | Author: suinevere
  ----------------------*/
-#define SCSP_NOISE_TRIM    5
+#ifndef SCSP_EG_PERC_D1R
+#define SCSP_EG_PERC_D1R   17
+#endif
 
 /*----------------------
  | SCSP_REG_WORDS

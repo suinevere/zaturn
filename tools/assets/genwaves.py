@@ -48,6 +48,21 @@ NOISE_WARMUP = 4096
 # fails if they drift apart.
 NOISE_RUN = 1024
 NOISE_STRIDE = 293
+# The percussion's fine level. DISDL's steps are 6 dB and the drum sits between
+# two of them, so something finer is needed; the chip's own TL attenuator is not
+# it -- see the note above SCSP_EG_PERC_D1R in scsp.h -- and this is, because it
+# is exact by construction and is also what the offline preview model plays.
+# Of a possible 127, and swept on the chip against a recording of the NES
+# original: with the drum on DISDL 6, amplitudes 100 / 80 / 64 / 55 give
+# whole-mix band errors of 0.235 / 0.112 / 0.099 / 0.080, and again at 56 once
+# beat accent below took energy out of it -- 55 / 65 / 75 then give 0.123 /
+# 0.086 / 0.084, and 65 is the one that puts the 4-8 kHz band on 3.9 per cent
+# against the original 3.7 rather than 75's 4.6 -- and 56 after the fast runs
+# stopped taking the beat accent, which put eighty-eight strikes back up 6 dB
+# and left the 4-8 kHz band at 4.4. It reads 3.7 now, the original exactly. Sanity check on the
+# calibration: amplitude 50 on DISDL 6 reproduces amplitude 100 on DISDL 5
+# digit for digit, which is the 6 dB step it should be.
+NOISE_AMP = 56.0
 
 NES_NAMES = ["pulse 12.5%", "pulse 25%", "NES triangle (4-bit staircase)", "pulse 50%"]
 SMOOTH_NAMES = ["square", "pulse 25%", "triangle", "saw"]
@@ -84,11 +99,12 @@ def build_noise():
     for _ in range(NOISE_WARMUP):
         feedback = (reg ^ (reg >> 1)) & 1
         reg = (reg >> 1) | (feedback << 14)
+    amp = int(round(NOISE_AMP))
     out = []
     for _ in range(NOISE_LEN // NOISE_OVERSAMPLE):
         feedback = (reg ^ (reg >> 1)) & 1
         reg = (reg >> 1) | (feedback << 14)
-        out.extend([int(AMP) if not reg & 1 else -int(AMP)] * NOISE_OVERSAMPLE)
+        out.extend([amp if not reg & 1 else -amp] * NOISE_OVERSAMPLE)
     return out
 
 
@@ -122,10 +138,19 @@ def build(kind, voice="nes"):
 
 
 def main():
+    global NOISE_AMP, NOISE_OVERSAMPLE
     ap = argparse.ArgumentParser()
     ap.add_argument("out", nargs="?", default="saturn/src/sound/synth_waves.c")
     ap.add_argument("--voice", choices=("nes", "smooth"), default="nes")
+    ap.add_argument("--noise-oversample", type=int, default=NOISE_OVERSAMPLE,
+                    help="table samples per shift-register bit; halving it "
+                         "doubles the bit rate and so the noise bandwidth")
+    ap.add_argument("--noise-amp", type=float, default=NOISE_AMP,
+                    help="percussion table amplitude, 0-127; the drum's fine "
+                         "level, because the chip's own attenuator is coarse and clamps")
     args = ap.parse_args()
+    NOISE_AMP = args.noise_amp
+    NOISE_OVERSAMPLE = args.noise_oversample
 
     names = NES_NAMES if args.voice == "nes" else SMOOTH_NAMES
     blocks = []
@@ -173,7 +198,10 @@ const signed char SYNTH_WAVE_TABLE[4][%(len)d] = {
  |   never heard. Held as data rather than made by the chip because the SCSP's
  |   own noise generator has one setting and the chip has no filter to darken it
  |   with -- its slot registers stop at 0x16. Keying this at a lower note is
- |   what the NES does with its sixteen shift-register clock periods.
+ |   what the NES does with its sixteen shift-register clock periods. Written at
+ |   amplitude %(amp)g of a possible 127, which is also the drum's fine level --
+ |   the chip's own attenuator is too coarse in one direction and too clamped in
+ |   the other, so the trim lives in the data.
  | Author: suinevere
  ----------------------*/
 const signed char SYNTH_NOISE_TABLE[%(nlen)d] = {
@@ -181,9 +209,9 @@ const signed char SYNTH_NOISE_TABLE[%(nlen)d] = {
 };
 ''' % {"voice": args.voice, "len": LEN, "note": note, "nlen": NOISE_LEN,
        "names": ", ".join(names), "body": ",\n".join(blocks),
-       "noise": "\n".join(noise_rows)}, encoding="utf-8")
-    print("wrote %s (%s voices, %d bytes of tonal table, %d of noise)"
-          % (args.out, args.voice, 4 * LEN, NOISE_LEN))
+       "noise": "\n".join(noise_rows), "amp": NOISE_AMP}, encoding="utf-8")
+    print("wrote %s (%s voices, %d bytes of tonal table, %d of noise at amplitude %g)"
+          % (args.out, args.voice, 4 * LEN, NOISE_LEN, NOISE_AMP))
 
 
 if __name__ == "__main__":

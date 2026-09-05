@@ -17,12 +17,14 @@
  |   off, so its decay rate is zero. A drum has no key-off -- the pattern data
  |   only ever strikes it -- so it must decay to silence by itself, or the first
  |   hit latches its voice on and every note afterwards plays under a continuous
- |   hiss. D1R is the decay rate (higher is faster) and DL the level it decays
- |   to, set to full attenuation so the hit ends.
+ |   hiss. Register 0x08 is D2R in bits 15-11, D1R in 10-6, EGHOLD in 5 and AR
+ |   in 4-0; register 0x0A carries DL in bits 9-5 and RR in 4-0. DL is full
+ |   attenuation, so D1R alone runs the strike to silence and D2R is never
+ |   reached -- SCSP_EG_PERC_D1R is therefore the length of a drum hit.
  | Author: suinevere
  ----------------------*/
 #define SCSP_EG_SUSTAINED       0x001F
-#define SCSP_EG_PERCUSSIVE      0xFE1F
+#define SCSP_EG_PERCUSSIVE      ((unsigned short)(0xF81Fu | ((SCSP_EG_PERC_D1R & 0x1F) << 6)))
 #define SCSP_EG_PERCUSSIVE_DL   0x03FF
 
 static volatile unsigned short *g_regs;
@@ -111,7 +113,7 @@ void scsp_key_on(int voice, unsigned short pitch, int wave, int level, int percu
     s[0x06 / 2] = (unsigned short)(len - 1);
     s[0x08 / 2] = percussive ? SCSP_EG_PERCUSSIVE : SCSP_EG_SUSTAINED;
     s[0x0A / 2] = percussive ? SCSP_EG_PERCUSSIVE_DL : SCSP_EG_SUSTAINED;
-    s[0x0C / 2] = (unsigned short)((wave == SCSP_NOISE_WAVE) ? SCSP_NOISE_TRIM : 0);
+    s[0x0C / 2] = 0x0000;
     s[0x0E / 2] = 0x0000;
     s[0x10 / 2] = pitch;
     s[0x12 / 2] = 0x0000;

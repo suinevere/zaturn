@@ -53,16 +53,19 @@ def test_the_shift_register_is_run_past_its_biased_opening():
     The register is seeded with 1, a corner of its state space, and its first
     few hundred outputs are lopsided. Every hit read that same opening, so every
     hit carried the same DC step -- a thump with a pitch, not a noise burst. One
-    hit's worth of the old table averaged +39.6 of a possible 100.
+    hit's worth of the old table averaged +39.6 of a possible 100. The bounds
+    scale with the amplitude the table is written at, which is the drum's level
+    knob and not a constant.
     """
     table = genwaves.build_noise()
+    scale = genwaves.NOISE_AMP / 100.0
     hit = genwaves.NOISE_RUN // 2          # what a hit actually reaches
     opening = sum(table[:hit]) / float(hit)
-    assert abs(opening) < 12, "the table opens on a DC step of %+.1f" % opening
+    assert abs(opening) < 12 * scale, "the table opens on a DC step of %+.1f" % opening
 
     worst = max((abs(sum(table[i:i + hit]) / float(hit))
                  for i in range(0, len(table) - hit, 64)))
-    assert worst < 15, "some hit starts on a DC step of %+.1f" % worst
+    assert worst < 15 * scale, "some hit starts on a DC step of %+.1f" % worst
 
 
 def test_the_table_is_two_samples_per_shift_register_bit():
@@ -70,7 +73,8 @@ def test_the_table_is_two_samples_per_shift_register_bit():
     rate the drum can be keyed at without changing anything visible."""
     table = genwaves.build_noise()
     assert len(table) == genwaves.NOISE_LEN
-    assert set(table) == {100, -100}
+    amp = int(round(genwaves.NOISE_AMP))
+    assert set(table) == {amp, -amp}
     runs, current = [], 1
     for a, b in zip(table, table[1:]):
         if a == b:

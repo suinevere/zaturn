@@ -54,10 +54,23 @@ void synth_wave_build(int index, signed char *out, int len) {
 
 #include "tracker.h"
 #include "music_synth_data.h"
+#include "song_bank.h"
 
 static int g_level = 7;
 static int g_voice_vol[SCSP_VOICES];
 static int g_voice_on[SCSP_VOICES];
+
+/*----------------------
+ | g_song / g_paused
+ | Description: Which tune is loaded and whether the tick is being withheld.
+ |   g_song is remembered rather than read back off the tracker because the
+ |   tracker knows a song by its address and the callers name one by index, and
+ |   because synth_start_song has to be able to tell "this tune again" from "a
+ |   different tune" without comparing pointers into generated data.
+ | Author: suinevere
+ ----------------------*/
+static int g_song = MUSIC_SYNTH_DEFAULT;
+static int g_paused = 0;
 
 void synth_note_on(int channel, int semitone, int octave, int wave, int vol) {
     if (channel < 0 || channel >= SCSP_VOICES) return;
@@ -91,15 +104,63 @@ void synth_init(void) {
 }
 
 void synth_start(void) {
-    tracker_start(music_synth_song(), synth_note_on);
+    synth_start_song(MUSIC_SYNTH_DEFAULT);
+}
+
+void synth_start_song(int index) {
+    const TrackerSong *song;
+    if (index < 0 || index >= song_bank_count()) index = MUSIC_SYNTH_DEFAULT;
+    if (index == g_song && tracker_playing() && !g_paused) return;
+    /* Stopped BEFORE the song is fetched, not after. On the CD build a tune the
+       image does not carry is read off the disc into a buffer the tracker may
+       be walking at that moment -- synth_tick runs on the V-blank -- so asking
+       for it while the tracker is live is a read under a reader. */
+    tracker_stop();
+    song = song_bank_at(index);
+    g_song = index;
+    g_paused = 0;
+    tracker_start(song, synth_note_on);
+}
+
+int synth_song(void) {
+    return g_song;
+}
+
+int synth_song_count(void) {
+    return song_bank_count();
+}
+
+void synth_play_track(int track, int loop) {
+    (void)loop;
+    if (track <= 0) { synth_stop(); return; }
+    synth_start_song(song_bank_for_track(track));
+}
+
+int synth_track_is_short(int track) {
+    (void)track;
+    return 0;
 }
 
 void synth_stop(void) {
     tracker_stop();
+    g_paused = 0;
     for (int v = 0; v < SCSP_VOICES; v++) {
         scsp_key_off(v);
         g_voice_on[v] = 0;
     }
+}
+
+void synth_pause(void) {
+    if (g_paused) return;
+    g_paused = 1;
+    for (int v = 0; v < SCSP_VOICES; v++) {
+        scsp_key_off(v);
+        g_voice_on[v] = 0;
+    }
+}
+
+void synth_resume(void) {
+    g_paused = 0;
 }
 
 void synth_set_level(int level) {
@@ -111,6 +172,7 @@ void synth_set_level(int level) {
 }
 
 void synth_tick(void) {
+    if (g_paused) return;
     tracker_tick();
 }
 

@@ -150,19 +150,28 @@ DRUM_NOTE = 20
 
 def read_midi(path):
     """Return (division, tempo_us_per_quarter, [(tick, pitch, on, channel)])."""
-    buf = pathlib.Path(path).read_bytes()
-    if buf[:4] != b"MThd":
+    raw = pathlib.Path(path).read_bytes()
+    if raw[:4] != b"MThd":
         raise SystemExit("%s is not a MIDI file" % path)
-    _, ntrk, division = struct.unpack(">HHH", buf[8:14])
+    _, ntrk, division = struct.unpack(">HHH", raw[8:14])
+    # A file may declare more than it holds. sgdragon.mid says eight tracks,
+    # carries five, and gives the last of them a length that ends 290 bytes past
+    # the end of the file. Two guards, because the declaration is wrong in two
+    # ways: every track's end is clamped to what is really there, so the walk
+    # stops on the file rather than on the claim, and the buffer is padded so an
+    # event straddling that end reads zeros instead of raising. A tune missing
+    # its last bars is worth more than no tune.
+    have = len(raw)
+    buf = raw + bytes(4)
     p = 14
     events = []
     tempo = 500000
     for _ in range(ntrk):
-        if p >= len(buf) or buf[p:p + 4] != b"MTrk":
+        if p >= have or buf[p:p + 4] != b"MTrk":
             break
         length = struct.unpack(">I", buf[p + 4:p + 8])[0]
         p += 8
-        end = p + length
+        end = min(p + length, have)
         tick = 0
         running = 0
         while p < end:
@@ -560,6 +569,51 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             "ch_wave": ch_wave, "shift": shift, "thick": thick}
 
 
+def pack_patterns(cells):
+    """/*----------------------
+     | pack_patterns
+     | Description: Collapses identical sixteen-row blocks and returns the
+     |     unique ones plus the order list that references them. This is where
+     |     most of the size saving on repeating music comes from -- the
+     |     entryway theme's 384 rows are 20 patterns and 24 order entries -- and
+     |     it is a function rather than a loop inside the emitter because the
+     |     manifest path packs twelve tunes with it.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: ROWS_PER_PATTERN
+     | Params: cells -- rows of per-channel (note, wv) pairs
+     | Returns: (patterns, order)
+     ----------------------*/"""
+    patterns, order, seen = [], [], {}
+    for i in range(0, len(cells), ROWS_PER_PATTERN):
+        block = tuple(tuple(c) for r in cells[i:i + ROWS_PER_PATTERN] for c in r)
+        if block not in seen:
+            seen[block] = len(patterns)
+            patterns.append(block)
+        order.append(seen[block])
+    return patterns, order
+
+
+def check_length(patterns, order, what=""):
+    """/*----------------------
+     | check_length
+     | Description: Refuses a tune the tracker cannot address. Both counts are
+     |     unsigned char in TrackerSong, so 255 is the ceiling and exceeding it
+     |     would wrap silently into a song that plays the wrong patterns rather
+     |     than one that fails to build.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: patterns, order -- pack_patterns' two returns; what -- named in
+     |     the message, since the manifest path converts twelve files
+     | Returns: N/A
+     ----------------------*/"""
+    if len(patterns) > 255 or len(order) > 255:
+        raise SystemExit("%s too long: %d patterns / %d order entries (max 255 "
+                         "each) -- use a coarser grid or a max_rows"
+                         % (what or "tune", len(patterns), len(order)))
+
+
 def add_shared_arguments(ap):
     """The options that change the conversion, so both entry points take them."""
     ap.add_argument("--grid", type=int, default=16, help="notes per whole note")
@@ -580,14 +634,30 @@ def add_shared_arguments(ap):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("midi")
-    ap.add_argument("out")
+    ap.add_argument("midi", nargs="?")
+    ap.add_argument("out", nargs="?")
+    ap.add_argument("--manifest",
+                    help="a songs.json; converts every tune in it into one "
+                         "file, and takes each tune's settings from there "
+                         "rather than from the options below")
+    ap.add_argument("--out", dest="out_opt",
+                    help="where --manifest writes; the .h goes beside it")
+    ap.add_argument("--pat",
+                    help="also write the whole catalogue as a disc file, which "
+                         "is how the CD build carries tunes it has no heap for")
     ap.add_argument("--name", default="")
     ap.add_argument("--source", default="")
     ap.add_argument("--speed", type=int, default=0,
                     help="whole V-blanks per row; 0 derives it from the tempo")
     add_shared_arguments(ap)
     args = ap.parse_args()
+
+    if args.manifest:
+        if not args.out_opt:
+            raise SystemExit("--manifest needs --out")
+        return emit_manifest(args.manifest, args.out_opt, args.pat)
+    if not args.midi or not args.out:
+        raise SystemExit("give a MIDI file and an output, or --manifest and --out")
 
     song = convert(args.midi, args.grid, args.speed, args.max_rows,
                    args.no_drums, args.bpm, args.fold_octaves, args.drums_tab,
@@ -603,17 +673,8 @@ def main():
         reduction += ("; channel %d is channel %d repeated %d rows later and takes "
                       "its waveform" % (answer, lead, delay))
 
-    patterns, order, seen = [], [], {}
-    for i in range(0, len(cells), ROWS_PER_PATTERN):
-        block = tuple(tuple(c) for r in cells[i:i + ROWS_PER_PATTERN] for c in r)
-        if block not in seen:
-            seen[block] = len(patterns)
-            patterns.append(block)
-        order.append(seen[block])
-    if len(patterns) > 255 or len(order) > 255:
-        raise SystemExit("too long: %d patterns / %d order entries (max 255 each) "
-                         "-- use a coarser --grid or --max-rows"
-                         % (len(patterns), len(order)))
+    patterns, order = pack_patterns(cells)
+    check_length(patterns, order, args.midi)
 
     body = []
     for n, block in enumerate(patterns):
@@ -663,6 +724,387 @@ def main():
           % (song["thick"], len(cells)))
     print("pattern data = %d bytes" % size)
     print("wrote %s and %s" % (out, out.with_suffix(".h")))
+    return 0
+
+
+def load_manifest(path):
+    """/*----------------------
+     | load_manifest
+     | Description: Reads songs.json and fills in every default, so the emitter
+     |     below sees one complete record per tune and the manifest can stay as
+     |     short as an id, a name and a file. Paths inside it are relative to
+     |     the manifest's own folder, which is what makes the file movable.
+     | Author: suinevere
+     | Dependencies: json
+     | Globals: N/A
+     | Params: path -- the songs.json
+     | Returns: (list of settings dicts, index of the default tune)
+     ----------------------*/"""
+    import json
+    root = pathlib.Path(path).resolve().parent
+    doc = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    songs = []
+    for s in doc["songs"]:
+        midi = root / s["midi"]
+        if not midi.exists():
+            raise SystemExit("%s: no such MIDI file" % midi)
+        tab = s.get("drums_tab")
+        songs.append({
+            "id": s["id"],
+            "name": s.get("name") or s["id"],
+            "source": s.get("source") or ("%s, a fan sequence of Shadowgate "
+                                          "(NES, 1989), music by Hiroyuki Masuno"
+                                          % s["midi"]),
+            "midi": str(midi),
+            "grid": int(s.get("grid", 32)),
+            "bpm": float(s.get("bpm", 0.0)),
+            "fold": s.get("fold", "off"),
+            "max_rows": int(s.get("max_rows", 0)),
+            "drums_tab": str(root / tab) if tab else None,
+            "tab_beats": int(s.get("tab_beats", 4)),
+            "cd": bool(s.get("cd", False)),
+        })
+    ids = [s["id"] for s in songs]
+    if len(set(ids)) != len(ids):
+        raise SystemExit("two songs share an id: %s" % ids)
+    want = doc.get("default", ids[0])
+    if want not in ids:
+        raise SystemExit("default '%s' is not one of the songs" % want)
+    # The tunes the CD build carries come first, so that build can be the
+    # netbin's catalogue cut short at a number rather than a different table --
+    # every offset below is a prefix of the same two arrays. Stable within each
+    # group, so the manifest's order is still the order the ids are numbered in
+    # as long as nothing moves between the groups.
+    songs.sort(key=lambda s: not s["cd"])
+    ids = [s["id"] for s in songs]
+    if not songs[0]["cd"]:
+        raise SystemExit("no song is marked \"cd\": true -- the CD build needs "
+                         "at least the default one")
+    if not songs[ids.index(want)]["cd"]:
+        raise SystemExit("the default '%s' is not marked \"cd\": true, so the "
+                         "CD build would not carry it" % want)
+    return songs, ids.index(want)
+
+
+def load_track_map(manifest_path, ids, default_index):
+    """/*----------------------
+     | load_track_map
+     | Description: Reads the CD-DA track to tune table that
+     |     tools/gen_synth_moods.py measures, from track_songs.json beside the
+     |     manifest. Missing file means every track falls to the default tune,
+     |     which is what the build did before there was more than one -- so the
+     |     mapping is an improvement on the fallback rather than a requirement
+     |     of it, and a fresh checkout builds without running the measurement.
+     | Author: suinevere
+     | Dependencies: json
+     | Globals: N/A
+     | Params: manifest_path -- the songs.json; ids -- song ids in emit order;
+     |     default_index -- what an unmapped track plays
+     | Returns: (min_track, max_track, [song index per track])
+     ----------------------*/"""
+    import json
+    p = pathlib.Path(manifest_path).resolve().parent / "track_songs.json"
+    if not p.exists():
+        return 2, 32, [default_index] * 31
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    lo, hi = int(doc.get("min_track", 2)), int(doc.get("max_track", 32))
+    table = []
+    for t in range(lo, hi + 1):
+        want = doc.get("tracks", {}).get(str(t))
+        if want is None:
+            table.append(default_index)
+        elif want not in ids:
+            raise SystemExit("track %d maps to '%s', which is not a song" % (t, want))
+        else:
+            table.append(ids.index(want))
+    return lo, hi, table
+
+
+PAT_MAGIC = b"PAT\x1a"
+PAT_VERSION = 1
+PAT_SECTOR = 2048
+PAT_HEADER_BYTES = 512
+PAT_DIR_ENTRY = 12
+
+
+def song_record(entry):
+    """/*----------------------
+     | song_record
+     | Description: One tune as the bytes the console loads into its slot:
+     |     a two-word count, then the cells, then the order list. Self-describing
+     |     because the record is read on its own, sectors away from the directory
+     |     that pointed at it, and a record that had to be trusted to match a
+     |     directory entry would fail silently rather than loudly.
+     |
+     |     Big-endian, because the SH-2 is, and the console casts these bytes to
+     |     TrackerCell in place rather than copying them out.
+     | Author: suinevere
+     | Dependencies: struct
+     | Globals: ROWS_PER_PATTERN, CHANNELS
+     | Params: entry -- an emit_manifest entry carrying blocks and order_list
+     | Returns: bytes, padded to a whole number of sectors
+     ----------------------*/"""
+    blocks, order = entry["blocks"], entry["order_list"]
+    out = bytearray()
+    out += struct.pack(">HH", len(blocks), len(order))
+    for block in blocks:
+        for note, wv in block:
+            out += struct.pack(">BB", note, wv)
+    out += bytes(order)
+    while len(out) % PAT_SECTOR:
+        out += b"\x00"
+    return bytes(out)
+
+
+def write_pat(path, entries, default_index, track_min, track_song):
+    """/*----------------------
+     | write_pat
+     | Description: Writes MUSIC.PAT -- the whole catalogue as a disc file, so
+     |     the CD build can carry twelve tunes without carrying them in .rodata.
+     |     That distinction is the entire point: on that target __heap_start
+     |     follows .rodata, so a linked tune is taken straight out of the heap
+     |     the story loads into, and a tune on the disc is not.
+     |
+     |     One header sector, then one record per tune, each starting on a sector
+     |     of its own. Sector alignment is not tidiness: SRL's LoadBytes takes a
+     |     SECTOR offset, not a byte offset, so a record that did not start on
+     |     one could not be read without reading everything before it.
+     |
+     |     The header carries the directory, the track-to-tune table and the ids,
+     |     so the menu can list every tune and the engine can answer for every
+     |     track with only the first sector resident.
+     | Author: suinevere
+     | Dependencies: struct, pathlib
+     | Globals: PAT_*
+     | Params: path -- where to write; entries -- emit_manifest's entries;
+     |     default_index -- the tune played when nothing chose one; track_min --
+     |     the first CD-DA track the table answers for; track_song -- one tune
+     |     index per track
+     | Returns: (file bytes, largest record bytes)
+     ----------------------*/"""
+    records = [song_record(e) for e in entries]
+    sectors, at = [], 1
+    for r in records:
+        sectors.append(at)
+        at += len(r) // PAT_SECTOR
+
+    ids = bytearray()
+    id_rel = []
+    for e in entries:
+        id_rel.append(len(ids))
+        ids += e["id"].encode("ascii") + b"\x00"
+
+    slot = max(len(r) for r in records)
+    directory = bytearray()
+    for i, e in enumerate(entries):
+        # The record's real length, not its padded one: the console reads whole
+        # sectors but only the leading bytes mean anything, and the slot is
+        # sized from the padded maximum below.
+        real = 4 + len(e["blocks"]) * ROWS_PER_PATTERN * CHANNELS * 2 + e["order_len"]
+        directory += struct.pack(">HHHBBBB", sectors[i], len(records[i]) // PAT_SECTOR,
+                                 real, e["order_len"], 0, e["speed"], e["frac"])
+        directory += struct.pack(">H", id_rel[i])
+
+    tracks = bytes(track_song)
+    # 4 magic + seven words of shape + five of layout. Written out rather than
+    # measured because the directory offset has to be inside the header that
+    # names it; the assertion below is what keeps the two honest.
+    dir_off = 28
+    trk_off = dir_off + len(directory)
+    id_off = trk_off + len(tracks)
+    head = bytearray()
+    head += PAT_MAGIC
+    head += struct.pack(">HHHHHHH", PAT_VERSION, len(entries), ROWS_PER_PATTERN,
+                        CHANNELS, default_index, track_min,
+                        track_min + len(tracks) - 1)
+    head += struct.pack(">HHHHH", slot, dir_off, trk_off, id_off, 0)
+    if len(head) != dir_off:
+        raise SystemExit("PAT header is %d bytes, not the declared %d"
+                         % (len(head), dir_off))
+    head += directory + tracks + ids
+    if len(head) > PAT_HEADER_BYTES:
+        raise SystemExit("PAT header sector is %d bytes, over the %d the console "
+                         "reads -- fewer tunes, or shorter ids"
+                         % (len(head), PAT_HEADER_BYTES))
+    head += b"\x00" * (PAT_SECTOR - len(head))
+
+    pathlib.Path(path).write_bytes(bytes(head) + b"".join(records))
+    return PAT_SECTOR + sum(len(r) for r in records), slot
+
+
+def order_text(order_all, cut):
+    """/*----------------------
+     | order_text
+     | Description: The order list as C, cut where the CD build's copy ends. The
+     |     cut has to be written out here rather than left to the chunking,
+     |     because sixteen entries to a line will not in general land on the
+     |     boundary and a #if in the middle of an initialiser line does not
+     |     compile.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: order_all -- every tune's order entries; cut -- how many of them
+     |     the CD build carries
+     | Returns: the initialiser body
+     ----------------------*/"""
+    def rows(seq):
+        return [", ".join("%d" % o for o in seq[i:i + 16])
+                for i in range(0, len(seq), 16)]
+    head = rows(order_all[:cut])
+    tail = rows(order_all[cut:])
+    if not tail:
+        return ",\n    ".join(head)
+    return (",\n    ".join(head) + ",\n"
+            "#if MUSIC_SYNTH_SONGS > MUSIC_SYNTH_SONGS_CD\n    "
+            + ",\n    ".join(tail) + "\n#endif")
+
+
+def emit_manifest(manifest_path, out_path, pat_path=None):
+    """/*----------------------
+     | emit_manifest
+     | Description: Converts every tune in the manifest and writes them into one
+     |     music_synth_data.c. The cells and the order lists of all of them live
+     |     in two flat arrays and each song points at its own offset inside
+     |     them, rather than each tune getting arrays of its own: TrackerSong
+     |     holds a pointer, so an offset base costs nothing at run time, and it
+     |     leaves two length assertions to write instead of two per tune.
+     | Author: suinevere
+     | Dependencies: json, pathlib
+     | Globals: ROWS_PER_PATTERN, CHANNELS, WAVE_NAMES
+     | Params: manifest_path -- the songs.json; out_path -- the .c to write,
+     |     whose .h is written beside it
+     | Returns: 0
+     ----------------------*/"""
+    songs, default_index = load_manifest(manifest_path)
+    cd_songs = sum(1 for s in songs if s["cd"])
+    cell_lines, order_all, entries = [], [], []
+    cell_off = 0
+    cd_cells = cd_order = 0
+    for n_song, s in enumerate(songs):
+        # Where the CD build's copy of each array ends. Everything past here is
+        # inside the #if below, and both builds read the same prefix.
+        if n_song == cd_songs:
+            cd_cells, cd_order = cell_off, len(order_all)
+            cell_lines.append("#if MUSIC_SYNTH_SONGS > MUSIC_SYNTH_SONGS_CD")
+        got = convert(s["midi"], grid=s["grid"], speed_arg=0,
+                      max_rows=s["max_rows"], no_drums=False,
+                      bpm_override=s["bpm"], fold=s["fold"],
+                      drum_tab=s["drums_tab"], tab_beats=s["tab_beats"])
+        patterns, order = pack_patterns(got["cells"])
+        check_length(patterns, order, s["id"])
+        cell_lines.append("    /* %s -- %d patterns of %d rows, from cell %d */"
+                          % (s["id"], len(patterns), ROWS_PER_PATTERN, cell_off))
+        for n, block in enumerate(patterns):
+            cell_lines.append("    /* %s pattern %d */" % (s["id"], n))
+            for r in range(ROWS_PER_PATTERN):
+                row = block[r * CHANNELS:(r + 1) * CHANNELS]
+                cell_lines.append("    " + " ".join("{ %3d, 0x%02X },"
+                                                    % (a, b) for a, b in row))
+        seconds = len(got["cells"]) * (got["speed"] + got["frac"] / 256.0) / 60.0
+        entries.append({
+            "id": s["id"], "name": s["name"], "source": s["source"],
+            "cell_off": cell_off, "order_off": len(order_all),
+            "order_len": len(order), "patterns": len(patterns),
+            "speed": got["speed"], "frac": got["frac"], "seconds": seconds,
+            "waves": ", ".join(WAVE_NAMES[w] for w in got["ch_wave"]),
+            "drums": "drums" if got["has_drums"] else "no drums",
+            "rows": len(got["cells"]),
+            "blocks": patterns, "order_list": order,
+        })
+        cell_off += len(patterns) * ROWS_PER_PATTERN * CHANNELS
+        order_all.extend(order)
+    if cd_songs == len(songs):
+        cd_cells, cd_order = cell_off, len(order_all)
+    else:
+        cell_lines.append("#endif")
+
+    lo, hi, track_song = load_track_map(manifest_path,
+                                        [e["id"] for e in entries], default_index)
+
+    song_rows, name_rows, id_rows = [], [], []
+    for i, e in enumerate(entries):
+        if i == cd_songs and cd_songs != len(entries):
+            song_rows.append("#if MUSIC_SYNTH_SONGS > MUSIC_SYNTH_SONGS_CD")
+            name_rows.append("#if MUSIC_SYNTH_SONGS > MUSIC_SYNTH_SONGS_CD")
+            id_rows.append("#if MUSIC_SYNTH_SONGS > MUSIC_SYNTH_SONGS_CD")
+        song_rows.append("    /* %d %-12s %3d patterns, %3d order, %5.1f s, %s */"
+                         % (i, e["id"] + ":", e["patterns"], e["order_len"],
+                            e["seconds"], e["drums"]))
+        song_rows.append("    { MUSIC_CELLS + %6d, MUSIC_SYNTH_ROWS, "
+                         "MUSIC_SYNTH_CHANNELS, MUSIC_ORDER + %4d, %3d, 0, %3d, %3d },"
+                         % (e["cell_off"], e["order_off"], e["order_len"],
+                            e["speed"], e["frac"]))
+        name_rows.append('    "%s",' % e["name"])
+        id_rows.append('    "%s",' % e["id"])
+    if cd_songs != len(entries):
+        song_rows.append("#endif")
+        name_rows.append("#endif")
+        id_rows.append("#endif")
+
+    catalogue = "\n".join(" |     %-4s %-12s %-26s %s"
+                          % ("disc" if songs[i]["cd"] else "net",
+                             e["id"], e["name"], e["source"])
+                          for i, e in enumerate(entries))
+    fields = {
+        "command": ("tools/assets/mid2pat.py --manifest %s --out %s"
+                    % (manifest_path, out_path)),
+        "songs": len(entries),
+        "cells": "\n".join(cell_lines),
+        "cell_total": cell_off,
+        "order": order_text(order_all, cd_order),
+        "order_total": len(order_all),
+        "rows": ROWS_PER_PATTERN,
+        "channels": CHANNELS,
+        "default": default_index,
+        "default_id": entries[default_index]["id"],
+        "default_name": entries[default_index]["name"],
+        "song_table": "\n".join(song_rows),
+        "names": "\n".join(name_rows),
+        "ids": "\n".join(id_rows),
+        "id_width": max(len(e["id"]) for e in entries),
+        "catalogue": catalogue,
+        "songs_cd": cd_songs,
+        "cells_cd": cd_cells,
+        "order_cd": cd_order,
+        "track_min": lo,
+        "track_max": hi,
+        "track_count": hi - lo + 1,
+        "track_table": ",\n    ".join(
+            ", ".join("%d" % t for t in track_song[i:i + 16])
+            for i in range(0, len(track_song), 16)),
+    }
+
+    pat_bytes, slot = 0, 0
+    if pat_path:
+        pat_bytes, slot = write_pat(pat_path, entries, default_index, lo, track_song)
+    fields["pat_slot"] = slot
+    fields["pat_header"] = PAT_HEADER_BYTES
+    fields["pat_sector"] = PAT_SECTOR
+    fields["pat_name"] = pathlib.Path(pat_path).name if pat_path else "MUSIC.PAT"
+
+    out = pathlib.Path(out_path)
+    out.write_text(MANIFEST_TEMPLATE % fields, encoding="utf-8")
+    out.with_suffix(".h").write_text(MANIFEST_HEADER % fields, encoding="utf-8")
+
+    def image_bytes(cells, order, count):
+        return cells * 2 + order + count * 12 + len(track_song)
+    for i, e in enumerate(entries):
+        print("%-4s %-12s rows=%5d patterns=%3d order=%3d %6.1f s  %s"
+              % ("disc" if songs[i]["cd"] else "net", e["id"], e["rows"],
+                 e["patterns"], e["order_len"], e["seconds"], e["drums"]))
+    print("netbin: %d songs, %d cells, %d order entries -- about %d bytes of image"
+          % (len(entries), cell_off, len(order_all),
+             image_bytes(cell_off, len(order_all), len(entries))))
+    print("CD:     %d songs, %d cells, %d order entries -- about %d bytes of image"
+          % (cd_songs, cd_cells, cd_order,
+             image_bytes(cd_cells, cd_order, cd_songs)))
+    print("default is %s; CD-DA tracks %d-%d mapped to %d distinct tunes"
+          % (entries[default_index]["id"], lo, hi, len(set(track_song))))
+    print("wrote %s and %s" % (out, out.with_suffix(".h")))
+    if pat_path:
+        print("wrote %s -- %d bytes on the disc, largest tune %d, so the CD "
+              "build holds %d bytes of Low Work RAM and no heap"
+              % (pat_path, pat_bytes, slot, PAT_HEADER_BYTES + slot))
     return 0
 
 
@@ -782,6 +1224,359 @@ static const TrackerSong MUSIC_SONG = {
 
 const TrackerSong *music_synth_song(void) {
     return &MUSIC_SONG;
+}
+'''
+
+MANIFEST_HEADER = '''/*----------------------
+ | music_synth_data.h
+ | Description: The tunes the synth can play, in both builds. Data only: the
+ |   engine reads it and never reaches back. Generated by
+ |   tools/assets/mid2pat.py from tools/assets/music/songs.json -- do not
+ |   hand-edit, because the .c asserts its own array lengths against the
+ |   numbers here.
+ |
+ |   The catalogue, in emit order:
+%(catalogue)s
+ |
+ |   Default: %(default_name)s.
+ | Author: suinevere
+ | Dependencies: tracker.h
+ ----------------------*/
+#ifndef MUSIC_SYNTH_DATA_H
+#define MUSIC_SYNTH_DATA_H
+
+#include "tracker.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*----------------------
+ | MUSIC_SYNTH_SONGS_CD
+ | Description: How many tunes the CD build carries, which is fewer, and why
+ |   there are two counts at all.
+ |
+ |   The catalogue is pattern data in .rodata, and on the CD target
+ |   __heap_start follows .rodata: every byte of music comes straight off the
+ |   HWRAM heap the story is loaded into. Measured, the full catalogue is 55,424
+ |   bytes and takes that heap to 98,016, which is below the 129,704 bytes
+ |   LURKING.Z3 needs to load at all -- the disc's largest story simply stops
+ |   working. The netbin loads no story and has 130 KB of its own image budget
+ |   spare, so it carries all of them.
+ |
+ |   The CD build's tunes are the first MUSIC_SYNTH_SONGS_CD of the catalogue,
+ |   never a scattered subset, so both builds read the same prefix of the same
+ |   two arrays and a song index means the same thing in each. Which tunes those
+ |   are is the "cd": true flag in songs.json.
+ |
+ |   This costs the CD build nothing it had: the synth is its fallback for a
+ |   disc that carries no CD-DA, and a disc that does carry it has thirty-one
+ |   real tracks and never reaches here.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SYNTH_SONGS_CD %(songs_cd)d
+
+/*----------------------
+ | MUSIC_SYNTH_SONGS / MUSIC_SYNTH_ROWS / MUSIC_SYNTH_CHANNELS
+ | Description: How many tunes this build has and the shape of a pattern. Every
+ |   tune shares the row and channel counts, because the tracker reads them off
+ |   the song it is given and a tune with a shape of its own would only mean a
+ |   second set of numbers to keep in step.
+ | Author: suinevere
+ ----------------------*/
+#ifdef NETBIN
+#define MUSIC_SYNTH_SONGS    %(songs)d
+#else
+#define MUSIC_SYNTH_SONGS    MUSIC_SYNTH_SONGS_CD
+#endif
+#define MUSIC_SYNTH_ROWS     %(rows)d
+#define MUSIC_SYNTH_CHANNELS %(channels)d
+
+/*----------------------
+ | MUSIC_SYNTH_CELLS / MUSIC_SYNTH_ORDER
+ | Description: The lengths of the two flat arrays every tune points into. They
+ |   are here rather than only in the .c because the file asserts its own
+ |   initialiser lengths against them at compile time: C zero-fills a short
+ |   initialiser without complaint, which would be a silently truncated
+ |   catalogue that every test still passes -- and with two builds carrying
+ |   different lengths, that assertion is now also what catches a prefix cut in
+ |   the wrong place.
+ | Author: suinevere
+ ----------------------*/
+#ifdef NETBIN
+#define MUSIC_SYNTH_CELLS    %(cell_total)d
+#define MUSIC_SYNTH_ORDER    %(order_total)d
+#else
+#define MUSIC_SYNTH_CELLS    %(cells_cd)d
+#define MUSIC_SYNTH_ORDER    %(order_cd)d
+#endif
+
+/*----------------------
+ | MUSIC_SYNTH_DEFAULT
+ | Description: The tune played where nothing has chosen one -- the boot menus,
+ |   the netbin, and any CD-DA track the mood table does not reach.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SYNTH_DEFAULT  %(default)d
+
+/*----------------------
+ | MUSIC_PAT_FILE / MUSIC_PAT_HEADER_BYTES / MUSIC_PAT_SLOT_BYTES
+ | Description: The disc copy of this catalogue, and the two sizes a loader has
+ |   to know before it has read anything.
+ |
+ |   The CD build carries only the first MUSIC_SYNTH_SONGS_CD tunes in .rodata
+ |   and reads the rest out of /BG/MUSIC.PAT one at a time. That is not a
+ |   convenience: on that target __heap_start follows .rodata, so a linked tune
+ |   comes straight out of the heap the story is loaded into, and the whole
+ |   catalogue there stopped the disc's largest story loading at all. A tune on
+ |   the disc costs Low Work RAM instead, which the story does not use.
+ |
+ |   One at a time and not all at once, also measured: the catalogue is bigger
+ |   than the Low Work RAM left in the worst in-game case, and one slot the size
+ |   of the largest tune is not.
+ |
+ |   HEADER_BYTES is what the loader reads of the first sector -- the directory,
+ |   the track table and the ids -- and the generator refuses to write a header
+ |   longer than it. SLOT_BYTES is the largest tune's record padded to whole
+ |   sectors, which is the buffer every tune is read into.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_PAT_FILE         "%(pat_name)s"
+#define MUSIC_PAT_HEADER_BYTES %(pat_header)d
+#define MUSIC_PAT_SLOT_BYTES   %(pat_slot)d
+#define MUSIC_PAT_SECTOR       %(pat_sector)d
+
+/*----------------------
+ | MUSIC_SYNTH_TRACK_MIN / MUSIC_SYNTH_TRACK_MAX
+ | Description: The CD-DA track numbers music_synth_song_for_track answers for.
+ |   They are the disc's own range, so a caller can hand it whatever the room
+ |   table named without checking first.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SYNTH_TRACK_MIN %(track_min)d
+#define MUSIC_SYNTH_TRACK_MAX %(track_max)d
+
+/*----------------------
+ | music_synth_song_count
+ | Description: How many tunes the build carries.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: MUSIC_SYNTH_SONGS
+ ----------------------*/
+int music_synth_song_count(void);
+
+/*----------------------
+ | music_synth_song_at
+ | Description: One tune by index. An index outside the catalogue returns the
+ |   default rather than nothing, because a bad index should sound like the
+ |   wrong tune and not like a silent build.
+ | Author: suinevere
+ | Dependencies: tracker.h
+ | Globals: N/A
+ | Params: index -- 0..MUSIC_SYNTH_SONGS-1
+ | Returns: a song valid for the life of the program
+ ----------------------*/
+const TrackerSong *music_synth_song_at(int index);
+
+/*----------------------
+ | music_synth_song_name
+ | Description: A tune's title, for anything that shows the player what is
+ |   playing.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: index -- 0..MUSIC_SYNTH_SONGS-1
+ | Returns: a string valid for the life of the program
+ ----------------------*/
+const char *music_synth_song_name(int index);
+
+/*----------------------
+ | MUSIC_SYNTH_ID_MAX
+ | Description: The longest id, so a caller can reserve a column for one. The
+ |   Sound page's Test Track row is why this exists: it has 12 columns of value
+ |   after a padded label, which an id fits and a title does not.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SYNTH_ID_MAX %(id_width)d
+
+/*----------------------
+ | music_synth_song_id
+ | Description: A tune's short name -- its id in songs.json, which is what the
+ |   preview scripts take on the command line and what a menu row has room for.
+ |   The title is music_synth_song_name.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: index -- 0..MUSIC_SYNTH_SONGS-1
+ | Returns: a string valid for the life of the program
+ ----------------------*/
+const char *music_synth_song_id(int index);
+
+/*----------------------
+ | music_synth_song_for_track
+ | Description: Which tune stands in for a CD-DA track. The table is measured
+ |   by tools/gen_synth_moods.py -- each of the disc's tracks matched to the
+ |   tune that measures nearest to it -- so a room that names a track gets the
+ |   closest thing the synth has rather than the same loop everywhere.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: track -- a CD-DA track number
+ | Returns: a song index, the default for a track outside the disc's range
+ ----------------------*/
+int music_synth_song_for_track(int track);
+
+/*----------------------
+ | music_synth_song
+ | Description: The default tune. Kept so callers that only ever wanted "the
+ |   music" do not have to name one.
+ | Author: suinevere
+ | Dependencies: tracker.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: a song valid for the life of the program
+ ----------------------*/
+const TrackerSong *music_synth_song(void);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* MUSIC_SYNTH_DATA_H */
+'''
+
+MANIFEST_TEMPLATE = '''/*----------------------
+ | music_synth_data.c
+ | Description: %(songs)d tunes converted from MIDI -- do not hand-edit, re-run the
+ |   converter. The settings are not guessable from the result, so they live in
+ |   tools/assets/music/songs.json and the command is:
+ |     %(command)s
+ |
+ |   Each is reduced to %(channels)d monophonic voices, transposed in whole octaves
+ |   until its lowest note is representable, and packed by collapsing identical
+ |   patterns. All of them share the two arrays below and point at their own
+ |   offset inside them, which is why the cell array is one block and not
+ |   %(songs)d of them.
+ | Author: suinevere
+ ----------------------*/
+#include "music_synth_data.h"
+#include "synth.h"
+
+/*----------------------
+ | MUSIC_CELLS
+ | Description: Every tune's patterns end to end, %(cell_total)d cells of them. A note
+ |   byte is a semitone index plus two; 0 holds whatever is sounding and 1 keys
+ |   off. wv packs the waveform in the high nibble and the volume in the low.
+ | Author: suinevere
+ ----------------------*/
+static const TrackerCell MUSIC_CELLS[MUSIC_SYNTH_CELLS] = {
+%(cells)s
+};
+
+/*----------------------
+ | music_cells_length_check
+ | Description: Fails the build if the initialiser above is not exactly the
+ |   declared length. C pads a short initialiser with zeros, which would be a
+ |   truncated catalogue that every runtime test still passes.
+ | Author: suinevere
+ ----------------------*/
+typedef char music_cells_length_check[
+    (sizeof(MUSIC_CELLS) / sizeof(MUSIC_CELLS[0]) == MUSIC_SYNTH_CELLS) ? 1 : -1];
+
+/*----------------------
+ | MUSIC_ORDER
+ | Description: Every tune's play order end to end, %(order_total)d entries. Each index
+ |   is relative to its own tune's first pattern, which is what lets the songs
+ |   below carry an offset base instead of an absolute one.
+ | Author: suinevere
+ ----------------------*/
+static const unsigned char MUSIC_ORDER[MUSIC_SYNTH_ORDER] = {
+    %(order)s
+};
+
+/*----------------------
+ | music_order_length_check
+ | Description: The same guard for the order list -- a short one would loop a
+ |   tune early rather than fail.
+ | Author: suinevere
+ ----------------------*/
+typedef char music_order_length_check[
+    (sizeof(MUSIC_ORDER) / sizeof(MUSIC_ORDER[0]) == MUSIC_SYNTH_ORDER) ? 1 : -1];
+
+/*----------------------
+ | MUSIC_SONGS
+ | Description: The catalogue. Each entry is speed whole V-blanks plus a
+ |   fraction in 256ths per row, which is what keeps a tempo honest on a 60 Hz
+ |   tick, and loops back to its own order 0.
+ | Author: suinevere
+ ----------------------*/
+static const TrackerSong MUSIC_SONGS[MUSIC_SYNTH_SONGS] = {
+%(song_table)s
+};
+
+/*----------------------
+ | MUSIC_NAMES
+ | Description: The titles, in the same order.
+ | Author: suinevere
+ ----------------------*/
+static const char *const MUSIC_NAMES[MUSIC_SYNTH_SONGS] = {
+%(names)s
+};
+
+/*----------------------
+ | MUSIC_IDS
+ | Description: The songs.json ids, in the same order -- what a menu row shows
+ |   and what songs.bat takes.
+ | Author: suinevere
+ ----------------------*/
+static const char *const MUSIC_IDS[MUSIC_SYNTH_SONGS] = {
+%(ids)s
+};
+
+/*----------------------
+ | MUSIC_TRACK_SONG
+ | Description: One tune index per CD-DA track, tracks %(track_min)d to %(track_max)d.
+ | Author: suinevere
+ ----------------------*/
+static const unsigned char MUSIC_TRACK_SONG[%(track_count)d] = {
+    %(track_table)s
+};
+
+int music_synth_song_count(void) {
+    return MUSIC_SYNTH_SONGS;
+}
+
+const TrackerSong *music_synth_song_at(int index) {
+    if (index < 0 || index >= MUSIC_SYNTH_SONGS) index = MUSIC_SYNTH_DEFAULT;
+    return &MUSIC_SONGS[index];
+}
+
+const char *music_synth_song_name(int index) {
+    if (index < 0 || index >= MUSIC_SYNTH_SONGS) index = MUSIC_SYNTH_DEFAULT;
+    return MUSIC_NAMES[index];
+}
+
+const char *music_synth_song_id(int index) {
+    if (index < 0 || index >= MUSIC_SYNTH_SONGS) index = MUSIC_SYNTH_DEFAULT;
+    return MUSIC_IDS[index];
+}
+
+int music_synth_song_for_track(int track) {
+    int song;
+    if (track < MUSIC_SYNTH_TRACK_MIN || track > MUSIC_SYNTH_TRACK_MAX)
+        return MUSIC_SYNTH_DEFAULT;
+    song = (int)MUSIC_TRACK_SONG[track - MUSIC_SYNTH_TRACK_MIN];
+    /* The table is measured against the whole catalogue, and the CD build
+       carries a prefix of it. A track matched to a tune that build does not
+       have falls to the default rather than indexing off the end -- which is
+       the one thing that could not be caught by reading the generated file,
+       because the table is correct and the array is short. */
+    return song < MUSIC_SYNTH_SONGS ? song : MUSIC_SYNTH_DEFAULT;
+}
+
+const TrackerSong *music_synth_song(void) {
+    return &MUSIC_SONGS[MUSIC_SYNTH_DEFAULT];
 }
 '''
 

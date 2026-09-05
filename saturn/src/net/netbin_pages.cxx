@@ -42,6 +42,8 @@ extern "C" {
 #include "menu_layout.h"
 #include "display.h"
 #include "synth.h"
+#include "music_synth_data.h"
+#include "song_bank.h"
 }
 
 /*----------------------
@@ -1056,13 +1058,21 @@ static void gameplay_page(void) {
  |   own Display and Gameplay pages for the same reason -- so this is a second
  |   implementation rather than a shared one. What IS shared is the row rule:
  |   sound_page_rows decides which rows exist, so the netbin cannot drift from
- |   the CD build about when a music slider is offered. With no disc there is
- |   no CD-DA and no Blorb, so the list here is always Music, Synth Music, Ok,
- |   Cancel. Cancel restores the level it found, live, since the row is judged
- |   by ear while it is moved.
+ |   the CD build about when a music slider is offered. With no disc there is no
+ |   CD-DA, no Blorb and no source to choose, so the list here is always Music,
+ |   Synth Music, Test Track, Ok, Cancel. Cancel restores the level it found,
+ |   live, since the row is judged by ear while it is moved.
+ |
+ |   Test Track matters more here than on the CD build. This is the target that
+ |   carries the whole catalogue -- the disc has room for one tune -- so this
+ |   page is the only place on hardware where the other eleven can be heard at
+ |   all. Cancel puts back the tune that was playing; Ok leaves the audition
+ |   running, because there is no room engine in this build to re-assert
+ |   anything and stopping the music on the way out of a menu would just be
+ |   silence.
  | Author: suinevere
- | Dependencies: menu.c, menu_layout.c (sound_page_rows), synth.h, options.h,
- |   input.c, saturn_keyboard.h, soft_reset.h
+ | Dependencies: menu.c, menu_layout.c (sound_page_rows), synth.h,
+ |   music_synth_data.h, options.h, input.c, saturn_keyboard.h, soft_reset.h
  | Globals: g_synth_level, g_kbd_visible, g_menu_page_fade
  | Params: N/A
  | Returns: N/A
@@ -1072,13 +1082,18 @@ static void sound_options_page(void) {
     const int SND_ROW_W   = 31;
     const int SND_LABEL_W = 14;
 
-    int rows[8];
-    int nrows = sound_page_rows(0, 0, rows, 8);
+    int rows[SND_PAGE_ROW_MAX];
+    // Always the synth and always something to test: this build has no disc to
+    // offer anything else and no build of it carries fewer than one tune.
+    int nrows = sound_page_rows(0, 0, 1, 1, rows, SND_PAGE_ROW_MAX);
 
     static int last_row = SND_ROW_MASTER;
     int sel = 0;
     for (int i = 0; i < nrows; i++) if (rows[i] == last_row) { sel = i; break; }
     int s_syn = g_synth_level;
+    int sidx = synth_song();
+    const int s_song = sidx;
+    bool previewed = false;
 
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
@@ -1102,6 +1117,7 @@ static void sound_options_page(void) {
         if (cancel || (ok && row == SND_ROW_CANCEL)) {
             g_synth_level = s_syn;
             synth_set_level(g_synth_level);
+            if (previewed) synth_start_song(s_song);
             break;
         }
         if (commit || (ok && row == SND_ROW_OK)) {
@@ -1116,6 +1132,14 @@ static void sound_options_page(void) {
             if (left && g_synth_level > 0) g_synth_level--;
             if (right && g_synth_level < 7) g_synth_level++;
             if (left || right) synth_set_level(g_synth_level);
+        }
+        else if (row == SND_ROW_TEST) {
+            int n = synth_song_count();
+            if (left  && sidx > 0)     sidx--;
+            if (right && sidx < n - 1) sidx++;
+            // Only an actual press plays. Merely arriving on this row must not
+            // restart the tune the player came in listening to.
+            if (left || right || ok) { synth_start_song(sidx); previewed = true; }
         }
 
         menu_clear();
@@ -1135,6 +1159,14 @@ static void sound_options_page(void) {
                 case SND_ROW_SYNTH:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
                               menu_pad("Synth Music", SND_LABEL_W), g_synth_level);
+                    break;
+                case SND_ROW_TEST:
+                    // The id and not the title: 14 columns after the padded
+                    // label, which "corridor" fits and "Shadowgate, Lit
+                    // Corridor" does not.
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s", n,
+                              menu_pad("Test Track", SND_LABEL_W),
+                              song_bank_id(sidx));
                     break;
                 case SND_ROW_OK:
                     y++;

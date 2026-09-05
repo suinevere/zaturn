@@ -94,23 +94,48 @@ enum {
     SND_ROW_SYNTH  = 2,
     SND_ROW_PCM    = 3,
     SND_ROW_OK     = 4,
-    SND_ROW_CANCEL = 5
+    SND_ROW_CANCEL = 5,
+    SND_ROW_SOURCE = 6,
+    SND_ROW_TEST   = 7
 };
+
+/*----------------------
+ | SND_PAGE_ROW_MAX
+ | Description: The most rows the page can show at once, for callers sizing the
+ |   array they hand in. Every row but Master, Ok and Cancel is conditional, so
+ |   this is the sum and not a count of the enum.
+ | Author: suinevere
+ ----------------------*/
+#define SND_PAGE_ROW_MAX 7
 
 /*----------------------
  | sound_page_rows
  | Description: Fills `rows` with the Sound page's visible rows in display
- |   order. CD Music and Synth Music are mutually exclusive -- the synth is the
- |   fallback, so its slider appears exactly where CD-DA is absent, and the page
- |   never offers two music sliders at once. Ok and Cancel are always the last
- |   two.
+ |   order.
+ |
+ |   CD Music and Synth Music are still mutually exclusive, but the reason has
+ |   changed: it used to be which one the disc had, and it is now which one is
+ |   playing. A disc with CD-DA can be switched to the synth, so the page shows
+ |   the level of whichever source is active and a Source row to move between
+ |   them -- and that row appears only where there are two, since on a disc
+ |   without CD-DA it would be a control with one setting.
+ |
+ |   Test Track sits under the level it is judged against. It is conditional on
+ |   the caller because what there is to test differs by source, and a build
+ |   carrying one tune with no CD-DA has a row that can only replay the same
+ |   thing.
+ |
+ |   Ok and Cancel are always the last two.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: has_cd -- disc carries CD-DA; has_blb -- game carries a sound blorb;
+ |   synth_active -- the synth is the source, whether by preference or because
+ |   the disc has no audio; can_test -- there is something to preview;
  |   rows -- destination; max -- its capacity
  | Returns: how many rows were written
  ----------------------*/
-int sound_page_rows(int has_cd, int has_blb, int *rows, int max);
+int sound_page_rows(int has_cd, int has_blb, int synth_active, int can_test,
+                    int *rows, int max);
 
 #endif

@@ -72,6 +72,11 @@ EXPECTED = {
     "src/sound/synth_waves.c",
     "src/sound/tracker.c",
     "src/sound/music_synth_data.c",
+    # The bank is here and song_bank_cd.cxx is not, which is the whole point of
+    # the split: this build links every tune and the bank is a pass-through to
+    # them, where the CD build links one and reads the rest off the disc. The
+    # half that needs SRL and a drive stays out.
+    "src/sound/song_bank.c",
     "src/sound/synth_target.cxx",
 }
 

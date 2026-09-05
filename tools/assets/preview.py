@@ -113,15 +113,38 @@ def render(cells, speed, frac, ch_wave, seconds):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("midi")
+    ap.add_argument("midi", nargs="?")
     ap.add_argument("wav")
     ap.add_argument("--seconds", type=float, default=30.0)
+    ap.add_argument("--song",
+                    help="render a tune from a manifest by its id, with the "
+                         "settings recorded there, instead of a MIDI file and "
+                         "the options below")
+    ap.add_argument("--manifest",
+                    default=str(pathlib.Path(__file__).resolve().parent
+                                / "music" / "songs.json"),
+                    help="where --song looks; defaults to music/songs.json")
     mid2pat.add_shared_arguments(ap)
     args = ap.parse_args()
 
-    song = mid2pat.convert(args.midi, args.grid, 0, args.max_rows,
-                           args.no_drums, args.bpm, args.fold_octaves,
-                           args.drums_tab, args.tab_beats)
+    if args.song:
+        songs, _ = mid2pat.load_manifest(args.manifest)
+        picked = [s for s in songs if s["id"] == args.song]
+        if not picked:
+            raise SystemExit("no song '%s' in %s -- have: %s"
+                             % (args.song, args.manifest,
+                                ", ".join(s["id"] for s in songs)))
+        s = picked[0]
+        print("%s -- %s" % (s["id"], s["name"]))
+        song = mid2pat.convert(s["midi"], s["grid"], 0, s["max_rows"], False,
+                               s["bpm"], s["fold"], s["drums_tab"],
+                               s["tab_beats"])
+    else:
+        if not args.midi:
+            raise SystemExit("give a MIDI file, or --song ID")
+        song = mid2pat.convert(args.midi, args.grid, 0, args.max_rows,
+                               args.no_drums, args.bpm, args.fold_octaves,
+                               args.drums_tab, args.tab_beats)
 
     buf = render(song["cells"], song["speed"], song["frac"],
                  song["ch_wave"], args.seconds)

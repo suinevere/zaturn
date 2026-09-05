@@ -49,7 +49,10 @@ extern "C" {
 #include "sound.h"
 #include "music.h"
 #include "synth.h"
+#include "music_synth_data.h"
+#include "song_bank.h"
 }
+#include "music_source.h"
 
 /*----------------------
  | page_fade_out / page_fade_in
@@ -865,11 +868,52 @@ bool keyboard_controls_page(void) {
  | Params: N/A
  | Returns: N/A
  ----------------------*/
+/*----------------------
+ | sound_restore_preview
+ | Description: Puts back what the room was playing after the Test Track row
+ |   demonstrated something else. A preview is never a choice -- the room
+ |   decides the music now that the mix modes are gone -- so both of the page's
+ |   exits come through here, and so does a Cancel that did not also change the
+ |   source (a source change restarts the music by itself).
+ |
+ |   Two things to restore because the two sources hold their position
+ |   differently: the engine holds a CD-DA track number, and the synth holds a
+ |   song index that the engine never sees. Restoring the track alone would put
+ |   the drive back and leave the synth on whatever was last auditioned.
+ | Author: suinevere
+ | Dependencies: music.h (music_refresh/music_start_menu), synth.h
+ | Globals: N/A
+ | Params: track -- music_active_track() as it was on entry; song -- synth_song()
+ |   as it was on entry
+ | Returns: N/A
+ ----------------------*/
+static void sound_restore_preview(int track, int song) {
+    if (music_source_active() == MUSIC_SOURCE_SYNTH) {
+        synth_start_song(song);
+        return;
+    }
+    // music_refresh would be the obvious call and is the wrong one: it re-issues
+    // whatever the engine currently holds, and a preview goes through
+    // music_start_menu, which MAKES the previewed track the thing it holds. So
+    // refreshing after an audition re-plays the audition. The track this page
+    // opened on has to be named again, from the snapshot.
+    //
+    // It comes back as CAT_KIND_ROOM, which is what a room's own theme already
+    // is; a cue or a drawn neutral track is held rather than cycled for one
+    // pass longer than it would have been, and the next room commit re-decides
+    // everything anyway.
+    if (track > 0) music_start_menu(track);
+    else           music_start_menu(0);
+}
+
 void sound_options_page(void) {
     MenuBacking backing;
     const int SND_ROW_W   = 31;
     const int SND_LABEL_W = 14;
-    bool has_cd  = (music_cdda_audio_tracks(0) > 0);
+    const int SND_SRC_W   = 8;    // as wide as "CD Audio", so the arrows hold still
+    const unsigned char *atracks;
+    int an = music_cdda_audio_tracks(&atracks);
+    bool has_cd  = (an > 0);
     bool has_blb = (sound_has_audio() != 0);
 
     // The visible-row list is built by sound_page_rows (menu_layout.c) so the
@@ -877,17 +921,41 @@ void sound_options_page(void) {
     // in a pure function the host tests can exercise, rather than here where it
     // could only be checked by eye. The master switch is always listed now: the
     // synth is a source on every disc, so there is always something to switch.
-    int rows[8];
-    int nrows = sound_page_rows(has_cd ? 1 : 0, has_blb ? 1 : 0, rows, 8);
+    //
+    // Rebuilt every frame, because the Source row changes it: switching to the
+    // synth swaps the CD level row for the synth's and refills Test Track from
+    // a different list. `sel` is clamped after each rebuild, the way the Display
+    // page does it for the Dimming row.
+    int rows[SND_PAGE_ROW_MAX];
+    bool synth_on = (music_source_active() == MUSIC_SOURCE_SYNTH);
+    int nrows = sound_page_rows(has_cd ? 1 : 0, has_blb ? 1 : 0,
+                                synth_on ? 1 : 0, 1, rows, SND_PAGE_ROW_MAX);
 
-    // Remembered as a row ID, not an index: CD Music is only listed when there
-    // is CD audio, Synth Music only when there is not, and PCM only when there
+    // Remembered as a row ID, not an index: the level row is whichever source is
+    // playing, Source is only listed when there are two and PCM only when there
     // is a sound blob, so the same index names a different row on a different
-    // disc.
+    // disc and even on a different frame.
     static int last_row = SND_ROW_MASTER;
     int sel = 0;
     for (int i = 0; i < nrows; i++) if (rows[i] == last_row) { sel = i; break; }
     int s_mus = g_music_level, s_pcm = g_pcm_level, s_syn = g_synth_level;
+    int s_src = g_music_source;
+
+    // Where Test Track is pointing. Two lists, one cursor: an index into the
+    // disc's audio tracks under CD, and a song index under the synth. Opened on
+    // what is actually sounding so the first Left or Right steps off that rather
+    // than jumping somewhere unrelated -- and deliberately NOT written back
+    // anywhere, so opening the page and closing it changes nothing.
+    int tidx = 0;
+    int cur = music_cdda_current_track();
+    if (cur > 0) for (int i = 0; i < an; i++) if (atracks[i] == cur) { tidx = i; break; }
+    int sidx = synth_song();
+    // What to put back on the way out, if a preview interrupted it. The track is
+    // the engine's own rather than the drive's, because a preview overwrites the
+    // drive's and the engine's is what the room decided.
+    const int s_track = music_active_track();
+    const int s_song  = sidx;
+    bool previewed = false;
     // Reached from the in-game Options menu, the music is ducked; this page is the
     // one place that cannot work under a duck, since every row on it is judged by
     // ear and has to be heard at the level being set. A no-op everywhere else.
@@ -898,12 +966,28 @@ void sound_options_page(void) {
     const int was_paused = music_is_paused();
     music_resume();
 
+    // Sized for the longest list this disc can produce, not for the current one:
+    // the Source row can add a level row's worth of change under the cursor and
+    // a box that grew and shrank with it would flicker between frames.
     int fx, fy, fw, fh;
-    menu_box_fit("SOUND", 34, nrows + 3, &fx, &fy, &fw, &fh);
+    menu_box_fit("SOUND", 34,
+                 sound_page_rows(has_cd ? 1 : 0, has_blb ? 1 : 0, 1, 1,
+                                 rows, SND_PAGE_ROW_MAX) + 3,
+                 &fx, &fy, &fw, &fh);
+    nrows = sound_page_rows(has_cd ? 1 : 0, has_blb ? 1 : 0,
+                            synth_on ? 1 : 0, 1, rows, SND_PAGE_ROW_MAX);
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
         check_soft_reset();
+        // The list can have changed since the last frame -- only the Source row
+        // does that, but it does it under the cursor -- so rebuild before the
+        // input is read against it.
+        synth_on = (music_source_active() == MUSIC_SOURCE_SYNTH);
+        nrows = sound_page_rows(has_cd ? 1 : 0, has_blb ? 1 : 0,
+                                synth_on ? 1 : 0, 1, rows, SND_PAGE_ROW_MAX);
+        if (sel >= nrows) sel = nrows - 1;
+        if (sel < 0) sel = 0;
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         pad_repeat_update();
@@ -923,11 +1007,21 @@ void sound_options_page(void) {
             g_music_level = s_mus; g_pcm_level = s_pcm; g_synth_level = s_syn;
             music_set_level(g_music_level); sound_set_level(g_pcm_level);
             synth_set_level(g_synth_level);
+            // The source goes back too, and through music_source_select rather
+            // than by writing the global: it is the hardware that was changed,
+            // not just a number, and one of the two sources is sounding.
+            if (g_music_source != s_src) music_source_select(s_src);
+            else if (previewed) sound_restore_preview(s_track, s_song);
             break;
         }
         if (commit || (ok && row == SND_ROW_OK)) {
             music_set_level(g_music_level); sound_set_level(g_pcm_level);
             synth_set_level(g_synth_level);
+            // A preview is a demonstration and never a choice: Ok keeps the
+            // levels and the source, and puts back whatever the room was
+            // playing. Picking a track to keep is what the mix modes did, and
+            // they are gone -- the room decides the music now.
+            if (previewed) sound_restore_preview(s_track, s_song);
             options_save();
             break;
         }
@@ -949,6 +1043,39 @@ void sound_options_page(void) {
             sound_set_level(g_pcm_level);
             synth_set_level(g_synth_level);
         }
+        else if (row == SND_ROW_SOURCE) {
+            // Both directions on both keys: there are two settings, so Left and
+            // Right are the same gesture and an arrow that did nothing at one
+            // end would read as a stuck row.
+            if (left || right || ok) {
+                // Undo an audition FIRST. A preview goes through the engine and
+                // so becomes the track the engine holds; switching source
+                // re-issues whatever it holds, which would carry the audition
+                // across the switch and leave it standing in for the room's own
+                // music after the page closes.
+                if (previewed) { sound_restore_preview(s_track, s_song); previewed = false; }
+                music_source_select(g_music_source == MUSIC_SOURCE_CD
+                                    ? MUSIC_SOURCE_SYNTH : MUSIC_SOURCE_CD);
+                sidx = synth_song();
+            }
+        }
+        else if (row == SND_ROW_TEST) {
+            int n = synth_on ? synth_song_count() : an;
+            int *at = synth_on ? &sidx : &tidx;
+            if (left  && *at > 0)     (*at)--;
+            if (right && *at < n - 1) (*at)++;
+            // Only an actual press previews. Merely arriving on this row must
+            // not cut the music the player came in listening to -- which is the
+            // rule the row this was recovered from was written around.
+            if ((left || right || ok) && n > 0) {
+                if (synth_on) synth_start_song(*at);
+                // Through the engine and not straight at the drive: a preview
+                // left sounding while the player sits here is still music, and
+                // it has to obey the same loop-end rules as anything else.
+                else          music_start_menu(atracks[*at]);
+                previewed = true;
+            }
+        }
         else if (row == SND_ROW_CD) { if (left && g_music_level > 0) g_music_level--; if (right && g_music_level < 7) g_music_level++;
                                if (left || right) music_set_volume(g_music_level); }
         else if (row == SND_ROW_SYNTH) { if (left && g_synth_level > 0) g_synth_level--; if (right && g_synth_level < 7) g_synth_level++;
@@ -967,6 +1094,26 @@ void sound_options_page(void) {
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s", n,
                               menu_pad("Music", SND_LABEL_W),
                               (g_music_level > 0 || g_pcm_level > 0 || g_synth_level > 0) ? "On" : "Off");
+                    break;
+                case SND_ROW_SOURCE:
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s< %s >", n,
+                              menu_pad("Music From", SND_LABEL_W),
+                              menu_pad(synth_on ? "Synth" : "CD Audio", SND_SRC_W));
+                    break;
+                case SND_ROW_TEST:
+                    // The id and not the title: there are 14 columns after the
+                    // padded label, which "corridor" fits and "Shadowgate, Lit
+                    // Corridor" does not. Under CD it is the disc's own track
+                    // number, which is what docs/ZORK1_AUDIO_MAP.md and the
+                    // generated presentation table both name a track by.
+                    if (synth_on)
+                        menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s", n,
+                                  menu_pad("Test Track", SND_LABEL_W),
+                                  song_bank_id(sidx));
+                    else
+                        menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%sTrack %d", n,
+                                  menu_pad("Test Track", SND_LABEL_W),
+                                  an > 0 ? (int)atracks[tidx] : 0);
                     break;
                 case SND_ROW_CD:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,

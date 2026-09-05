@@ -1,14 +1,20 @@
 @ECHO OFF
-REM Regenerate the shipped pattern data from the drum tablature and the MIDI.
-REM This is the exact command recorded in the header of music_synth_data.c;
-REM run it after editing the tab, then build as usual.
+REM Regenerate the shipped pattern data from music\songs.json -- every tune, the
+REM drum tablature with them. This is the exact command recorded in the header
+REM of music_synth_data.c; run it after editing the tab or the manifest, then
+REM build as usual.
+REM
+REM The per-tune settings that used to be spelled out here now live in
+REM music\songs.json, so that this script, tools\assets\drums.bat and
+REM tools\assets\songs.bat cannot render the same tune three different ways.
 SETLOCAL
 SET "REPO=%~dp0..\.."
+REM --pat writes the whole catalogue to the disc as well. The CD build links one
+REM tune and reads the rest from there, because on that target __heap_start
+REM follows .rodata and the catalogue in the image stops the largest story
+REM loading. Both outputs come from one run so they cannot disagree.
 python "%~dp0mid2pat.py" ^
-  "%REPO%\tools\assets\music\castle-halls.mid" ^
-  "%REPO%\saturn\src\sound\music_synth_data.c" ^
-  --name "Shadowgate, Entryway (Hiroyuki Masuno, 1989)" ^
-  --source "castle-halls.mid, a fan sequence; drums authored separately in 3/4" ^
-  --max-rows 384 --fold-octaves up --bpm 122.3 --grid 32 ^
-  --drums-tab "%REPO%\tools\assets\music\castle-halls-drums.tab" --tab-beats 3
+  --manifest "%REPO%\tools\assets\music\songs.json" ^
+  --out "%REPO%\saturn\src\sound\music_synth_data.c" ^
+  --pat "%REPO%\saturn\cd\data\BG\MUSIC.PAT"
 ENDLOCAL

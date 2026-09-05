@@ -284,7 +284,7 @@ void options_load(void) {
        behind it depends on. */
     int s = m + 1 + fa_stored + CA_N;
     if (s + OPTS_SOUND_BLOCK_BYTES <= (int) sizeof(buf))
-        opts_sound_block_decode(&buf[s], &g_synth_level);
+        opts_sound_block_decode(&buf[s], &g_synth_level, &g_music_source);
     /* The gameplay block sits between the sound block and the display one because
        the display block is the variable-width tail. Sentinel 5 (v1, verbosity
        only) and sentinel 7 (v2, verbosity plus a packed command-interface byte)
@@ -343,7 +343,7 @@ void options_save(void) {
     buf[n++] = 3;                                 // controller-mapping format sentinel: + Space
     for (int a = 0; a < FA_N && n < 62; a++) buf[n++] = (uint8_t) g_face_btn[a];
     for (int a = 0; a < CA_N && n < 62; a++) buf[n++] = (uint8_t) g_chord_slot[a];
-    opts_sound_block_encode(&buf[n], g_synth_level);   // sound block: sentinel 10, then the synth level
+    opts_sound_block_encode(&buf[n], g_synth_level, g_music_source);   // sound block: sentinel 10, the synth level, the music source
     n += OPTS_SOUND_BLOCK_BYTES;
     buf[n++] = 7;                                 // gameplay-block sentinel, v2
     buf[n++] = (uint8_t) g_verbosity;             // VERB_*

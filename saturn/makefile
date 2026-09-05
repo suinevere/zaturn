@@ -107,6 +107,7 @@ SOURCES = src/main_netbin.cxx \
           src/sound/synth_waves.c \
           src/sound/tracker.c \
           src/sound/music_synth_data.c \
+          src/sound/song_bank.c \
           src/sound/synth_target.cxx
 SRL_CUSTOM_CCFLAGS += -DNETBIN
 # This build has music but no sound DRIVER: the synth writes SCSP slots 28-31

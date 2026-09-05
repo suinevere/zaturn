@@ -131,11 +131,20 @@ int menu_visible_digit(char ch, int top, int visible, int count) {
     return idx;
 }
 
-int sound_page_rows(int has_cd, int has_blb, int *rows, int max) {
+int sound_page_rows(int has_cd, int has_blb, int synth_active, int can_test,
+                    int *rows, int max) {
     int n = 0;
     if (n < max) rows[n++] = SND_ROW_MASTER;
-    if (has_cd) { if (n < max) rows[n++] = SND_ROW_CD; }
-    else        { if (n < max) rows[n++] = SND_ROW_SYNTH; }
+    /* Only where there are two. Without CD-DA the synth is the whole of the
+       music and a Source row would be a control with one setting. */
+    if (has_cd) { if (n < max) rows[n++] = SND_ROW_SOURCE; }
+    /* The level of what is playing, never both -- and driven by the source and
+       not by the disc, so switching to the synth on a disc with CD-DA swaps the
+       slider under the cursor for the one that now does something. */
+    if (synth_active) { if (n < max) rows[n++] = SND_ROW_SYNTH; }
+    else              { if (n < max) rows[n++] = SND_ROW_CD; }
+    /* Directly under that level, because it is what the level is judged by. */
+    if (can_test) { if (n < max) rows[n++] = SND_ROW_TEST; }
     if (has_blb) { if (n < max) rows[n++] = SND_ROW_PCM; }
     if (n < max) rows[n++] = SND_ROW_OK;
     if (n < max) rows[n++] = SND_ROW_CANCEL;

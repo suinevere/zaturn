@@ -881,6 +881,10 @@ void music_set_audible(int on) {
  | Params: N/A
  | Returns: N/A
  ----------------------*/
+int music_active_track(void) {
+    return g_active_track;
+}
+
 void music_refresh(void) {
     if (g_active_track > 0 && g_play) {
         g_dyn_pass = 1;

@@ -91,6 +91,23 @@ ITEM_ART_RESERVE = 40840 + 5120 + 4096
 # of up to 129 KB -- see tests/test_hwram_budget.py.
 PARCHMENT_RESERVE = None      # filled by compute_budget from the shipped TGA
 
+# The synth's tune catalogue: the header sector of /BG/MUSIC.PAT plus one slot
+# the size of the largest tune, claimed once at boot and held for the session.
+# Filled by compute_budget from the generated MUSIC_PAT_* defines rather than
+# written here, because both numbers move when a tune is added or lengthened.
+#
+# It is Low Work RAM and not the C heap for the reason the parchment is, only
+# harder: on this target __heap_start follows .rodata, so a linked tune comes
+# straight out of the heap the story loads into, and the whole catalogue there
+# took that heap to 98,016 against LURKING.Z3's 129,704 -- the disc's largest
+# story stopped loading at all. See tests/test_hwram_budget.py.
+#
+# One slot and not the catalogue, also forced by measurement: 41,708 bytes of
+# tunes do not fit in what is left here, and 8,704 does. The cost is a seek when
+# the room's mood moves to a tune that is not resident, which is the same seek
+# CD-DA pays for the same change.
+SONG_BANK_RESERVE = None      # filled by compute_budget from music_synth_data.h
+
 
 def cdefines(path):
     """Every simple #define in a file, as {name: int}, resolved in order.
@@ -152,10 +169,20 @@ def compute_budget():
     # load_area's own arithmetic: the archive, the decode target, and 4 KB.
     resident = biggest.stat().st_size + frame + 4096
 
+    # The song bank's claim, from the generated header rather than restated
+    # here: both numbers move when a tune is added or lengthened, and a copy of
+    # them would be a copy that goes stale silently.
+    pat = cdefines(SRC / "sound" / "music_synth_data.h")
+    for n in ("MUSIC_PAT_HEADER_BYTES", "MUSIC_PAT_SLOT_BYTES"):
+        if n not in pat:
+            raise RuntimeError(f"could not read {n} from music_synth_data.h")
+    song_bank = pat["MUSIC_PAT_HEADER_BYTES"] + pat["MUSIC_PAT_SLOT_BYTES"]
+
     return {
         "frame": frame, "jingle": jingle, "archives": archives,
         "biggest": biggest, "resident": resident,
         "parchment": tga_gate("MAP.TGA"),
+        "song_bank": song_bank,
     }
 
 
@@ -256,6 +283,24 @@ def test_parchment_fits_beside_the_in_game_claimants(budget):
         "back out of this zone.")
 
 
+def test_the_song_bank_fits_beside_everything_else(budget):
+    """The tune slot is claimed at the mode menu and held for the session, so it
+    is resident under every other claimant here. It is the smallest of them and
+    the last to be added, which is exactly why it is worth a check of its own:
+    song_bank_cd_open's refusal is silent, and the symptom is the CD build
+    playing one tune for the whole game while the disc carries twelve."""
+    need = (budget["resident"] + TRIE_RESERVE + SCRATCH_RESERVE
+            + ITEM_ART_RESERVE + budget["parchment"] + budget["song_bank"])
+    over = need - LWRAM_TOTAL
+    assert need <= LWRAM_TOTAL, (
+        f"the tune slot ({budget['song_bank']} bytes) does not fit beside the "
+        f"area archive, the trie, the save scratch, the item pane and the "
+        f"parchment -- {over} bytes over LWRAM. song_bank_cd_open refuses "
+        "quietly and the build falls back to the tunes it links, which is one. "
+        "Shorten the longest tune in tools/assets/music/songs.json: the slot is "
+        "sized from it, and MUSIC_PAT_SLOT_BYTES is what this reads.")
+
+
 def test_parchment_is_released_at_the_title(budget):
     """And it has to go when the game does. g_held is a plain static, so it
     survives the longjmp; left resident it comes out of the next game's trie,
@@ -347,6 +392,11 @@ def _print_report(b):
     print("  game:   + item pane + parchment   %8d  of %d"
           % (b["resident"] + TRIE_RESERVE + SCRATCH_RESERVE + ITEM_ART_RESERVE
              + b["parchment"], LWRAM_TOTAL))
+    print("  tune slot + header       %8d  (held for the session)" % b["song_bank"])
+    worst = (b["resident"] + TRIE_RESERVE + SCRATCH_RESERVE + ITEM_ART_RESERVE
+             + b["parchment"] + b["song_bank"])
+    print("  game:   + the tune slot           %8d  of %d  (%d spare)"
+          % (worst, LWRAM_TOTAL, LWRAM_TOTAL - worst))
 
 
 def main():

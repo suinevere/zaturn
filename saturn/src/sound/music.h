@@ -203,6 +203,21 @@ void music_art_change(int changed);
  ----------------------*/
 void music_transition_skip_fade(void);
 void music_refresh(void);   /* re-assert the current room's track (after a preview) */
+/*----------------------
+ | music_active_track
+ | Description: The CD-DA track the engine currently holds, or 0 when nothing
+ |   has played yet this session. Exposed because "has anything played?" and
+ |   "what is playing?" are different questions from the backend's own
+ |   is-playing -- a source switch has to tell a track worth re-issuing from a
+ |   session that has not started one, and the backend it is switching away from
+ |   cannot answer that.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_active_track
+ | Params: N/A
+ | Returns: a track number, or 0
+ ----------------------*/
+int  music_active_track(void);
 void music_seed(unsigned int s);            /* seed the track-pool RNG */
 int  music_category_track(int category);    /* random track from the category pool; 0 if none */
 void music_start(void);                                /* clear the mix; the first room starts it */

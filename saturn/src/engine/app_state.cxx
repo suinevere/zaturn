@@ -73,6 +73,18 @@ int g_pcm_level   = PCM_LEVEL_DEFAULT;
 int g_synth_level = SYNTH_LEVEL_DEFAULT;
 
 /*----------------------
+ | g_music_source
+ | Description: Which music source the player picked. The disc's own audio by
+ |   default, so a player who never opens the Sound page hears what the disc was
+ |   made to sound like; the synth is a choice and not a consolation now that
+ |   there are twelve tunes to choose it for. Only a preference -- a disc with no
+ |   CD-DA plays the synth whatever this holds, and music_source_active() is what
+ |   answers for the two together.
+ | Author: suinevere
+ ----------------------*/
+int g_music_source = MUSIC_SOURCE_CD;
+
+/*----------------------
  | g_display
  | Description: Current display colors/background, applied to VDP2 by
  |   display_apply and persisted in MOJOOPTS.

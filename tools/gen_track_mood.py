@@ -102,7 +102,26 @@ def measure(path):
      | Params: path -- the .bin track
      | Returns: a dict of measurements
      ----------------------*/"""
-    mono, left, right = read_pcm(path)
+    return measure_signal(*read_pcm(path))
+
+
+def measure_signal(mono, left, right):
+    """/*----------------------
+     | measure_signal
+     | Description: measure's body, taking the signal rather than a path, so
+     |     something that is not a ripped track can be put on the same scale --
+     |     tools/gen_synth_moods.py renders each of the synth's own tunes and
+     |     measures it here. Splitting it out rather than writing a second
+     |     measurement is the point: two implementations of "how bright is this"
+     |     would drift, and the whole use of these numbers is comparing one
+     |     recording against another.
+     | Author: suinevere
+     | Dependencies: numpy
+     | Globals: RATE, HOP
+     | Params: mono, left, right -- float arrays in -1..1; a mono source passes
+     |     the same array three times, which reads a width of 0
+     | Returns: a dict of measurements, or None if the signal is all silence
+     ----------------------*/"""
     mag, freqs, rms = spectra(mono)
     if not len(mag):
         return None

@@ -50,6 +50,8 @@ extern "C" {
 #include "online.h"
 #include "synth.h"
 #include "synth_target.h"
+#include "music_source.h"
+#include "song_bank_cd.h"
 using namespace SRL::Types;
 
 /*----------------------
@@ -207,6 +209,17 @@ static void on_art_commit(void) {
  | Returns: N/A
  ----------------------*/
 static void music_fade_volume(int level) {
+    // The synth is attenuated per slot and 0 really is silence with a way back,
+    // so it takes the ramp whole instead of the CD-DA floor below -- that floor
+    // exists because music_set_volume(0) stops the drive, and nothing here
+    // stops anything.
+    if (music_source_active() == MUSIC_SOURCE_SYNTH) {
+        if (g_synth_level <= 0) return;
+        int v = (g_synth_level * level) / 255;
+        if (v > g_synth_level) v = g_synth_level;
+        synth_set_level(v);
+        return;
+    }
     if (g_music_level <= 0) return;
     int v = 1 + ((g_music_level - 1) * level) / 255;
     if (v < 1)             v = 1;
@@ -548,6 +561,10 @@ int main(void) {
     // The backend goes in here rather than at game start, because the menu track
     // below is the engine's now too -- that is what makes it obey the cycle rule
     // instead of repeating one track forever.
+    // Provisional, and CD-DA because that is what the title screen's own track
+    // is. music_source_bind() below re-decides all five of these once the TOC
+    // has certainly been read -- which is the earliest moment the answer can be
+    // asked for without freezing the wrong one.
     music_set_backend(music_cdda_play_mode);
     music_set_isplaying(music_cdda_is_playing);
     music_set_isshort(music_cdda_is_short);
@@ -612,8 +629,28 @@ int main(void) {
        certainly been read -- music_cdda_audio_tracks caches its answer on the
        first call, so asking earlier could have frozen the wrong one. A disc
        with CD-DA keeps its own music and this leaves the synth stopped. */
-    if (synth_should_play(music_cdda_has_audio())) {
-        synth_set_level(g_synth_level);
+    /* And this is where the synth stops being one loop over everything. The
+       room engine already decides a CD-DA track per room, off the same authored
+       table whether or not the disc can play it; giving it the synth as its
+       backend means that decision picks a tune instead --
+       music_synth_song_for_track, measured by tools/gen_synth_moods.py.
+       music_source_bind reads the player's saved preference and the disc and
+       decides between them, and it is called HERE rather than beside the CD-DA
+       backend above for the reason that comment gives: the answer needs the
+       TOC, and music_cdda_has_audio caches whatever it is first asked.
+
+       The catalogue is opened first, in the same window and for the same
+       reason plus one of its own: this build links a single tune and reads the
+       other eleven off /BG/MUSIC.PAT, because on this target __heap_start
+       follows .rodata and the whole catalogue in the image took the heap below
+       what the disc's largest story needs to load. A disc without the file just
+       plays the one it links. */
+    song_bank_cd_open();
+    music_source_bind();
+    if (music_source_active() == MUSIC_SOURCE_SYNTH) {
+        /* Started rather than left to the first room commit: the menus under
+           this are reached before any room is entered, and they are not silent
+           on a disc with CD-DA either. */
         synth_start();
     }
 

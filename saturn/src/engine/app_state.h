@@ -109,9 +109,25 @@ extern int g_pcm_level;
 
 // Generated music volume level, 0..7 (0 = off); persisted in MOJOOPTS.
 // Separate from g_music_level because the two are never both in play: one is
-// CD-DA's level, the other the synth's, and the Sound page shows whichever the
-// disc calls for.
+// CD-DA's level, the other the synth's, and the Sound page shows whichever
+// source is active.
 extern int g_synth_level;
+
+/*----------------------
+ | MUSIC_SOURCE_CD / MUSIC_SOURCE_SYNTH
+ | Description: Where the room engine's music comes from. CD is 0 so that every
+ |   options blob already written -- the sound block's third byte has always
+ |   been a zero it never read -- decodes as the behaviour those saves had.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SOURCE_CD    0
+#define MUSIC_SOURCE_SYNTH 1
+
+// Which music source the player picked, 0 = CD-DA and 1 = the synth; persisted
+// in MOJOOPTS. A preference and not a fact: a disc with no CD-DA plays the synth
+// whatever this says, which is why nothing reads it directly -- ask
+// music_source_active() for what is really playing.
+extern int g_music_source;
 
 // Current display colors/background/image, applied to VDP2 by display_apply
 // and persisted in MOJOOPTS.

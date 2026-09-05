@@ -4,7 +4,12 @@ REM Regenerates the pattern data from the drum tablature, builds a disc that
 REM boots straight into the tune, and launches Mednafen on it -- about thirty
 REM seconds, against two and a half minutes for compile.bat.
 REM
-REM   tools\assets\drums-chip.bat
+REM   tools\assets\drums-chip.bat            the manifest's default tune
+REM   tools\assets\drums-chip.bat halls      any other one, by its songs.json id
+REM
+REM songs.bat lists the ids, and plays the same tune through the offline model
+REM in a second -- use that to judge which rows are struck, and this to judge
+REM how they sound.
 REM
 REM Close Mednafen with its window button, NOT by killing the process: it
 REM rewrites mednafen.cfg on exit and a kill mid-write has already once left
@@ -18,6 +23,13 @@ SET "PATH=%CDIR%\sh2eb-elf\bin;%CDIR%\msys2\usr\bin;%CDIR%\Other Utilities;%PATH
 SET "SRL_INSTALL_ROOT=../../SaturnRingLib"
 
 CALL "%~dp0drums-emit.bat"
+IF ERRORLEVEL 1 GOTO :eof
+
+REM Turn the id into the index the catalogue uses, and fail here rather than
+REM after a thirty-second build if it names nothing.
+SET "SONG=%~1"
+IF "%SONG%"=="" SET "SONG=-"
+python "%~dp0song_index.py" "%SONG%" "%PROBE%\src\probe_song.h"
 IF ERRORLEVEL 1 GOTO :eof
 
 COPY /Y "%REPO%\saturn\src\sound\scsp.c"             "%PROBE%\src\" >NUL

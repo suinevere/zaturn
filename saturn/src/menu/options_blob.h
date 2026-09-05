@@ -37,28 +37,35 @@ extern "C" {
 
 /*----------------------
  | opts_sound_block_encode
- | Description: Writes the three-byte sound block.
+ | Description: Writes the three-byte sound block. The third byte was a hard
+ |   zero for the whole life of this block and now carries the music source,
+ |   which is what let the source be persisted without moving the sentinel or
+ |   the width -- CD is 0, so every blob already on a cartridge decodes as the
+ |   source it was played with.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: buf -- at least OPTS_SOUND_BLOCK_BYTES writable; synth_level -- 0..7
+ | Params: buf -- at least OPTS_SOUND_BLOCK_BYTES writable; synth_level -- 0..7;
+ |   source -- MUSIC_SOURCE_CD or MUSIC_SOURCE_SYNTH
  | Returns: N/A
  ----------------------*/
-void opts_sound_block_encode(unsigned char *buf, int synth_level);
+void opts_sound_block_encode(unsigned char *buf, int synth_level, int source);
 
 /*----------------------
  | opts_sound_block_decode
  | Description: Reads the three-byte sound block. Leaves *synth_level untouched
  |   for the dead form, an absent block, or an out-of-range value, so a blob
  |   that never carried a level comes back at the compiled default rather than
- |   at whatever those bytes happened to hold.
+ |   at whatever those bytes happened to hold. *source is left alone on the same
+ |   terms, and additionally when the third byte holds anything but 0 or 1.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: buf -- at least OPTS_SOUND_BLOCK_BYTES readable; synth_level -- out
+ | Params: buf -- at least OPTS_SOUND_BLOCK_BYTES readable; synth_level -- out;
+ |   source -- out, may be null
  | Returns: 1 when a level was read, 0 otherwise
  ----------------------*/
-int opts_sound_block_decode(const unsigned char *buf, int *synth_level);
+int opts_sound_block_decode(const unsigned char *buf, int *synth_level, int *source);
 
 #ifdef __cplusplus
 }

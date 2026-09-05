@@ -5,9 +5,9 @@ metadata:
   type: project
 ---
 
-Three commits on `art-v2`, on top of [[controller-module-handoff]]: `d366a6f`
+Four commits on `art-v2`, on top of [[controller-module-handoff]]: `d366a6f`
 (L+R and the command module), `50baab5` (gun targeting), `50ea1e8` (the Controls
-page). Read `docs/CONTROLS_MATRIX.md` first -- it now carries the page layout and
+page), `498c909` (the cursor). Read `docs/CONTROLS_MATRIX.md` first -- it now carries the page layout and
 a "Changes made after the workbook was drawn" section as well as the transcription.
 
 ## What the owner decided this session
@@ -46,10 +46,40 @@ Asked and answered; treat as settled.
 - **The room picture's edge** is a move (`cv_pointer_travel`), gated on the exit
   the rose is already showing so Hard cannot be read through the gun.
 
+## The cursor, and the three reasons it was invisible
+
+`498c909`, after the owner reported seeing no cursor for any mouse mode or for the
+gun. It was never one bug:
+
+1. **Nothing drew one.** `text_map` now carries a one-cell overlay
+   (`text_cursor_set`/`text_cursor_off`) painted *after* the block copy in
+   `text_flush` rather than composed into the shadow, so the character underneath
+   is restored by the copy itself when the cursor moves off. `render_pointer` in
+   `console_view.cxx` places it every frame in both interfaces. The glyph is a
+   blinking `+` because every text palette slot is already spoken for -- a cell
+   that moves is easier to find than one more colour among the party inks.
+2. **Mouse Mode had no switch.** `controller_mouse_mode_set` was never called from
+   anywhere, so `g_mouse_mode` was permanently 0 and `read_sticks` never moved the
+   cursor. It is now a `CK_MMODE` row at the head of the Mouse Mode sheet.
+   `controller_twin_set` had the same problem and is now a root-page row -- it has
+   to be, since it decides whether the Device row can reach a Twin Stick at all.
+3. **Two devices never updated their cell.** `DevPointer.col/row` come from
+   `clamp_cursor`, and `read_gun` set absolute coordinates without calling it, so a
+   gun cursor would have drawn at a stale cell. A control pad reports no axis, so
+   it never reached `read_sticks` either and its D-pad moved nothing;
+   `read_dpad_cursor` is the control pad's and twin stick's Mouse Mode cell.
+
+**The one interaction this leaves open:** with Mouse Mode on and a control pad, the
+D-pad drives the cursor *and* still steps the rose cursor and every menu selection.
+The workbook's two Mouse Mode rows ("Move selection" against "Mouse cursor move")
+say it should be one or the other. Suppressing the selection half means touching
+`cv_travel_dpad` and the keyboard nav, which is a bigger change than this fix, so
+it is left double-duty deliberately.
+
 ## What is unverified
 
-**Nothing here has been on a screen.** Syntax-checked only, all four
-configurations. 276 host tests pass, with the one pre-existing
+**Nothing here has been on a screen** except the absence the cursor fix answers.
+Syntax-checked only, all four configurations. 280 host tests pass, with the one pre-existing
 `test_lwram_budget::test_every_frame_lies_inside_its_archive` failure that belongs
 to the uncommitted art manifest and predates all of this.
 

@@ -173,93 +173,48 @@ static int slot_raw(int slot) {
 }
 
 /*----------------------
- | caps_combo_fired
- | Description: Latches held state across calls in a static `was`, comparing it
- |   to the current L+R-without-shift read so only the rising edge reports true.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad
- | Params: N/A
- | Returns: true on the frame the combo first becomes held
- ----------------------*/
-bool caps_combo_fired(void) {
-    static bool was = false;
-    bool now = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R)
-             && !g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y);
-    bool fired = now && !was;
-    was = now;
-    return fired;
-}
-
-/*----------------------
- | g_mtog_was / g_mtog_spent
- | Description: mode_toggle_fired's held/spent latch, file-scope rather than
+ | g_mtog_was
+ | Description: mode_combo_fired's held latch, file-scope rather than
  |   function-local so mode_toggle_reset can clear it from outside.
  | Author: suinevere
  ----------------------*/
 static bool g_mtog_was = false;
-static bool g_mtog_spent = false;
 
 /*----------------------
- | toggle_btn_free
- | Description: Whether `b` carries no face action, which is what a toggle button
- |   needs: mode_toggle_fired claims a clean tap, and a button that also types
- |   cannot spare one. Z always qualifies; Y only until a face action moves onto
- |   it, which the default Space now does.
+ | mode_combo_fired
+ | Description: Latches held state in g_mtog_was, comparing it to the current
+ |   L+R-without-shift read so only the rising edge reports true. L and R are
+ |   tested together deliberately: each alone already has a job in both
+ |   interfaces, and only the pair is free.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_face_btn
- | Params: b -- the candidate toggle button
- | Returns: true when no face action is mapped to it
- ----------------------*/
-static bool toggle_btn_free(Button b) {
-    for (int a = 0; a < FA_N; a++) if (face_button(a) == b) return false;
-    return true;
-}
-
-/*----------------------
- | mode_toggle_fired
- | Description: Reports a tap of the toggle button -- pressed and released with
- |   no direction or shoulder held in between -- provided that button types
- |   nothing (toggle_btn_free). A press that fires a chord is marked spent and
- |   never reports. Z always qualifies; Y stopped qualifying when Space moved onto
- |   it, so a Y toggle is inert until the player moves Space off Y.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad, g_toggle_btn, g_mtog_was, g_mtog_spent
+ | Globals: g_pad, g_mtog_was
  | Params: N/A
- | Returns: true on the frame a clean tap completes
+ | Returns: true on the frame the combo first becomes held
  ----------------------*/
-bool mode_toggle_fired(void) {
-    Button b = (g_toggle_btn == 1) ? Button::Y : Button::Z;
-    if (!toggle_btn_free(b)) return false;
-    bool now = g_pad->IsHeld(b);
-    bool other = g_pad->IsHeld(Button::Up) || g_pad->IsHeld(Button::Down) ||
-                 g_pad->IsHeld(Button::Left) || g_pad->IsHeld(Button::Right) ||
-                 g_pad->IsHeld(Button::L) || g_pad->IsHeld(Button::R);
-    bool fired = false;
-    if (now && other) g_mtog_spent = true;
-    if (g_mtog_was && !now) { fired = !g_mtog_spent; g_mtog_spent = false; }
+bool mode_combo_fired(void) {
+    bool now = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R)
+             && !g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y);
+    bool fired = now && !g_mtog_was;
     g_mtog_was = now;
     return fired;
 }
 
 /*----------------------
  | mode_toggle_reset
- | Description: Zeroes g_mtog_was/g_mtog_spent, discarding whatever edge
- |   mode_toggle_fired was mid-tracking. See input.h for why this has to be a
- |   hard discard rather than a "only count presses observed here" flag: the
- |   press edge was legitimately observed, before the modal that is now
- |   returning ever opened; the fix is to forget it entirely, not to gate it.
+ | Description: Zeroes g_mtog_was, discarding whatever edge mode_combo_fired was
+ |   mid-tracking. See input.h for why this has to be a hard discard rather than a
+ |   "only count presses observed here" flag: the press edge was legitimately
+ |   observed, before the modal that is now returning ever opened; the fix is to
+ |   forget it entirely, not to gate it.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_mtog_was, g_mtog_spent
+ | Globals: g_mtog_was
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void mode_toggle_reset(void) {
     g_mtog_was = false;
-    g_mtog_spent = false;
 }
 
 /*----------------------

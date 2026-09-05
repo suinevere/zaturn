@@ -592,7 +592,6 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
                     SaturnKeyEvent &ke, bool pad,
                     DictionaryWord *&selected_out, int &cw_len_out) {
     if (pad) {
-        if (caps_combo_fired()) keyboard_set_caps(!keyboard_get_caps());
         if (chord_fired(CA_RECALL, -1)) history_recall(&k, 1);
         if (chord_fired(CA_RECALL, +1)) history_recall(&k, 0);
         if (chord_fired(CA_CURSOR, -1)) keyboard_caret_left(&k);

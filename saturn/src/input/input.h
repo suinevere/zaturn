@@ -89,7 +89,7 @@ extern MultiPad *g_pad;
 //     Page -- each in one of eight slots {L/R, Z+Up/Dn, Z+L/R, Z+Left/Right,
 //     Y+Up/Dn, Y+Left/Right, Y+L/R, X+Up/Dn}; reassigning to a used slot swaps, to
 //     a free spare just moves ("alternate iff already used").
-//   Fixed: L+R caps toggle.
+//   Fixed: L+R swaps the dashboard's Keyboard and Command Panel modes.
 // Everything reads through face_button()/chord_fired() so both editors honor it.
 //
 // Space joined group 1 rather than staying the fixed X it was: it is a typing
@@ -101,8 +101,8 @@ extern MultiPad *g_pad;
 // X, so SL_XUD no longer overlaps a typing button, and moves the overlap onto Y,
 // where the default Page (Y+Up/Dn) and Home/End (Y+Left/Right) chords now sit
 // under the Space button the same way Recall used to sit under X. It also costs
-// the Y option on the Panel/Keyboard toggle, which needs a button that types
-// nothing; see toggle_btn_free in input.cxx.
+// nothing on the Panel/Keyboard swap, which has moved off the shift buttons
+// entirely and onto the fixed L+R combo (mode_combo_fired).
 enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_N };
 enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
 
@@ -118,8 +118,8 @@ enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
 
 // Directional chord slots. Y shifts home-end/page, Z shifts line/cursor, X shifts
 // recall. Suffix: "t" = shoulder triggers L/R, "d" = D-pad Left/Right. The spare
-// directional slots are SL_ZLRd and SL_YLRt; caps-toggle rides the fixed L+R combo
-// instead of a slot.
+// directional slots are SL_ZLRd and SL_YLRt; the mode swap rides the fixed L+R
+// combo instead of a slot.
 //
 // SL_XUD is last so the numbers already written into a save keep their meaning --
 // the slot list is persisted by index, and inserting in the middle would silently
@@ -129,7 +129,8 @@ enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
 // the set: in the Command Panel interface Space has no job, so Y is free, but in
 // the Keyboard interface Y+Up both types a space and pages. Harmless in practice
 // -- the scroll redraws over the stray space's frame -- and remappable either way.
-// Z alone does nothing; see mode_toggle_fired, which claims a clean tap of it.
+// Z and Y do nothing alone: both are shift buttons only, now that the mode swap
+// has moved off them onto L+R.
 enum { SL_LR, SL_ZUD, SL_ZLRt, SL_ZLRd, SL_YUD, SL_YLRd, SL_YLRt, SL_XUD, SL_N };
 
 /*----------------------
@@ -185,41 +186,30 @@ const char *face_btn_name(int action);
 const char *slot_name(int slot);
 
 /*----------------------
- | caps_combo_fired
- | Description: Reports the rising edge of the fixed L+R (no shift) caps-toggle
- |   combo -- fires once per press, not once per held frame.
+ | mode_combo_fired
+ | Description: Reports the rising edge of the fixed L+R (no shift) combo, which
+ |   swaps the dashboard between its Keyboard and Command Panel modes -- fires
+ |   once per press, not once per held frame. This is the combo that used to
+ |   toggle Caps; Caps is now an Options row and has no pad binding at all,
+ |   because a modifier the player cannot see the state of is worth less than a
+ |   swap they can.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_pad
  | Params: N/A
  | Returns: true on the frame the combo first becomes held
  ----------------------*/
-bool caps_combo_fired(void);
-
-/*----------------------
- | mode_toggle_fired
- | Description: Reports a tap of the toggle button -- pressed and released with
- |   no direction or shoulder held in between. Y and Z do nothing on their own
- |   today, they only shift the chord slots, so a tap is free to claim; a press
- |   that fires a chord is marked spent and never reports.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad, g_toggle_btn
- | Params: N/A
- | Returns: true on the frame a clean tap completes
- ----------------------*/
-bool mode_toggle_fired(void);
+bool mode_combo_fired(void);
 
 /*----------------------
  | mode_toggle_reset
- | Description: Clears mode_toggle_fired's latch (the held/spent state it
- |   tracks across calls). Call after any blocking UI (a menu, a device/slot
- |   picker, any modal that runs its own poll loop and does not itself call
- |   mode_toggle_fired) returns to the caller's own frame loop -- the toggle
- |   button can be pressed and released entirely while that modal owned the
- |   screen, and without this the next mode_toggle_fired call would see a
- |   stale "was held" and swap interfaces on a press the player spent on
- |   something else, or never made at all.
+ | Description: Clears mode_combo_fired's held latch. Call after any blocking UI
+ |   (a menu, a device/slot picker, any modal that runs its own poll loop and does
+ |   not itself call mode_combo_fired) returns to the caller's own frame loop --
+ |   L+R can be pressed and released entirely while that modal owned the screen,
+ |   and without this the next mode_combo_fired call would see a stale "was held"
+ |   and swap interfaces on a press the player spent on something else, or never
+ |   made at all.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A

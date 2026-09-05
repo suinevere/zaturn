@@ -17,7 +17,7 @@
  |   text_map.h (text_clear_line, for blanking the strip's rows on a fatal halt),
  |   room_model.h (the room snapshot the panel reads), keyboard.h
  |   (KeyboardState), saturn_keyboard.h (key events), input.h (g_pad, pad
- |   repeat/scroll, history, mode_toggle_fired), typeahead.h +
+ |   repeat/scroll, history, mode_combo_fired), typeahead.h +
  |   typeahead_extract.h + typeahead_solution.h (the trie), menu.h + menu_pages.h
  |   (mid-game menus and save dialogs), save_ui.h (device/slot pickers),
  |   saturn_backup.h (backup reads/writes), soft_reset.h (reboot/quit handling),
@@ -482,7 +482,7 @@ static void run_room_transition(void) {
  |   blocking UI of their own and call mode_toggle_reset() the instant it
  |   returns -- the toggle button could have been pressed and released
  |   entirely while that UI owned the screen, and without the reset the next
- |   frame's mode_toggle_fired would see a stale held state and swap
+ |   frame's mode_combo_fired would see a stale held state and swap
  |   interfaces on nothing the player did at the prompt: the F10/START/Esc
  |   Options menu (int om = options_menu()), the F11 keyboard-controls page,
  |   the F12 sound-options page (inside its has-audio guard), and the reboot/
@@ -595,6 +595,11 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
        first frame after the ramp. One shot: every later prompt finds this null. */
     void (*intro_reveal)(void) = g_intro_reveal;
     g_intro_reveal = 0;
+    /* The command module's menu and swap rows, held across one frame. Both are
+       set where the panel's action is spent, which is below the two blocks that
+       act on them, so each is read on the frame after the row was picked. */
+    bool panel_menu = false;
+    bool panel_swap = false;
     for (;;) {
       while (!k.submitted) {
         check_soft_reset();
@@ -614,9 +619,10 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
            arrives on the black the hook left and must not, since menu_fade_out
            starts at full brightness and would flash the room back on first. */
         bool menu_back = (g_menu_reopen != 0);
-        if (menu_back || (pad && g_pad->WasPressed(Button::START))
+        if (menu_back || panel_menu || (pad && g_pad->WasPressed(Button::START))
             || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_F10) {
             g_menu_reopen = 0;
+            panel_menu = false;
             // Duck the music for as long as the menu is up rather than stopping it:
             // the game is still underneath, so the track should thin out, not cut.
             // The Sound page lifts it to full itself if the player goes that way --
@@ -710,7 +716,8 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
            command across, or the player loses what they just picked or typed.
            cp_load_line re-derives the slot from the word count, exactly as it
            does for a recalled command. */
-        if (g_kbd_visible && mode_toggle_fired()) {
+        if (g_kbd_visible && (mode_combo_fired() || panel_swap)) {
+            panel_swap = false;
             if (g_cmd_mode == IFACE_PANEL) {
                 keyboard_load_line(&k, cpanel.line);
                 g_cmd_mode = IFACE_KEYBOARD;
@@ -738,6 +745,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
                 reveal_owed = true;
                 continue;
             }
+            /* The menu and swap rows only raise a flag: both are acted on at the
+               top of the loop, where the pad's own Start and L+R are already
+               handled -- and the menu path there owes a ramp down and a music
+               duck that this point in the frame cannot give it. */
+            if (cpanel.action == CP_ACT_MENU) { cpanel.action = CP_ACT_NONE; panel_menu = true; continue; }
+            if (cpanel.action == CP_ACT_SWAP) { cpanel.action = CP_ACT_NONE; panel_swap = true; continue; }
             pad_scroll_update();
             render_console();
             render_command_panel(cpanel, *room_model_get(), cw);

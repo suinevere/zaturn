@@ -27,7 +27,7 @@ extern "C" {
  |   silently truncated tune that every test still passes.
  | Author: suinevere
  ----------------------*/
-#define MUSIC_SYNTH_PATTERNS 17
+#define MUSIC_SYNTH_PATTERNS 20
 #define MUSIC_SYNTH_ROWS     16
 #define MUSIC_SYNTH_CHANNELS 4
 

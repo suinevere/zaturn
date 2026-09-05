@@ -73,10 +73,40 @@ typedef enum {
 typedef struct {
     int      valid;      /* a pointing device is driving the cursor */
     int      hot;        /* it fired this frame */
+    int      held;       /* a button is down right now, for hold-repeat */
     int      offscreen;  /* the shot missed the raster entirely */
     int16_t  x, y;       /* screen pixels, clamped to controller_cursor_bounds */
+    int      col, row;   /* the same point as a text cell, for hit tests */
     int      button;     /* which fired: DEV_BTN_LEFT / _MIDDLE / _RIGHT */
 } DevPointer;
+
+/*----------------------
+ | DEV_HOLD_SCROLL_UP .. DEV_HOLD_N
+ | Description: The hold-repeat slots controller_hold_fired keeps timers for, one
+ |   per thing a player can hold a trigger on. Named centrally so two callers
+ |   cannot pick the same number and share a timer by accident.
+ | Author: suinevere
+ ----------------------*/
+enum {
+    DEV_HOLD_SCROLL_UP = 0,
+    DEV_HOLD_SCROLL_DOWN,
+    DEV_HOLD_N
+};
+
+/*----------------------
+ | controller_hold_fired
+ | Description: Accelerating auto-repeat for something held rather than tapped.
+ |   Fires once the moment `active` goes true, waits out an initial delay, then
+ |   repeats -- slowly at first and quicker the longer the hold lasts, the way a
+ |   held keyboard key behaves. Releasing resets the slot, so the next hold starts
+ |   slow again.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: slot -- one of the DEV_HOLD_* constants; active -- nonzero while held
+ | Returns: nonzero on the frames it fires
+ ----------------------*/
+int controller_hold_fired(int slot, int active);
 
 /*----------------------
  | DEV_BTN_LEFT / DEV_BTN_MIDDLE / DEV_BTN_RIGHT

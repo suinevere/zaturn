@@ -753,6 +753,7 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             if (cpanel.action == CP_ACT_SWAP) { cpanel.action = CP_ACT_NONE; panel_swap = true; continue; }
             pad_scroll_update();
             render_console();
+            console_pointer_scroll();
             render_command_panel(cpanel, *room_model_get(), cw);
         } else {
             DictionaryWord* selected; int cw_len;

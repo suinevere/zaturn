@@ -108,7 +108,62 @@ static int g_wedged     = 0;
  | Author: suinevere
  ----------------------*/
 static int g_bound_w = 320;
-static int g_bound_h = 224;
+static int g_bound_h = 240;
+
+/*----------------------
+ | CELL_W / CELL_H
+ | Description: A text cell in pixels. The screen is 40 by 30 cells over 320 by
+ |   240, so both are 8 and DevPointer.col/row are the cursor divided by them.
+ | Author: suinevere
+ ----------------------*/
+static const int CELL_W = 8;
+static const int CELL_H = 8;
+
+/*----------------------
+ | HOLD_DELAY / HOLD_RATE_SLOW / HOLD_RATE_FAST / HOLD_ACCEL
+ | Description: controller_hold_fired's timing in frames: the wait before a held
+ |   trigger starts repeating, the interval it starts repeating at, the floor it
+ |   accelerates to, and how many repeats it takes to gain one frame of speed.
+ | Author: suinevere
+ ----------------------*/
+static const int HOLD_DELAY     = 24;
+static const int HOLD_RATE_SLOW = 10;
+static const int HOLD_RATE_FAST = 2;
+static const int HOLD_ACCEL     = 3;
+
+/*----------------------
+ | HoldRep / g_hold
+ | Description: Per-slot hold-repeat state: the countdown to the next tick and how
+ |   many ticks this hold has already produced, which is what makes it accelerate.
+ | Author: suinevere
+ ----------------------*/
+struct HoldRep { int16_t timer; int16_t ticks; };
+static HoldRep g_hold[DEV_HOLD_N];
+
+/*----------------------
+ | controller_hold_fired
+ | Description: Fires immediately when a hold begins, then after HOLD_DELAY starts
+ |   repeating at HOLD_RATE_SLOW and shortens the interval by one frame every
+ |   HOLD_ACCEL repeats until it reaches HOLD_RATE_FAST. Releasing clears the slot
+ |   so the next hold starts slow again.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_hold
+ | Params: slot -- one of the DEV_HOLD_* constants; active -- nonzero while held
+ | Returns: nonzero on the frames it fires
+ ----------------------*/
+int controller_hold_fired(int slot, int active) {
+    if (slot < 0 || slot >= DEV_HOLD_N) return 0;
+    HoldRep &h = g_hold[slot];
+    if (!active) { h.timer = 0; h.ticks = -1; return 0; }
+    if (h.ticks < 0) { h.ticks = 0; h.timer = (int16_t) HOLD_DELAY; return 1; }
+    if (--h.timer > 0) return 0;
+    h.ticks++;
+    int rate = HOLD_RATE_SLOW - h.ticks / HOLD_ACCEL;
+    if (rate < HOLD_RATE_FAST) rate = HOLD_RATE_FAST;
+    h.timer = (int16_t) rate;
+    return 1;
+}
 
 /*----------------------
  | AxisRep
@@ -273,6 +328,8 @@ static void clamp_cursor(void) {
     if (g_ptr.y < 0) g_ptr.y = 0;
     if (g_ptr.x > (int16_t) (g_bound_w - 1)) g_ptr.x = (int16_t) (g_bound_w - 1);
     if (g_ptr.y > (int16_t) (g_bound_h - 1)) g_ptr.y = (int16_t) (g_bound_h - 1);
+    g_ptr.col = g_ptr.x / CELL_W;
+    g_ptr.row = g_ptr.y / CELL_H;
 }
 
 /*----------------------
@@ -405,6 +462,9 @@ static void read_mouse(int port) {
         clamp_cursor();
     }
 
+    if (m.IsHeld(P::Button::Left) || m.IsHeld(P::Button::Middle) ||
+        m.IsHeld(P::Button::Right)) g_ptr.held = 1;
+
     if (m.WasPressed(P::Button::Start))  mark(DA_MENU, 0);
     if (m.WasPressed(P::Button::Left))   pointer_fire(DEV_BTN_LEFT);
     if (m.WasPressed(P::Button::Middle)) pointer_fire(DEV_BTN_MIDDLE);
@@ -439,6 +499,8 @@ static void read_gun(int port) {
         g_ptr.y = (int16_t) py;
     }
 
+    if (!off && g.IsHeld(G::Button::Trigger)) g_ptr.held = 1;
+
     if (g.WasPressed(G::Button::Start)) mark(DA_MENU, 0);
     if (g.WasPressed(G::Button::Trigger)) {
         if (off) mark(DA_ACCEPT, 0);
@@ -463,6 +525,7 @@ static void read_gun(int port) {
 void controller_tick(void) {
     for (int a = 0; a < DA_N; a++) g_fired[a][0] = g_fired[a][1] = g_fired[a][2] = 0;
     g_ptr.hot = 0;
+    g_ptr.held = 0;
     g_ptr.offscreen = 0;
     g_ptr.valid = 0;
     g_ptr_fallback = -1;
@@ -634,7 +697,11 @@ void controller_cursor_bounds(int w, int h) {
 void controller_init(void) {
     for (int a = 0; a < DA_N; a++) g_fired[a][0] = g_fired[a][1] = g_fired[a][2] = 0;
     for (int p = 0; p < PORT_N; p++) { g_axis[p][0] = AxisRep{0, 0}; g_axis[p][1] = AxisRep{0, 0}; }
-    g_ptr = DevPointer{0, 0, 0, (int16_t) (g_bound_w / 2), (int16_t) (g_bound_h / 2), DEV_BTN_LEFT};
+    for (int i = 0; i < DEV_HOLD_N; i++) g_hold[i] = HoldRep{0, -1};
+    g_ptr = DevPointer{0, 0, 0, 0,
+                       (int16_t) (g_bound_w / 2), (int16_t) (g_bound_h / 2),
+                       0, 0, DEV_BTN_LEFT};
+    clamp_cursor();
     g_ptr_fallback = -1;
     g_wedged = 0;
 }

@@ -23,6 +23,7 @@
 
 #include <srl.hpp>
 #include "command_view.h"
+#include "controller.h"
 #include "command_rose.h"
 #include "rose_draw.h"
 #include "text_map.h"
@@ -55,6 +56,15 @@ static const int CV_TOP_MARGIN = 1;
  | Author: suinevere
  ----------------------*/
 static const char *CV_BORDER = "+-------------+---------------+--------+";
+
+/*----------------------
+ | g_strip_top
+ | Description: The row the strip's top border was last drawn on, which is also
+ |   the first row the room picture does not reach. cv_pointer_travel needs the
+ |   picture's extent and this is where it is already known.
+ | Author: suinevere
+ ----------------------*/
+static int g_strip_top = 0;
 
 /*----------------------
  | CV_LIST_ROW0
@@ -965,6 +975,7 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     if (p.overlay) cv_overlay_border(frame, tall);
 
     int dash = dash_ready();
+    g_strip_top = border_top;
     dash_set(p.overlay ? (tall ? DASH_OVERLAY_TALL : DASH_OVERLAY) : DASH_PANEL, border_top);
 
     /* Black behind the box on the fallback path, the way a menu box is black:
@@ -1211,6 +1222,48 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
 }
 
 /*----------------------
+ | CV_TRAVEL_EDGE
+ | Description: How many cells deep the picture's four movement bands are. The
+ |   picture is divided into a border of this thickness and a dead middle, so a
+ |   shot has to be meant rather than merely land somewhere in the frame.
+ | Author: suinevere
+ ----------------------*/
+#define CV_TRAVEL_EDGE 3
+
+/*----------------------
+ | cv_pointer_travel
+ | Description: Turns a shot at the edge of the room picture into a move, which is
+ |   the light gun's way of doing what the compass rose does for a pad: the top
+ |   band is north, the bottom south, the left west and the right east, and the
+ |   middle is dead. Only an exit the room actually has is taken, so a shot at a
+ |   wall does nothing rather than submitting a command the parser will refuse.
+ |   Corners resolve to the vertical band, since a room is likelier to have north
+ |   and south than the diagonal the corner would otherwise suggest.
+ | Author: suinevere
+ | Dependencies: controller.h, command_panel.h, room_model.h
+ | Globals: g_strip_top
+ | Params: p -- panel state; exits -- the room's exit table
+ | Returns: true if a direction was picked, so the caller can stop looking
+ ----------------------*/
+static bool cv_pointer_travel(CommandPanel &p, const unsigned char *exits) {
+    const DevPointer *ptr = controller_pointer();
+    if (!ptr->valid || !ptr->hot) return false;
+    if (g_strip_top <= 0 || ptr->row >= g_strip_top) return false;
+
+    int d = -1;
+    if      (ptr->row < CV_TRAVEL_EDGE)                  d = 0;   /* north */
+    else if (ptr->row >= g_strip_top - CV_TRAVEL_EDGE)   d = 3;   /* south */
+    else if (ptr->col < CV_TRAVEL_EDGE)                  d = 2;   /* west  */
+    else if (ptr->col >= CV_OVERLAY_W - CV_TRAVEL_EDGE)  d = 1;   /* east  */
+    if (d < 0) return false;
+    if (exits[d] != RM_EXIT_OPEN && exits[d] != RM_EXIT_MAYBE) return false;
+
+    cp_pick(&p, room_model_dir_word(d), 0);
+    controller_pointer_consume();
+    return true;
+}
+
+/*----------------------
  | cv_cmd_accept
  | Description: Type Word in the command module: overwrites the sentence in
  |   progress with the selected entry's submit word and marks it submitted --
@@ -1332,8 +1385,8 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  ----------------------*/
 void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
                   TrieNode *root, SaturnKeyEvent &ke, CommandWords &w) {
-    /* L+R is the caps toggle in both interfaces, so the panel has to stop
-       reading the two triggers as module jumps while they are held together --
+    /* L+R swaps the dashboard's two modes, so the panel has to stop reading the
+       two triggers as module jumps while they are held together --
        otherwise the combo also cycles focus, and because cp_focus clamps rather
        than wraps the L and R of one press do not cancel out at the ends: from
        the leftmost module the pair lands one to the right with the cursor
@@ -1354,6 +1407,12 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
            drawn -- stepping onto a direction the player cannot see would give
            the difficulty away. */
         if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
+
+        /* A shot at the picture's edge is a move. Resolved here, after the Hard
+           flatten, so the gun can only reach the exits the rose is showing; and
+           before anything reads the pointer's fallback action, or the same
+           trigger pull would arrive again as a plain letter-click. */
+        if (cv_pointer_travel(p, exits)) return;
 
         if (!lr_both) {
             if (pad_fired(Button::L)) cp_focus(&p, -1);

@@ -58,8 +58,11 @@ def main():
         if normalize(body(old, a)) != normalize(body(new, b)):
             print(f"MISMATCH: {a}", file=sys.stderr); fails += 1
 
-    # The label tables move verbatim too.
-    for tbl in ("FACE_LABEL", "CHORD_LABEL"):
+    # The Controls tables move verbatim too. FACE_LABEL/CHORD_LABEL used to be
+    # the pair checked here; they went when the page stopped being two flat views
+    # and became a device pager over one submenu per controls.xls sheet, and their
+    # strings now live inside ctl_sheet_rows, which the controls_page pair covers.
+    for tbl in ("CS_NAME", "CTL_DEV"):
         oa = normalize(re.search(rf"{tbl}\[[A-Z_]+\]\s*=\s*\{{.*?\}};",
                                  old.read_text(encoding='utf-8'), re.S).group(0))
         nb = normalize(re.search(rf"{tbl}\[[A-Z_]+\]\s*=\s*\{{.*?\}};",

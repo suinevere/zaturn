@@ -22,6 +22,7 @@
 #include "menu.h"
 #include "console_view.h"
 #include "input.h"
+#include "controller.h"
 #include "soft_reset.h"
 #include "game_catalog.h"
 #ifdef NETBIN
@@ -454,6 +455,11 @@ void online_mode(void) {
        instance, and the next dial may be a different one. */
     party_reset();
 #endif
+    /* The command module's menu and swap rows, held across one frame. Both are
+       set where the panel's action is spent, which is below the two blocks that
+       act on them, so each is read on the frame after the row was picked. */
+    bool panel_menu = false;
+    bool panel_swap = false;
     for (;;) {
         term_service(&ts, tr, ZATURN_RX_BUDGET);
         if (term_output_settled(&ts, ONLINE_SETTLE_FRAMES)) console_scroll_to_output();
@@ -491,6 +497,8 @@ void online_mode(void) {
         if (pad && g_pad->AnyPressed()) g_kbd_visible = true;
         pad_repeat_update();
         chord_tick();
+        controller_tick();
+        controller_feed_key(ke);
 
         bool lr = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R);
         lr_hold = lr ? (lr_hold + 1) : 0;
@@ -509,7 +517,8 @@ void online_mode(void) {
            long as it owns the screen and clear it before touching the wire
            again -- Restart never comes back, and main()'s landing clears it for
            that path. */
-        if (g_pad->WasPressed(Button::START)) {
+        if (panel_menu || g_pad->WasPressed(Button::START)) {
+            panel_menu = false;
             int verb_was = g_verbosity;
             PauseSvc svc = { &ts, tr };
             menu_set_service(pause_service, &svc);
@@ -543,7 +552,8 @@ void online_mode(void) {
            cpanel.line, the keyboard k.input -- so the swap carries the
            half-built command across, exactly as saturn_glue.cxx does it for the
            local game. */
-        if (g_kbd_visible && mode_toggle_fired()) {
+        if (g_kbd_visible && (mode_combo_fired() || panel_swap)) {
+            panel_swap = false;
             if (g_cmd_mode == IFACE_PANEL) {
                 keyboard_load_line(&k, cpanel.line);
                 g_cmd_mode = IFACE_KEYBOARD;
@@ -569,6 +579,12 @@ void online_mode(void) {
             SRL::Core::Synchronize();
             continue;
         }
+        /* The menu and swap rows only raise a flag: both are acted on at the top
+           of the loop, where the pad's own Start and L+R are already handled, so
+           a row and a button press cannot take two different paths to the same
+           place. */
+        if (cpanel.action == CP_ACT_MENU) { cpanel.action = CP_ACT_NONE; panel_menu = true; continue; }
+        if (cpanel.action == CP_ACT_SWAP) { cpanel.action = CP_ACT_NONE; panel_swap = true; continue; }
 #else
         DictionaryWord* selected; int cw_len;
         typeahead_edit(k, g_online_ta, sug_index, sug_last, ke, pad, selected, cw_len);
@@ -613,6 +629,7 @@ void online_mode(void) {
         }
 
         render_console();
+        console_pointer_scroll();
 #ifdef NETBIN
         if (panel) render_command_panel(cpanel, *netbin_room(), cw);
         else       render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);

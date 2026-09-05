@@ -83,21 +83,48 @@ extern MultiPad *g_pad;
 // ---- configurable controller mapping ---------------------------------------
 // Two tied groups the player can remap (Options > Controller > Configure):
 //   Group 1 (face buttons): Accept, Backspace/Cancel, Type-letter and Space --
-//     always a permutation of {A,B,C,X}; reassigning one swaps with whoever held
+//     always a permutation of {A,B,C,Y}; reassigning one swaps with whoever held
 //     that button ("alternate when changed").
 //   Group 2 (shift chords): Autocomplete, Recall, Home/End, Line, Cursor-move and
 //     Page -- each in one of eight slots {L/R, Z+Up/Dn, Z+L/R, Z+Left/Right,
 //     Y+Up/Dn, Y+Left/Right, Y+L/R, X+Up/Dn}; reassigning to a used slot swaps, to
 //     a free spare just moves ("alternate iff already used").
-//   Fixed: L+R caps toggle.
+//   Fixed: L+R swaps the dashboard's Keyboard and Command Panel modes.
 // Everything reads through face_button()/chord_fired() so both editors honor it.
 //
 // Space joined group 1 rather than staying the fixed X it was: it is a typing
 // button like the other three -- on the on-screen keyboard it enters a space, or
 // accepts the showing completion and adds one -- and a player who has moved
 // Type-letter off C has no way to reason about why Space alone cannot move.
+//
+// The group's fourth button is Y, not X: controls.xls puts Space on Y. That frees
+// X, so SL_XUD no longer overlaps a typing button, and moves the overlap onto Y,
+// where the default Page (Y+Up/Dn) and Home/End (Y+Left/Right) chords now sit
+// under the Space button the same way Recall used to sit under X. It also costs
+// nothing on the Panel/Keyboard swap, which has moved off the shift buttons
+// entirely and onto the fixed L+R combo (mode_combo_fired).
 enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_N };
 enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
+
+/*----------------------
+ | CG_ACTIONS / CG_SCROLL
+ | Description: The controls.xls sheet a chord action is configured on. Each sheet
+ |   is its own configuration group: a slot swap stays inside one.
+ | Author: suinevere
+ ----------------------*/
+enum { CG_ACTIONS = 0, CG_SCROLL };
+
+/*----------------------
+ | chord_group
+ | Description: Which configuration group (CG_ACTIONS / CG_SCROLL) chord action
+ |   `a` is edited in.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: a -- one of the CA_* constants
+ | Returns: CG_ACTIONS or CG_SCROLL
+ ----------------------*/
+int chord_group(int a);
 
 /*----------------------
  | FA_BTN_N
@@ -111,19 +138,19 @@ enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
 
 // Directional chord slots. Y shifts home-end/page, Z shifts line/cursor, X shifts
 // recall. Suffix: "t" = shoulder triggers L/R, "d" = D-pad Left/Right. The spare
-// directional slots are SL_ZLRd and SL_YLRt; caps-toggle rides the fixed L+R combo
-// instead of a slot.
+// directional slots are SL_ZLRd and SL_YLRt; the mode swap rides the fixed L+R
+// combo instead of a slot.
 //
 // SL_XUD is last so the numbers already written into a save keep their meaning --
 // the slot list is persisted by index, and inserting in the middle would silently
 // re-read every stored chord as its neighbour.
 //
-// X carries a chord *and* stays the default Space button, which is the one overlap
-// in the set: in the Command Panel interface Space has no job, so X is free, but in
-// the Keyboard interface X+Up both types a space and recalls. Harmless in practice
-// -- history_load overwrites the whole input line, so the stray space is gone the
-// same frame -- and remappable either way. Y and Z, by contrast, do nothing alone;
-// see mode_toggle_fired, which claims a clean tap of one of them.
+// Y carries chords *and* is the default Space button, which is the one overlap in
+// the set: in the Command Panel interface Space has no job, so Y is free, but in
+// the Keyboard interface Y+Up both types a space and pages. Harmless in practice
+// -- the scroll redraws over the stray space's frame -- and remappable either way.
+// Z and Y do nothing alone: both are shift buttons only, now that the mode swap
+// has moved off them onto L+R.
 enum { SL_LR, SL_ZUD, SL_ZLRt, SL_ZLRd, SL_YUD, SL_YLRd, SL_YLRt, SL_XUD, SL_N };
 
 /*----------------------
@@ -150,7 +177,7 @@ extern int g_chord_slot[CA_N];
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
- | Returns: the Button (A, B, C or X) currently assigned to that action
+ | Returns: the Button (A, B, C or Y) currently assigned to that action
  ----------------------*/
 Button face_button(int action);
 
@@ -162,7 +189,7 @@ Button face_button(int action);
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
- | Returns: "A", "B", "C" or "X"
+ | Returns: "A", "B", "C" or "Y"
  ----------------------*/
 const char *face_btn_name(int action);
 
@@ -179,41 +206,30 @@ const char *face_btn_name(int action);
 const char *slot_name(int slot);
 
 /*----------------------
- | caps_combo_fired
- | Description: Reports the rising edge of the fixed L+R (no shift) caps-toggle
- |   combo -- fires once per press, not once per held frame.
+ | mode_combo_fired
+ | Description: Reports the rising edge of the fixed L+R (no shift) combo, which
+ |   swaps the dashboard between its Keyboard and Command Panel modes -- fires
+ |   once per press, not once per held frame. This is the combo that used to
+ |   toggle Caps; Caps is now an Options row and has no pad binding at all,
+ |   because a modifier the player cannot see the state of is worth less than a
+ |   swap they can.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_pad
  | Params: N/A
  | Returns: true on the frame the combo first becomes held
  ----------------------*/
-bool caps_combo_fired(void);
-
-/*----------------------
- | mode_toggle_fired
- | Description: Reports a tap of the toggle button -- pressed and released with
- |   no direction or shoulder held in between. Y and Z do nothing on their own
- |   today, they only shift the chord slots, so a tap is free to claim; a press
- |   that fires a chord is marked spent and never reports.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad, g_toggle_btn
- | Params: N/A
- | Returns: true on the frame a clean tap completes
- ----------------------*/
-bool mode_toggle_fired(void);
+bool mode_combo_fired(void);
 
 /*----------------------
  | mode_toggle_reset
- | Description: Clears mode_toggle_fired's latch (the held/spent state it
- |   tracks across calls). Call after any blocking UI (a menu, a device/slot
- |   picker, any modal that runs its own poll loop and does not itself call
- |   mode_toggle_fired) returns to the caller's own frame loop -- the toggle
- |   button can be pressed and released entirely while that modal owned the
- |   screen, and without this the next mode_toggle_fired call would see a
- |   stale "was held" and swap interfaces on a press the player spent on
- |   something else, or never made at all.
+ | Description: Clears mode_combo_fired's held latch. Call after any blocking UI
+ |   (a menu, a device/slot picker, any modal that runs its own poll loop and does
+ |   not itself call mode_combo_fired) returns to the caller's own frame loop --
+ |   L+R can be pressed and released entirely while that modal owned the screen,
+ |   and without this the next mode_combo_fired call would see a stale "was held"
+ |   and swap interfaces on a press the player spent on something else, or never
+ |   made at all.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -368,12 +384,12 @@ bool chord_shift_held(void);
  | face_assign
  | Description: Assigns face-action `a` to button `b`. If another action already
  |   holds `b`, that action takes over whatever button `a` previously had (a
- |   swap), keeping the four face actions a permutation of {A,B,C,X}.
+ |   swap), keeping the four face actions a permutation of {A,B,C,Y}.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: a -- the face action being reassigned; b -- the button
- |   (0=A, 1=B, 2=C, 3=X) to give it
+ |   (0=A, 1=B, 2=C, 3=Y) to give it
  | Returns: N/A
  ----------------------*/
 void face_assign(int a, int b);

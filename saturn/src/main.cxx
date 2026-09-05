@@ -34,6 +34,7 @@ extern "C" {
 }
 #include "app_state.h"
 #include "input.h"
+#include "controller.h"
 #include "console_view.h"
 #include "options.h"
 #include "soft_reset.h"
@@ -449,6 +450,7 @@ int main(void) {
     options_load();
     static MultiPad pads;
     g_pad = &pads;
+    controller_init();
 
     // Before the splash, and before the setjmp below, so a soft reset does not
     // re-ask: the answer cannot have changed, and one of the two answers leaves

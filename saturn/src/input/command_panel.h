@@ -46,15 +46,17 @@ enum { CP_BOX_TRAVEL = 0, CP_BOX_WORD, CP_BOX_CMD, CP_BOX_N };
 enum { CP_SLOT_VERB = 0, CP_SLOT_NOUN, CP_SLOT_PREP, CP_SLOT_NOUN2, CP_SLOT_DONE };
 
 /*----------------------
- | CP_ACT_NONE / CP_ACT_MAP
- | Description: A screen the command module asks for that is not a command to
- |   the story. The panel cannot open one itself -- the map runs its own loop and
- |   owns the whole display while it is up, and the fade around it belongs to
- |   whichever frame loop is hosting the panel -- so the request is left in
- |   CommandPanel::action for that loop to spend and clear.
+ | CP_ACT_NONE / CP_ACT_MAP / CP_ACT_MENU / CP_ACT_SWAP
+ | Description: Something the command module asks for that is not a command to
+ |   the story: the map screen, the pause menu, or a swap to the other dashboard
+ |   mode. The panel cannot do any of them itself -- the first two run their own
+ |   loops and own the whole display while they are up, and the third has to move
+ |   a half-built command between two buffers the panel only holds one of -- so
+ |   the request is left in CommandPanel::action for the hosting frame loop to
+ |   spend and clear.
  | Author: suinevere
  ----------------------*/
-enum { CP_ACT_NONE = 0, CP_ACT_MAP };
+enum { CP_ACT_NONE = 0, CP_ACT_MAP, CP_ACT_MENU, CP_ACT_SWAP };
 
 /*----------------------
  | CommandPanel

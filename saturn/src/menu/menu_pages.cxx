@@ -22,7 +22,7 @@
  |   g_kbd_visible), options.h (options_save/display_apply/
  |   display_cycle_row/valid_dialnum), app_state.h (g_difficulty/g_dialnum/
  |   g_display/g_music_level/g_pcm_level/g_in_game/
- |   g_cmd_iface/g_toggle_btn), keyboard.h, saturn_keyboard.h, soft_reset.h,
+ |   g_cmd_iface), keyboard.h, saturn_keyboard.h, soft_reset.h,
  |   display.h, sound.h, music.h, SRL
  ----------------------*/
 
@@ -34,6 +34,7 @@
 #include "app_state.h"
 #include "console_view.h"
 #include "input.h"
+#include "controller.h"
 #include "options.h"
 #include "saturn_keyboard.h"
 #include "soft_reset.h"
@@ -218,35 +219,69 @@ static void network_page(void) {
 }
 
 /*----------------------
- | FACE_LABEL / CHORD_LABEL
- | Description: Display names for the remappable face actions (FA_*) and chord
- |   actions (CA_*), shown as the row labels in the control-remap editor.
+ | CK_FACE / CK_CHORD / CK_FIXED / CtlRow
+ | Description: One row of a configuration sheet: an editable face-button or
+ |   shift-chord binding, or a fixed one the device itself decides. `idx` is the
+ |   FA_ or CA_ action for the first two and unused for the third, whose value is
+ |   the literal in `fixed`.
  | Author: suinevere
  ----------------------*/
-static const char *const FACE_LABEL[FA_N]  = { "Accept", "Backspace/Cancel", "Type Letter",
-                                               "Space" };
-static const char *const CHORD_LABEL[CA_N] = { "Autocomplete", "Recall", "Home/End",
-                                               "Line Up/Down", "Cursor Move", "Page Up/Down" };
+enum { CK_FACE, CK_CHORD, CK_FIXED };
+struct CtlRow {
+    unsigned char kind;
+    unsigned char idx;
+    const char *label;
+    const char *fixed;
+};
 
 /*----------------------
- | PANEL_FACE_LABEL
- | Description: The Command Panel view's names for the face actions, differing
- |   from FACE_LABEL only at FA_TYPE: the panel commits a whole word off the rose,
- |   not a letter off a grid. Indexed by FA_* like its counterpart rather than by
- |   visible-row number, so a row lookup never has to know which table it is in.
- |   FA_SPACE's entry is never drawn -- the panel view does not list it -- but is
- |   present so the two tables stay index-compatible.
+ | CS_ACTIONS / CS_SCROLL / CS_MOUSE / CS_N / CS_NAME
+ | Description: The three configurable sheets of controls.xls, and their names as
+ |   the submenu rows spell them. The workbook's fourth sheet, Static, has no
+ |   entry here: nothing on it can change, so it is printed on the root page
+ |   rather than given a submenu that could only be read.
  | Author: suinevere
  ----------------------*/
-static const char *const PANEL_FACE_LABEL[FA_N] = { "Accept", "Backspace/Cancel",
-                                                    "Type Word", "Space" };
+enum { CS_ACTIONS = 0, CS_SCROLL, CS_MOUSE, CS_N };
+static const char *const CS_NAME[CS_N] = { "Actions", "Scrolling", "Mouse Mode" };
+
+/*----------------------
+ | CSB_ACT / CSB_SCR / CSB_MOUSE / DevCfg / CTL_DEV
+ | Description: Which sheets each device configures, and what its row on the
+ |   Static sheet says, read off controls.xls. A device with nothing on a sheet
+ |   does not get that submenu: the light gun has no Scrolling column and no
+ |   selection to step, so it lists Actions alone, and the mouse has no Mouse Mode
+ |   because it is always a cursor -- that sheet's "N/A (no mouse on/off)".
+ | Author: suinevere
+ ----------------------*/
+#define CSB_ACT   1
+#define CSB_SCR   2
+#define CSB_MOUSE 4
+struct DevCfg { unsigned char sheets; const char *menu; };
+static const DevCfg CTL_DEV[DEV_KIND_N] = {
+    { 0,                         ""            },   /* DEV_NONE   */
+    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_PAD    */
+    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_FLIGHT */
+    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_ANALOG */
+    { CSB_ACT|CSB_SCR,           "Blue button" },   /* DEV_MOUSE  */
+    { CSB_ACT|CSB_MOUSE,         "Start"       },   /* DEV_TWIN   */
+    { CSB_ACT,                   "Button"      },   /* DEV_GUN    */
+    { CSB_ACT,                   "ESC"         },   /* DEV_KBD    */
+};
+
+/*----------------------
+ | CTL_SHEET_MAX
+ | Description: The most rows any one sheet lists, which is the pad's Actions
+ |   sheet in the Keyboard interface: four face buttons, three chords and the
+ |   fixed Map row.
+ | Author: suinevere
+ ----------------------*/
+#define CTL_SHEET_MAX 8
 
 /*----------------------
  | INAMES / IDESC
  | Description: The Interface row's value names and description lines, indexed by
- |   IFACE_KEYBOARD/IFACE_PANEL. Word for word what the Gameplay page showed
- |   before the row moved here; file scope rather than function-local because the
- |   row now heads a page that is drawn from tables either side of it.
+ |   IFACE_KEYBOARD/IFACE_PANEL.
  | Author: suinevere
  ----------------------*/
 static const char *const INAMES[] = { "Keyboard", "Command Panel" };
@@ -254,147 +289,225 @@ static const char *const IDESC[]  = { "Type words, autocomplete",
                                       "Pick words with the pad" };
 
 /*----------------------
- | CtlRow / CTL_PANEL / CTL_KBD / CTL_PANEL_N / CTL_KBD_N / CTL_ASSIGN_MAX
- | Description: The remappable rows each Controls view lists, in the order they
- |   are drawn. Both tables index the one shared g_face_btn/g_chord_slot mapping --
- |   a view is a filter over it, not a second copy -- so a row absent from a view
- |   is still live in the interface that uses it. The panel drops Space (it types
- |   whole words), Autocomplete (it has no completion list) and Cursor Move (its
- |   D-pad drives the rose directly, unshifted), and orders its chords the way the
- |   hand reaches them rather than by CA_* number.
- |
- |   A consequence worth knowing: remapping a shown row onto a hidden row's slot
- |   still swaps, silently, because chord_assign only sees the mapping and not the
- |   view. Moving Recall onto L/R from the panel view sends Autocomplete to
- |   Recall's old slot with nothing on screen to say so; it is visible again the
- |   moment the player switches to the Keyboard view.
- |
- |   CTL_ASSIGN_MAX is the longer of the two lists, used to reserve the rows the
- |   block occupies so the box and everything below it hold still when the player
- |   flips the Interface row.
+ | ctl_dev_editable
+ | Description: Whether a device's bindings are the remappable face/chord mapping
+ |   rather than the device's own fixed buttons. Only the three pad-family kinds
+ |   are: a mouse click is a mouse click and a trigger is a trigger, and there is
+ |   no second mapping table for those to be pointed at.
  | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: N/A
+ | Params: k -- the device kind
+ | Returns: true when the sheets for `k` are editable
  ----------------------*/
-enum { CK_FACE, CK_CHORD };
-struct CtlRow { unsigned char kind; unsigned char idx; };
-
-static const CtlRow CTL_PANEL[] = {
-    { CK_FACE,  FA_ACCEPT }, { CK_FACE,  FA_BACK },    { CK_FACE,  FA_TYPE },
-    { CK_CHORD, CA_RECALL }, { CK_CHORD, CA_PAGE },    { CK_CHORD, CA_HOMEEND },
-    { CK_CHORD, CA_LINE },
-};
-static const CtlRow CTL_KBD[] = {
-    { CK_FACE,  FA_ACCEPT }, { CK_FACE,  FA_BACK },    { CK_FACE,  FA_TYPE },
-    { CK_FACE,  FA_SPACE },
-    { CK_CHORD, CA_AUTO },   { CK_CHORD, CA_RECALL },  { CK_CHORD, CA_HOMEEND },
-    { CK_CHORD, CA_LINE },   { CK_CHORD, CA_CURSOR },  { CK_CHORD, CA_PAGE },
-};
-#define CTL_PANEL_N   7
-#define CTL_KBD_N     10
-#define CTL_ASSIGN_MAX CTL_KBD_N
+static bool ctl_dev_editable(DevKind k) {
+    return k == DEV_PAD || k == DEV_FLIGHT || k == DEV_ANALOG;
+}
 
 /*----------------------
- | CTL_BLOCK_ROWS
- | Description: Rows reserved for the assignable list plus the unremappable ones
- |   under it -- the panel's Cycle Module and Caps Toggle, the keyboard's Caps
- |   Toggle alone. The keyboard's 10 + 1 is the taller of the two; the panel's
- |   7 + 2 leaves the last two blank. Reserved rather than measured so Keyboard
- |   Caps, the Swap row and Ok/Cancel keep their screen position across a view
- |   flip instead of sliding two rows up and back under the cursor.
+ | ctl_sheet_rows
+ | Description: Fills `out` with sheet `sheet`'s rows for device `k`, in display
+ |   order, and reports how many. The pad family's Actions and Scrolling sheets
+ |   are the live face/chord mapping, filtered by interface exactly as the old
+ |   two-view page filtered it -- the Command Panel has no Space, no completion
+ |   list and no shifted cursor, so those three rows are absent from it. Every
+ |   other device's rows come straight off controls.xls and are fixed.
  | Author: suinevere
- ----------------------*/
-#define CTL_BLOCK_ROWS (CTL_KBD_N + 1)
-
-/*----------------------
- | CtlView / ctl_view
- | Description: The Controls page's row geometry for whichever interface the
- |   Interface row currently names: which table the assignable rows come from, how many there
- |   are, and the `sel` index of every row below them (all offset by one for the
- |   Interface row at index 0). Derived rather than stored because the page
- |   calls it twice per frame -- once before reading input and again after, so the
- |   frame that flips the Interface row already draws the list it flipped to
- |   instead of
- |   showing the old one for a frame.
- | Author: suinevere
- | Dependencies: app_state.h (g_cmd_iface, IFACE_PANEL)
+ | Dependencies: input.h, controller.h, app_state.h (g_cmd_iface)
  | Globals: g_cmd_iface
- | Params: N/A
- | Returns: the row geometry for the named interface
+ | Params: k -- the device; sheet -- one of CS_*; out -- at least CTL_SHEET_MAX rows
+ | Returns: how many rows were written
  ----------------------*/
-struct CtlView {
-    const CtlRow *rows;
-    bool panel;
-    int nassign, r_caps, r_toggle, r_reset, r_done, r_cancel, nrows;
-};
+static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
+    int n = 0;
+    if (ctl_dev_editable(k)) {
+        bool panel = (g_cmd_iface == IFACE_PANEL);
+        if (sheet == CS_ACTIONS) {
+            out[n++] = CtlRow{ CK_FACE, FA_ACCEPT, "Accept", 0 };
+            out[n++] = CtlRow{ CK_FACE, FA_BACK, "Backspace/Cancel", 0 };
+            out[n++] = CtlRow{ CK_FACE, FA_TYPE, panel ? "Type Word" : "Type Letter", 0 };
+            if (!panel) out[n++] = CtlRow{ CK_FACE, FA_SPACE, "Space", 0 };
+            if (!panel) out[n++] = CtlRow{ CK_CHORD, CA_AUTO, "Autocomplete", 0 };
+            out[n++] = CtlRow{ CK_CHORD, CA_RECALL, "Recall", 0 };
+            if (!panel) out[n++] = CtlRow{ CK_CHORD, CA_CURSOR, "Cursor Move", 0 };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Map", "Command module" };
+        } else if (sheet == CS_SCROLL) {
+            out[n++] = CtlRow{ CK_CHORD, CA_LINE, "Line Up/Down", 0 };
+            out[n++] = CtlRow{ CK_CHORD, CA_PAGE, "Page Up/Down", 0 };
+            out[n++] = CtlRow{ CK_CHORD, CA_HOMEEND, "Home/End", 0 };
+        } else {
+            const char *sel = (k == DEV_FLIGHT) ? "Right Stick" : "D-pad";
+            const char *cur = (k == DEV_FLIGHT) ? "Right Stick"
+                            : (k == DEV_ANALOG) ? "Analogue Stick" : "D-pad";
+            out[n++] = CtlRow{ CK_FIXED, 0, "Move Selection", sel };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", cur };
+        }
+        return n;
+    }
+    if (k == DEV_MOUSE) {
+        if (sheet == CS_ACTIONS) {
+            out[n++] = CtlRow{ CK_FIXED, 0, "Letter", "Click" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Backspace/Cancel", "Middle Click" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Space", "Click" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Accept", "Right Click" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Map", "Click Map" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Recall", "Click prompt" };
+        } else if (sheet == CS_SCROLL) {
+            out[n++] = CtlRow{ CK_FIXED, 0, "Line Up/Down", "Click arrows" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Page Up/Down", "R-Click arrows" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Top/Bottom", "M-Click arrows" };
+        }
+    } else if (k == DEV_TWIN) {
+        if (sheet == CS_ACTIONS) {
+            out[n++] = CtlRow{ CK_FIXED, 0, "Letter", "Gun Trigger R" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Backspace/Cancel", "Gun Trigger L" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Space", "Top Trigger R" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Accept", "Top Trigger L" };
+        } else if (sheet == CS_MOUSE) {
+            out[n++] = CtlRow{ CK_FIXED, 0, "Move Selection", "Left Stick" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", "Left Stick" };
+        }
+    } else if (k == DEV_GUN) {
+        if (sheet == CS_ACTIONS) {
+            out[n++] = CtlRow{ CK_FIXED, 0, "Letter", "Shoot" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Backspace/Cancel", "Shoot" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Space", "Shoot" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Accept", "Shoot off screen" };
+            out[n++] = CtlRow{ CK_FIXED, 0, "Move", "Shoot edge" };
+        }
+    } else if (k == DEV_KBD) {
+        if (sheet == CS_ACTIONS) out[n++] = CtlRow{ CK_FIXED, 0, "Map", "F8" };
+    }
+    return n;
+}
 
-static CtlView ctl_view(void) {
-    CtlView v;
-    v.panel    = (g_cmd_iface == IFACE_PANEL);
-    v.rows     = v.panel ? CTL_PANEL : CTL_KBD;
-    v.nassign  = v.panel ? CTL_PANEL_N : CTL_KBD_N;
-    v.r_caps   = v.nassign + 1;
-    v.r_toggle = v.nassign + 2;
-    v.r_reset  = v.nassign + 3;
-    v.r_done   = v.nassign + 4;
-    v.r_cancel = v.nassign + 5;
-    v.nrows    = v.nassign + 6;
-    return v;
+/*----------------------
+ | ctl_row_value
+ | Description: The value column for one sheet row: the live button or slot name
+ |   for an editable row, the row's own literal for a fixed one.
+ | Author: suinevere
+ | Dependencies: input.h
+ | Globals: g_chord_slot
+ | Params: r -- the row
+ | Returns: the string to print
+ ----------------------*/
+static const char *ctl_row_value(const CtlRow &r) {
+    if (r.kind == CK_FACE)  return face_btn_name(r.idx);
+    if (r.kind == CK_CHORD) return slot_name(g_chord_slot[r.idx]);
+    return r.fixed;
+}
+
+/*----------------------
+ | ctl_dev_list
+ | Description: Fills `out` with every device kind currently attached, which is
+ |   what the Device row pages over -- a page for a controller nobody has plugged
+ |   in is a page that can only mislead. Falls back to the control pad when
+ |   nothing at all reports, so the row always has something to name.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: N/A
+ | Params: out -- at least DEV_KIND_N entries
+ | Returns: how many were written, always at least 1
+ ----------------------*/
+static int ctl_dev_list(DevKind *out) {
+    int n = 0;
+    for (int k = DEV_PAD; k < DEV_KIND_N; k++)
+        if (controller_present((DevKind) k)) out[n++] = (DevKind) k;
+    if (n == 0) out[n++] = DEV_PAD;
+    return n;
+}
+
+/*----------------------
+ | controls_sheet_page
+ | Description: One configuration sheet for one device, opened from the root
+ |   Controls page. Editable rows cycle with Left/Right through face_assign or
+ |   chord_assign, which swap ties only inside the same sheet -- that is what
+ |   makes a sheet a configuration group. Fixed rows are listed and skipped over,
+ |   because a device that decides its own bindings still has to say what they
+ |   are. Leaves on B/Backspace, Start/Esc, or the Back row.
+ | Author: suinevere
+ | Dependencies: input.c (face_assign/chord_assign/face_btn_name/slot_name),
+ |   menu.c, menu_layout.c (MENU_DIGIT_COLS), saturn_keyboard.h
+ | Globals: g_face_btn, g_chord_slot, g_kbd_visible
+ | Params: dev -- the device being configured; sheet -- one of CS_*
+ | Returns: N/A
+ ----------------------*/
+static void controls_sheet_page(DevKind dev, int sheet) {
+    MenuBacking backing;
+    const int CTL_ROW_W   = 36;
+    const int CTL_LABEL_W = 18;
+    menu_sync();
+    bool need_fade_in = true;
+    int sel = 0;
+    for (;;) {
+        CtlRow rows[CTL_SHEET_MAX];
+        int nrows = ctl_sheet_rows(dev, sheet, rows);
+        int r_back = nrows;
+        if (sel < 0 || sel > r_back) sel = 0;
+        SaturnKeyEvent ke = saturn_keyboard_poll();
+        pad_repeat_update();
+        bool up    = g_pad->WasPressed(Button::Up)    || ke.kind == SATURN_KEY_UP;
+        bool down  = g_pad->WasPressed(Button::Down)  || ke.kind == SATURN_KEY_DOWN;
+        bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
+        bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
+        bool act   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
+                   || ke.kind == SATURN_KEY_ENTER;
+        bool back  = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
+        bool done  = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
+        if (back || done) break;
+        if (up)   sel = (sel - 1 + r_back + 1) % (r_back + 1);
+        if (down) sel = (sel + 1) % (r_back + 1);
+        if (sel == r_back) { if (act) break; }
+        else if (left || right) {
+            const CtlRow &r = rows[sel];
+            if (r.kind == CK_FACE) {
+                int n = right ? (g_face_btn[r.idx] + 1) % FA_BTN_N
+                              : (g_face_btn[r.idx] + FA_BTN_N - 1) % FA_BTN_N;
+                face_assign(r.idx, n);
+            } else if (r.kind == CK_CHORD) {
+                int n = right ? (g_chord_slot[r.idx] + 1) % SL_N
+                              : (g_chord_slot[r.idx] + SL_N - 1) % SL_N;
+                chord_assign(r.idx, n);
+            }
+        }
+
+        nrows = ctl_sheet_rows(dev, sheet, rows);
+        menu_clear();
+        int fx, fy, fw, fh;
+        menu_box_fit(CS_NAME[sheet], CTL_ROW_W, CTL_SHEET_MAX + 5, &fx, &fy, &fw, &fh);
+        menu_frame(fx, fy, fw, fh, CS_NAME[sheet]);
+        int y = fy + 3;
+        menu_text(fx, fw, y++, 0, controller_kind_name(dev));
+        y++;
+        for (int i = 0; i < nrows; i++)
+            menu_rowf(fx, fw, y++, sel == i, CTL_ROW_W, "   %s%s",
+                      menu_pad(rows[i].label, CTL_LABEL_W), ctl_row_value(rows[i]));
+        y = fy + 4 + CTL_SHEET_MAX + 1;
+        menu_row(fx, fw, y++, sel == r_back, CTL_ROW_W, "   Back");
+        menu_sync();
+        if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
+    }
+    page_fade_out(g_menu_page_fade);
+    menu_sync();
+    mode_toggle_reset();
 }
 
 /*----------------------
  | controls_page
- | Description: Gamepad Controls page. The top row is the Interface slider,
- |   moved here verbatim from the Gameplay page -- same wording, same clamped
- |   Left/Right, same description line under it -- and everything below it is
- |   that interface's own configuration: the Command Panel lists Accept, Backspace/
- |   Cancel, Type Word, Recall, Page Up/Down, Home/End and Line Up/Down, then a
- |   fixed Cycle Module (L/R) and the fixed L+R Caps Toggle; the Keyboard lists
- |   all four face actions and all six chords, then the Caps Toggle alone. Below
- |   the swapped block, shared by both views: a Keyboard Caps on/off toggle, a
- |   Panel/Keyboard Swap row cycling g_toggle_btn between the Z and Y shift
- |   buttons that flip the in-game interface, then Reset to Defaults, Ok and
- |   Cancel.
+ | Description: The Controls root. The Device row pages over every peripheral
+ |   currently attached and nothing else, so the page always describes something
+ |   the player can actually pick up; the Interface row under it is the persisted
+ |   preference a game starts in, which L+R and the command module's Swap row then
+ |   change for the session. Under those sits the workbook's Static sheet, printed
+ |   rather than offered, and then one submenu row per sheet the current device
+ |   configures. Keyboard Caps is here because it stopped being a pad binding: a
+ |   modifier the player cannot see the state of is not worth a combo.
  |
- |   The two views are filters over the one g_face_btn/g_chord_slot mapping, not
- |   separate tables -- see CTL_PANEL/CTL_KBD for what that costs. Interface is
- |   g_cmd_iface, the persisted preference main.cxx seeds g_cmd_mode from at game
- |   start, and this page is now its only editor; a session already in progress
- |   keeps whatever the toggle button last picked, exactly as it did while the
- |   row lived on the Gameplay page. It is deliberately NOT touched by Reset to
- |   Defaults, which restores bindings and has no business throwing the player
- |   out of the view they are reading.
- |
- |   Content starts one row higher than the other option pages, at fy + 3 rather
- |   than fy + 4, so the Interface row plus its description line finish where a
- |   single row would have and the swapped block below opens on the same line it
- |   did when the head row was one line tall.
- |
- |   Only the assignable rows are numbered -- the keyboard view's ten use every
- |   digit key there is, so Interface, Caps, Swap, Reset, Ok and Cancel stay
- |   reachable only by Up/Down. menu_digit_row therefore indexes the assignable
- |   list and its result is offset past the Interface row rather than used as
- |   `sel` directly. Snapshots g_face_btn/g_chord_slot/g_toggle_btn/g_cmd_iface on
- |   entry so Cancel (or B/Backspace) can restore them verbatim; Start/Esc leave
- |   the other way, saving what is on screen exactly as the Ok row does. Keyboard
- |   Caps takes effect immediately and is not part of that snapshot, matching the
- |   toggles on every other page; Panel/Keyboard Swap and Interface ARE
- |   snapshotted, since a stray edit to either should be as cancellable as a
- |   face/chord remap. Up/Down move the row cursor with wraparound, resolved
- |   before the digit-row jump so a same-frame digit press wins the tie against
- |   the pad -- the order the other option pages use; resolving Up/Down first
- |   would let a simultaneous press move `sel` while left/right/act stayed set
- |   from the digit, cycling whichever row the pad happened to land on instead.
- |   Left/Right cycle the selected row's assignment via face_assign/chord_assign
- |   (applying their own tie-breaking rules), move Interface, flip Keyboard Caps or
- |   the Panel/Keyboard Swap, or activate Reset/Ok/Cancel.
- |
- |   Only the Interface row can change the row count, and it sits at index 0,
- |   so `sel` is always 0 at the moment the count changes and never needs
- |   clamping. The swapped block is drawn to the reserved CTL_BLOCK_ROWS height
- |   for the same reason the value column is reserved: nothing below it may move
- |   when the view flips. The value column stays at x + 20 + MENU_DIGIT_COLS,
- |   reserved unconditionally so it does not shift when the player switches
- |   between gamepad and keyboard mid-page; the widest value string is still
- |   "Z+Left/Right" (12 chars), clearing the box's right border at column 39.
+ |   Snapshots g_face_btn/g_chord_slot/g_cmd_iface on entry so Cancel (or
+ |   B/Backspace) restores them verbatim, including edits made two levels down in
+ |   a sheet; Start/Esc save what is on screen exactly as the Ok row does.
+ |   Keyboard Caps takes effect immediately and is not part of that snapshot,
+ |   matching the toggles on every other page.
  |
  |   Returns true, without saving or restoring, if the active input device's
  |   family (pad vs. real keyboard) changed while this page was open, so
@@ -402,48 +515,49 @@ static CtlView ctl_view(void) {
  |   this page on screen showing the wrong device's controls with the music still
  |   paused; false on a genuine Ok/Cancel/B/Backspace/Start/Esc exit.
  | Author: suinevere
- | Dependencies: input.c (g_face_btn/g_chord_slot/face_assign/chord_assign/
- |   mapping_reset_defaults/face_btn_name/slot_name), keyboard.c
+ | Dependencies: input.c (g_face_btn/g_chord_slot/mapping_reset_defaults),
+ |   controller.h (controller_present/controller_kind_name), keyboard.c
  |   (keyboard_get_caps/keyboard_set_caps), console_view.c
- |   (note_input_device/hint/g_kbd_visible), menu.c, menu_layout.c
- |   (MENU_DIGIT_COLS), options.c (options_save), app_state.h (g_toggle_btn,
- |   g_cmd_iface, IFACE_PANEL/IFACE_KEYBOARD), saturn_keyboard.h
- | Globals: g_face_btn, g_chord_slot, g_toggle_btn, g_cmd_iface, g_kbd_visible
+ |   (note_input_device/g_kbd_visible), menu.c, menu_layout.c, options.c
+ |   (options_save), app_state.h (g_cmd_iface, IFACE_PANEL/IFACE_KEYBOARD),
+ |   saturn_keyboard.h
+ | Globals: g_face_btn, g_chord_slot, g_cmd_iface, g_kbd_visible
  | Params: N/A
  | Returns: true if it exited because the input device family changed
- |   (caller should redispatch to the other Controls page); false on a
- |   normal exit
  ----------------------*/
 static bool controls_page(void) {
     MenuBacking backing;
-    // One bar width for every selectable row, and one label field inside the
-    // assignment block, so the centred rows keep a single left edge and a
-    // single value column. CTL_ROW_W is the box's content width; CTL_IFACE_W is
-    // the wider of INAMES, so the Interface slider's arrows do not move when
-    // its value does.
     const int CTL_ROW_W   = 36;
-    const int CTL_LABEL_W = 20;
+    const int CTL_LABEL_W = 18;
     const int CTL_IFACE_W = 13;
+    const int CTL_DEV_W   = 13;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
     int s_face[FA_N], s_chord[CA_N];
-    int s_toggle = g_toggle_btn;
-    int s_iface  = g_cmd_iface;
+    int s_iface = g_cmd_iface;
     for (int a = 0; a < FA_N; a++) s_face[a]  = g_face_btn[a];
     for (int a = 0; a < CA_N; a++) s_chord[a] = g_chord_slot[a];
-    const int R_IFACE = 0;
-    // Held across visits so returning from Options lands on the row the player
-    // was configuring. Clamped rather than trusted, because the row count moves
-    // with the interface: a Command Panel view lists one more binding than a
-    // keyboard one, and switching interface between visits would otherwise
-    // leave the cursor past the end, where none of the sel == v.r_* tests match.
-    static int last_sel = 0;
-    int sel = last_sel;
+    static int last_dev = 0;
+    int sel = 0;
     bool switched = false;
     for (;;) {
-        CtlView v = ctl_view();
-        if (sel < 0 || sel >= v.nrows) sel = 0;
+        DevKind devs[DEV_KIND_N];
+        int ndev = ctl_dev_list(devs);
+        if (last_dev < 0 || last_dev >= ndev) last_dev = 0;
+        DevKind dev = devs[last_dev];
+        int sheets[CS_N], nsheet = 0;
+        for (int s = 0; s < CS_N; s++)
+            if (CTL_DEV[dev].sheets & (1 << s)) sheets[nsheet++] = s;
+        const int R_DEV = 0, R_IFACE = 1;
+        int r_sheet0 = 2;
+        int r_caps   = r_sheet0 + nsheet;
+        int r_reset  = r_caps + 1;
+        int r_done   = r_caps + 2;
+        int r_cancel = r_caps + 3;
+        int nrows    = r_caps + 4;
+        if (sel < 0 || sel >= nrows) sel = 0;
+
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
         if (g_kbd_visible != started_kbd) { switched = true; break; }
@@ -459,84 +573,62 @@ static bool controls_page(void) {
         if (back) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
             for (int a = 0; a < CA_N; a++) g_chord_slot[a] = s_chord[a];
-            g_toggle_btn = s_toggle;
-            g_cmd_iface  = s_iface;
+            g_cmd_iface = s_iface;
             break;
         }
         if (done) { options_save(); break; }
-        if (up)   sel = (sel - 1 + v.nrows) % v.nrows;
-        if (down) sel = (sel + 1) % v.nrows;
-        int drow = 0;
-        if (menu_digit_row(ke, v.nassign, drow, left, right)) { sel = drow + 1; act = true; }
-        last_sel = sel;   // after every move, so no exit path has to remember to
-        if (sel == v.r_done)  { if (act) { options_save(); break; } }
-        else if (sel == v.r_cancel) { if (act) {
+        if (up)   sel = (sel - 1 + nrows) % nrows;
+        if (down) sel = (sel + 1) % nrows;
+        if (sel == r_done) { if (act) { options_save(); break; } }
+        else if (sel == r_cancel) { if (act) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
             for (int a = 0; a < CA_N; a++) g_chord_slot[a] = s_chord[a];
-            g_toggle_btn = s_toggle;
-            g_cmd_iface  = s_iface;
+            g_cmd_iface = s_iface;
             break; } }
-        else if (sel == v.r_reset) { if (act) mapping_reset_defaults(); }
-        else if (sel == v.r_caps) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
-        else if (sel == v.r_toggle) { if (left || right || act) g_toggle_btn = 1 - g_toggle_btn; }
+        else if (sel == r_reset) { if (act) mapping_reset_defaults(); }
+        else if (sel == r_caps) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
+        else if (sel == R_DEV) {
+            if (left)  last_dev = (last_dev - 1 + ndev) % ndev;
+            if (right) last_dev = (last_dev + 1) % ndev;
+        }
         else if (sel == R_IFACE) {
             if (left  && g_cmd_iface > IFACE_KEYBOARD) g_cmd_iface--;
             if (right && g_cmd_iface < IFACE_PANEL)    g_cmd_iface++;
         }
-        else if (left || right) {
-            const CtlRow &r = v.rows[sel - 1];
-            if (r.kind == CK_FACE) {
-                int n = right ? (g_face_btn[r.idx] + 1) % FA_BTN_N
-                              : (g_face_btn[r.idx] + FA_BTN_N - 1) % FA_BTN_N;
-                face_assign(r.idx, n);
-            } else {
-                int n = right ? (g_chord_slot[r.idx] + 1) % SL_N
-                              : (g_chord_slot[r.idx] + SL_N - 1) % SL_N;
-                chord_assign(r.idx, n);
-            }
+        else if (act && sel >= r_sheet0 && sel < r_caps) {
+            controls_sheet_page(dev, sheets[sel - r_sheet0]);
+            need_fade_in = true;
+            continue;
         }
 
-        v = ctl_view();
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", CTL_ROW_W, CTL_BLOCK_ROWS + 9, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 12, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
-        /* One row higher than every other page's content start, so the Interface
-           row and its description line together end where a single row would
-           have: the swapped block below opens on the same line either way. */
         int y = fy + 3;
-        bool nums = !g_kbd_visible;
+        menu_rowf(fx, fw, y++, sel == R_DEV, CTL_ROW_W, "   Device:     %s %s %s",
+                  ndev > 1 ? "<" : " ",
+                  menu_pad(controller_kind_name(dev), CTL_DEV_W),
+                  ndev > 1 ? ">" : " ");
         menu_rowf(fx, fw, y++, sel == R_IFACE, CTL_ROW_W, "   Interface:  %s %s %s",
                   g_cmd_iface > IFACE_KEYBOARD ? "<" : " ",
                   menu_pad(INAMES[g_cmd_iface], CTL_IFACE_W),
                   g_cmd_iface < IFACE_PANEL ? ">" : " ");
         menu_text(fx, fw, y++, 0, IDESC[g_cmd_iface]);
         y++;
-        const int block_y = y;
-        for (int i = 0; i < v.nassign; i++) {
-            const CtlRow &r = v.rows[i];
-            const char *label = r.kind == CK_FACE
-                              ? (v.panel ? PANEL_FACE_LABEL[r.idx] : FACE_LABEL[r.idx])
-                              : CHORD_LABEL[r.idx];
-            menu_rowf(fx, fw, y++, sel == i + 1, CTL_ROW_W, "%s%s%s",
-                      menu_num(nums, i), menu_pad(label, CTL_LABEL_W),
-                      r.kind == CK_FACE ? face_btn_name(r.idx)
-                                        : slot_name(g_chord_slot[r.idx]));
-        }
-        if (v.panel)
-            menu_rowf(fx, fw, y++, 0, CTL_ROW_W, "   %sL/R (fixed)",
-                      menu_pad("Cycle Module", CTL_LABEL_W));
-        menu_rowf(fx, fw, y++, 0, CTL_ROW_W, "   %sL+R (fixed)",
-                  menu_pad("Caps Toggle", CTL_LABEL_W));
-        y = block_y + CTL_BLOCK_ROWS;
-        menu_rowf(fx, fw, y++, sel == v.r_caps, CTL_ROW_W, "   Keyboard Caps: %s",
-                  keyboard_get_caps() ? "On" : "Off");
-        menu_rowf(fx, fw, y++, sel == v.r_toggle, CTL_ROW_W, "   Panel/Keyboard Swap: %s",
-                  g_toggle_btn == 1 ? "Y" : "Z");
+        menu_rowf(fx, fw, y++, 0, CTL_ROW_W, "   %s%s",
+                  menu_pad("Menu (fixed)", CTL_LABEL_W), CTL_DEV[dev].menu);
         y++;
-        menu_row(fx, fw, y++, sel == v.r_reset,  CTL_ROW_W, "   Reset to Defaults");
-        menu_row(fx, fw, y++, sel == v.r_done,   CTL_ROW_W, "   Ok");
-        menu_row(fx, fw, y++, sel == v.r_cancel, CTL_ROW_W, "   Cancel");
+        for (int i = 0; i < nsheet; i++)
+            menu_rowf(fx, fw, y++, sel == r_sheet0 + i, CTL_ROW_W, "   %s...",
+                      CS_NAME[sheets[i]]);
+        y = fy + 9 + CS_N;
+        menu_rowf(fx, fw, y++, sel == r_caps, CTL_ROW_W, "   Keyboard Caps: %s",
+                  keyboard_get_caps() ? "On" : "Off");
+        y++;
+        menu_row(fx, fw, y++, sel == r_reset,  CTL_ROW_W, "   Reset to Defaults");
+        menu_row(fx, fw, y++, sel == r_done,   CTL_ROW_W, "   Ok");
+        menu_row(fx, fw, y++, sel == r_cancel, CTL_ROW_W, "   Cancel");
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }

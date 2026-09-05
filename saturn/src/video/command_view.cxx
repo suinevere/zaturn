@@ -23,6 +23,7 @@
 
 #include <srl.hpp>
 #include "command_view.h"
+#include "controller.h"
 #include "command_rose.h"
 #include "rose_draw.h"
 #include "text_map.h"
@@ -57,6 +58,15 @@ static const int CV_TOP_MARGIN = 1;
 static const char *CV_BORDER = "+-------------+---------------+--------+";
 
 /*----------------------
+ | g_strip_top
+ | Description: The row the strip's top border was last drawn on, which is also
+ |   the first row the room picture does not reach. cv_pointer_travel needs the
+ |   picture's extent and this is where it is already known.
+ | Author: suinevere
+ ----------------------*/
+static int g_strip_top = 0;
+
+/*----------------------
  | CV_LIST_ROW0
  | Description: The strip content row the word and command lists start on. The
  |   rose is seven rows tall and they are five, so they sit one row in, centred
@@ -68,31 +78,32 @@ static const char *CV_BORDER = "+-------------+---------------+--------+";
 #define CV_LIST_ROW0 1
 
 /*----------------------
- | CV_CMD_INVENT .. CV_CMD_N / CV_CMD_ROW
+ | CV_CMD_MENU .. CV_CMD_N / CV_CMD_ROW
  | Description: The fixed command module's entries, in display order, and how
  |   many. Every one routes to a mechanism that already exists, so none of them
  |   needs a new path to the interpreter.
  |
- |   Map is the one that is not a command at all: it opens the map screen, which
- |   is why it is the only entry with no word to submit and the only one that can
- |   be missing -- see cv_cmd_count.
+ |   Three of the five are not commands at all: menu opens the pause menu, map
+ |   opens the map screen, and swap flips the dashboard to its other mode. They
+ |   are the entries with no word to submit, and map is the only one that can be
+ |   missing -- see cv_cmd_count. Save, Load and Quit used to sit here and do not
+ |   any more: all three live on the menu this module now opens, and a row that
+ |   costs one press to reach beats three rows that each cost one.
  | Author: suinevere
  ----------------------*/
-enum { CV_CMD_INVENT = 0, CV_CMD_LOOK, CV_CMD_MAP,
-       CV_CMD_SAVE, CV_CMD_LOAD, CV_CMD_QUIT, CV_CMD_N };
-static const char *CV_CMD_ROW[CV_CMD_N] = { "invent", "look", "map", "save", "load", "quit" };
+enum { CV_CMD_MENU = 0, CV_CMD_INVENT, CV_CMD_LOOK, CV_CMD_MAP,
+       CV_CMD_SWAP, CV_CMD_N };
+static const char *CV_CMD_ROW[CV_CMD_N] = { "menu", "invent", "look", "map", "swap" };
 
 /*----------------------
  | CV_CMD_WORD
  | Description: The command each CV_CMD_ROW entry actually submits, which differs
  |   from the display text where the interpreter's verb is not the label: "invent"
- |   submits "inventory", and "load" submits "restore" -- the z-machine's load verb,
- |   the same word the physical Load key and the options-menu Load Game send. Map
- |   submits nothing; its entry is empty and cv_cmd_accept never reaches it.
+ |   submits "inventory". Menu, map and swap submit nothing; their entries are
+ |   empty and cv_cmd_accept never reaches them.
  | Author: suinevere
  ----------------------*/
-static const char *CV_CMD_WORD[CV_CMD_N] = { "inventory", "look", "",
-                                             "save", "restore", "quit" };
+static const char *CV_CMD_WORD[CV_CMD_N] = { "", "inventory", "look", "", "" };
 
 /*----------------------
  | cv_cmd_count / cv_cmd_entry
@@ -964,6 +975,7 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
     if (p.overlay) cv_overlay_border(frame, tall);
 
     int dash = dash_ready();
+    g_strip_top = border_top;
     dash_set(p.overlay ? (tall ? DASH_OVERLAY_TALL : DASH_OVERLAY) : DASH_PANEL, border_top);
 
     /* Black behind the box on the fallback path, the way a menu box is black:
@@ -1210,6 +1222,48 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
 }
 
 /*----------------------
+ | CV_TRAVEL_EDGE
+ | Description: How many cells deep the picture's four movement bands are. The
+ |   picture is divided into a border of this thickness and a dead middle, so a
+ |   shot has to be meant rather than merely land somewhere in the frame.
+ | Author: suinevere
+ ----------------------*/
+#define CV_TRAVEL_EDGE 3
+
+/*----------------------
+ | cv_pointer_travel
+ | Description: Turns a shot at the edge of the room picture into a move, which is
+ |   the light gun's way of doing what the compass rose does for a pad: the top
+ |   band is north, the bottom south, the left west and the right east, and the
+ |   middle is dead. Only an exit the room actually has is taken, so a shot at a
+ |   wall does nothing rather than submitting a command the parser will refuse.
+ |   Corners resolve to the vertical band, since a room is likelier to have north
+ |   and south than the diagonal the corner would otherwise suggest.
+ | Author: suinevere
+ | Dependencies: controller.h, command_panel.h, room_model.h
+ | Globals: g_strip_top
+ | Params: p -- panel state; exits -- the room's exit table
+ | Returns: true if a direction was picked, so the caller can stop looking
+ ----------------------*/
+static bool cv_pointer_travel(CommandPanel &p, const unsigned char *exits) {
+    const DevPointer *ptr = controller_pointer();
+    if (!ptr->valid || !ptr->hot) return false;
+    if (g_strip_top <= 0 || ptr->row >= g_strip_top) return false;
+
+    int d = -1;
+    if      (ptr->row < CV_TRAVEL_EDGE)                  d = 0;   /* north */
+    else if (ptr->row >= g_strip_top - CV_TRAVEL_EDGE)   d = 3;   /* south */
+    else if (ptr->col < CV_TRAVEL_EDGE)                  d = 2;   /* west  */
+    else if (ptr->col >= CV_OVERLAY_W - CV_TRAVEL_EDGE)  d = 1;   /* east  */
+    if (d < 0) return false;
+    if (exits[d] != RM_EXIT_OPEN && exits[d] != RM_EXIT_MAYBE) return false;
+
+    cp_pick(&p, room_model_dir_word(d), 0);
+    controller_pointer_consume();
+    return true;
+}
+
+/*----------------------
  | cv_cmd_accept
  | Description: Type Word in the command module: overwrites the sentence in
  |   progress with the selected entry's submit word and marks it submitted --
@@ -1217,8 +1271,8 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
  |   not: "invent" opens the inventory overlay when the model actually holds
  |   carried objects, and falls through to submit "inventory" like a typed command
  |   when it does not -- with nothing carried, or no model at all, the game's own
- |   answer is the better one. "map" opens a screen and submits nothing, so it
- |   only records the request; see CP_ACT_MAP.
+ |   answer is the better one. "menu", "map" and "swap" submit nothing and only
+ |   record the request; see CP_ACT_MAP.
  | Author: suinevere
  | Dependencies: command_panel.h, room_model.h
  | Globals: N/A
@@ -1239,13 +1293,14 @@ static void cv_cmd_accept(CommandPanel &p, const RoomModel &m) {
         cp_overlay_open(&p);
         return;
     }
-    /* The map is a screen, not a command. It is left as a request for the frame
-       loop hosting the panel, which owns the fade around it and is the only
-       thing that can hand the display over and take it back. */
-    if (entry == CV_CMD_MAP) {
-        p.action = CP_ACT_MAP;
-        return;
-    }
+    /* Three of the five are screens or mode changes, not commands. Each is left
+       as a request for the frame loop hosting the panel: that loop owns the fade
+       around the map and the menu and is the only thing that can hand the display
+       over and take it back, and it is the only place that holds both command
+       buffers a swap has to move the half-built line between. */
+    if (entry == CV_CMD_MAP)  { p.action = CP_ACT_MAP;  return; }
+    if (entry == CV_CMD_MENU) { p.action = CP_ACT_MENU; return; }
+    if (entry == CV_CMD_SWAP) { p.action = CP_ACT_SWAP; return; }
     cmd = CV_CMD_WORD[entry];
     while (cmd[i] != '\0' && i < CP_LINE_MAX - 1) { p.line[i] = cmd[i]; i++; }
     p.line[i] = '\0';
@@ -1319,7 +1374,7 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  |   refreshed for the current slot and scroll before the D-pad is read, since
  |   the word module's cursor bound depends on it.
  | Author: suinevere
- | Dependencies: input.h (pad_fired/face_button/caps_combo_fired), keyboard.h
+ | Dependencies: input.h (pad_fired/face_button), keyboard.h
  |   (keyboard_get_caps/keyboard_set_caps), command_panel.h, room_model.h
  | Globals: g_pad
  | Params: k -- keyboard state the command is written into; p -- panel state;
@@ -1330,14 +1385,13 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
  ----------------------*/
 void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
                   TrieNode *root, SaturnKeyEvent &ke, CommandWords &w) {
-    /* L+R is the caps toggle in both interfaces, so the panel has to stop
-       reading the two triggers as module jumps while they are held together --
+    /* L+R swaps the dashboard's two modes, so the panel has to stop reading the
+       two triggers as module jumps while they are held together --
        otherwise the combo also cycles focus, and because cp_focus clamps rather
        than wraps the L and R of one press do not cancel out at the ends: from
        the leftmost module the pair lands one to the right with the cursor
        reset. Same rule slot_raw applies to SL_LR, for the same reason. */
     bool lr_both = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R);
-    if (caps_combo_fired()) keyboard_set_caps(!keyboard_get_caps());
 
     if (p.overlay) {
         cv_overlay_dpad(p, m.ncarried);
@@ -1353,6 +1407,12 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
            drawn -- stepping onto a direction the player cannot see would give
            the difficulty away. */
         if (g_difficulty == DIFF_HARD) { cv_flatten_hard(m.exits, flat); exits = flat; }
+
+        /* A shot at the picture's edge is a move. Resolved here, after the Hard
+           flatten, so the gun can only reach the exits the rose is showing; and
+           before anything reads the pointer's fallback action, or the same
+           trigger pull would arrive again as a plain letter-click. */
+        if (cv_pointer_travel(p, exits)) return;
 
         if (!lr_both) {
             if (pad_fired(Button::L)) cp_focus(&p, -1);

@@ -173,7 +173,7 @@ extern "C" int saturn_keyboard_any_down(void) {
  |   Otherwise it gates emission through auto-repeat (fresh press, or a repeat
  |   tick) and maps the scancode to an event: Enter/Tab/Backspace/Esc, the arrow
  |   keys (Ctrl+Left/Right distinguished for word motion), Delete, the nav-cluster
- |   and Page keys, the function keys F2..F12, Ctrl+C to clear the line, and
+ |   and Page keys, the function keys F2..F12 (F8 opens the map), Ctrl+C to clear the line, and
  |   finally a character (numpad digits suppressed when NumLock is off, Shift/Caps
  |   applied).
  | Author: suinevere
@@ -262,6 +262,7 @@ extern "C" SaturnKeyEvent saturn_keyboard_poll(void) {
     if (code == 4)                { ev.kind = SATURN_KEY_F3;  return ev; }
     if (code == 3)                { ev.kind = SATURN_KEY_F5;  return ev; }
     if (code == 11)               { ev.kind = SATURN_KEY_F6;  return ev; }
+    if (code == 10)               { ev.kind = SATURN_KEY_F8;  return ev; }
     if (code == 1)                { ev.kind = SATURN_KEY_F9;  return ev; }
     if (code == 9)                { ev.kind = SATURN_KEY_F10; return ev; }
     if (code == 120)              { ev.kind = SATURN_KEY_F11; return ev; }

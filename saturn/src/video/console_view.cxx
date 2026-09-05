@@ -22,6 +22,7 @@
 #include "input.h"
 #include "dash_view.h"
 #include "menu_layout.h"   // MENU_SCREEN_ROWS, the one place the row count is literal
+#include "controller.h"
 
 // ---- rendering -------------------------------------------------------------
 
@@ -277,14 +278,36 @@ long g_output_start = 0;
 static bool g_more_below = false;
 
 /*----------------------
+ | g_more_above / g_more_row
+ | Description: Whether the "more ^" marker is showing, and which row the
+ |   "more v" marker was last drawn on. console_pointer_scroll needs both to place
+ |   the two shoot targets without re-deriving the console's height.
+ | Author: suinevere
+ ----------------------*/
+static bool g_more_above = false;
+static int  g_more_row   = 0;
+
+/*----------------------
+ | CV_MORE_X / CV_MORE_W
+ | Description: The column both scroll markers start at and how wide they are.
+ |   34 puts the six-cell marker's last character at column 39, the last cell of
+ |   the 40-wide text layer.
+ | Author: suinevere
+ ----------------------*/
+#define CV_MORE_X 34
+#define CV_MORE_W 6
+
+/*----------------------
  | render_console
  | Description: Clamps g_scroll to [0, maxstart+1] (the +1 allows one blank line
  |   past the top as a scroll-limit affordance), then prints `rows` console lines
- |   starting from the computed `start` index. Prints a "^" at column 39 of the
- |   top row when older text is scrolled off above, and sets g_more_below (and
- |   prints "more v" at column 34 -- chosen so the 6-wide marker's trailing 'v'
- |   lands inside the 40-cell text layer instead of clipping at column 35) when
- |   newer text remains below the window.
+ |   starting from the computed `start` index. Prints "more ^" at CV_MORE_X of the
+ |   top row when older text is scrolled off above and "more v" at the same column
+ |   of the bottom row when newer text remains below, recording both in
+ |   g_more_above/g_more_below. The two markers are the same width at the same
+ |   column deliberately: they are shoot targets as well as affordances, and a
+ |   one-cell "^" against a six-cell "more v" is neither symmetrical to read nor
+ |   equally easy to hit.
  | Author: suinevere
  | Dependencies: console.c, text_map.h
  | Globals: g_scroll, g_more_below
@@ -305,9 +328,40 @@ void render_console(void) {
         if (li >= 0 && li < total)
             text_print(0, TOP_MARGIN + r, "%s", console_get_line(li));
     }
-    if (start > 0 && !top_blank) text_print(39, TOP_MARGIN, "^");
+    g_more_above = (start > 0 && !top_blank);
+    if (g_more_above)            text_print(CV_MORE_X, TOP_MARGIN, "more ^");
     g_more_below = (start + rows < total);
-    if (g_more_below)            text_print(34, TOP_MARGIN + rows - 1, "more v");
+    if (g_more_below)            text_print(CV_MORE_X, TOP_MARGIN + rows - 1, "more v");
+    g_more_row = TOP_MARGIN + rows - 1;
+}
+
+/*----------------------
+ | console_pointer_scroll
+ | Description: Scrolls the console when a pointing device fires on one of the two
+ |   "more" markers -- the mouse's "player clicks up/down arrows on screen" row and
+ |   the light gun aimed at the same six cells. Holding the button repeats through
+ |   controller_hold_fired, so a held trigger walks the scrollback and speeds up the
+ |   longer it is held, the way a held key does. Call once per input frame, after
+ |   controller_tick and after render_console has placed the markers.
+ | Author: suinevere
+ | Dependencies: controller.h, app_state.h
+ | Globals: g_scroll, g_more_above, g_more_below, g_more_row
+ | Params: N/A
+ | Returns: true if a marker took the shot, so the caller can consume the pointer
+ ----------------------*/
+bool console_pointer_scroll(void) {
+    const DevPointer *p = controller_pointer();
+    if (!p->valid || (!p->hot && !p->held)) {
+        controller_hold_fired(DEV_HOLD_SCROLL_UP, 0);
+        controller_hold_fired(DEV_HOLD_SCROLL_DOWN, 0);
+        return false;
+    }
+    bool in_col = (p->col >= CV_MORE_X && p->col < CV_MORE_X + CV_MORE_W);
+    bool on_up  = in_col && g_more_above && p->row == TOP_MARGIN;
+    bool on_dn  = in_col && g_more_below && p->row == g_more_row;
+    if (controller_hold_fired(DEV_HOLD_SCROLL_UP,   on_up ? 1 : 0)) g_scroll += 1;
+    if (controller_hold_fired(DEV_HOLD_SCROLL_DOWN, on_dn ? 1 : 0)) g_scroll -= 1;
+    return on_up || on_dn;
 }
 
 /*----------------------
@@ -592,7 +646,6 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
                     SaturnKeyEvent &ke, bool pad,
                     DictionaryWord *&selected_out, int &cw_len_out) {
     if (pad) {
-        if (caps_combo_fired()) keyboard_set_caps(!keyboard_get_caps());
         if (chord_fired(CA_RECALL, -1)) history_recall(&k, 1);
         if (chord_fired(CA_RECALL, +1)) history_recall(&k, 0);
         if (chord_fired(CA_CURSOR, -1)) keyboard_caret_left(&k);
@@ -871,7 +924,7 @@ void render_keyboard(const KeyboardState &k, DictionaryWord* prediction, int cur
         text_clear_line(base);
         text_clear_line(row);
         draw_input_line(row, k, prediction, current_word_len, block_on);
-        if (g_more_below) text_print(34, row, "more v");
+        if (g_more_below) text_print(CV_MORE_X, row, "more v");
         return;
     }
 

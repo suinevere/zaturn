@@ -63,8 +63,10 @@ extern int g_cmd_iface;
 // flipped by the toggle button. Not persisted -- a tap is for this session.
 extern int g_cmd_mode;
 
-// Which shift button carries the interface toggle: 0 = Z, 1 = Y. Persisted in
-// MOJOOPTS and set on the Options > Controller > Configure page.
+// Reserved. Used to pick which shift button carried the interface toggle (0 = Z,
+// 1 = Y) before that moved onto the fixed L+R combo (mode_combo_fired). Nothing
+// reads it now; it stays declared and persisted so a MOJOOPTS blob written either
+// side of the change still loads on the other.
 extern int g_toggle_btn;
 
 // Set by main() when a game starts: the routine that reveals the game's opening

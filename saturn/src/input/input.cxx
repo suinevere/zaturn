@@ -92,8 +92,10 @@ static const int PAD_SCROLL_RATE  = 4;
 
 /*----------------------
  | face_button
- | Description: Indexes a fixed {A,B,C,X} table by the currently-mapped button
- |   number for face-action `action`.
+ | Description: Indexes a fixed {A,B,C,Y} table by the currently-mapped button
+ |   number for face-action `action`. The fourth button is Y, not X, because
+ |   controls.xls puts Space there; the stored numbers are indices into this table,
+ |   so a save written before the change now reads its slot-3 action as Y.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_face_btn
@@ -101,7 +103,7 @@ static const int PAD_SCROLL_RATE  = 4;
  | Returns: the Button currently assigned to that action
  ----------------------*/
 Button face_button(int action) {
-    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C, Button::X };
+    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C, Button::Y };
     return BTN[g_face_btn[action]];
 }
 
@@ -115,10 +117,10 @@ Button face_button(int action) {
  | Dependencies: N/A
  | Globals: g_face_btn
  | Params: action -- one of FA_ACCEPT/FA_BACK/FA_TYPE/FA_SPACE
- | Returns: "A", "B", "C" or "X"
+ | Returns: "A", "B", "C" or "Y"
  ----------------------*/
 const char *face_btn_name(int action) {
-    static const char *N[FA_BTN_N] = { "A", "B", "C", "X" };
+    static const char *N[FA_BTN_N] = { "A", "B", "C", "Y" };
     return N[g_face_btn[action]];
 }
 
@@ -171,74 +173,48 @@ static int slot_raw(int slot) {
 }
 
 /*----------------------
- | caps_combo_fired
- | Description: Latches held state across calls in a static `was`, comparing it
- |   to the current L+R-without-shift read so only the rising edge reports true.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad
- | Params: N/A
- | Returns: true on the frame the combo first becomes held
- ----------------------*/
-bool caps_combo_fired(void) {
-    static bool was = false;
-    bool now = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R)
-             && !g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y);
-    bool fired = now && !was;
-    was = now;
-    return fired;
-}
-
-/*----------------------
- | g_mtog_was / g_mtog_spent
- | Description: mode_toggle_fired's held/spent latch, file-scope rather than
+ | g_mtog_was
+ | Description: mode_combo_fired's held latch, file-scope rather than
  |   function-local so mode_toggle_reset can clear it from outside.
  | Author: suinevere
  ----------------------*/
 static bool g_mtog_was = false;
-static bool g_mtog_spent = false;
 
 /*----------------------
- | mode_toggle_fired
- | Description: Reports a tap of the toggle button -- pressed and released with
- |   no direction or shoulder held in between. Y and Z do nothing on their own
- |   today, they only shift the chord slots, so a tap is free to claim; a press
- |   that fires a chord is marked spent and never reports.
+ | mode_combo_fired
+ | Description: Latches held state in g_mtog_was, comparing it to the current
+ |   L+R-without-shift read so only the rising edge reports true. L and R are
+ |   tested together deliberately: each alone already has a job in both
+ |   interfaces, and only the pair is free.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_pad, g_toggle_btn, g_mtog_was, g_mtog_spent
+ | Globals: g_pad, g_mtog_was
  | Params: N/A
- | Returns: true on the frame a clean tap completes
+ | Returns: true on the frame the combo first becomes held
  ----------------------*/
-bool mode_toggle_fired(void) {
-    Button b = (g_toggle_btn == 1) ? Button::Y : Button::Z;
-    bool now = g_pad->IsHeld(b);
-    bool other = g_pad->IsHeld(Button::Up) || g_pad->IsHeld(Button::Down) ||
-                 g_pad->IsHeld(Button::Left) || g_pad->IsHeld(Button::Right) ||
-                 g_pad->IsHeld(Button::L) || g_pad->IsHeld(Button::R);
-    bool fired = false;
-    if (now && other) g_mtog_spent = true;
-    if (g_mtog_was && !now) { fired = !g_mtog_spent; g_mtog_spent = false; }
+bool mode_combo_fired(void) {
+    bool now = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R)
+             && !g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y);
+    bool fired = now && !g_mtog_was;
     g_mtog_was = now;
     return fired;
 }
 
 /*----------------------
  | mode_toggle_reset
- | Description: Zeroes g_mtog_was/g_mtog_spent, discarding whatever edge
- |   mode_toggle_fired was mid-tracking. See input.h for why this has to be a
- |   hard discard rather than a "only count presses observed here" flag: the
- |   press edge was legitimately observed, before the modal that is now
- |   returning ever opened; the fix is to forget it entirely, not to gate it.
+ | Description: Zeroes g_mtog_was, discarding whatever edge mode_combo_fired was
+ |   mid-tracking. See input.h for why this has to be a hard discard rather than a
+ |   "only count presses observed here" flag: the press edge was legitimately
+ |   observed, before the modal that is now returning ever opened; the fix is to
+ |   forget it entirely, not to gate it.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_mtog_was, g_mtog_spent
+ | Globals: g_mtog_was
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 void mode_toggle_reset(void) {
     g_mtog_was = false;
-    g_mtog_spent = false;
 }
 
 /*----------------------
@@ -535,10 +511,32 @@ void face_assign(int a, int b) {
 }
 
 /*----------------------
+ | chord_group
+ | Description: Which controls.xls sheet a chord action belongs to. Autocomplete
+ |   and Cursor Move are in neither sheet, being keyboard-interface conveniences
+ |   the workbook does not list; they sit with Actions because that is the page
+ |   they are edited from.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: a -- one of the CA_* constants
+ | Returns: CG_ACTIONS or CG_SCROLL
+ ----------------------*/
+int chord_group(int a) {
+    switch (a) {
+        case CA_LINE: case CA_PAGE: case CA_HOMEEND: return CG_SCROLL;
+        default:                                     return CG_ACTIONS;
+    }
+}
+
+/*----------------------
  | chord_assign
- | Description: Scans the other chord actions for one that currently holds slot
- |   `s`; if found, gives it `a`'s previous slot (the swap; a free spare slot has
- |   no owner, so this is skipped and `a` simply moves), then sets `a` to `s`.
+ | Description: Scans the other chord actions of the same chord_group for one that
+ |   currently holds slot `s`; if found, gives it `a`'s previous slot (the swap; a
+ |   free spare slot has no owner, so this is skipped and `a` simply moves), then
+ |   sets `a` to `s`. Restricting the scan to one group is what makes each
+ |   controls.xls sheet its own configuration group: a Scrolling row can no longer
+ |   move an Actions row the player is not looking at.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_chord_slot
@@ -546,7 +544,9 @@ void face_assign(int a, int b) {
  | Returns: N/A
  ----------------------*/
 void chord_assign(int a, int s) {
-    for (int o = 0; o < CA_N; o++) if (o != a && g_chord_slot[o] == s) g_chord_slot[o] = g_chord_slot[a];
+    for (int o = 0; o < CA_N; o++)
+        if (o != a && g_chord_slot[o] == s && chord_group(o) == chord_group(a))
+            g_chord_slot[o] = g_chord_slot[a];
     g_chord_slot[a] = s;
 }
 

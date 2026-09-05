@@ -120,6 +120,19 @@ int console_height(void);
 int console_screen_rows(void);
 
 /*----------------------
+ | console_pointer_scroll
+ | Description: Scrolls the console when a pointing device fires or holds on one
+ |   of the two "more" markers. Call once per input frame, after controller_tick
+ |   and after render_console has placed them.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: g_scroll
+ | Params: N/A
+ | Returns: true if a marker took the shot, so the caller can consume the pointer
+ ----------------------*/
+bool console_pointer_scroll(void);
+
+/*----------------------
  | console_strip_shift
  | Description: How far up, in pixels, the NBG0 wallpaper sits while the
  |   gamepad's input strip is on screen. The strip's marble covers its two

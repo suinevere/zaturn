@@ -107,6 +107,26 @@ enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_N };
 enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
 
 /*----------------------
+ | CG_ACTIONS / CG_SCROLL
+ | Description: The controls.xls sheet a chord action is configured on. Each sheet
+ |   is its own configuration group: a slot swap stays inside one.
+ | Author: suinevere
+ ----------------------*/
+enum { CG_ACTIONS = 0, CG_SCROLL };
+
+/*----------------------
+ | chord_group
+ | Description: Which configuration group (CG_ACTIONS / CG_SCROLL) chord action
+ |   `a` is edited in.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: a -- one of the CA_* constants
+ | Returns: CG_ACTIONS or CG_SCROLL
+ ----------------------*/
+int chord_group(int a);
+
+/*----------------------
  | FA_BTN_N
  | Description: How many physical buttons the face group permutes over, and so
  |   the modulus the editors cycle a row's assignment by. Equal to FA_N because

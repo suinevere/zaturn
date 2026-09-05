@@ -511,10 +511,32 @@ void face_assign(int a, int b) {
 }
 
 /*----------------------
+ | chord_group
+ | Description: Which controls.xls sheet a chord action belongs to. Autocomplete
+ |   and Cursor Move are in neither sheet, being keyboard-interface conveniences
+ |   the workbook does not list; they sit with Actions because that is the page
+ |   they are edited from.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: a -- one of the CA_* constants
+ | Returns: CG_ACTIONS or CG_SCROLL
+ ----------------------*/
+int chord_group(int a) {
+    switch (a) {
+        case CA_LINE: case CA_PAGE: case CA_HOMEEND: return CG_SCROLL;
+        default:                                     return CG_ACTIONS;
+    }
+}
+
+/*----------------------
  | chord_assign
- | Description: Scans the other chord actions for one that currently holds slot
- |   `s`; if found, gives it `a`'s previous slot (the swap; a free spare slot has
- |   no owner, so this is skipped and `a` simply moves), then sets `a` to `s`.
+ | Description: Scans the other chord actions of the same chord_group for one that
+ |   currently holds slot `s`; if found, gives it `a`'s previous slot (the swap; a
+ |   free spare slot has no owner, so this is skipped and `a` simply moves), then
+ |   sets `a` to `s`. Restricting the scan to one group is what makes each
+ |   controls.xls sheet its own configuration group: a Scrolling row can no longer
+ |   move an Actions row the player is not looking at.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_chord_slot
@@ -522,7 +544,9 @@ void face_assign(int a, int b) {
  | Returns: N/A
  ----------------------*/
 void chord_assign(int a, int s) {
-    for (int o = 0; o < CA_N; o++) if (o != a && g_chord_slot[o] == s) g_chord_slot[o] = g_chord_slot[a];
+    for (int o = 0; o < CA_N; o++)
+        if (o != a && g_chord_slot[o] == s && chord_group(o) == chord_group(a))
+            g_chord_slot[o] = g_chord_slot[a];
     g_chord_slot[a] = s;
 }
 

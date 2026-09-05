@@ -40,6 +40,30 @@ back to another column. The flight stick's top/bottom-page cell says so out loud
 | Move selection | Dpad | Right Stick | Dpad | N/A (no mouse on/off) | Left Stick | — | — |
 | Mouse cursor move | Dpad | Right Stick | Analogue Stick | Movement | Left Stick | pointed at screen | mouse if available in other controller port |
 
+## How the Controls page is laid out
+
+One page per **connected** device, paged with the Device row; a device nobody has
+plugged in gets no page. Under it sits the Interface row (the persisted preference
+a game starts in), then the Static sheet printed rather than offered, then one
+submenu row per sheet that device configures.
+
+Each sheet is its own configuration group: a swap inside Actions can never move a
+Scrolling row, which is what `chord_group` in `input.cxx` enforces.
+
+Only the three pad-family devices have editable sheets, because only they have a
+mapping to point somewhere else -- a mouse click is a mouse click and a trigger is
+a trigger. The other four list their bindings and are read-only.
+
+| Device | Actions | Scrolling | Mouse Mode | Editable |
+|---|---|---|---|---|
+| 6 Pad | yes | yes | yes | yes |
+| Flight Stick | yes | yes | yes | yes |
+| Analogue | yes | yes | yes | yes |
+| Mouse | yes | yes | no (always a cursor) | no |
+| Twin Stick | yes | no | yes | no |
+| Light Gun | yes | no | no | no |
+| Keyboard | yes (Map only) | no | no | no |
+
 ## Where the shipped build differs from the workbook, and why
 
 Three cells could not be taken literally without deleting a mechanism the workbook
@@ -57,9 +81,27 @@ does not mention. Each is listed with what shipped instead.
 - **Space = Y** *did* ship, as the compiled default: the face group now permutes
   over `{A,B,C,Y}` instead of `{A,B,C,X}`. Two consequences. `SL_XUD` no longer
   overlaps a typing button, and the overlap moves to Y, where the default Page and
-  Home/End chords sit. And the Panel/Keyboard toggle can no longer usefully be set
-  to Y, because that toggle needs a button that types nothing — see
-  `toggle_btn_free` in `input.cxx`. It still defaults to Z, which is unaffected.
+  Home/End chords sit. The Panel/Keyboard toggle that Y would also have collided
+  with is gone entirely: that swap now rides the fixed L+R combo, so no shift
+  button carries it.
+
+## Changes made after the workbook was drawn
+
+- **L+R swaps the dashboard's two modes.** It used to toggle Caps. The shift-button
+  toggle (`g_toggle_btn`, Z or Y) is gone with it, which also retires the inert-Y
+  case Space created when it moved onto Y.
+- **Caps is an Options row only**, with no controller binding at all: a modifier
+  whose state the player cannot see was not worth a fixed combo.
+- **The command module reads menu / invent / look / map / swap.** Save, Load and
+  Quit left it -- all three are one press away on the menu that module now opens.
+  `invent` keeps its truncated label because the module is eight columns wide; it
+  still submits the full `inventory`.
+- **Both scroll markers are the same width at the same column** ("more ^" and
+  "more v" at column 34), so the pair reads as a pair and both are equally easy to
+  shoot. Clicking or shooting either scrolls, and holding repeats faster the longer
+  it is held.
+- **A shot at the room picture's edge is a move**, taken only where the compass
+  rose is already showing that exit, so Hard cannot be read through the gun.
 
 ## Two things in the module that hardware has not confirmed
 

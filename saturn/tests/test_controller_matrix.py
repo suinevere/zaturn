@@ -158,6 +158,103 @@ def test_doc_transcription_exists():
         assert col in d, "the transcription lost the %s column" % col
 
 
+MENU_PAGES = ROOT / "src" / "menu" / "menu_pages.cxx"
+CMD_VIEW = ROOT / "src" / "video" / "command_view.cxx"
+INPUT_CXX = ROOT / "src" / "input" / "input.cxx"
+
+
+def _table(src, name):
+    """The text of a file-scope array initialiser, from its name to the `};`."""
+    i = src.index(name + "[")
+    j = src.index("};", i)
+    return src[i:j + 2]
+
+
+def test_controls_root_shows_static_and_submenus():
+    """The root Controls page carries the workbook's Static row and one submenu
+    per configurable sheet; the sheets are pages of their own."""
+    body = _body(_read(MENU_PAGES), "controls_page")
+    assert "Menu (fixed)" in body, "the root page no longer prints the Static row"
+    assert "controls_sheet_page" in body, "the root page opens no sheet submenu"
+    assert "CS_NAME" in body, "the submenu rows are not named from CS_NAME"
+
+
+def test_controls_pages_only_connected_devices():
+    """A page for a controller nobody has plugged in can only mislead."""
+    body = _body(_read(MENU_PAGES), "ctl_dev_list")
+    assert "controller_present" in body, "the device list is not gated on presence"
+
+
+def test_static_row_matches_the_workbook():
+    """Each device's Static cell, straight off the Static sheet."""
+    tbl = _table(_read(MENU_PAGES), "CTL_DEV")
+    for want in ('"Start"', '"Blue button"', '"Button"', '"ESC"'):
+        assert want in tbl, "CTL_DEV lost the Static value %s" % want
+
+
+def test_sheets_applicable_per_device():
+    """"if applicable": the mouse is always a cursor (that sheet's "N/A (no mouse
+    on/off)"), and neither the light gun nor the twin stick has a Scrolling
+    column."""
+    tbl = _table(_read(MENU_PAGES), "CTL_DEV")
+    rows = {}
+    for line in tbl.splitlines():
+        if "DEV_" in line and "{" in line:
+            key = line[line.index("DEV_"):].split()[0].strip("*/ ")
+            rows[key] = line
+    assert "CSB_MOUSE" not in rows["DEV_MOUSE"], "the mouse gained a Mouse Mode sheet"
+    assert "CSB_SCR" not in rows["DEV_GUN"], "the light gun gained a Scrolling sheet"
+    assert "CSB_SCR" not in rows["DEV_TWIN"], "the twin stick gained a Scrolling sheet"
+    assert "CSB_MOUSE" in rows["DEV_PAD"], "the pad lost its Mouse Mode sheet"
+
+
+def test_sheets_are_separate_configuration_groups():
+    """A slot swap must stay inside one controls.xls sheet, or remapping a
+    Scrolling row silently moves an Actions row the player cannot see."""
+    body = _body(_read(INPUT_CXX), "chord_assign")
+    assert "chord_group" in body, "chord_assign swaps across sheets again"
+
+
+def test_caps_has_no_pad_binding():
+    """Caps is an Options row now; L+R carries the dashboard swap instead."""
+    src = _read(INPUT_CXX)
+    assert "mode_combo_fired" in src, "the L+R combo is gone"
+    assert "caps_combo_fired" not in src, "Caps is back on the pad"
+
+
+def test_command_module_rows():
+    """The far-right dashboard module, in the order it is drawn."""
+    tbl = _table(_read(CMD_VIEW), "CV_CMD_ROW")
+    got = [p.split('"')[0] for p in tbl.split('"')[1::2]]
+    assert got == ["menu", "invent", "look", "map", "swap"], got
+
+
+def test_scroll_markers_are_symmetric():
+    """Both markers are shoot targets, so both are the same width at the same
+    column; a one-cell caret against a six-cell "more v" is neither."""
+    body = _body(_read(ROOT / "src" / "video" / "console_view.cxx"), "render_console")
+    assert body.count("CV_MORE_X") == 2, "the two markers no longer share a column"
+    assert '"more ^"' in body and '"more v"' in body, "a marker lost its wording"
+
+
+def test_scroll_markers_are_shootable():
+    """The mouse's "player clicks up/down arrows" row, and the gun aimed at the
+    same cells, with a held button repeating."""
+    body = _body(_read(ROOT / "src" / "video" / "console_view.cxx"),
+                 "console_pointer_scroll")
+    assert "controller_hold_fired" in body, "a held button no longer repeats"
+    assert "DEV_HOLD_SCROLL_UP" in body and "DEV_HOLD_SCROLL_DOWN" in body
+
+
+def test_picture_edge_moves():
+    """A shot at the picture's edge is a move, and only where the room has that
+    exit."""
+    body = _body(_read(CMD_VIEW), "cv_pointer_travel")
+    assert "RM_EXIT_OPEN" in body, "the edge shot no longer checks the exit"
+    assert "controller_pointer_consume" in body, "the shot is not consumed"
+    assert "room_model_dir_word" in body, "the edge shot submits no direction"
+
+
 def main():
     fails = 0
     for name, fn in sorted(globals().items()):

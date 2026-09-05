@@ -66,13 +66,10 @@ still owns it -- but those two advance the timers it reads, and calling them twi
 in a frame doubles every repeat rate. There is a box at the foot of
 `controller.cxx` saying so.
 
-**Space on Y cost the Y option on the Panel/Keyboard toggle.** That toggle claims a
-clean tap, which needs a button that types nothing, and Y now types a space.
-`toggle_btn_free` in `input.cxx` makes a Y toggle inert rather than let one tap do
-both. It still defaults to Z, which is unaffected, so nothing changes out of the
-box -- but the Controls page still offers Y, and picking it now silently does
-nothing. Either drop Y from that row or accept it; left as-is deliberately because
-the owner scoped the Controls page as unchanged.
+**Space on Y cost the Y option on the Panel/Keyboard toggle.** SUPERSEDED by
+[[controls-page-and-gun-targeting-handoff]]: the toggle moved off the shift buttons
+onto the fixed L+R combo, so nothing collides with Y any more and `toggle_btn_free`
+is gone.
 
 **Stored face mappings shifted meaning.** `g_face_btn` holds indices into the face
 table, and index 3 was X and is now Y. A save written before this commit that had

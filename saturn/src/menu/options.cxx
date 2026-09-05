@@ -11,6 +11,7 @@
 #include <srl.hpp>
 
 #include "options.h"
+#include "options_blob.h"
 #include "app_state.h"
 #include "input.h"
 #include "display.h"
@@ -214,7 +215,10 @@ void display_cycle_row(DisplayCycleRow which, int dir) {
  |   only when the sentinel matches. Sentinel 2 is the same block one face byte
  |   shorter, from before Space became remappable, and is still read -- the width
  |   found is what every block behind it is measured from (an absent block keeps
- |   the compiled default mapping); a sound block, sentinel 1 followed by [mix][track]; a
+ |   the compiled default mapping); a sound block, sentinel 10 followed by the
+ |   generated-music level and one reserved byte -- sentinel 1 is the dead form
+ |   (a mix mode and a track number) and is skipped, leaving the compiled
+ |   default; a
  |   gameplay block -- sentinel 5 followed by one VERB_* verbosity byte (the
  |   original form), or sentinel 7 followed by the verbosity byte plus a packed
  |   byte (bit 0 = g_cmd_iface, bit 1 = g_toggle_btn), the form that also carries
@@ -272,11 +276,15 @@ void options_load(void) {
         for (int a = 0; a < fa_stored; a++) { int v = buf[m + 1 + a];             if (v < btn_max) g_face_btn[a]   = v; }
         for (int a = 0; a < CA_N; a++)      { int v = buf[m + 1 + fa_stored + a]; if (v < SL_N)    g_chord_slot[a] = v; }
     }
-    /* The sound block's sentinel and its two bytes -- the mix mode and the
-       selected track -- are read past rather than read. Both settings are gone;
-       the bytes stay reserved because every block behind them is positional, and
-       reclaiming two bytes would silently misparse every blob already written. */
+    /* The sound block used to carry a mix mode and a track number, both long
+       gone. Its three bytes now carry the generated music's level under a new
+       sentinel; sentinel 1 is still recognised and still skipped, so an older
+       blob keeps the compiled default rather than reading a track number as a
+       volume. The width is unchanged either way, which is what every block
+       behind it depends on. */
     int s = m + 1 + fa_stored + CA_N;
+    if (s + OPTS_SOUND_BLOCK_BYTES <= (int) sizeof(buf))
+        opts_sound_block_decode(&buf[s], &g_synth_level);
     /* The gameplay block sits between the sound block and the display one because
        the display block is the variable-width tail. Sentinel 5 (v1, verbosity
        only) and sentinel 7 (v2, verbosity plus a packed command-interface byte)
@@ -310,7 +318,7 @@ void options_load(void) {
  | Description: Serializes the current option globals into the same MOJOOPTS
  |   layout options_load reads: difficulty byte; NUL-terminated dial number;
  |   music and pcm level bytes; controller-mapping sentinel byte (3) followed
- |   by the face-button and chord-slot bytes; sound-block sentinel byte (1)
+ |   by the face-button and chord-slot bytes; sound-block sentinel byte (10)
  |   followed by two reserved bytes that used to carry the mix mode and the
  |   selected track; gameplay-block sentinel byte (7)
  |   followed by the verbosity byte and a packed byte (bit 0 = g_cmd_iface, bit
@@ -335,9 +343,8 @@ void options_save(void) {
     buf[n++] = 3;                                 // controller-mapping format sentinel: + Space
     for (int a = 0; a < FA_N && n < 62; a++) buf[n++] = (uint8_t) g_face_btn[a];
     for (int a = 0; a < CA_N && n < 62; a++) buf[n++] = (uint8_t) g_chord_slot[a];
-    buf[n++] = 1;                                 // sound-block sentinel
-    buf[n++] = 0;                                 // reserved (was the mix mode)
-    buf[n++] = 0;                                 // reserved (was the selected track)
+    opts_sound_block_encode(&buf[n], g_synth_level);   // sound block: sentinel 10, then the synth level
+    n += OPTS_SOUND_BLOCK_BYTES;
     buf[n++] = 7;                                 // gameplay-block sentinel, v2
     buf[n++] = (uint8_t) g_verbosity;             // VERB_*
     buf[n++] = (uint8_t) ((g_cmd_iface & 1) | ((g_toggle_btn & 1) << 1));

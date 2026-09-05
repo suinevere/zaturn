@@ -80,6 +80,7 @@ SOURCES = src/main_netbin.cxx \
           src/input/game_kb.c \
           src/menu/menu.cxx \
           src/menu/menu_layout.c \
+          src/menu/options_blob.c \
           src/menu/options.cxx \
           src/input/input.cxx \
           src/input/saturn_keyboard.cxx \
@@ -99,10 +100,17 @@ SOURCES = src/main_netbin.cxx \
           src/video/map_view.cxx \
           src/input/command_panel.c \
           src/video/command_view.cxx \
-          src/engine/app_state.cxx
+          src/engine/app_state.cxx \
+          src/sound/scsp.c \
+          src/sound/synth.c \
+          src/sound/tracker.c \
+          src/sound/music_synth_data.c \
+          src/sound/synth_target.cxx
 SRL_CUSTOM_CCFLAGS += -DNETBIN
-# No sound of any kind in this build, so SRL's own sound stack should not link
-# either, and no SDDRVS.TSK / BOOTSND.MAP is staged.
+# This build has music but no sound DRIVER: the synth writes SCSP slots 28-31
+# itself, so SRL's driver-mediated sound stack stays unlinked and no
+# SDDRVS.TSK / BOOTSND.MAP is staged. That is the whole size argument -- the
+# driver alone is 26,610 bytes before a note sounds.
 SRL_USE_SGL_SOUND_DRIVER = 0
 BUILD_NETBIN = $(BUILD_DROP)/zaturn.netbin
 endif

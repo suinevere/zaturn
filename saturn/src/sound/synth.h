@@ -1,0 +1,188 @@
+/*----------------------
+ | synth.h
+ | Description: The voice layer: what a note is, and what the four instruments
+ |   sound like. Converts a semitone and octave into the SCSP's packed
+ |   OCT/FNS word and builds the waveforms the slots loop. The five-function
+ |   playback API that sits on top of this arrives with the tracker.
+ | Author: suinevere
+ | Dependencies: scsp.h
+ ----------------------*/
+#ifndef SYNTH_H
+#define SYNTH_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*----------------------
+ | SYNTH_WAVE_*
+ | Description: The four generated waveforms, in the order scsp_upload_wave
+ |   receives them, so the index is both the instrument and its place in the
+ |   waveform area.
+ | Author: suinevere
+ ----------------------*/
+#define SYNTH_WAVE_SQUARE   0
+#define SYNTH_WAVE_PULSE    1
+#define SYNTH_WAVE_TRIANGLE 2
+#define SYNTH_WAVE_SAW      3
+
+/*----------------------
+ | SYNTH_WAVE_NOISE
+ | Description: The percussion voice. One past the generated waveforms because
+ |   it is not one of them: the SCSP makes noise internally, so this index
+ |   names no waveform data and costs no sound RAM.
+ | Author: suinevere
+ ----------------------*/
+#define SYNTH_WAVE_NOISE    4
+
+/*----------------------
+ | synth_pitch
+ | Description: Packs a semitone and octave into the SCSP pitch register word
+ |   (OCT bits 14-11, FNS bits 9-0). Semitone 0 at octave 0 is the waveform's
+ |   own rate, which for a 64-sample wave is 689 Hz. OCT is four bits and
+ |   negative octaves wrap into it, so an octave down is 0xF rather than -1.
+ |   Inputs outside range are clamped rather than rejected, because a bad note
+ |   byte in pattern data should sound wrong, not silence the channel.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: semitone -- 0 (C) to 11 (B); octave -- -8 to 7
+ | Returns: the register word for slot offset 0x10
+ ----------------------*/
+unsigned short synth_pitch(int semitone, int octave);
+
+/*----------------------
+ | synth_wave_build
+ | Description: Generates one waveform into a caller-supplied buffer. Costs no
+ |   image bytes, which is the point -- four instruments for the price of the
+ |   code that draws them.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: index -- a SYNTH_WAVE_* value; out -- buffer of at least len bytes;
+ |   len -- samples to generate
+ | Returns: N/A
+ ----------------------*/
+void synth_wave_build(int index, signed char *out, int len);
+
+/*----------------------
+ | synth_bind
+ | Description: Points the synth at the sound chip. On the target this is the
+ |   SCSP register window and the waveform area inside sound RAM; the host
+ |   tests pass arrays. Call before synth_init.
+ | Author: suinevere
+ | Dependencies: scsp.h
+ | Globals: N/A
+ | Params: regs -- slot register file base; wave_ram -- waveform memory;
+ |   wave_sa -- SCSP address of wave_ram
+ | Returns: N/A
+ ----------------------*/
+void synth_bind(volatile unsigned short *regs, volatile signed char *wave_ram, unsigned long wave_sa);
+
+/*----------------------
+ | synth_note_on
+ | Description: Sounds one note, or releases the channel when semitone is -1.
+ |   This is the tracker's sink, public because it is also the only way to play
+ |   a note that is not in the song -- which is how the noise voice is reached
+ |   and tested, since the shipped loop carries no percussion yet. Scales the
+ |   note's own volume by the current music level on the way to the chip, and
+ |   remembers both so a later level change can rescale a sounding voice.
+ | Author: suinevere
+ | Dependencies: scsp.h
+ | Globals: N/A
+ | Params: channel -- 0..SCSP_VOICES-1; semitone -- 0..11 or -1 to release;
+ |   octave -- -8..7; wave -- a SYNTH_WAVE_* value; vol -- 0..7
+ | Returns: N/A
+ ----------------------*/
+void synth_note_on(int channel, int semitone, int octave, int wave, int vol);
+
+/*----------------------
+ | synth_init
+ | Description: Silences the owned slots and uploads the four generated
+ |   waveforms. Safe to call twice.
+ | Author: suinevere
+ | Dependencies: scsp.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void synth_init(void);
+
+/*----------------------
+ | synth_start
+ | Description: Starts the shipped loop from its beginning. The first
+ |   synth_tick after this sounds the first row.
+ | Author: suinevere
+ | Dependencies: tracker.h, music_synth_data.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void synth_start(void);
+
+/*----------------------
+ | synth_stop
+ | Description: Stops the loop and keys every voice off.
+ | Author: suinevere
+ | Dependencies: tracker.h, scsp.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void synth_stop(void);
+
+/*----------------------
+ | synth_set_level
+ | Description: Sets the music level, 0 (silent) to 7. Reaches voices that are
+ |   already sounding without restarting them, because the in-game duck happens
+ |   mid-note. Applied per slot, never through the machine's master volume,
+ |   which CD-DA and the splash jingle share.
+ | Author: suinevere
+ | Dependencies: scsp.h
+ | Globals: N/A
+ | Params: level -- 0..7, clamped
+ | Returns: N/A
+ ----------------------*/
+void synth_set_level(int level);
+
+/*----------------------
+ | synth_tick
+ | Description: One V-blank of playback. A no-op when stopped, so the handler
+ |   can call it unconditionally.
+ | Author: suinevere
+ | Dependencies: tracker.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void synth_tick(void);
+
+/*----------------------
+ | synth_playing
+ | Description: Whether the loop is running.
+ | Author: suinevere
+ | Dependencies: tracker.h
+ | Globals: N/A
+ | Params: N/A
+ | Returns: nonzero while playing
+ ----------------------*/
+int synth_playing(void);
+
+/*----------------------
+ | synth_should_play
+ | Description: Whether the synth is the right music source. It is the
+ |   fallback, so the answer is no wherever the disc brought its own music.
+ |   The netbin passes 0 because it has no disc, which makes this one rule for
+ |   both builds rather than a compile-time switch.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: has_cd_audio -- nonzero when the disc carries CD-DA
+ | Returns: nonzero when the synth should play
+ ----------------------*/
+int synth_should_play(int has_cd_audio);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* SYNTH_H */

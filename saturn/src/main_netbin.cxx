@@ -38,6 +38,8 @@ extern "C" {
 #include "console.h"
 #include "display.h"
 #include "net/net_connect.h"
+#include "synth.h"
+#include "synth_target.h"
 }
 
 using namespace SRL::Types;
@@ -261,6 +263,11 @@ int main(void) {
     display_defaults(&g_display);
     options_load();
 
+    /* Bind and upload only; the music starts at the dial page below, which is
+       this build's first real screen. Matching the CD build, where the title's
+       jingle owns the title and the synth waits for the menu. */
+    synth_target_init();
+
     netbin_video_init();
     console_init();
 
@@ -322,6 +329,15 @@ int main(void) {
        page. online_mode() does the actual dialing from g_dialnum. After it returns
        -- hang-up, no carrier, session end -- the dial page opens so the number can
        be changed or redialed. */
+    /* Started here rather than at boot, and after the setjmp so a Restart takes
+       the loop from the top again. The netbin has no disc, so the fallback rule
+       always resolves in the synth's favour -- asked through the same function
+       the CD build asks rather than assumed, so the two cannot drift. */
+    if (synth_should_play(0)) {
+        synth_set_level(g_synth_level);
+        synth_start();
+    }
+
     bool auto_dial = valid_dialnum(g_dialnum);
     for (;;) {
         menu_clear();

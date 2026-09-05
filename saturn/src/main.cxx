@@ -47,6 +47,8 @@ extern "C" {
 #include "splash.h"
 #include "game_catalog.h"
 #include "online.h"
+#include "synth.h"
+#include "synth_target.h"
 using namespace SRL::Types;
 
 /*----------------------
@@ -557,6 +559,18 @@ int main(void) {
     // on_music_fade), so a fade that bottomed out at 0 would have nothing to raise.
     if (g_music_level > 0) music_set_volume(1);
 
+    /* Bind and upload only. The synth does NOT start here: the splash jingle
+       owns the whole title screen, and a second piece of music under it is two
+       tunes at once. It starts at the mode menu, below, once title_and_seed has
+       returned and boot_music_stop has silenced the jingle.
+       Nothing here asks music_cdda_has_audio() either, and that is not
+       tidiness: music_cdda_audio_tracks caches its answer in a static on the
+       first call (music_cdda.cxx:366), so asking before the drive's TOC is
+       readable would freeze "no CD audio" for the rest of the session -- which
+       would start the synth over a disc that has CD-DA and put the Synth Music
+       row on the Sound page in place of CD Music. */
+    synth_target_init();
+
     // No music_start_menu() here any more: the splash jingle carries the whole
     // title screen, so CD-DA is not started until title_and_seed has faded it out.
     title_bg_fade_in_ex(TITLE_FADE_FRAMES, on_title_fade);
@@ -589,6 +603,17 @@ int main(void) {
                                   // menu is composed unseen (display_apply lit the
                                   // backdrop; this re-darkens it with no frame shown)
     g_menu_intro_fade = TITLE_FADE_FRAMES;   // first menu_select fades the menu up
+
+    /* The synth starts here and not before. Two reasons, and both were found by
+       running it: the splash jingle plays across the whole title screen and the
+       two overlapped, and this is the first point where the drive's TOC has
+       certainly been read -- music_cdda_audio_tracks caches its answer on the
+       first call, so asking earlier could have frozen the wrong one. A disc
+       with CD-DA keeps its own music and this leaves the synth stopped. */
+    if (synth_should_play(music_cdda_has_audio())) {
+        synth_set_level(g_synth_level);
+        synth_start();
+    }
 
     static const char *modes[] = { "Single Player", "Online (Netlink)",
                                    "Load Save Game", "Options", "Credits" };

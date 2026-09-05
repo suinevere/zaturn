@@ -97,12 +97,19 @@ const char *verbosity_command(void);
  ----------------------*/
 #define MUSIC_LEVEL_DEFAULT 7
 #define PCM_LEVEL_DEFAULT   4
+#define SYNTH_LEVEL_DEFAULT 5
 
 // CD-DA music volume level, 0..7 (0 = off); persisted in MOJOOPTS.
 extern int g_music_level;
 
 // PCM sound-effect volume level, 0..7 (0 = off); persisted in MOJOOPTS.
 extern int g_pcm_level;
+
+// Generated music volume level, 0..7 (0 = off); persisted in MOJOOPTS.
+// Separate from g_music_level because the two are never both in play: one is
+// CD-DA's level, the other the synth's, and the Sound page shows whichever the
+// disc calls for.
+extern int g_synth_level;
 
 // Current display colors/background/image, applied to VDP2 by display_apply
 // and persisted in MOJOOPTS.

@@ -1,0 +1,46 @@
+/*----------------------
+ | music_synth_data.h
+ | Description: The one loop the synth plays, in both builds. Data only: the
+ |   engine reads it and never reaches back, so a different tune is a different
+ |   table and no code change.
+ | Author: suinevere
+ | Dependencies: tracker.h
+ ----------------------*/
+#ifndef MUSIC_SYNTH_DATA_H
+#define MUSIC_SYNTH_DATA_H
+
+#include "tracker.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*----------------------
+ | MUSIC_SYNTH_PATTERNS / MUSIC_SYNTH_ROWS / MUSIC_SYNTH_CHANNELS
+ | Description: The shape of the cell array. The order list indexes into the
+ |   pattern count, so the two have to agree or the tracker reads past the
+ |   table. All three are here rather than only in the .c file because the
+ |   file asserts its own initialiser length against them at compile time:
+ |   C zero-fills a short initialiser without complaint, which would be a
+ |   silently truncated tune that every test still passes.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SYNTH_PATTERNS 4
+#define MUSIC_SYNTH_ROWS     16
+#define MUSIC_SYNTH_CHANNELS 3
+
+/*----------------------
+ | music_synth_song
+ | Description: The shipped loop.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: a song valid for the life of the program
+ ----------------------*/
+const TrackerSong *music_synth_song(void);
+
+#ifdef __cplusplus
+}
+#endif
+#endif /* MUSIC_SYNTH_DATA_H */

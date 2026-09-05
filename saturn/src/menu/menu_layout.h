@@ -81,4 +81,36 @@ char menu_row_digit_char(int row);
  ----------------------*/
 int menu_visible_digit(char ch, int top, int visible, int count);
 
+/*----------------------
+ | SND_ROW_*
+ | Description: The Sound page's rows, as IDs rather than positions. The page
+ |   shows a different subset on a different disc, so the same position names a
+ |   different row and only the ID is stable enough to remember a selection by.
+ | Author: suinevere
+ ----------------------*/
+enum {
+    SND_ROW_MASTER = 0,
+    SND_ROW_CD     = 1,
+    SND_ROW_SYNTH  = 2,
+    SND_ROW_PCM    = 3,
+    SND_ROW_OK     = 4,
+    SND_ROW_CANCEL = 5
+};
+
+/*----------------------
+ | sound_page_rows
+ | Description: Fills `rows` with the Sound page's visible rows in display
+ |   order. CD Music and Synth Music are mutually exclusive -- the synth is the
+ |   fallback, so its slider appears exactly where CD-DA is absent, and the page
+ |   never offers two music sliders at once. Ok and Cancel are always the last
+ |   two.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: has_cd -- disc carries CD-DA; has_blb -- game carries a sound blorb;
+ |   rows -- destination; max -- its capacity
+ | Returns: how many rows were written
+ ----------------------*/
+int sound_page_rows(int has_cd, int has_blb, int *rows, int max);
+
 #endif

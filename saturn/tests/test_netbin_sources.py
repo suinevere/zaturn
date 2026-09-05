@@ -61,6 +61,16 @@ EXPECTED = {
     "src/input/command_panel.c",
     "src/video/command_view.cxx",
     "src/engine/app_state.cxx",
+    # The generated-music engine. The netbin has no sound driver -- these write
+    # SCSP slots 28-31 directly -- so this is the whole audio stack in this
+    # build, and it costs about 4 KB against the 26,610-byte driver the
+    # recorded-sample route would have needed before its first note.
+    "src/menu/options_blob.c",
+    "src/sound/scsp.c",
+    "src/sound/synth.c",
+    "src/sound/tracker.c",
+    "src/sound/music_synth_data.c",
+    "src/sound/synth_target.cxx",
 }
 
 # The files that only the netbin links -- the CD build's find-globbed

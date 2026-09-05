@@ -88,15 +88,20 @@ def main():
         if banned in disp:
             print(f"netbin display_options_page still carries {banned}", file=sys.stderr); fails += 1
 
-    # The pause menu offers exactly the five rows it is specified to offer, and
+    # The pause menu offers exactly the six rows it is specified to offer, and
     # reaches Restart through the same confirm the soft-reset chord uses.
+    # Sound joined the list when the netbin gained generated music: it has no
+    # CD-DA and no Blorb, but the synth plays on every netbin, so there is a
+    # level to set. The rows still banned below are the ones that would name
+    # something this build genuinely does not have.
     pause = body(new, "void netbin_pause_menu(void)")
-    for must in ("PI_RESUME", "PI_DISPLAY", "PI_GAMEPLAY", "PI_CONTROLS", "PI_RESTART",
-                 "display_options_page", "gameplay_page", "controls_dispatch",
+    for must in ("PI_RESUME", "PI_DISPLAY", "PI_GAMEPLAY", "PI_SOUND", "PI_CONTROLS",
+                 "PI_RESTART", "display_options_page", "gameplay_page",
+                 "sound_options_page", "controls_dispatch",
                  "confirm_return_to_title"):
         if must not in pause:
             print(f"MISSING in netbin_pause_menu: {must}", file=sys.stderr); fails += 1
-    for banned in ("Save Game", "Load Game", "Sound", "Network", "Title Screen"):
+    for banned in ("Save Game", "Load Game", "Network", "Title Screen"):
         if banned in pause:
             print(f"netbin_pause_menu offers a {banned} row", file=sys.stderr); fails += 1
 

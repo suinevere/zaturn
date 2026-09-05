@@ -40,6 +40,7 @@ extern "C" {
 #include "numpad.h"
 #include "menu_layout.h"
 #include "display.h"
+#include "synth.h"
 }
 
 /*----------------------
@@ -878,6 +879,109 @@ static void gameplay_page(void) {
 }
 
 /*----------------------
+ | sound_options_page
+ | Description: Sound Options for the netbin. The CD build has a page of this
+ |   name in menu_pages.cxx, which this build does not link -- it carries its
+ |   own Display and Gameplay pages for the same reason -- so this is a second
+ |   implementation rather than a shared one. What IS shared is the row rule:
+ |   sound_page_rows decides which rows exist, so the netbin cannot drift from
+ |   the CD build about when a music slider is offered. With no disc there is
+ |   no CD-DA and no Blorb, so the list here is always Music, Synth Music, Ok,
+ |   Cancel. Cancel restores the level it found, live, since the row is judged
+ |   by ear while it is moved.
+ | Author: suinevere
+ | Dependencies: menu.c, menu_layout.c (sound_page_rows), synth.h, options.h,
+ |   input.c, saturn_keyboard.h, soft_reset.h
+ | Globals: g_synth_level, g_kbd_visible, g_menu_page_fade
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void sound_options_page(void) {
+    MenuBacking backing;
+    const int SND_ROW_W   = 31;
+    const int SND_LABEL_W = 14;
+
+    int rows[8];
+    int nrows = sound_page_rows(0, 0, rows, 8);
+
+    static int last_row = SND_ROW_MASTER;
+    int sel = 0;
+    for (int i = 0; i < nrows; i++) if (rows[i] == last_row) { sel = i; break; }
+    int s_syn = g_synth_level;
+
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
+    bool need_fade_in = true;
+    for (;;) {
+        check_soft_reset();
+        SaturnKeyEvent ke = saturn_keyboard_poll();
+        note_input_device(ke);
+        pad_repeat_update();
+        if (g_pad->WasPressed(Button::Up)   || ke.kind == SATURN_KEY_UP)   sel = (sel - 1 + nrows) % nrows;
+        if (g_pad->WasPressed(Button::Down) || ke.kind == SATURN_KEY_DOWN) sel = (sel + 1) % nrows;
+        bool left  = g_pad->WasPressed(Button::Left)  || ke.kind == SATURN_KEY_LEFT;
+        bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
+        bool ok   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
+                  || ke.kind == SATURN_KEY_ENTER;
+        bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
+        bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
+        if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+        int row = rows[sel];
+        last_row = row;   // every frame, so no exit path has to remember to
+
+        if (cancel || (ok && row == SND_ROW_CANCEL)) {
+            g_synth_level = s_syn;
+            synth_set_level(g_synth_level);
+            break;
+        }
+        if (commit || (ok && row == SND_ROW_OK)) {
+            options_save();
+            break;
+        }
+        if (row == SND_ROW_MASTER && (left || right || ok)) {
+            g_synth_level = (g_synth_level > 0) ? 0 : SYNTH_LEVEL_DEFAULT;
+            synth_set_level(g_synth_level);
+        }
+        else if (row == SND_ROW_SYNTH) {
+            if (left && g_synth_level > 0) g_synth_level--;
+            if (right && g_synth_level < 7) g_synth_level++;
+            if (left || right) synth_set_level(g_synth_level);
+        }
+
+        menu_clear();
+        int fx, fy, fw, fh;
+        menu_box_fit("SOUND", 34, nrows + 4, &fx, &fy, &fw, &fh);
+        menu_frame(fx, fy, fw, fh, "SOUND");
+        int y = fy + 4;
+        bool nums = !g_kbd_visible;
+        for (int i = 0; i < nrows; i++) {
+            const char *n = menu_num(nums, i);
+            switch (rows[i]) {
+                case SND_ROW_MASTER:
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s", n,
+                              menu_pad("Music", SND_LABEL_W),
+                              g_synth_level > 0 ? "On" : "Off");
+                    break;
+                case SND_ROW_SYNTH:
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
+                              menu_pad("Synth Music", SND_LABEL_W), g_synth_level);
+                    break;
+                case SND_ROW_OK:
+                    y++;
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%sOk", n);
+                    break;
+                case SND_ROW_CANCEL:
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%sCancel", n);
+                    break;
+            }
+        }
+        menu_sync();
+        if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
+    }
+    page_fade_out(g_menu_page_fade);
+    menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
+}
+
+/*----------------------
  | netbin_pause_menu
  | Description: See netbin_pages.h. The Map row is present at Easy and Medium
  |   and absent at Hard, the same rule the CD build's options_menu applies. The
@@ -893,9 +997,9 @@ static void gameplay_page(void) {
  ----------------------*/
 void netbin_pause_menu(void) {
     MenuBacking backing;
-    enum { PI_RESUME, PI_MAP, PI_DISPLAY, PI_GAMEPLAY, PI_CONTROLS, PI_RESTART, PI_N };
+    enum { PI_RESUME, PI_MAP, PI_DISPLAY, PI_GAMEPLAY, PI_SOUND, PI_CONTROLS, PI_RESTART, PI_N };
     static const char *const LABEL[PI_N] = {
-        "Resume", "Map", "Display", "Gameplay", "Controls", "Restart"
+        "Resume", "Map", "Display", "Gameplay", "Sound", "Controls", "Restart"
     };
 
     int items[PI_N], nitems = 0, label_w = 0, row_w = 0, x0, y0, w, h;
@@ -912,6 +1016,7 @@ void netbin_pause_menu(void) {
         if (g_difficulty != DIFF_HARD) items[nitems++] = PI_MAP;
         items[nitems++] = PI_DISPLAY;
         items[nitems++] = PI_GAMEPLAY;
+        items[nitems++] = PI_SOUND;
         items[nitems++] = PI_CONTROLS;
         items[nitems++] = PI_RESTART;
 
@@ -951,6 +1056,10 @@ void netbin_pause_menu(void) {
             else if (item == PI_MAP)      { page_fade_out(g_menu_page_fade); map_view_show(); menu_clear(); need_fade_in = true; }
             else if (item == PI_DISPLAY)  { page_fade_out(g_menu_page_fade); display_options_page(); menu_clear(); need_fade_in = true; }
             else if (item == PI_GAMEPLAY) { page_fade_out(g_menu_page_fade); gameplay_page(); build(); need_fade_in = true; }
+            // menu_clear rather than Gameplay's build(): build() exists because
+            // Gameplay can change the difficulty and so change which items are
+            // listed, and the Sound page changes no item's visibility.
+            else if (item == PI_SOUND)    { page_fade_out(g_menu_page_fade); sound_options_page(); menu_clear(); need_fade_in = true; }
             else if (item == PI_CONTROLS) { page_fade_out(g_menu_page_fade); controls_dispatch(); menu_clear(); need_fade_in = true; }
             // Never returns if accepted: confirm_return_to_title longjmps to
             // main()'s dial loop, which resets the backing depth and the

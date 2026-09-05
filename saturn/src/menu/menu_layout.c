@@ -130,3 +130,14 @@ int menu_visible_digit(char ch, int top, int visible, int count) {
     if (idx < 0 || idx >= count) return -1;
     return idx;
 }
+
+int sound_page_rows(int has_cd, int has_blb, int *rows, int max) {
+    int n = 0;
+    if (n < max) rows[n++] = SND_ROW_MASTER;
+    if (has_cd) { if (n < max) rows[n++] = SND_ROW_CD; }
+    else        { if (n < max) rows[n++] = SND_ROW_SYNTH; }
+    if (has_blb) { if (n < max) rows[n++] = SND_ROW_PCM; }
+    if (n < max) rows[n++] = SND_ROW_OK;
+    if (n < max) rows[n++] = SND_ROW_CANCEL;
+    return n;
+}

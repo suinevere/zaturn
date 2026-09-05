@@ -47,6 +47,7 @@ extern "C" {
 #include "display.h"
 #include "sound.h"
 #include "music.h"
+#include "synth.h"
 }
 
 /*----------------------
@@ -697,27 +698,25 @@ void sound_options_page(void) {
     MenuBacking backing;
     const int SND_ROW_W   = 31;
     const int SND_LABEL_W = 14;
-    enum { SR_SOUND, SR_MUSIC, SR_PCM, SR_OK, SR_CANCEL };
     bool has_cd  = (music_cdda_audio_tracks(0) > 0);
     bool has_blb = (sound_has_audio() != 0);
 
-    int rows[5], nrows = 0;
-    // The master switch is listed whenever there is anything for it to switch.
-    // On a disc with neither CD audio nor a sound blob it would sit there
-    // toggling two levels nothing reads.
-    if (has_cd || has_blb) rows[nrows++] = SR_SOUND;
-    if (has_cd)  rows[nrows++] = SR_MUSIC;
-    if (has_blb) rows[nrows++] = SR_PCM;
-    rows[nrows++] = SR_OK;
-    rows[nrows++] = SR_CANCEL;
+    // The visible-row list is built by sound_page_rows (menu_layout.c) so the
+    // rule that CD Music and Synth Music are mutually exclusive is stated once,
+    // in a pure function the host tests can exercise, rather than here where it
+    // could only be checked by eye. The master switch is always listed now: the
+    // synth is a source on every disc, so there is always something to switch.
+    int rows[8];
+    int nrows = sound_page_rows(has_cd ? 1 : 0, has_blb ? 1 : 0, rows, 8);
 
-    // Remembered as a row ID, not an index: Music is only listed when there is
-    // CD audio and PCM only when there is a sound blob, so the same index names
-    // a different row on a different disc.
-    static int last_row = SR_SOUND;
+    // Remembered as a row ID, not an index: CD Music is only listed when there
+    // is CD audio, Synth Music only when there is not, and PCM only when there
+    // is a sound blob, so the same index names a different row on a different
+    // disc.
+    static int last_row = SND_ROW_MASTER;
     int sel = 0;
     for (int i = 0; i < nrows; i++) if (rows[i] == last_row) { sel = i; break; }
-    int s_mus = g_music_level, s_pcm = g_pcm_level;
+    int s_mus = g_music_level, s_pcm = g_pcm_level, s_syn = g_synth_level;
     // Reached from the in-game Options menu, the music is ducked; this page is the
     // one place that cannot work under a duck, since every row on it is judged by
     // ear and has to be heard at the level being set. A no-op everywhere else.
@@ -749,32 +748,41 @@ void sound_options_page(void) {
         int row = rows[sel];
         last_row = row;   // every frame, so no exit path has to remember to
 
-        if (cancel || (ok && row == SR_CANCEL)) {
-            g_music_level = s_mus; g_pcm_level = s_pcm;
+        if (cancel || (ok && row == SND_ROW_CANCEL)) {
+            g_music_level = s_mus; g_pcm_level = s_pcm; g_synth_level = s_syn;
             music_set_level(g_music_level); sound_set_level(g_pcm_level);
+            synth_set_level(g_synth_level);
             break;
         }
-        if (commit || (ok && row == SR_OK)) {
+        if (commit || (ok && row == SND_ROW_OK)) {
             music_set_level(g_music_level); sound_set_level(g_pcm_level);
+            synth_set_level(g_synth_level);
             options_save();
             break;
         }
-        if (row == SR_SOUND && (left || right || ok)) {
-            // One switch over both levels, and derived from them rather than
+        if (row == SND_ROW_MASTER && (left || right || ok)) {
+            // One switch over every level, and derived from them rather than
             // held beside them: a level row moved off 0 turns this back On by
             // itself, and there is no second piece of state to keep in step or
             // to find room for in the save blob. Off is 0, which is what each
-            // level's own bottom stop already means; On is the shipped pair,
+            // level's own bottom stop already means; On is the shipped set,
             // since the levels the player had are exactly what Off overwrote.
-            bool on = (g_music_level > 0 || g_pcm_level > 0);
+            // The synth level is in here because on a disc without CD-DA it is
+            // the only music there is, and a switch labelled Music that left it
+            // playing would be lying.
+            bool on = (g_music_level > 0 || g_pcm_level > 0 || g_synth_level > 0);
             g_music_level = on ? 0 : MUSIC_LEVEL_DEFAULT;
             g_pcm_level   = on ? 0 : PCM_LEVEL_DEFAULT;
+            g_synth_level = on ? 0 : SYNTH_LEVEL_DEFAULT;
             music_set_volume(g_music_level);
             sound_set_level(g_pcm_level);
+            synth_set_level(g_synth_level);
         }
-        else if (row == SR_MUSIC) { if (left && g_music_level > 0) g_music_level--; if (right && g_music_level < 7) g_music_level++;
+        else if (row == SND_ROW_CD) { if (left && g_music_level > 0) g_music_level--; if (right && g_music_level < 7) g_music_level++;
                                if (left || right) music_set_volume(g_music_level); }
-        else if (row == SR_PCM) { if (left && g_pcm_level > 0) g_pcm_level--; if (right && g_pcm_level < 7) g_pcm_level++;
+        else if (row == SND_ROW_SYNTH) { if (left && g_synth_level > 0) g_synth_level--; if (right && g_synth_level < 7) g_synth_level++;
+                                  if (left || right) synth_set_level(g_synth_level); }
+        else if (row == SND_ROW_PCM) { if (left && g_pcm_level > 0) g_pcm_level--; if (right && g_pcm_level < 7) g_pcm_level++;
                                   if (left || right) sound_set_level(g_pcm_level); }
 
         menu_clear();
@@ -784,24 +792,28 @@ void sound_options_page(void) {
         for (int i = 0; i < nrows; i++) {
             const char *n = menu_num(nums, i);
             switch (rows[i]) {
-                case SR_SOUND:
+                case SND_ROW_MASTER:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s", n,
                               menu_pad("Music", SND_LABEL_W),
-                              (g_music_level > 0 || g_pcm_level > 0) ? "On" : "Off");
+                              (g_music_level > 0 || g_pcm_level > 0 || g_synth_level > 0) ? "On" : "Off");
                     break;
-                case SR_MUSIC:
+                case SND_ROW_CD:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
                               menu_pad("CD Music", SND_LABEL_W), g_music_level);
                     break;
-                case SR_PCM:
+                case SND_ROW_SYNTH:
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
+                              menu_pad("Synth Music", SND_LABEL_W), g_synth_level);
+                    break;
+                case SND_ROW_PCM:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
                               menu_pad("PCM", SND_LABEL_W), g_pcm_level);
                     break;
-                case SR_OK:
+                case SND_ROW_OK:
                     y++;
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%sOk", n);
                     break;
-                case SR_CANCEL:
+                case SND_ROW_CANCEL:
                     menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%sCancel", n);
                     break;
             }
@@ -1441,7 +1453,11 @@ int options_menu(void) {
         "Resume", "Map", "Save Game", "Load Game", "Gameplay", "Display", "Sound",
         "Controls", "Network", "Title Screen"
     };
-    bool sound_available = (music_cdda_has_audio() != 0) || (sound_has_audio() != 0);
+    // Always true now: the synth plays on any disc without CD-DA, so there is
+    // never a configuration where the Sound page has nothing to offer. Kept as
+    // a named flag rather than dropped, because the row list below reads better
+    // for it and because a future source could gate it again.
+    bool sound_available = true;
     int items[OI_N], nitems = 0, label_w = 0, x0, y0, w, h;
     // Remembered as an item ID, not an index: Resume/Save/Load only appear
     // in-game and Sound only with audio present, so the same index names a

@@ -630,6 +630,7 @@ void online_mode(void) {
 
         render_console();
         console_pointer_scroll();
+        render_pointer();
 #ifdef NETBIN
         if (panel) render_command_panel(cpanel, *netbin_room(), cw);
         else       render_keyboard(k, did_submit ? nullptr : selected, did_submit ? 0 : cw_len);

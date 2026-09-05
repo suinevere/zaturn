@@ -255,6 +255,40 @@ def test_picture_edge_moves():
     assert "room_model_dir_word" in body, "the edge shot submits no direction"
 
 
+def test_a_cursor_is_actually_drawn():
+    """The pointer is useless if nothing paints it: render_pointer must place a
+    cell through the text layer's cursor overlay."""
+    body = _body(_read(ROOT / "src" / "video" / "console_view.cxx"), "render_pointer")
+    assert "text_cursor_set" in body, "render_pointer paints nothing"
+    assert "text_cursor_off" in body, "the cursor is never taken away"
+    assert "controller_pointer" in body, "render_pointer reads no pointer"
+
+
+def test_cursor_overlay_paints_after_the_block_copy():
+    """The copy is what restores the character under the cursor, so the cursor has
+    to go down after it or it erases itself."""
+    body = _body(_read(ROOT / "src" / "video" / "text_map.cxx"), "text_flush")
+    copy = body.index("for (int i = 0; i < longs; i++)")
+    paint = body.index("g_cur_word")
+    assert paint > copy, "the cursor is painted before the block copy erases it"
+
+
+def test_mouse_mode_is_reachable():
+    """A Mouse Mode nothing can switch on is a cursor that never moves."""
+    src = _read(ROOT / "src" / "menu" / "menu_pages.cxx")
+    assert "controller_mouse_mode_set" in src, "no Mouse Mode toggle on the Controls page"
+    assert "controller_twin_set" in src, "no Twin Stick toggle on the Controls page"
+
+
+def test_every_pointing_device_updates_its_cell():
+    """col/row come from clamp_cursor, so any reader that moves the cursor has to
+    call it -- the gun sets absolute coordinates and once did not."""
+    src = _read(SRC)
+    for fn in ("read_gun", "read_mouse", "read_sticks", "read_dpad_cursor"):
+        body = _body(src, fn)
+        assert "clamp_cursor" in body, "%s moves the cursor without recomputing its cell" % fn
+
+
 def main():
     fails = 0
     for name, fn in sorted(globals().items()):

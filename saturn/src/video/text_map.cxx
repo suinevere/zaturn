@@ -247,6 +247,39 @@ extern "C" void text_clear_line(int y)
     }
 }
 
+/*----------------------
+ | g_cur_x / g_cur_y / g_cur_word
+ | Description: The one overlay cell the pointer cursor occupies, and the pattern
+ |   word to paint there. It is deliberately not part of the shadow: the shadow is
+ |   what the program composed, and the cursor is painted over the top of it at
+ |   flush time so the character underneath comes back by itself the moment the
+ |   cursor moves off. g_cur_x < 0 means no cursor.
+ | Author: suinevere
+ ----------------------*/
+static int      g_cur_x = -1;
+static int      g_cur_y = -1;
+static uint16_t g_cur_word = 0;
+
+extern "C" void text_cursor_set(int x, int y, char ch)
+{
+    if (x < 0 || y < 0 || x >= TEXT_COLS || y >= TEXT_ROWS) { text_cursor_off(); return; }
+    uint16_t word = (uint16_t)((uint16_t)(uint8_t) ch + TEXT_FONT_BANK) | TEXT_COLOR_BANK;
+    if (g_cur_x == x && g_cur_y == y && g_cur_word == word) return;
+    if (g_cur_x >= 0) mark_dirty(g_cur_y);
+    g_cur_x = x;
+    g_cur_y = y;
+    g_cur_word = word;
+    mark_dirty(y);
+}
+
+extern "C" void text_cursor_off(void)
+{
+    if (g_cur_x < 0) return;
+    mark_dirty(g_cur_y);
+    g_cur_x = -1;
+    g_cur_y = -1;
+}
+
 extern "C" void text_flush(void)
 {
     if (g_dirty_top > g_dirty_bottom) return;
@@ -256,6 +289,15 @@ extern "C" void text_flush(void)
     int longs = ((g_dirty_bottom - g_dirty_top + 1) * TEXT_COLS) >> 1;
 
     for (int i = 0; i < longs; i++) *dst++ = *src++;
+
+    /* After the block copy, never inside it: the copy has just laid the composed
+       frame down over wherever the cursor was, which is exactly how the character
+       under it is restored, and painting the cursor first would only erase it. */
+    if (g_cur_x >= 0 && g_cur_y >= g_dirty_top && g_cur_y <= g_dirty_bottom)
+    {
+        volatile uint16_t *cell = (volatile uint16_t *) TEXT_VRAM_MAP;
+        cell[g_cur_y * TEXT_COLS + g_cur_x] = g_cur_word;
+    }
 
     g_dirty_top    = TEXT_ROWS;
     g_dirty_bottom = -1;

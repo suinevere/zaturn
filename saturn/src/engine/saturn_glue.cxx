@@ -753,7 +753,6 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             if (cpanel.action == CP_ACT_SWAP) { cpanel.action = CP_ACT_NONE; panel_swap = true; continue; }
             pad_scroll_update();
             render_console();
-            console_pointer_scroll();
             render_command_panel(cpanel, *room_model_get(), cw);
         } else {
             DictionaryWord* selected; int cw_len;
@@ -763,6 +762,12 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             render_console();
             render_keyboard(k, selected, cw_len);
         }
+        /* Outside the branch, because both interfaces show the same scroll
+           markers and the same cursor: a mouse does not stop existing because the
+           player is typing. Both run after render_console, which is what places
+           the markers this one hit-tests. */
+        console_pointer_scroll();
+        render_pointer();
         // The frame is composed but not yet pushed, which is exactly what the
         // ramp wants: its own first Synchronize is what carries it to VRAM,
         // under the black the menu left behind. Every other frame just syncs.

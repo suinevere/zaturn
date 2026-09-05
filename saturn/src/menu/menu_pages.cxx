@@ -220,12 +220,13 @@ static void network_page(void) {
 /*----------------------
  | CK_FACE / CK_CHORD / CK_FIXED / CtlRow
  | Description: One row of a configuration sheet: an editable face-button or
- |   shift-chord binding, or a fixed one the device itself decides. `idx` is the
- |   FA_ or CA_ action for the first two and unused for the third, whose value is
- |   the literal in `fixed`.
+ |   shift-chord binding, a fixed one the device itself decides, or one of the two
+ |   on/off switches (Mouse Mode, Twin Stick profile). `idx` is the FA_ or CA_
+ |   action for the first two and unused for the rest; a CK_FIXED row's value is
+ |   the literal in `fixed` and a switch row's is read live.
  | Author: suinevere
  ----------------------*/
-enum { CK_FACE, CK_CHORD, CK_FIXED };
+enum { CK_FACE, CK_CHORD, CK_FIXED, CK_MMODE, CK_TWIN };
 struct CtlRow {
     unsigned char kind;
     unsigned char idx;
@@ -338,6 +339,7 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
             const char *sel = (k == DEV_FLIGHT) ? "Right Stick" : "D-pad";
             const char *cur = (k == DEV_FLIGHT) ? "Right Stick"
                             : (k == DEV_ANALOG) ? "Analogue Stick" : "D-pad";
+            out[n++] = CtlRow{ CK_MMODE, 0, "Mouse Mode", 0 };
             out[n++] = CtlRow{ CK_FIXED, 0, "Move Selection", sel };
             out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", cur };
         }
@@ -363,6 +365,7 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
             out[n++] = CtlRow{ CK_FIXED, 0, "Space", "Top Trigger R" };
             out[n++] = CtlRow{ CK_FIXED, 0, "Accept", "Top Trigger L" };
         } else if (sheet == CS_MOUSE) {
+            out[n++] = CtlRow{ CK_MMODE, 0, "Mouse Mode", 0 };
             out[n++] = CtlRow{ CK_FIXED, 0, "Move Selection", "Left Stick" };
             out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", "Left Stick" };
         }
@@ -393,6 +396,8 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
 static const char *ctl_row_value(const CtlRow &r) {
     if (r.kind == CK_FACE)  return face_btn_name(r.idx);
     if (r.kind == CK_CHORD) return slot_name(g_chord_slot[r.idx]);
+    if (r.kind == CK_MMODE) return controller_mouse_mode_get() ? "On" : "Off";
+    if (r.kind == CK_TWIN)  return controller_twin_get() ? "On" : "Off";
     return r.fixed;
 }
 
@@ -457,7 +462,7 @@ static void controls_sheet_page(DevKind dev, int sheet) {
         if (up)   sel = (sel - 1 + r_back + 1) % (r_back + 1);
         if (down) sel = (sel + 1) % (r_back + 1);
         if (sel == r_back) { if (act) break; }
-        else if (left || right) {
+        else if (left || right || (act && rows[sel].kind == CK_MMODE)) {
             const CtlRow &r = rows[sel];
             if (r.kind == CK_FACE) {
                 int n = right ? (g_face_btn[r.idx] + 1) % FA_BTN_N
@@ -467,6 +472,8 @@ static void controls_sheet_page(DevKind dev, int sheet) {
                 int n = right ? (g_chord_slot[r.idx] + 1) % SL_N
                               : (g_chord_slot[r.idx] + SL_N - 1) % SL_N;
                 chord_assign(r.idx, n);
+            } else if (r.kind == CK_MMODE) {
+                controller_mouse_mode_set(!controller_mouse_mode_get());
             }
         }
 
@@ -500,7 +507,10 @@ static void controls_sheet_page(DevKind dev, int sheet) {
  |   change for the session. Under those sits the workbook's Static sheet, printed
  |   rather than offered, and then one submenu row per sheet the current device
  |   configures. Keyboard Caps is here because it stopped being a pad binding: a
- |   modifier the player cannot see the state of is not worth a combo.
+ |   modifier the player cannot see the state of is not worth a combo. Twin Stick
+ |   is here rather than in a submenu because it decides what the Device row can
+ |   page to at all -- a Twin Stick reports the same id as a control pad, so
+ |   nothing else can make one appear.
  |
  |   Snapshots g_face_btn/g_chord_slot/g_cmd_iface on entry so Cancel (or
  |   B/Backspace) restores them verbatim, including edits made two levels down in
@@ -550,7 +560,8 @@ static bool controls_page(void) {
             if (CTL_DEV[dev].sheets & (1 << s)) sheets[nsheet++] = s;
         const int R_DEV = 0, R_IFACE = 1;
         int r_sheet0 = 2;
-        int r_caps   = r_sheet0 + nsheet;
+        int r_twin   = r_sheet0 + nsheet;
+        int r_caps   = r_twin + 1;
         int r_reset  = r_caps + 1;
         int r_done   = r_caps + 2;
         int r_cancel = r_caps + 3;
@@ -586,6 +597,7 @@ static bool controls_page(void) {
             break; } }
         else if (sel == r_reset) { if (act) mapping_reset_defaults(); }
         else if (sel == r_caps) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
+        else if (sel == r_twin) { if (left || right || act) controller_twin_set(!controller_twin_get()); }
         else if (sel == R_DEV) {
             if (left)  last_dev = (last_dev - 1 + ndev) % ndev;
             if (right) last_dev = (last_dev + 1) % ndev;
@@ -602,7 +614,7 @@ static bool controls_page(void) {
 
         menu_clear();
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 12, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 13, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
         int y = fy + 3;
         menu_rowf(fx, fw, y++, sel == R_DEV, CTL_ROW_W, "   Device:     %s %s %s",
@@ -622,6 +634,8 @@ static bool controls_page(void) {
             menu_rowf(fx, fw, y++, sel == r_sheet0 + i, CTL_ROW_W, "   %s...",
                       CS_NAME[sheets[i]]);
         y = fy + 9 + CS_N;
+        menu_rowf(fx, fw, y++, sel == r_twin, CTL_ROW_W, "   Twin Stick: %s",
+                  controller_twin_get() ? "On" : "Off");
         menu_rowf(fx, fw, y++, sel == r_caps, CTL_ROW_W, "   Keyboard Caps: %s",
                   keyboard_get_caps() ? "On" : "Off");
         y++;

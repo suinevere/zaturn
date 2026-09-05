@@ -437,6 +437,28 @@ static void read_sticks(int port, DevKind kind) {
 }
 
 /*----------------------
+ | read_dpad_cursor
+ | Description: Drives the cursor from the D-pad while Mouse Mode is on, which is
+ |   the control pad's and the twin stick's cell on that sheet -- neither reports
+ |   an axis, so neither reaches read_sticks, and without this a pad in Mouse Mode
+ |   shows a cursor that cannot be moved.
+ | Author: suinevere
+ | Dependencies: input.h
+ | Globals: g_pad, g_ptr
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void read_dpad_cursor(void) {
+    if (g_pad == nullptr) return;
+    int dx = g_pad->IsHeld(Button::Right) ? 1 : g_pad->IsHeld(Button::Left) ? -1 : 0;
+    int dy = g_pad->IsHeld(Button::Down)  ? 1 : g_pad->IsHeld(Button::Up)   ? -1 : 0;
+    if (!dx && !dy) return;
+    g_ptr.x = (int16_t) (g_ptr.x + dx * CURSOR_STEP);
+    g_ptr.y = (int16_t) (g_ptr.y + dy * CURSOR_STEP);
+    clamp_cursor();
+}
+
+/*----------------------
  | read_mouse
  | Description: Accumulates a mouse's relative movement into the cursor and turns
  |   its three buttons into pointer clicks; its Start button is the Static sheet's
@@ -497,6 +519,7 @@ static void read_gun(int port) {
     if (!off) {
         g_ptr.x = (int16_t) px;
         g_ptr.y = (int16_t) py;
+        clamp_cursor();
     }
 
     if (!off && g.IsHeld(G::Button::Trigger)) g_ptr.held = 1;
@@ -533,12 +556,13 @@ void controller_tick(void) {
     int saw_pad = 0;
     int saw_twin = 0;
     int saw_stick = 0;
+    int saw_dpad = 0;
 
     for (int p = 0; p < PORT_N; p++) {
         DevKind k = controller_kind(p);
         switch (k) {
-            case DEV_PAD:  saw_pad  = 1; break;
-            case DEV_TWIN: saw_twin = 1; saw_stick = 1; break;
+            case DEV_PAD:  saw_pad  = 1; saw_dpad = 1; break;
+            case DEV_TWIN: saw_twin = 1; saw_stick = 1; saw_dpad = 1; break;
             case DEV_FLIGHT:
             case DEV_ANALOG: saw_pad = 1; saw_stick = 1; read_sticks(p, k); break;
             case DEV_MOUSE:  g_ptr.valid = 1; read_mouse(p); break;
@@ -552,7 +576,10 @@ void controller_tick(void) {
 
     if (saw_pad)  read_pad_family();
     if (saw_twin) read_twin();
-    if (g_mouse_mode && (saw_stick || saw_pad)) g_ptr.valid = 1;
+    if (g_mouse_mode && (saw_stick || saw_pad)) {
+        g_ptr.valid = 1;
+        if (saw_dpad) read_dpad_cursor();
+    }
 }
 
 /*----------------------

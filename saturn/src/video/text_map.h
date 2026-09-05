@@ -169,6 +169,22 @@ void text_set_party_ink(int slot, unsigned short rgb555);
 void text_clear_line(int y);
 
 /*----------------------
+ | text_cursor_set / text_cursor_off
+ | Description: Place or hide the one-cell pointer cursor. It is an overlay, not
+ |   part of the composed frame: text_flush paints it after the block copy, so the
+ |   character underneath is restored by the copy itself when the cursor moves.
+ |   Setting it marks both the old and the new row dirty, which is what makes the
+ |   flush repaint the cell it is leaving.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: x, y -- cell coordinates; ch -- the glyph to paint
+ | Returns: N/A
+ ----------------------*/
+void text_cursor_set(int x, int y, char ch);
+void text_cursor_off(void);
+
+/*----------------------
  | text_flush
  | Description: Copies the rows changed since the last flush into the VDP2
  |   tilemap and drops the dirty range. Registered on OnAfterSync, so callers do

@@ -365,6 +365,41 @@ bool console_pointer_scroll(void) {
 }
 
 /*----------------------
+ | CURSOR_GLYPH / CURSOR_ON / CURSOR_PERIOD
+ | Description: The pointer cursor's shape and blink. A reticle rather than a
+ |   block because it has to be findable over console text and over a room
+ |   picture, and blinking rather than coloured because every palette slot the
+ |   text layer has is already spoken for -- a cell that moves is easier to spot
+ |   than one more colour among the party inks.
+ | Author: suinevere
+ ----------------------*/
+#define CURSOR_GLYPH  '+'
+#define CURSOR_ON     32
+#define CURSOR_PERIOD 40
+
+/*----------------------
+ | render_pointer
+ | Description: Paints the one-cell cursor wherever a mouse, a light gun or a
+ |   stick in Mouse Mode is pointing, and takes it away when no pointing device is
+ |   driving. Call once per input frame, after the frame's text has been composed:
+ |   the cursor is an overlay text_flush paints last, so it does not matter what
+ |   is drawn under it, only that this runs before the Synchronize that flushes.
+ | Author: suinevere
+ | Dependencies: controller.h, text_map.h
+ | Globals: N/A (the blink counter is function-static)
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void render_pointer(void) {
+    static int tick = 0;
+    const DevPointer *p = controller_pointer();
+    if (!p->valid) { tick = 0; text_cursor_off(); return; }
+    if (++tick >= CURSOR_PERIOD) tick = 0;
+    if (tick < CURSOR_ON) text_cursor_set(p->col, p->row, CURSOR_GLYPH);
+    else                  text_cursor_off();
+}
+
+/*----------------------
  | console_scroll_to_output
  | Description: Computes how many lines the turn just emitted from the delta
  |   against g_output_start (using the monotonic total-lines counter so this

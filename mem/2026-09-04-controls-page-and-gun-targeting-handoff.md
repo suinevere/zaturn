@@ -1,6 +1,6 @@
 ---
 name: controls-page-and-gun-targeting-handoff
-description: Three commits reshaping the Controls page into a device pager over one submenu per controls.xls sheet, moving the mode swap onto L+R, rebuilding the command module, and making the scroll markers and the room picture shootable. Never on a screen.
+description: Four commits reshaping the Controls page into a device pager over one submenu per controls.xls sheet, moving the mode swap onto L+R, rebuilding the command module, and making the scroll markers and the room picture shootable, and drawing the pointer cursor that three separate faults had kept invisible. Never on a screen.
 metadata:
   type: project
 ---
@@ -85,7 +85,7 @@ to the uncommitted art manifest and predates all of this.
 
 The layout arithmetic is the part most likely to be wrong on sight: both new pages
 place rows by hand against a `menu_box_fit` height, and neither has been looked at.
-`controls_page` draws to `fy + 16` inside a box asked for `CS_N + 12` content rows,
+`controls_page` draws to `fy + 16` inside a box asked for `CS_N + 13` content rows,
 and `controls_sheet_page` puts its Back row at `fy + 4 + CTL_SHEET_MAX + 1`. If
 either overflows its frame, that is where.
 
@@ -126,7 +126,7 @@ the loop owes a ramp-down and a music duck that the action site cannot give it.
 
 ## Suggested skills
 
-- **`superpowers:verification-before-completion`** — three commits, nothing seen.
+- **`superpowers:verification-before-completion`** — four commits, nothing seen.
 - **`code-review`** with base `c9e6ebb`, which reaches all four of this branch's
   input commits. `menu_pages.cxx` and `controller.cxx` carry the risk.
 

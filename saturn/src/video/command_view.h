@@ -51,4 +51,28 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
 void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
                   TrieNode *root, SaturnKeyEvent &ke, CommandWords &w);
 
+/*----------------------
+ | cv_set_lobby / cv_lobby
+ | Description: Switches the word module between the story's vocabulary and the
+ |   short list a multizork session needs before its game exists. Online play
+ |   opens on a login, a lobby and a waiting room, none of which the parser ever
+ |   sees: what they accept is a name, a room number, yes or no, and go or quit.
+ |   Offering the story's several hundred verbs and nouns there is offering words
+ |   that cannot work, so lobby mode replaces the whole list with the handful
+ |   those screens do take -- see CV_LOBBY_WORDS for where each came from -- and
+ |   each of them submits on its own rather than opening a sentence.
+ |
+ |   The caller decides when the game has begun; online.cxx turns this off on the
+ |   first room id, which multizorkd only sends once the Z-machine is asking a
+ |   player for a command. Off is the default, so the CD build -- which has no
+ |   lobby -- never has to say anything.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: on -- nonzero for the slim list
+ | Returns: cv_lobby reports the current setting
+ ----------------------*/
+void cv_set_lobby(int on);
+int  cv_lobby(void);
+
 #endif /* COMMAND_VIEW_H */

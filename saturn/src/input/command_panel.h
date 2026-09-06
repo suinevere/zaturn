@@ -158,6 +158,24 @@ void cp_move(CommandPanel *p, int d, int count);
 void cp_pick(CommandPanel *p, const char *word, int wants_prep);
 
 /*----------------------
+ | cp_pick_whole
+ | Description: Picks a word that is the whole command, replacing whatever the
+ |   line held and submitting it at once -- what a rose direction already does
+ |   through cp_pick's travel branch, made available to a word module that is
+ |   offering answers rather than sentence openings. Not a shortcut for
+ |   cp_pick + cp_submit: those two walk the slot chain on the way past, which
+ |   restores the noun slot's remembered row and so moves the cursor off the word
+ |   just picked, and an answer list wants the cursor left where it was so the
+ |   same answer can be given again.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; word -- the whole command, ignored when empty
+ | Returns: N/A
+ ----------------------*/
+void cp_pick_whole(CommandPanel *p, const char *word);
+
+/*----------------------
  | cp_submit
  | Description: Marks the command submitted as it stands, however far short of
  |   the grammar slot chain it stops -- the player's explicit send, alongside the

@@ -20,7 +20,19 @@ extern "C" {
  |   the dial failed (distinguished so the caller redials only when it might help).
  | Author: suinevere
  ----------------------*/
-typedef enum { NET_OK = 0, NET_NO_MODEM, NET_DIAL_FAIL } net_connect_result_t;
+typedef enum { NET_OK = 0, NET_NO_MODEM, NET_DIAL_FAIL, NET_CANCELLED }
+    net_connect_result_t;
+
+/*----------------------
+ | net_connect_poll_fn
+ | Description: What net_connect_open_poll calls while it waits on the dial. The
+ |   caller runs one frame of its own from here -- polling the pad, redrawing the
+ |   box -- and answers whether the player has asked to give up.
+ | Author: suinevere
+ | Params: ctx -- the caller's opaque pointer, passed through untouched
+ | Returns: nonzero to abandon the call
+ ----------------------*/
+typedef int (*net_connect_poll_fn)(void *ctx);
 
 /*----------------------
  | net_connect_open / net_connect_transport / net_connect_close
@@ -30,6 +42,27 @@ typedef enum { NET_OK = 0, NET_NO_MODEM, NET_DIAL_FAIL } net_connect_result_t;
  | Author: suinevere
  ----------------------*/
 net_connect_result_t net_connect_open(const char *dial_number);
+
+/*----------------------
+ | net_connect_open_poll
+ | Description: net_connect_open with a way out. The dial is the one step here
+ |   that can hold the machine for half a minute -- the modem is off dialling and
+ |   training, and nothing arrives on the wire until it has an answer -- so this
+ |   is the only step that gives `poll` the frames it needs to see a button. Probe
+ |   and init are each a couple of seconds at worst and are still run blind.
+ |
+ |   A cancelled dial is aborted the way the AT command set says to abort one:
+ |   any character sent to a modem that is dialling ends the call. Then it hangs
+ |   up anyway, so the line is left idle whether or not the modem took the hint.
+ | Author: suinevere
+ | Dependencies: saturn_uart16550.h, modem.h, transport_uart.h
+ | Globals: g_uart, g_transport, g_open
+ | Params: dial_number -- the number to dial; poll -- called between reads while
+ |   the dial is outstanding, may be NULL; ctx -- passed to poll
+ | Returns: NET_OK, NET_NO_MODEM, NET_DIAL_FAIL, or NET_CANCELLED
+ ----------------------*/
+net_connect_result_t net_connect_open_poll(const char *dial_number,
+                                           net_connect_poll_fn poll, void *ctx);
 const cui_transport_t *net_connect_transport(void);
 void net_connect_close(void);
 

@@ -125,6 +125,47 @@ static bool online_cancel_requested(void) {
 }
 
 /*----------------------
+ | DIAL_CANCEL_GRACE
+ | Description: Polled frames at the head of a dial during which the cancel
+ |   gesture is read and thrown away. Powering the modem on goes through the
+ |   SMPC, which reboots the controllers and the keyboard, and for a short window
+ |   after that their reports are stale or garbage -- the same window
+ |   online_settle_input exists to sit out on the other side of the connect. All
+ |   held at once is exactly what an absent peripheral reports, so without this a
+ |   dial would cancel itself on its first frame. ~0.5s.
+ | Author: suinevere
+ ----------------------*/
+#define DIAL_CANCEL_GRACE 30
+
+/*----------------------
+ | DialPoll / online_dial_poll
+ | Description: The frame net_connect_open_poll runs on this file's behalf while
+ |   the modem is off placing the call. It keeps the box on screen -- menu_message
+ |   draws once and the frame has to keep claiming NBG2 or the border blinks out
+ |   -- syncs, and answers whether the player has asked to give up.
+ |
+ |   Without it the dial is a thirty-five second spin inside the UART read with no
+ |   vsync in it, which is why the "L+R = cancel" the box has always offered did
+ |   nothing until the modem itself gave up: the chord was there to be read and
+ |   nothing was reading.
+ | Author: suinevere
+ | Dependencies: menu.h, net/net_connect.h
+ | Globals: N/A
+ | Params: ctx -- the DialPoll carrying the message to keep drawing
+ | Returns: nonzero once the player has asked to abandon the call
+ ----------------------*/
+struct DialPoll { const char *msg; int frames; };
+
+static int online_dial_poll(void *ctx) {
+    DialPoll *d = (DialPoll *) ctx;
+    menu_message("ONLINE", d->msg,
+                 hint("L+R or right click = cancel", "Esc = cancel"));
+    menu_sync();
+    if (d->frames < DIAL_CANCEL_GRACE) { d->frames++; return 0; }
+    return online_cancel_requested() ? 1 : 0;
+}
+
+/*----------------------
  | online_wait_any
  | Description: Blocks until any face button, Start, or a keyboard key is seen.
  |   Used to hold a terminal error screen until the player acknowledges it.
@@ -295,34 +336,44 @@ void ensure_online_typeahead(void) {
 /*----------------------
  | netbin_room
  | Description: The room snapshot the command panel draws. Once multizorkd has
- |   named a room this is the real decode; before that it is a stand-in with all
- |   twelve directions open, because room_model reports every exit as NONE
- |   between being bound and being refreshed, and a rose showing a room with no
- |   way out is a worse lie than one offering directions the server will refuse.
+ |   named a room this is the real decode; before that it is a stand-in, and which
+ |   stand-in depends on why there is no room yet.
  |
- |   Contents and inventory stay empty in both: room_model is in exits-only mode
- |   here, and this build has no business claiming either.
+ |   In the lobby there is no room because the player is not in the game, so the
+ |   rose is closed: twelve directions there are twelve words the login, the room
+ |   list and the waiting room would all refuse, which is the same thing lobby
+ |   mode takes out of the word module beside it. A closed rose is not somewhere
+ |   focus can sit, and command_edit already knows to hand it to the word module.
+ |
+ |   Once past that, a room the decoder has not named yet is drawn all open, on
+ |   the older reasoning that room_model reports every exit as NONE between being
+ |   bound and being refreshed, and a rose showing a room with no way out is a
+ |   worse lie than one offering directions the server will refuse.
+ |
+ |   Contents and inventory stay empty throughout: room_model is in exits-only
+ |   mode here, and this build has no business claiming either.
  | Author: suinevere
- | Dependencies: room_model.h
+ | Dependencies: room_model.h, command_view.h (cv_lobby)
  | Globals: N/A
  | Params: N/A
  | Returns: the snapshot to draw and edit against
  ----------------------*/
 static const RoomModel *netbin_room(void) {
-    static RoomModel all_open;
-    static bool built = false;
+    static RoomModel stand_in;
+    static int built_for = -1;
+    int lobby = cv_lobby();
     if (room_model_has_room()) return room_model_get();
-    if (!built) {
+    if (built_for != lobby) {
         for (int i = 0; i < RM_DIR_N; i++) {
-            all_open.exits[i] = RM_EXIT_OPEN;
-            all_open.dest[i]  = 0;
+            stand_in.exits[i] = (unsigned char) (lobby ? RM_EXIT_NONE : RM_EXIT_OPEN);
+            stand_in.dest[i]  = 0;
         }
-        all_open.room = 0;
-        all_open.nhere = 0;
-        all_open.ncarried = 0;
-        built = true;
+        stand_in.room = 0;
+        stand_in.nhere = 0;
+        stand_in.ncarried = 0;
+        built_for = lobby;
     }
-    return &all_open;
+    return &stand_in;
 }
 #endif
 
@@ -333,6 +384,13 @@ static const RoomModel *netbin_room(void) {
  |   is re-asserted after that build, which is the one CD read on this path.
  |   Dials inside a MenuBacking-scoped image-suppressing window that covers the
  |   whole redial sequence and is dropped before the terminal takes the screen.
+ |   The dial itself runs through net_connect_open_poll, which hands a frame back
+ |   here often enough that the cancel the box offers can actually be seen.
+ |
+ |   A netbin session opens on the on-screen keyboard with the word module cut
+ |   down to the lobby's own vocabulary, and both revert -- to the story's words,
+ |   and to whichever interface Options names -- on the first room id, which is
+ |   the frame this build can know a game has begun on.
  |   The terminal loop services RX into the console, rescans on-screen words for
  |   the typeahead only when output grows, honors the global reboot command and
  |   the soft-reset chord, and disconnects on Esc or a deliberate ~0.75s L+R hold
@@ -360,21 +418,24 @@ void online_mode(void) {
     MenuBacking backing;
     net_connect_result_t rc = NET_DIAL_FAIL;
     for (int attempt = 1; attempt <= ONLINE_DIAL_ATTEMPTS; attempt++) {
-        {
-            char dial[40];
-            snprintf(dial, sizeof(dial), "Dialing %s ... (attempt %d/%d)",
-                     number, attempt, ONLINE_DIAL_ATTEMPTS);
-            menu_message("ONLINE", dial,
-                         hint("L+R or right click = cancel", "Esc = cancel"));
-            // menu_sync, not a bare Synchronize: menu_message draws the box
-            // once and this is the frame it is shown on, so the frame has to
-            // keep claiming NBG2 or the border blinks out under the text.
-            menu_sync();
-        }
+        // Outside the call, not inside a block that ends before it: the poll
+        // keeps redrawing this text for as long as the dial lasts.
+        char dial[40];
+        snprintf(dial, sizeof(dial), "Dialing %s ... (attempt %d/%d)",
+                 number, attempt, ONLINE_DIAL_ATTEMPTS);
+        DialPoll dp = { dial, 0 };
+        // menu_sync, not a bare Synchronize: menu_message draws the box
+        // once and this is the frame it is shown on, so the frame has to
+        // keep claiming NBG2 or the border blinks out under the text.
+        menu_message("ONLINE", dial,
+                     hint("L+R or right click = cancel", "Esc = cancel"));
+        menu_sync();
 
-        rc = net_connect_open(number);
+        rc = net_connect_open_poll(number, online_dial_poll, &dp);
         if (rc == NET_OK) break;
         if (rc == NET_NO_MODEM) break;
+        // Asked for, so there is nothing to report and nothing to retry.
+        if (rc == NET_CANCELLED) { net_connect_close(); return; }
 
         if (attempt < ONLINE_DIAL_ATTEMPTS) {
             menu_message("ONLINE", "No carrier. Retrying...",
@@ -430,7 +491,14 @@ void online_mode(void) {
     int last_scan_lines = -1;
 #ifdef NETBIN
     CommandPanel cpanel; cp_init(&cpanel);
-    g_cmd_mode = g_cmd_iface;
+    /* The keyboard, whatever Options says, because the first thing multizorkd
+       asks for is a username and the panel cannot spell one: it offers words, and
+       a name is not a word any dictionary holds. The saved preference is honoured
+       the moment the game begins -- see the room-id handler -- unless the player
+       has already chosen for themselves by then. */
+    cv_set_lobby(1);
+    g_cmd_mode = IFACE_KEYBOARD;
+    bool iface_by_hand = false;
     mode_toggle_reset(); controller_pointer_flush();
     /* The rose can show this game's real exits, but only the exits: the story
        is the one in .rodata and the game is on the server, so its room contents
@@ -493,6 +561,22 @@ void online_mode(void) {
                and the embedded story knows what that object connects to. */
             if (room_model_has_room()) map_model_enter(room_model_get());
             ts.room_id_fresh = 0;
+            /* And it is also how this build learns the game has started at all.
+               multizorkd sends the frame from the Z-machine's read opcode and
+               nowhere else, so an id arriving means a story is now asking this
+               player for a command -- which is exactly when the story's own
+               vocabulary starts being worth offering, and when the interface the
+               player asked for in Options stops being the wrong one. Their own
+               swap outranks the preference; the half-built line crosses with
+               them, as it does on a swap they made themselves. */
+            if (cv_lobby()) {
+                cv_set_lobby(0);
+                if (!iface_by_hand && g_cmd_mode != g_cmd_iface) {
+                    if (g_cmd_iface == IFACE_PANEL) cp_load_line(&cpanel, k.input);
+                    else                            keyboard_load_line(&k, cpanel.line);
+                    g_cmd_mode = g_cmd_iface;
+                }
+            }
         }
 #endif
         SaturnKeyEvent ke = saturn_keyboard_poll();
@@ -570,6 +654,7 @@ void online_mode(void) {
            local game. */
         if (g_kbd_visible && (mode_combo_fired() || panel_swap)) {
             panel_swap = false;
+            iface_by_hand = true;
             if (g_cmd_mode == IFACE_PANEL) {
                 keyboard_load_line(&k, cpanel.line);
                 g_cmd_mode = IFACE_KEYBOARD;

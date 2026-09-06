@@ -141,6 +141,44 @@ static const char *CV_VERB_CORE[] = {
 #define CV_VERB_CORE_N ((int) (sizeof(CV_VERB_CORE) / sizeof(CV_VERB_CORE[0])))
 
 /*----------------------
+ | CV_LOBBY_WORDS / g_cv_lobby
+ | Description: Everything a multizork session accepts before its game starts,
+ |   and whether that is what the word module is currently offering. Read off
+ |   multizorkd.c's four pre-game input handlers rather than guessed at, because
+ |   a word this list offers that they do not take is a pick that spends a turn
+ |   and answers "Wrong choice or room name":
+ |
+ |     inpfn_waiting_for_players  "go" starts the game, "quit" closes the room
+ |     inpfn_player_waiting       "quit" leaves it
+ |     inpfn_new_room_privacy     "yes" or "no" lists the room or hides it
+ |     inpfn_lobby                "n" opens a new room, "q" leaves,
+ |                                a number picks a row
+ |
+ |   Both quits are here because they are not the same word: the lobby matches
+ |   "q" alone and the waiting rooms match "quit" alone, so either one typed at
+ |   the other screen does nothing. Numbers run to twenty-five because that is
+ |   the most the lobby can print -- LOBBY_MAX_ROWS rows numbered from two, over
+ |   the "<new room>" that is always one -- and the whole point of listing them
+ |   is that a two-digit row cannot be reached by picking twice: a pick here is
+ |   the whole command, and two picks would send "1 2".
+ |
+ |   Six words then twenty-five numbers, so the words fill the first three rows
+ |   of the two-column module and the numbers start on a row of their own.
+ | Author: suinevere
+ ----------------------*/
+static const char *CV_LOBBY_WORDS[] = {
+    "go", "quit", "yes", "no", "n", "q",
+    "1",  "2",  "3",  "4",  "5",  "6",  "7",  "8",  "9",  "10", "11", "12", "13",
+    "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"
+};
+#define CV_LOBBY_WORDS_N ((int) (sizeof(CV_LOBBY_WORDS) / sizeof(CV_LOBBY_WORDS[0])))
+
+static int g_cv_lobby = 0;
+
+void cv_set_lobby(int on) { g_cv_lobby = on ? 1 : 0; }
+int  cv_lobby(void)       { return g_cv_lobby; }
+
+/*----------------------
  | CV_CAND_MAX / CV_PRED_MAX
  | Description: The cap on how many candidate words a slot's sourcing pass
  |   collects before ordering and paging. It has to hold a whole story's nouns,
@@ -603,17 +641,22 @@ static void cv_truncate_all(const char **cand, int n) {
  ----------------------*/
 static int cv_cache_stale(const CommandPanel &p, TrieNode *root) {
     static int   last_slot = -1, last_diff = -1, last_gen = -1, last_len = -1;
+    static int   last_lobby = -1;
     static TrieNode *last_root = 0;
     static char  last_line[CP_LINE_MAX];
     int gen = typeahead_screen_gen();
+    /* The lobby flag is part of the key for the same reason the trie pointer is:
+       it decides which list gets sourced, and the frame the game begins on
+       changes nothing else the key is watching. */
     int i, same = (p.slot == last_slot && g_difficulty == last_diff && gen == last_gen
-                   && root == last_root && p.line_len == last_len);
+                   && root == last_root && p.line_len == last_len
+                   && g_cv_lobby == last_lobby);
     if (same)
         for (i = 0; i < p.line_len; i++)
             if (p.line[i] != last_line[i]) { same = 0; break; }
     if (same) return 0;
     last_slot = p.slot; last_diff = g_difficulty; last_gen = gen;
-    last_root = root;   last_len = p.line_len;
+    last_root = root;   last_len = p.line_len;  last_lobby = g_cv_lobby;
     for (i = 0; i < p.line_len && i < CP_LINE_MAX; i++) last_line[i] = p.line[i];
     return 1;
 }
@@ -639,7 +682,18 @@ static int cv_refill_words(CommandPanel &p, TrieNode *root, CommandWords &w) {
         int core_n = 0;
         DictionaryWord *prev = 0;
         g_cv_ncand = 0;
-        if (p.slot == CP_SLOT_VERB) {
+        /* Whole list, not a head the story's words rank below: before the game
+           exists there is no story vocabulary that could work, and every entry
+           is protected so cv_reorder leaves the wanted-first order alone at all
+           three difficulties. There is only ever the verb slot here -- picking
+           in lobby mode submits rather than opening a sentence -- so no other
+           branch can be reached. */
+        if (g_cv_lobby) {
+            int i;
+            for (i = 0; i < CV_LOBBY_WORDS_N; i++)
+                g_cv_ncand = cv_add_cand(g_cv_cand, g_cv_ncand, CV_LOBBY_WORDS[i]);
+            core_n = g_cv_ncand;
+        } else if (p.slot == CP_SLOT_VERB) {
             g_cv_ncand = cv_build_verb_cands(root, g_cv_cand, &core_n);
         } else if (p.slot == CP_SLOT_NOUN || p.slot == CP_SLOT_NOUN2) {
             prev = cv_last_word(p, root);
@@ -1216,6 +1270,15 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
     char submit[CP_WORD_MAX + 24];
     int wants_prep;
     if (p.cursor < 0 || p.cursor >= w.n || w.word[p.cursor] == 0) return;
+    /* A lobby word is the whole answer, so it goes as it stands and goes now.
+       Neither of the two steps skipped has anything to say here: the grammar
+       lookup would consult a trie built from a story this prompt is not being
+       read by, and the spelling recovery would search a room the player is not
+       standing in. */
+    if (g_cv_lobby) {
+        cp_pick_whole(&p, w.word[p.cursor]);
+        return;
+    }
     wants_prep = cv_verb_wants_prep(p, root, w.word[p.cursor]);
     cv_submit_form(w.word[p.cursor], m, submit, (int) sizeof submit);
     cp_pick(&p, submit, wants_prep);

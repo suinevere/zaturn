@@ -93,7 +93,7 @@ jobs:
         run: |
           set -e
           python3 - <<'PY'
-          import hashlib, sys
+          import hashlib, json, sys
           sys.path.insert(0, "../..")
           sys.path.insert(0, "../../tools")
           from saturn_translate.iso import SaturnImage
@@ -110,6 +110,25 @@ jobs:
               got = hashlib.sha256(data).hexdigest()
               assert got == digest, f"{name} sha256 {got} on the disc, expected {digest}"
           print(f"/BG: {len(BG_MANIFEST)} archives present and byte-identical on the built disc")
+
+          # And the generated art, which arrives by the other route entirely:
+          # committed under saturn/cd/data/BG and baked into the base ISO, where
+          # xorriso's -map merges the staged originals in beside it rather than
+          # replacing the directory. Same check for the same reason -- the
+          # offsets in frames.json were measured in these exact bytes.
+          record = json.load(open("../../tools/assets/art/frames.json"))
+          gen = record["archives"]
+          missing = [a["stem"] for a in gen if f"/BG/{a['stem']}.CGL" not in names]
+          assert not missing, f"/BG is missing {missing} -- those rooms would show no picture"
+          for a in gen:
+              data = img.extract(f"/BG/{a['stem']}.CGL")
+              assert len(data) == a["bytes"], (
+                  f"{a['stem']}.CGL is {len(data)} bytes on the disc, expected {a['bytes']}")
+              got = hashlib.sha256(data).hexdigest()
+              assert got == a["sha256"], (
+                  f"{a['stem']}.CGL sha256 {got} on the disc, expected {a['sha256']}")
+          print(f"/BG: {len(gen)} generated archives present and byte-identical, "
+                f"carrying {len(record['frames'])} pictures")
           PY
 
       - name: Check the disc's story manifest covers every injected game

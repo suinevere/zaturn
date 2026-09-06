@@ -5,3 +5,4 @@ saturn/compile-netbin.bat text eol=lf
 tools/assets/pvms.bat     text eol=lf
 
 saturn/cd/data/Z3/GAME.INF binary
+saturn/cd/data/BG/*.CGL   binary

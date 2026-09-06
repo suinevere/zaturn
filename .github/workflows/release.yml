@@ -107,6 +107,42 @@ jobs:
           set -e
           readelf -l "saturn/BuildDrop/Zaturn (USA) (Netlink Edition).elf" | grep -q "0x06004000"
 
+      # The generated room backgrounds are committed under saturn/cd/data/BG
+      # rather than built here -- see tools/gen_art_archive.py for why nothing
+      # in this workflow could rebuild them -- so the risk they carry is not a
+      # failed build but a silent absence: room_art.cxx opens /BG/<STEM>.CGL by
+      # literal path, and a disc without them boots fine and shows no picture in
+      # any of the 1,931 rooms. Checked against the .bin because that is the
+      # file the release ships, and against frames.json because the runtime
+      # reaches a frame by measured offset -- an archive that is merely present
+      # but not the one those offsets were measured in decompresses garbage.
+      - name: Check the room backgrounds reached the disc
+        run: |
+          set -e
+          python3 - <<'PY'
+          import hashlib, json, sys
+          sys.path.insert(0, ".")
+          from saturn_translate.iso import SaturnImage
+
+          record = json.load(open("tools/assets/art/frames.json"))
+          archives = record["archives"]
+          disc = "Zaturn (USA) (Netlink Edition)"
+          img = SaturnImage.from_file(f"saturn/BuildDrop/{disc}.bin")
+          names = {e.path for e in img.list_files()}
+          missing = [a["stem"] for a in archives
+                     if f"/BG/{a['stem']}.CGL" not in names]
+          assert not missing, f"/BG is missing {missing} -- those rooms would show no picture"
+          for a in archives:
+              data = img.extract(f"/BG/{a['stem']}.CGL")
+              assert len(data) == a["bytes"], (
+                  f"{a['stem']}.CGL is {len(data)} bytes on the disc, expected {a['bytes']}")
+              got = hashlib.sha256(data).hexdigest()
+              assert got == a["sha256"], (
+                  f"{a['stem']}.CGL sha256 {got} on the disc, expected {a['sha256']}")
+          print(f"/BG: {len(archives)} generated archives present and byte-identical, "
+                f"carrying {len(record['frames'])} pictures")
+          PY
+
       - name: Package release zip
         id: package
         run: |

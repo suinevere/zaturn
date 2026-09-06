@@ -14,7 +14,18 @@ cd/data/BOOTSND.MAP
 cd/data/SDDRVS.DAT
 cd/data/SDDRVS.TSK
 cd/data/MSC/*.PCM
+# The room-background archives. The originals are the Zork I (Japan) disc's
+# assets, staged by tools/assets/bg.bat and injected post-build, so they are
+# never committed and never enter the base ISO. GEN*.CGL are the opposite on
+# every count: they are our own generated pictures, they cannot be rebuilt
+# without both Pillow and the staged originals to grade against, and taking
+# ~25 minutes on four workers is not something a release build should spend --
+# so they are committed and the ordinary build bakes them into the ISO. The
+# record they are checked against is tools/assets/art/frames.json, which carries
+# a size and SHA-256 per archive; saturn/tests/test_art_archives.py holds them
+# to it, and both workflows check the built disc itself.
 cd/data/BG/*.CGL
+!cd/data/BG/GEN*.CGL
 cd/data/BG/OITEM.CZ
 build.log
 

@@ -1,6 +1,6 @@
 ---
 name: art-supply-restored-handoff
-description: The tracked art manifest had lost 1,867 of its 1,868 plates to a checkout and nobody had noticed because only the derived frames.json was ever committed; restored, built into 171 archives, and the whole supply is now on origin/main with 586 tests passing and Lurking Horror's heap floor clear at 41,752 bytes. The open question is the CI pipeline, which cannot build any of it and reports success anyway.
+description: The tracked art manifest had lost 1,867 of its 1,868 plates to a checkout and nobody had noticed because only the derived frames.json was ever committed; restored, built into 171 archives, and the whole supply is now on origin/main with 586 tests passing and Lurking Horror's heap floor clear at 41,752 bytes. The CI pipeline could not build any of it and reported success anyway; that is now closed by committing the archives rather than building them (see the CLOSED section).
 metadata:
   type: project
 ---
@@ -79,29 +79,36 @@ Last full run on `28bfb8e` after the owner's `compile.bat`: **586 passed, 8
 skipped, 0 failed.** Lurking Horror clears its floor -- heap 171,456,
 `LURKING.Z3` 129,704, **41,752 free against a 16,384 floor**.
 
-## Open, and the reason this note exists
+## CLOSED: the CI pipeline shipped a disc with no pictures
 
-**The CI pipeline cannot build the generated art and reports success anyway.**
-All 1,931 room records across the 31 games name a picture of index >= 75, so
-every room on the disc now depends on a `GEN*.CGL`. `tools/assets/bg.bat` does
-call `gen_art_archive.py` in the right order, but:
+**Was:** all 1,931 room records name a picture of index >= 75, so every room
+depends on a `GEN*.CGL`; neither workflow installed PIL or numpy, `bg.bat` ran
+`gen_art_archive.py` softly (`|| echo "WARNING: generated art not built"`), and
+the disc check iterated `BG_MANIFEST` -- the 11 originals plus `OITEM.CZ`, no
+`GEN` among them. A CI disc missing all 171 archives passed every check it had.
+Worse than the note knew: `release.yml`, the workflow that publishes, never ran
+`bg.bat` at all, so the released disc carried no pictures of either kind.
 
-1. `gen_art_archive.py` imports PIL and numpy and **neither workflow installs any
-   Python package** -- no `setup-python`, no `pip`, and `full-image.yml`'s host
-   tools are `xorriso wget unzip zip curl sox`.
-2. `bg.bat` runs it as `|| echo "WARNING: generated art not built"`, deliberately
-   soft. That reasoning was right when generated art was one bridge plate and is
-   wrong now that it is the entire supply.
-3. The "Check the room backgrounds reached the disc" step iterates `BG_MANIFEST`
-   -- the 11 original archives plus `OITEM.CZ`, no `GEN` among them. Neither
-   workflow mentions `GEN`, `frames.json`, `gen_art`, `Pillow` or `numpy`.
+**Fixed by not building them there.** The owner's call was to commit the
+archives, and the third option on the list -- install Pillow, budget ~100 minutes
+on a 2-core runner -- was never really available to `release.yml` anyway:
+styling grades each plate against the ORIGINAL frame beside it, so a rebuild
+needs `bg.bat`'s staged archives, and those come off a disc a public release
+workflow has no business downloading. So `saturn/cd/data/BG/GEN*.CGL` is tracked
+now (`saturn/.gitignore` negates the glob for `GEN` alone; the originals stay
+out, being that disc's assets), the ordinary build bakes them into the base ISO,
+and both workflows verify the built disc against the size and SHA-256 already in
+`frames.json` -- stdlib only, no imaging stack. `saturn/tests/test_art_archives.py`
+holds the committed bytes to the same record. Verified by running the release
+check against a real built `.bin`: 171 archives present and byte-identical,
+carrying 1,868 pictures.
 
-So a CI disc missing all 171 archives passes every check it has, and every room
-would show no picture. Three fixes were proposed and **none applied**, because it
-is a release-pipeline scope call for the owner: declare and install Pillow/numpy;
-assert every archive named in `frames.json` is at `/BG/<STEM>.CGL` with the
-SHA-256 already recorded there; and budget the time, since `default_jobs()` on a
-2--4 core runner is one worker and ~100 minutes.
+**What that costs, and the one thing to watch.** +38 MB to a pack already at
+454 MB, and another ~38 MB on every regeneration, permanently. Regenerating is
+still a local job needing Pillow, numpy, the staged originals and ~25 minutes on
+four workers. If the art churns often enough for that to hurt, the alternative
+considered and not taken was publishing the archives as a pinned release asset
+(`art-vN`) for CI to download, which keeps them out of the pack entirely.
 
 **Two smaller things left open:**
 

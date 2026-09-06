@@ -107,6 +107,34 @@ jobs:
           set -e
           readelf -l "saturn/BuildDrop/Zaturn (USA) (Netlink Edition).elf" | grep -q "0x06004000"
 
+      # The SCSP probe, linked the way the client is linked for PlanetWeb so it
+      # can be served and opened from the same page. Every other probe in this
+      # repo is a CD image, and a CD boot arrives on a chip nobody else has
+      # touched -- which is exactly the condition that does not hold when the
+      # browser hands the machine over, and is why three sound faults in a row
+      # were chased in the wrong layer. Built after the disc is asserted, so a
+      # probe failure can never be mistaken for a failure of the thing shipping.
+      - name: Build the SCSP probe netbin
+        working-directory: tools/scspfx
+        run: |
+          set -e
+          export SRL_INSTALL_ROOT=../../SaturnRingLib
+          export PATH="$GITHUB_WORKSPACE/SaturnRingLib/Compiler/linux/sh2eb-elf/bin:$PATH"
+          # cd/ is gitignored for this project, so a CI checkout has none. The
+          # boot text files inside it are created by shared.mk when they are
+          # missing (shared.mk:259-261); the directory they go in is not.
+          mkdir -p cd/data
+          make clean NETBIN=1
+          make all NETBIN=1 LDFILE=./sgl-netbin.linker
+          # Flattened here rather than by a post.makefile: SaturnRingLib indents
+          # its `include ./post.makefile` with a tab, so a project that carries
+          # one without also carrying a pre.makefile makes make run the include
+          # as a shell command and the build dies in pre_build with a 127.
+          sh2eb-elf-objcopy -O binary BuildDrop/scspfx.elf BuildDrop/scspfx.netbin
+          sz=$(stat -c%s BuildDrop/scspfx.netbin)
+          echo "scspfx.netbin: $sz bytes"
+          test "$sz" -gt 0
+
       - name: Package release zip
         id: package
         run: |
@@ -188,6 +216,16 @@ jobs:
           name: ${{ steps.kit.outputs.artifact_name }}
           path: ${{ steps.kit.outputs.stage_dir }}
 
+      # Also on manual runs, so the probe can be pulled and served without
+      # cutting a tag for it -- it is a diagnostic, and needing a release to get
+      # one is what makes people stop reaching for it.
+      - name: Upload SCSP probe netbin as workflow artifact (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scspfx.netbin
+          path: tools/scspfx/BuildDrop/scspfx.netbin
+
       # Tag runs: attach to a release, creating it if missing.
       - name: Attach to GitHub release (tag runs)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -204,6 +242,7 @@ jobs:
           gh release upload "$TAG" "${{ steps.package.outputs.zip_path }}" --clobber
           gh release upload "$TAG" "${{ steps.kit.outputs.zip_path }}" --clobber
           gh release upload "$TAG" "saturn/BuildDrop/zaturn.netbin" --clobber
+          gh release upload "$TAG" "tools/scspfx/BuildDrop/scspfx.netbin" --clobber
 
       # Tells suin-uk a new pair is available. Deliberately last: a dispatch fired
       # before the upload finished would send sync-zaturn.yml after an asset that is

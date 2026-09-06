@@ -29,6 +29,7 @@
 
 static volatile unsigned short *g_regs;
 static volatile signed char    *g_wave;
+static volatile unsigned short *g_wave16;
 static unsigned long            g_wave_sa;
 static int                      g_wave_len[SCSP_WAVES];
 static unsigned long            g_wave_off[SCSP_WAVES];
@@ -57,6 +58,7 @@ static void scsp_settle(void) {
 void scsp_bind(volatile unsigned short *regs, volatile signed char *wave_ram, unsigned long wave_sa) {
     g_regs = regs;
     g_wave = wave_ram;
+    g_wave16 = (volatile unsigned short *)(void *) wave_ram;
     g_wave_sa = wave_sa;
     g_noise_start = 0;
     unsigned long off = 0;
@@ -79,11 +81,58 @@ void scsp_enable_output(void) {
     ctrl[0] = (unsigned short)((ctrl[0] & 0xFFF0u) | 0x000Fu);
 }
 
+/*----------------------
+ | wave_poke
+ | Description: Copies `len` sample bytes into sound RAM at byte offset `off`,
+ |   writing whole 16-bit words.
+ |
+ |   The word is the point. Sound RAM is behind the SCSP on the Saturn's B-bus,
+ |   which is sixteen bits wide, and a byte write there is not narrowed for you --
+ |   it is the access the bus has no way to express. This copy was a byte loop
+ |   through a `signed char *` for as long as the synth has existed, and every
+ |   time anyone called that synth working it was under an emulator, where the
+ |   write is simply performed. On the machine it comes back as a waveform table
+ |   that is part right and part whatever was there before, which is not silence
+ |   and is not music: it is a run of bleeps, and a different run of them, and
+ |   sometimes nothing at all -- which is what the netbin does over NetLink.
+ |
+ |   Every caller is word-aligned and even-length (the tables are 256 bytes at
+ |   multiples of 256, the noise 4096), so the odd-end paths below are never
+ |   taken today. They are here because the alternative is a copy that is correct
+ |   only for its current callers and silently wrong for the next one, and the
+ |   failure it would produce is this same one again.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_wave16
+ | Params: off -- byte offset into sound RAM; data -- samples; len -- how many
+ | Returns: N/A
+ ----------------------*/
+static void wave_poke(unsigned long off, const signed char *data, int len) {
+    int i = 0;
+    if ((off & 1u) != 0u) {
+        unsigned long w = off >> 1;
+        g_wave16[w] = (unsigned short)((g_wave16[w] & 0xFF00u)
+                                       | (unsigned char) data[0]);
+        off++;
+        i = 1;
+    }
+    for (; i + 1 < len; i += 2, off += 2)
+        g_wave16[off >> 1] = (unsigned short)
+            (((unsigned int)(unsigned char) data[i] << 8)
+             | (unsigned char) data[i + 1]);
+    if (i < len) {
+        unsigned long w = off >> 1;
+        g_wave16[w] = (unsigned short)
+            (((unsigned int)(unsigned char) data[i] << 8)
+             | (g_wave16[w] & 0x00FFu));
+    }
+}
+
 void scsp_upload_wave(int index, const signed char *data, int len) {
     if (index < 0 || index >= SCSP_WAVES) return;
     int room = (index == SCSP_NOISE_WAVE) ? SCSP_NOISE_LEN : SCSP_WAVE_MAX;
     if (len > room) len = room;
-    for (int i = 0; i < len; i++) g_wave[g_wave_off[index] + (unsigned long) i] = data[i];
+    wave_poke(g_wave_off[index], data, len);
     g_wave_len[index] = len;
 }
 

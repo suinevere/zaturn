@@ -107,6 +107,13 @@ static volatile unsigned short *slot_regs(int slot) {
  | Description: Fills the sound-RAM tone buffer with a square wave. Written by
  |   the CPU rather than by DMA: sound RAM is directly addressable and this runs
  |   once, so there is nothing to gain and a DMA restriction to get wrong.
+ |
+ |   Written a word at a time, because sound RAM is behind the SCSP on the
+ |   sixteen-bit B-bus and a byte write there is an access the bus cannot
+ |   express. This was a byte loop, which is fine under an emulator and is what
+ |   made the same code produce bleeps on one run of real hardware and silence on
+ |   the next -- a probe that writes its tone the way the engine used to would
+ |   inherit the fault it is supposed to be measuring around.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -114,8 +121,12 @@ static volatile unsigned short *slot_regs(int slot) {
  | Returns: N/A
  ----------------------*/
 static void write_tone(void) {
-    for (int i = 0; i < TONE_LEN; i++)
-        TONE_RAM[i] = (signed char) ((i % TONE_PERIOD) < (TONE_PERIOD / 2) ? 100 : -100);
+    volatile unsigned short *ram = (volatile unsigned short *) TONE_RAM;
+    for (int i = 0; i < TONE_LEN; i += 2) {
+        unsigned int hi = ((i     % TONE_PERIOD) < (TONE_PERIOD / 2)) ? 100u : (unsigned int)(-100 & 0xFF);
+        unsigned int lo = (((i + 1) % TONE_PERIOD) < (TONE_PERIOD / 2)) ? 100u : (unsigned int)(-100 & 0xFF);
+        ram[i >> 1] = (unsigned short) ((hi << 8) | lo);
+    }
 }
 
 /*----------------------

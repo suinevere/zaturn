@@ -18,10 +18,20 @@ extern "C" {
 
 /*----------------------
  | SCSP_VOICES / SCSP_SLOT_FIRST
- | Description: The synth owns four SCSP slots starting at 28. The top of the
- |   file is deliberate: the SGL sound driver allocates from the bottom, and a
- |   probe confirmed it leaves slot 31 untouched across three seconds of
- |   playback, which is what lets this coexist with the CD build's driver.
+ | Description: The synth owns four SCSP slots starting at 28.
+ |
+ |   This used to say the driver allocates from the bottom and that a probe had
+ |   confirmed slot 31. Only 31 was ever confirmed; 28, 29 and 30 were inferred
+ |   from the allocation story, and the story was never checked. tools/scspfx
+ |   checks it now -- it keys every one of the thirty-two in turn with the driver
+ |   loaded and asks a listener -- and the answer is that **all thirty-two
+ |   sound**. 28-31 is fine, and so would any other four have been.
+ |
+ |   With one limit worth keeping in view: the driver was loaded, not playing.
+ |   The CD build's PCM sound effects go through SRL's slPCMOn, which is this
+ |   same driver, so a sweep taken while an effect is sounding could still come
+ |   back differently. If music ever breaks up when an effect plays, that sweep
+ |   is the first thing to run and this is the assumption it would break.
  | Author: suinevere
  ----------------------*/
 #define SCSP_VOICES     4

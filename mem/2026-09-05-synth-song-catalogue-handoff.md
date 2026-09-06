@@ -5,6 +5,12 @@ metadata:
   type: project
 ---
 
+**STALE ON THE NUMBERS IN THIS PARAGRAPH ONLY**, and on the two open items the
+next note closes; superseded there by [[lurking-sound-budget-handoff]], which
+carries the figures measured after the rebase onto the controller work. Nothing
+else in this note has changed: the catalogue, the mapping, the disc file, the
+song bank and the Sound page are all as described.
+
 Branch `synth-music`, ahead of `origin/main`. Both Saturn targets link: netbin
 **265,312 of 307,200**, CD heap **147,936** with **1,848 bytes** spare over the
 floor the largest story needs. All 312 Python tests pass except one pre-existing

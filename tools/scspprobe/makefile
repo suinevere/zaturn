@@ -21,7 +21,8 @@ BUILD_DROP = ./BuildDrop
 SRL_INSTALL_ROOT ?= ../../SaturnRingLib
 # Listed rather than found: `find` returns nothing under git-bash here.
 SOURCES = src/main.cxx src/synth_target.cxx \
-          src/scsp.c src/synth.c src/synth_waves.c src/tracker.c src/music_synth_data.c
+          src/scsp.c src/synth.c src/synth_waves.c src/tracker.c src/music_synth_data.c \
+          src/song_bank.c
 SRL_CUSTOM_CCFLAGS += -DNETBIN -Isrc
 SDK_ROOT = $(SRL_INSTALL_ROOT)/saturnringlib
 include $(SDK_ROOT)/shared.mk

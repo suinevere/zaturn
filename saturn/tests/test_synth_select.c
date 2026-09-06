@@ -167,10 +167,35 @@ static void test_resuming_a_stopped_synth_stays_stopped(void) {
     for (int v = 0; v < SCSP_VOICES; v++) assert(!KEYED_ON(v));
 }
 
+static void test_cut_silences_without_waiting_for_the_release(void) {
+    /* "is there anyway in menu to quickly silence the moment you go off the
+       track instead of fades." synth_stop lets the release run, which is about
+       90 ms and right for a note ending; stepping off a track in a list wants
+       the track gone. scsp_key_off_now writes the fastest release the field has
+       into the slot before the key-off, so what the chip does next is silence
+       rather than a fade -- checked here as the register, since a host cannot
+       hear it. */
+    bind_fresh();
+    if (synth_song_count() < 1) return;
+    synth_start_song(0);
+    for (int i = 0; i < 40; i++) synth_tick();
+    int sounding = 0;
+    for (int v = 0; v < SCSP_VOICES; v++) if (KEYED_ON(v)) sounding++;
+    assert(sounding > 0);
+
+    synth_cut();
+    for (int v = 0; v < SCSP_VOICES; v++) {
+        assert(!KEYED_ON(v));
+        assert((SLOT_WORD(v, 0x0A) & 0x1F) == 0x1F);   /* fastest release */
+    }
+    assert(!synth_playing());
+}
+
 int main(void) {
     test_start_uses_the_default();
     test_a_different_song_replaces_the_one_playing();
     test_switching_tune_does_not_leave_the_old_notes_holding();
+    test_cut_silences_without_waiting_for_the_release();
     test_asking_for_the_playing_song_again_does_not_restart_it();
     test_a_track_number_picks_a_tune_and_zero_stops();
     test_nothing_the_synth_plays_is_short();

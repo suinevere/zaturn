@@ -104,6 +104,23 @@ def render(cells, speed, frac, ch_wave, seconds):
                 continue
             index = note - 2
             semi, octv = index % 12, index // 12 - 2
+            # A pitched voice already sounding is NOT re-struck: scsp_key_on
+            # clears KYONB and sets it again without a KYONEX between, so the
+            # chip sees no transition and the new pitch takes effect where the
+            # note stands. That is a hammer-on, and it is what the NES original
+            # of this catalogue does to ornament a held note -- measured on the
+            # rip at 13.6 s, the lead moves 500.2 to 458.5 Hz and back with the
+            # level flat to within a percent across the move.
+            #
+            # The model used to restart the phase and the envelope on every
+            # note, so it re-attacked where the chip does not: it agreed with
+            # the chip about a fault they did not share, in the other
+            # direction from the release. Percussion is exempt, because there
+            # scsp_key_on does issue the key-off and the settle, deliberately.
+            held = (wave_of[ch] != mid2pat.WAVE_NOISE
+                    and wv >> 4 != mid2pat.WAVE_NOISE
+                    and amp[ch] > 0.0 and env[ch] > 0.0005
+                    and not releasing[ch])
             wave_of[ch] = wv >> 4
             vol = wv & 0x0F
             # DISDL is three bits in roughly 6 dB steps; 7 is full output.
@@ -111,6 +128,8 @@ def render(cells, speed, frac, ch_wave, seconds):
             # Table samples per output sample. The engine's OCT 0 semitone 0 is
             # one table sample per output sample whatever the table's length.
             step[ch] = 2.0 ** (semi / 12.0 + octv)
+            if held:
+                continue                    # pitch moved, envelope carries on
             env[ch] = 1.0
             releasing[ch] = False
             if wave_of[ch] == mid2pat.WAVE_NOISE:

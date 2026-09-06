@@ -86,7 +86,7 @@ extern "C" {
  | Author: suinevere
  ----------------------*/
 #ifdef NETBIN
-#define MUSIC_SYNTH_CELLS    19968
+#define MUSIC_SYNTH_CELLS    19904
 #define MUSIC_SYNTH_ORDER    569
 #else
 #define MUSIC_SYNTH_CELLS    1088
@@ -105,7 +105,7 @@ extern "C" {
  |   disc tune reads pairs that are not there.
  | Author: suinevere
  ----------------------*/
-#define MUSIC_SYNTH_PAIRS    180
+#define MUSIC_SYNTH_PAIRS    182
 
 /*----------------------
  | MUSIC_SYNTH_DEFAULT

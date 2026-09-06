@@ -190,6 +190,15 @@ void synth_stop(void) {
     release_voices();
 }
 
+void synth_cut(void) {
+    tracker_stop();
+    g_paused = 0;
+    for (int v = 0; v < SCSP_VOICES; v++) {
+        scsp_key_off_now(v);
+        g_voice_on[v] = 0;
+    }
+}
+
 void synth_pause(void) {
     if (g_paused) return;
     g_paused = 1;

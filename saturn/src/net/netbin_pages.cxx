@@ -1353,7 +1353,12 @@ static void sound_options_page(void) {
             sidx = menu_list_step(sidx, n, left, right);
             // Only an actual press plays. Merely arriving on this row must not
             // restart the tune the player came in listening to.
-            if (left || right || ok) { synth_start_song(sidx); previewed = true; }
+            // Cut and not fade -- see the same call on the disc's Sound page.
+            if (left || right || ok) {
+                synth_cut();
+                synth_start_song(sidx);
+                previewed = true;
+            }
         }
 
         menu_clear();

@@ -38,6 +38,20 @@ SET "SRL_INSTALL_ROOT=../../SaturnRingLib"
 CALL "%~dp0drums-emit.bat"
 IF ERRORLEVEL 1 GOTO :eof
 
+REM Regenerate the catalogue before copying it. The probe links
+REM music_synth_data.c, and that file is only rewritten when mid2pat is run --
+REM so editing songs.json, a drum tablature or the converter and then coming
+REM straight here builds the tune as it was, and the disc sounds like the last
+REM change rather than this one. That happened: a level change was reported
+REM twice in identical words because the second listen was to a disc built four
+REM minutes before the change landed. Cheap to be sure.
+python "%~dp0..\gen_synth_moods.py"
+IF ERRORLEVEL 1 GOTO :eof
+python "%~dp0mid2pat.py" --manifest "%~dp0music\songs.json" ^
+       --out "%REPO%\saturn\src\sound\music_synth_data.c" ^
+       --pat "%REPO%\saturn\cd\data\BG\MUSIC.PAT"
+IF ERRORLEVEL 1 GOTO :eof
+
 REM Turn the id into the index the catalogue uses, and fail here rather than
 REM after a thirty-second build if it names nothing.
 SET "SONG=%~1"

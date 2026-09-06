@@ -264,6 +264,14 @@ void scsp_key_off(int voice) {
     s[0x00 / 2] = (unsigned short)(s[0x00 / 2] | (1u << 12));
 }
 
+void scsp_key_off_now(int voice) {
+    if (voice < 0 || voice >= SCSP_VOICES) return;
+    volatile unsigned short *s = SLOT(voice);
+    s[0x0A / 2] = (unsigned short)((s[0x0A / 2] & ~0x1Fu) | 0x1Fu);
+    s[0x00 / 2] = (unsigned short)(s[0x00 / 2] & ~(1u << 11));
+    s[0x00 / 2] = (unsigned short)(s[0x00 / 2] | (1u << 12));
+}
+
 void scsp_set_voice_level(int voice, int level) {
     if (voice < 0 || voice >= SCSP_VOICES) return;
     SLOT(voice)[0x16 / 2] = (unsigned short)((level & 7) << 13);

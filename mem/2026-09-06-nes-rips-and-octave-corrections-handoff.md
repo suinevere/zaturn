@@ -1,11 +1,11 @@
 ---
 name: nes-rips-and-octave-corrections-handoff
-description: The Shadowgate NES soundtrack arrived as fourteen rips, so every tune in the catalogue could finally be matched to its own original by measurement rather than by filename -- which renamed three, found one piece sequenced twice and one MIDI that matches nothing -- and then turned on the voicing itself, where every constant this synth ships had been swept against the entryway theme alone: seven tunes agree with their original, four do not, and three of those were a fan sequence writing one voice an octave out.
+description: The Shadowgate NES soundtrack arrived as fourteen recordings, which turned the whole catalogue from guesswork into measurement -- every tune matched to its own original by correlating notes, three names corrected, one piece found sequenced twice and one MIDI matching nothing -- and then the owner started listening on the chip, which found eleven more faults across the converter, the envelope, the mix and the Sound page. Read the orientation below before the sections; they are in the order they were found, not the order they matter.
 metadata:
   type: project
 ---
 
-Branch `synth-music`, fifteen commits ahead of `origin/main` at `d44614d`
+Branch `synth-music`, thirty-nine commits ahead of `origin/main` at `6181d29`
 (`d66e5d8` the matching and the octave corrections, `2e8902f` the re-measured
 mood map, `8978fb8` the part separation, `3c6fa85` the release envelope and
 lake's third voice, `027ed33` per-tune levels, `e65bfa6` the held notes,
@@ -34,6 +34,35 @@ note for the hardware fault and its four wrong theories, for the LWRAM sound
 route and for both budget floors. Nothing here changes any of that. Supersedes
 [[synth-song-catalogue-handoff]] on the tunes' **names** and on its open item 3
 (the three unmatched tunes), and nothing else in it.
+
+## Read this first
+
+This note is long because the session was two halves and the second was a
+conversation. Sections are in the order things were found.
+
+**The first half is measurement**, and it stands on its own: the rips, the
+matching, the voicing table. Start at "Which tune is which" and "The voicing".
+
+**The second half is the owner listening to `lake` on real hardware and
+reporting**, eleven times. Those sections are a narrative of corrections and
+three of them record something I got wrong and took back out. If you only read
+one thing from that half, read **the lesson repeated in "The trills"**: a
+measurement that returns zero is a claim about the measurement first.
+
+**What the octave-band measurement is for, and is not.** It scores level and
+timbre against the original and it is good at that. It **cannot see which voice
+is playing a line**, and it preferred the audibly-wrong version three separate
+times -- lake's melody on an aliased triangle, court's, and shadow7's echo moved
+off its own pitch. Where the two disagree, the ear wins and the note says so.
+
+**`lake` is the tune everything below was tuned on**, and its manifest entry now
+carries more corrections than any other: `octaves`, `levels`, `legato`, a drum
+tablature and an `accent`. Every one is documented where it was decided.
+
+**The state of the last thing discussed** is in "The ornaments are the
+sequence's" -- the accent's `skip` has never been heard, and the echo difference
+the owner reports between the early and late ornaments is not findable in the
+data. Four searches are recorded there so the fifth is not a repeat.
 
 ## What arrived, and what it made possible
 
@@ -195,6 +224,12 @@ now.
     python tools\assets\voicecmp.py --dir ... --song banquet --sweep
     tools\assets\songs.bat lake                            hear one, a second
     python tools\gen_synth_moods.py --report               the mood map
+
+`drums-chip.bat` regenerates the catalogue itself now. It used to copy whatever
+was last generated, so editing `songs.json` or a tablature and going straight to
+a disc built the tune as it was -- which cost a whole round trip: a level was
+reported too loud twice in identical words because the second listen was to a
+disc burned four minutes before the change that answered the first.
 
 After any change to a tune, regenerate both -- **the moods FIRST**:
 
@@ -464,9 +499,9 @@ beats.
 Note `tab_hits` does not loop a tablature: past its end there are no strikes, so
 the repeat count has to cover `max_rows`.
 
-**The trills are not closed.** "the trills for the held notes are either too
-quick/they don't sound right". What is measured: lake's cells contain **no trill
-figure at all** -- no A-B-A inside six rows on any lane -- so it is not being
+**The trills** -- closed in the section below, and this is what was known
+first. "the trills for the held notes are either too quick/they don't sound
+right". What was measured: lake's cells contain **no trill figure at all** -- no A-B-A inside six rows on any lane -- so it is not being
 introduced by the conversion. The source has 102 onsets on channel 0 arriving
 under three rows apart, but **92 of them straddle the register split**: they are
 the bass and the melody, written on one channel, landing two rows apart. Those
@@ -475,6 +510,170 @@ inside the melody, at two rows -- 83 ms, the finest a 32nd grid at this tempo
 offers**, which is the source's own timing and not a quantisation artifact.
 Whether 83 ms is too quick needs the original, and isolating an ornament from a
 four-voice mix is not something the band measurement can do.
+
+## The trills: I broke a thing that was working, and the real fault was next to it
+
+The report was "the trills for the held notes are either too quick/they don't
+sound right", then "a subtle almost no strike hammer on like a guitar", then
+"normalize all of them so they all sound the same".
+
+**Measured at 13.6 s in the rip**, bandpassed to the lead and tracked by zero
+crossings at 12 ms windows: the lead alternates **500.2 Hz and 458.5 Hz**, holds
+the upper about 72 ms and the lower about 12, repeating every **~82 ms** -- and
+the level is flat to within a per cent across every move. No attack. A pitch
+change on a sounding voice, exactly as described. 82 ms is two rows here.
+
+Two true things came out of that and are kept:
+
+* **The chip hammers on for free.** `scsp_key_on` assigns `s[0x00]` (clearing
+  KYONB) and later ORs it back with no KYONEX between, so the chip never
+  observes a transition and a sounding pitched voice is not re-struck.
+* **The model did not.** `preview.render` restarted phase and envelope on every
+  note, re-attacking where the chip does not -- the mirror of the release bug,
+  a fault the model had and the chip did not. Fixed.
+
+**Then I got it badly wrong.** My detector for "does the conversion contain an
+ornament" only counted an exact return to the same note within six rows, found
+none in lake, and I concluded the ornaments were missing and authored a pass to
+add one to every long note. They were never missing: the ten fast figures in
+lake's melody are not plain A-B-A returns, which is why a strict detector saw
+nothing. What shipped was a tremolo -- "HELL NO, One trill then holds not, not
+repeated", "its now playing them all the time rather than first on 9s". The pass
+is **removed**, and lake's cells are verified identical to the build before it
+existed.
+
+The lesson is the one this note keeps relearning from the other direction: a
+measurement that returns zero is a claim about the measurement first. Read
+"no ornaments found" as "my detector found none", and check it against a tune
+that is known to have them before building anything on it.
+
+## What "make it hold better" turned out to be
+
+With the ornaments back to the sequence's own, the remaining complaint was how
+the notes hold, and there is a real fault under it.
+
+**sglake.mid lifts every bass note a row or two before the next.** 143 gaps on
+that lane, every one of them one or two rows, the voice sounding **87 per cent**
+of the time. `shadow7.mid` is the same piece sequenced by someone else: its bass
+has **no gaps at all and sounds 100 per cent**. That is what says the gaps are
+one sequencer's playing-in and not a rest anybody wrote.
+
+It costs more than it used to. A release fading over about 90 ms turns each gap
+into a dip and a re-attack, and at a note every eight rows that is a stutter
+eight times a second under the melody -- so the release work made an existing
+fault audible, the same way the octave correction made the aliased triangle
+audible.
+
+`legato: 2` closes any silence of two rows or fewer that has a note after it on
+the same lane. lake goes to 99 per cent sounding with no short gap left, a real
+rest still ends a phrase, and it packs one pattern *smaller*. Per tune, and only
+lake carries one.
+
+Checked and left alone: the original's held notes sag about 0.49 dB over half a
+second against our 0.12, but the quartiles overlap heavily (-2.02/+1.06 against
+-0.96/+0.53) and that is not a difference worth a decay rate.
+
+lake's drum part is hi-hats rather than snares, on the owner's word -- which is
+a real change to the cells even though both are the same tablature shape: a row
+carrying only a snare is darkened ten semitones by `DRUM_DARK_SEMITONES` and a
+hat is not, so the note byte goes from 10 to 20.
+
+## The ornaments are the sequence's, and they were being played by the quietest voice
+
+Once the pass was out, the owner described what the tune actually does: "what
+your doing at 9s and three times in next bar, 5 times in last bar, then back to
+start of loop. Make them more pronounced or louder."
+
+Found them: **eight fast figures in lake, every one a note two rows after the
+last and a semitone or two above it, and every one on lane 2** -- at 13.3 s,
+then bars 18/19/20, then bars 26/27/28 and 30. One, then three, then a longer
+group, which is the shape described.
+
+Lane 2 is the harmony, and lake's `levels` put it at 4 with the bass at 6. **The
+figure the ear is meant to catch was being played by the quietest thing on the
+chip.**
+
+A DISDL step is carried **per cell** -- the low nibble of `wv` -- not per voice,
+so one note can be lifted without moving the voice it belongs to. That is the
+same mechanism the drums already use in the other direction for a strike off the
+beat. `accent: {within: 3, steps: 1}` lifts the arriving note of a fast figure
+one step and leaves the note it decorates alone; exactly the eight move, and the
+ornament now sits above the lead instead of under it.
+
+Then: "only a subtle gap between trill in first 5 trills (bass note switch?).
+Can you widen them to match more of the last 4." Measured: the timing was
+identical -- all eight two rows apart -- and the **interval** differed, six a
+semitone and two a tone, with the two tones in the later group.
+
+**Widening the semitones to tones was wrong and is gone.** "go back way off",
+"sounded offkey". A semitone step is a scale degree and not a magnitude; forcing
+it to a tone lands on a note the key does not have. The mechanism was removed
+rather than switched off, because an unused dial that produces a wrong key is a
+trap for whoever finds it next. **The accent may change when a note is played
+and how loudly, never which note it is** -- that is now the invariant the test
+holds.
+
+What the figures actually wanted was time. They sat **two rows** after the note
+they decorate, which at 41.67 ms a row is a change of note more than an ornament
+on one; `hold: 3` gives the decorated note a third row before the figure takes
+it -- "let off not early so three in between". The arriving note is pushed later
+and never earlier, only across rows already silent on its lane, and only if it
+still lands before the next note.
+
+And yes to the aside: **the bass does change under every one of the eight**,
+which is the other half of what was being heard.
+
+Then: "now it's too loud for first 5, last 4 right volume." **Nothing in the
+cells separates the two groups** -- at all eight figures the bass is the same
+note at the same level, the drum is the same, and every voice carries the level
+its own table gives it; the only thing that differs is where they fall in the
+piece. So `skip: 4` leaves the first four at the harmony's own level and lifts
+the last four, and the comment on it says plainly that this is a dynamic asked
+for by ear rather than a rule read off the data. Quiet ornaments early and
+louder ones later is an ordinary arranging device, and a DISDL step being 6 dB
+there is nothing between on and off to give the early ones instead.
+
+The `hold` was then withdrawn -- "go back to the regular timing" -- and the
+figures are back on the two rows the sequence writes them at. The dial stays in
+the converter, documented and off: unlike the widening it cannot put a note out
+of key, it only moves one in time.
+
+**Unresolved, and it has cost four attempts.** "There's an echo effect missing
+on first 4, it exists on last 5, one echo after it." Nothing in the data
+separates lake's early ornaments from its late ones, looked for four ways:
+
+* the other voices at each figure -- same bass note at the same level, same
+  drum, every voice on its own table's level, at all eight;
+* what follows on the harmony lane -- the next note is 30+ rows away in both
+  groups;
+* an echo of the figure on any lane -- every one of the eight has a bass note
+  repeating one of its two pitches within 6 to 16 rows;
+* the original itself, counting pitch direction changes in a 1.6 s window at
+  each -- 60 and 77 in the first group against 45 and 121 in the last, which is
+  the tracker's jitter and not a signal.
+
+**Do not guess at this again without a way to localise it.** Three of the four
+changes made to this figure were rejected by ear, and one of those rounds was
+spent on a stale disc. The cheap next step is a time from the owner for one
+ornament in each group as they hear it, which makes the same instants findable
+in the rip.
+
+`within`, `steps`, `hold` and `skip` are the dials.
+
+## Stepping off a track cuts now, rather than fading
+
+"is there anyway in menu to quickly silence the moment you go off the track
+instead of fades." The release rate that makes a note end properly is about
+90 ms of it, and in a list of tunes that is heard as the track you have left
+still playing under the one you have arrived at.
+
+`scsp_key_off_now` writes the fastest release the field has into the slot before
+the key-off, so what follows is silence; the next `scsp_key_on` rewrites that
+register, so the setting cannot outlive the cut. **`synth_cut` is the menu's
+stop and `synth_stop` stays the music's** -- a note that is ending should still
+end. Both Sound pages call it before starting the tune the cursor moved to.
+
+Checked as a register rather than by ear, because a host cannot hear it.
 
 ## Open
 
@@ -512,18 +711,35 @@ New here:
 9. **The 48-second cuts are still blind**, still at a round number of seconds
    rather than at a musical boundary, and still nobody has listened to one. This
    session did not touch them. `songs.bat <id>` is a second per check.
-10. **Nothing here has been heard.** Every number in this note is the offline
-    model against an mp3. The model does not reproduce the SCSP's envelopes, its
-    interpolation or its output filtering, and it is not the chip -- see
-    `preview.py`'s own header. `drums-chip.bat <id>` is thirty seconds and is
-    the fastest way to put one of these on real hardware.
+10. **`lake` has been heard on the chip repeatedly and nothing else has.** Ten
+    of the eleven other tunes are still the offline model against an mp3, and
+    the model does not reproduce the SCSP's envelopes, its interpolation or its
+    output filtering -- see `preview.py`'s own header. `drums-chip.bat <id>` is
+    thirty seconds a tune and now regenerates the catalogue itself.
+11. **The accent's `skip: 4` has never been heard**, and neither has the
+    ornaments' return to their own timing. That is the build to burn first.
+12. **The echo the owner hears on the late ornaments and not the early ones is
+    not findable in the data.** Four searches are recorded in "The ornaments are
+    the sequence's"; do not attempt a fifth without a way to localise it. The
+    cheap next step is a timestamp from the owner for one ornament in each
+    group, which makes the same instants findable in the rip.
+13. **`banquet` is the worst tune in the catalogue at 0.943 and its fault is
+    unknown.** It plans, its triangle is in range, and its original puts 0.011
+    of its energy between 220 and 440 Hz where ours has two voices. A level cut
+    "fixes" the number by muting them and was deliberately not taken.
 
 ## Suggested skills
 
+* **`superpowers:systematic-debugging`** -- earned hardest. Every fault the
+  owner reported this session was found by building an instrument and reading a
+  number off it, and every change made without one was rejected: the ornament
+  pass, the widening, the hold. Measure the thing, or say plainly that you
+  cannot.
 * **`superpowers:verification-before-completion`** -- for the same reason the
-  last note gave it. Nothing in this session has been listened to; every claim
-  here is a measurement of a model, and the project has now been taught twice
-  that a model agreeing with you is not evidence about the machine.
+  last note gave it, and one more. A whole round trip went on a stale disc,
+  because `drums-chip.bat` copied the generated catalogue instead of generating
+  it. It regenerates now; the general form of that mistake is claiming a change
+  works when what was tested did not contain it.
 * **`superpowers:brainstorming`** -- before open items 5 and 6. Which of two
   sequences of one piece to keep, and whether to ship a tune nobody can name,
   are taste calls with the owner's ear in the loop.

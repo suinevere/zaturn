@@ -285,6 +285,23 @@ void scsp_key_on(int voice, unsigned short pitch, int wave, int level, int percu
 void scsp_key_off(int voice);
 
 /*----------------------
+ | scsp_key_off_now
+ | Description: Stops a voice without its release. scsp_key_off lets the
+ |   envelope run down at SCSP_EG_SUSTAINED_RR, which is a musical ending and
+ |   about 90 ms of it -- right when a note ends and wrong when a menu steps off
+ |   a track, where the fade reads as the old track hanging on. This writes the
+ |   fastest release the field has into that slot first, so the key-off is
+ |   silence. The next scsp_key_on rewrites the register, so the setting does
+ |   not outlive the cut.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: voice -- the slot
+ | Returns: N/A
+ ----------------------*/
+void scsp_key_off_now(int voice);
+
+/*----------------------
  | scsp_set_voice_level
  | Description: Changes a sounding voice's level without disturbing its pitch
  |   or restarting it. This is DISDL, the slot's own send level -- never MVOL,

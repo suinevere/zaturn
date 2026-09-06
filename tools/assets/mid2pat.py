@@ -564,7 +564,7 @@ def echo_delay(parts, lead, answer, max_shift=16):
 
 def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             bpm_override=0.0, fold="off", drum_tab=None, tab_beats=4,
-            octaves=None, levels=None):
+            octaves=None, levels=None, legato=0, accent=None):
     """Run the whole reduction and return everything both callers need.
 
     The offline preview renders from this, and the build emits C from it, so
@@ -687,12 +687,140 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
                        if hit else (0, 0))
         cells.append(row)
 
+    close_short_gaps(cells, tonal_slots, legato)
+    if accent:
+        shape_fast_figures(cells, tonal_slots, accent.get("within", 0),
+                           accent.get("steps", 0), accent.get("hold", 0),
+                           accent.get("skip", 0))
+
     return {"cells": cells, "speed": speed, "frac": frac, "bpm": bpm,
             "frames": frames,
             "has_drums": has_drums, "tonal_slots": tonal_slots,
             "lanes": lanes, "echoes": echoes,
             "ch_wave": ch_wave, "shift": shift, "thick": thick,
             "octaves": [o // 12 for o in lane_oct], "levels": lane_vol}
+
+
+def close_short_gaps(cells, tonal_slots, rows):
+    """/*----------------------
+     | close_short_gaps
+     | Description: Holds a note through a silence too short to be a rest.
+     |
+     |     A sequencer that lifts each note a moment before the next leaves a
+     |     gap of a row or two, which is not a rest anybody wrote -- it is how
+     |     the part was played in. sglake.mid does it to every bass note it
+     |     has: 143 gaps on that lane, every one of them one or two rows, the
+     |     voice sounding 87 per cent of the time. shadow7.mid is the same
+     |     piece sequenced by someone else and its bass has no gaps at all and
+     |     sounds 100 per cent of the time, which is what says this belongs to
+     |     the sequence rather than to the music.
+     |
+     |     It matters more than it did: a release rate that fades over about
+     |     90 ms turns each of those gaps into an audible dip and re-attack,
+     |     and at a note every eight rows that is a stutter at eight a second
+     |     under the melody.
+     |
+     |     Only silences of `rows` or fewer, and only where a note follows on
+     |     the same lane -- the end of a phrase still ends.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: cells -- rows of (note, wv) per lane; tonal_slots -- lanes that
+     |     are not percussion; rows -- the longest silence to close
+     | Returns: N/A, cells are edited in place
+     ----------------------*/"""
+    if not rows:
+        return
+    for lane in range(tonal_slots):
+        off = None
+        for r, row in enumerate(cells):
+            note = row[lane][0]
+            if note == 1:
+                off = r
+            elif note >= 2:
+                if off is not None and r - off <= rows:
+                    cells[off][lane] = (0, 0)
+                off = None
+
+
+def shape_fast_figures(cells, tonal_slots, within, steps, hold, skip):
+    """/*----------------------
+     | shape_fast_figures
+     | Description: Emits a note that arrives hard on the heels of another one
+     |     louder than the note it decorates.
+     |
+     |     These are the tune's ornaments, and they are the composer's and not
+     |     ours: in sglake.mid there are eight of them, every one a note two
+     |     rows after the last and a semitone or two above it, and every one on
+     |     the harmony voice -- which the level table puts at the bottom of the
+     |     mix. So the figure the ear is meant to catch is played by the
+     |     quietest thing on the chip. "Make them more pronounced or louder."
+     |
+     |     A DISDL step is about 6 dB and it is the only per-voice dial the
+     |     chip has, but it is carried per CELL -- the low nibble of wv -- so a
+     |     single note can be lifted without moving the voice it belongs to.
+     |     That is the whole mechanism, and it is the same one the drums use in
+     |     the other direction for a strike off the beat.
+     |
+     |     Only the arriving note is lifted. The note it decorates keeps its
+     |     level, or the figure is a jump in the whole line rather than an
+     |     ornament on it.
+     |
+     |     `hold` keeps the decorated note sounding a little longer before the
+     |     figure takes it. lake's are written two rows in, and two rows at
+     |     41.67 ms is a change of note more than an ornament on one -- "let off
+     |     not early so three in between". The arriving note is pushed later,
+     |     never earlier, and only across rows that are already silent on that
+     |     lane and only if it still lands before the next note; anything else
+     |     would be rewriting the line rather than holding a note in it.
+     |
+     |     `skip` leaves the first few figures at the voice's own level and lifts
+     |     only the ones after them. Nothing in the cells separates lake's early
+     |     ornaments from its late ones -- same bass, same drum, the same level
+     |     on every voice at all eight -- so this is not a rule derived from the
+     |     data but a dynamic asked for by ear: "now it's too loud for first 5,
+     |     last 4 right volume". Quiet ornaments early and louder ones later is
+     |     an ordinary arranging device; it is written here because a DISDL step
+     |     is 6 dB and there is nothing between on and off to give the early
+     |     ones instead.
+     |
+     |     What is NOT here is any widening of the interval. It was tried --
+     |     six of lake's eight figures are a semitone and two are a tone, so
+     |     opening the narrow ones to match looked like normalising to the
+     |     sequence's own widest -- and it "sounded offkey", which is the whole
+     |     lesson: a semitone step is a scale degree and not a magnitude, and
+     |     forcing it to a tone lands on a note the key does not have.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: cells -- rows of (note, wv) per lane; tonal_slots -- lanes that
+     |     are not percussion; within -- how few rows after the previous note
+     |     counts as a fast figure; steps -- DISDL steps to add
+     | Returns: N/A, cells are edited in place
+     ----------------------*/"""
+    if not within or not (steps or hold):
+        return
+    for lane in range(tonal_slots):
+        rows = [r for r, row in enumerate(cells) if row[lane][0] >= 2]
+        seen = 0
+        for k in range(1, len(rows)):
+            last, r = rows[k - 1], rows[k]
+            if r - last > within:
+                continue
+            seen += 1
+            note, wv = cells[r][lane]
+            if steps and seen > skip:
+                wv = (wv & 0xF0) | min(7, (wv & 0x0F) + steps)
+            at = r
+            if hold and r - last < hold:
+                want = last + hold
+                after = rows[k + 1] if k + 1 < len(rows) else len(cells)
+                if want < after and all(cells[j][lane][0] == 0
+                                        for j in range(r + 1, want + 1)):
+                    at = want
+            if at != r:
+                cells[r][lane] = (0, 0)
+            cells[at][lane] = (note, wv)
 
 
 def pack_patterns(cells):
@@ -898,7 +1026,9 @@ def convert_song(record):
                    max_rows=record["max_rows"], no_drums=False,
                    bpm_override=record["bpm"], fold=record["fold"],
                    drum_tab=record["drums_tab"], tab_beats=record["tab_beats"],
-                   octaves=record.get("octaves"), levels=record.get("levels"))
+                   octaves=record.get("octaves"), levels=record.get("levels"),
+                   legato=record.get("legato", 0),
+                   accent=record.get("accent"))
 
 
 def _octaves(entry):
@@ -962,6 +1092,8 @@ def load_manifest(path):
             "fold": s.get("fold", "off"),
             "octaves": _octaves(s),
             "levels": _levels(s),
+            "legato": int(s.get("legato", 0)),
+            "accent": s.get("accent"),
             "max_rows": int(s.get("max_rows", 0)),
             "drums_tab": str(root / tab) if tab else None,
             "tab_beats": int(s.get("tab_beats", 4)),

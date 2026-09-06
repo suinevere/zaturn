@@ -220,17 +220,24 @@ def test_a_level_override_reaches_the_cells_and_stops_there():
     assert lake["levels"][1] == mid2pat.CH_VOL[1] - 1, (
         "lake's lead is no longer one step under the global level")
 
+    # The accent lifts individual ornament cells above the voice's own level on
+    # purpose, so a lane may emit its level and that level plus the accent, and
+    # nothing else.
     got = mid2pat.convert_song(lake)
+    steps = (lake["accent"] or {}).get("steps", 0)
     seen = [set() for _ in range(mid2pat.CHANNELS)]
     for row in got["cells"]:
         for lane, (note, wv) in enumerate(row):
             if note >= 2:
                 seen[lane].add(wv & 0x0F)
     for lane, levels in enumerate(seen):
-        if levels:
-            assert levels == {lake["levels"][lane]}, (
-                "lane %d emits levels %s and its override says %d"
-                % (lane, sorted(levels), lake["levels"][lane]))
+        if not levels:
+            continue
+        base = lake["levels"][lane]
+        allowed = {base, min(7, base + steps)} if steps else {base}
+        assert levels <= allowed, (
+            "lane %d emits levels %s and its override says %d with an accent "
+            "of %d" % (lane, sorted(levels), base, steps))
 
     for other in songs:
         if other["levels"] is not None:
@@ -257,3 +264,140 @@ def test_a_level_that_is_not_a_disdl_value_is_refused():
                 mid2pat.load_manifest(p)
         finally:
             p.unlink()
+
+
+def test_legato_closes_only_the_gaps_too_short_to_be_rests():
+    # sglake.mid lifts every bass note a row or two before the next, which is
+    # how the part was played in and not a rest anybody wrote: 143 gaps on that
+    # lane, all of them one or two rows. shadow7.mid is the same piece sequenced
+    # by someone else, its bass has none, and that is what says the gaps belong
+    # to the sequence. With a release that fades over about 90 ms each one is a
+    # dip and a re-attack, eight times a second under the melody.
+    songs, _ = mid2pat.load_manifest(MANIFEST)
+    lake = [s for s in songs if s["id"] == "lake"][0]
+    assert lake["legato"] > 0, "lake's legato has been lost"
+
+    plain = mid2pat.convert_song(dict(lake, legato=0))
+    got = mid2pat.convert_song(lake)
+    assert len(plain["cells"]) == len(got["cells"])
+
+    # Nothing but a key-off may have changed, and only into "no change".
+    for r, (a, b) in enumerate(zip(plain["cells"], got["cells"])):
+        for lane in range(mid2pat.CHANNELS):
+            if a[lane] == b[lane]:
+                continue
+            assert a[lane][0] == 1 and b[lane] == (0, 0), (
+                "row %d lane %d went from %s to %s and legato may only drop a "
+                "key-off" % (r, lane, a[lane], b[lane]))
+
+    # No silence of legato rows or fewer survives on a tonal lane.
+    for lane in range(mid2pat.CHANNELS - 1):
+        off = None
+        for r, row in enumerate(got["cells"]):
+            note = row[lane][0]
+            if note == 1:
+                off = r
+            elif note >= 2:
+                if off is not None:
+                    assert r - off > lake["legato"], (
+                        "lane %d is silent for %d rows from row %d, which is "
+                        "short enough to be an artefact of the sequence"
+                        % (lane, r - off, off))
+                off = None
+
+    # A rest long enough to be one still is.
+    kept = sum(1 for row in got["cells"] for lane in range(mid2pat.CHANNELS)
+               if row[lane][0] == 1)
+    assert kept > 0, "legato removed every key-off, including the real rests"
+
+
+def test_a_tune_with_no_legato_is_untouched():
+    songs, _ = mid2pat.load_manifest(MANIFEST)
+    for record in songs:
+        if record["legato"]:
+            continue
+        assert (mid2pat.convert_song(record)["cells"]
+                == mid2pat.convert_song(dict(record, legato=0))["cells"]), \
+            record["id"]
+
+
+def test_accent_lifts_the_ornaments_and_holds_the_notes_they_decorate():
+    # "what your doing at 9s and three times in next bar, 5 times in last bar
+    # ... Make them more pronounced or louder", then "let off not early so
+    # three in between".
+    #
+    # Those are the sequence's own ornaments -- eight of them in lake, each a
+    # note a couple of rows after the last and a semitone or two above it -- and
+    # every one is on the harmony voice, which the level table puts at the
+    # bottom of the mix. A DISDL step is carried per cell, so one note can be
+    # lifted without moving the voice it belongs to, and a note can be pushed a
+    # row later without moving anything else.
+    #
+    # What the pass may NOT do is change which notes are played. Widening the
+    # narrow figures to match the wide ones was tried and "sounded offkey": six
+    # of lake's eight are a semitone and two are a tone, and a semitone step is
+    # a scale degree rather than a magnitude.
+    songs, _ = mid2pat.load_manifest(MANIFEST)
+    lake = [s for s in songs if s["id"] == "lake"][0]
+    spec = lake["accent"]
+    assert spec, "lake's accent has been lost"
+
+    plain = mid2pat.convert_song(dict(lake, accent=None))
+    got = mid2pat.convert_song(lake)
+    assert len(plain["cells"]) == len(got["cells"])
+
+    def played(song, lane):
+        return [row[lane][0] for row in song["cells"] if row[lane][0] >= 2]
+
+    for lane in range(mid2pat.CHANNELS):
+        assert played(plain, lane) == played(got, lane), (
+            "lane %d plays different notes with the accent on; it may change "
+            "when and how loudly, never what" % lane)
+
+    # skip leaves the first few at the voice's own level: nothing in the cells
+    # separates lake's early ornaments from its late ones -- same bass, same
+    # drum, the same level on every voice at all eight -- so the dynamic is by
+    # ear, "too loud for first 5, last 4 right volume", and what is pinned is
+    # that it lands on the right ones and not that it was derived.
+    skip = spec.get("skip", 0)
+    figures = 0
+    for lane in range(mid2pat.CHANNELS - 1):
+        was = [r for r, row in enumerate(plain["cells"]) if row[lane][0] >= 2]
+        now = [r for r, row in enumerate(got["cells"]) if row[lane][0] >= 2]
+        assert len(was) == len(now)
+        for k, (a, b) in enumerate(zip(was, now)):
+            fast = k and was[k] - was[k - 1] <= spec["within"]
+            if not fast:
+                assert a == b, (
+                    "lane %d moved a note at row %d that is not a fast figure"
+                    % (lane, a))
+                assert plain["cells"][a][lane] == got["cells"][b][lane], (
+                    "lane %d changed a note at row %d that is not a fast "
+                    "figure" % (lane, a))
+                continue
+            figures += 1
+            want = spec.get("steps", 0) if figures > skip else 0
+            if spec.get("hold"):
+                assert b - now[k - 1] == spec["hold"], (
+                    "lane %d has a fast figure %d rows after its note and the "
+                    "hold is %d" % (lane, b - now[k - 1], spec["hold"]))
+                assert b >= a, "a fast figure was pulled earlier, not later"
+            lifted = ((got["cells"][b][lane][1] & 0x0F)
+                      - (plain["cells"][a][lane][1] & 0x0F))
+            assert lifted == want, (
+                "figure %d on lane %d lifted %d steps and should have lifted "
+                "%d" % (figures, lane, lifted, want))
+    assert figures, "no fast figure in lake for the accent to reach"
+    assert figures > skip, (
+        "skip is %d and there are only %d figures, so nothing is ever accented"
+        % (skip, figures))
+
+
+def test_a_tune_with_no_accent_is_untouched():
+    songs, _ = mid2pat.load_manifest(MANIFEST)
+    for record in songs:
+        if record["accent"]:
+            continue
+        assert (mid2pat.convert_song(record)["cells"]
+                == mid2pat.convert_song(dict(record, accent=None))["cells"]), \
+            record["id"]

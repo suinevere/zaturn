@@ -1214,7 +1214,11 @@ void sound_options_page(void) {
             // not cut the music the player came in listening to -- which is the
             // rule the row this was recovered from was written around.
             if ((left || right || ok) && n > 0) {
-                if (synth_on) synth_start_song(*at);
+                // Cut, do not fade. Stepping off a track wants the one you have
+                // left gone at once: synth_start_song releases the voices at the
+                // musical release rate, which is right for a note ending and
+                // reads here as the old track hanging on under the new one.
+                if (synth_on) { synth_cut(); synth_start_song(*at); }
                 // Through the engine and not straight at the drive: a preview
                 // left sounding while the player sits here is still music, and
                 // it has to obey the same loop-end rules as anything else.

@@ -14,10 +14,10 @@
 # next best 0.352 at half that and 0.222 at eight times it. 1152 rows is
 # therefore 36 bars, which is the repeat count below.
 #
-# Snares on beats one and three, which the owner's own count confirms rather
+# Hi-hats on beats one and three, which the owner's own count confirms rather
 # than my choosing: "12/9s repeat". The tune's longest repeat under a phrase is
 # 192 rows -- six bars, 8.0 s, self-matching 0.209 against the next candidate's
-# 0.171 -- and two snares a bar across that phrase is exactly twelve strikes,
+# 0.171 -- and two strikes a bar across that phrase is exactly twelve of them,
 # looping six times over the 1152 rows. So the figure asked for and the figure
 # the music already repeats on are the same figure.
 #
@@ -28,4 +28,4 @@
 # tab_hits does NOT loop a tablature -- past its end there are simply no
 # strikes -- so the count has to cover the tune. 36 bars is exactly max_rows.
 
-s.../..../s.../.... x36
+h.../..../h.../.... x36

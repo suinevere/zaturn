@@ -239,6 +239,22 @@ void synth_resume(void);
 void synth_stop(void);
 
 /*----------------------
+ | synth_cut
+ | Description: Stops the music the way a menu wants it stopped -- at once,
+ |   with no release. synth_stop lets each voice run down at the release rate,
+ |   which is what a note ending should sound like and not what stepping off a
+ |   track in a list should: there the fade is heard as the track you have left
+ |   still playing. Use synth_stop for music that is ending and this for a
+ |   preview that is being abandoned.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void synth_cut(void);
+
+/*----------------------
  | synth_set_level
  | Description: Sets the music level, 0 (silent) to 7. Reaches voices that are
  |   already sounding without restarting them, because the in-game duck happens

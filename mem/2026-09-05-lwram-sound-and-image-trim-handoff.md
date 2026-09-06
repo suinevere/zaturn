@@ -127,10 +127,40 @@ ever breaks up when an effect plays, that is the sweep to run.
 None of this blocks the LWRAM route that shipped: those effects go through SRL's
 PCM and claim no slots of ours.
 
-## The netbin's music: sound RAM was being written a byte at a time
+## The netbin's music: the chip was inherited, not taken over
 
-**This is the session's largest finding and it invalidates the framing of
-everything above it.** `scsp_upload_wave` copied waveforms into sound RAM through
+The owner's own theory, and the best one: loading from the NetLink browser
+changes what the sound hardware is when the program starts. It does, and not in
+the way I first guessed -- `slSoundOffWait()` is `slRequestCommand(SMPC_SNDOFF,
+SMPC_WAIT)`, an SMPC command that halts the 68K in hardware whatever program it
+is running, so PlanetWeb's driver is stopped. That part was already right.
+
+What is not stopped is the **SCSP's own register file**. The 68K is only what
+writes those registers; the chip goes on doing whatever they say. PlanetWeb is a
+browser that plays audio, so the netbin arrives on a chip with slots already
+keyed, and a keyed slot loops its waveform forever once the CPU that would
+release it is gone. `scsp_silence()` cleared **four** slots -- the ones this
+synth uses -- and left the other twenty-eight exactly as found.
+
+Heard: one instrument that is none of ours, over the music or instead of it,
+different on every load. Which is what came back from NetLink three times.
+
+`scsp_silence_all()` releases all thirty-two and is called from
+`synth_target_init` under `#ifdef NETBIN` only. The CD build must keep clearing
+just its own four: the SGL driver owns the rest there, and clearing those would
+stop the CD-DA and the sound effects.
+
+**Why no probe caught it.** Every probe is a CD image. `scspfx-nodrv` disables
+*SGL's* driver; it cannot reproduce "another program's driver was already
+resident and playing". The slot sweeps were taken on a chip nobody else had
+touched, which is exactly the condition that does not hold on NetLink. If this
+fix does not land, the next tool is the probe built as a netbin so it loads the
+same way -- the build is `make all NETBIN=1 LDFILE=./sgl-netbin.linker`.
+
+## Sound RAM was also being written a byte at a time
+
+Also real, also emulator-invisible, and found first.
+`scsp_upload_wave` copied waveforms into sound RAM through
 a `volatile signed char *`, one byte per store, for as long as the synth has
 existed. The SCSP is behind the Saturn's B-bus, which is sixteen bits wide; a
 byte write there is not narrowed on your behalf, it is an access the bus has no

@@ -6,6 +6,15 @@
  |   with a ping-pong hand-off so they never gap. Every sample is read from the CD
  |   once and cached for the game's lifetime, so re-triggers never re-read the
  |   disc (which would interrupt CD-DA music -- the drive has one head).
+ |
+ |   Samples live in Low Work RAM, not the C heap. They are 7.7 KB to 60 KB each
+ |   (Lurking Horror's fourteen, the only sound blorb on the disc), and Lurking is
+ |   also the largest story -- so the game with sound is the one whose HWRAM heap
+ |   has least left behind its image. Measured: 6,200 bytes free there, which is
+ |   none of the fourteen; at the largest heap this build ever had it was two.
+ |   LWRAM is a separate megabyte, and SRL treats a sample buffer there as normal
+ |   (srl_sound.hpp's LoadPcmData allocates with autonew, so a WaveSound made with
+ |   lwnew holds its own data in the low zone).
  | Author: suinevere
  | Dependencies: sound.h (the opcode/host interface), sound_blorb.h (the Blorb
  |   index + sample lookup), SRL (Sound::Pcm, Cd::File, Memory)
@@ -80,6 +89,16 @@ static Slot  g_slot[NSLOT];
  | Description: Persistent PCM slice cache: each sound number's slice is loaded
  |   from the CD once and kept for the game's lifetime, so re-triggers and the
  |   loop ping-pong never re-read the CD.
+ |
+ |   NCACHE bounds the table, not the residency. What actually decides how many
+ |   slices are held at once is load_slice's floor: eight of Lurking Horror's
+ |   fourteen were never simultaneously affordable at any size this heap has had,
+ |   and eight of the largest (60 KB) are not affordable in Low Work RAM either.
+ |   A number whose slice loaded but found no free table entry is played from a
+ |   buffer the calling slot owns and frees, which is why cached_slice reports
+ |   which of the two happened -- before, that buffer was recorded nowhere and
+ |   freed by nobody, a leak the old High Work RAM heap was simply too small to
+ |   ever reach.
  | Author: suinevere
  ----------------------*/
 #define NCACHE 8
@@ -136,14 +155,40 @@ static int cd_reader(unsigned int off, unsigned int len, unsigned char* out) {
 }
 
 /*----------------------
+ | SLICE_KEEP_FREE
+ | Description: The Low Work RAM a sample load leaves behind it, whatever else is
+ |   free. The zone's other claimants divide in two. The typeahead trie, the map
+ |   parchment, the item pane and the song-bank slot are all taken at game start
+ |   and held, so by the time an effect plays they are already spent and need no
+ |   reserve. The save/restore scratch is the one that arrives later, when the
+ |   player saves, and it is not gated at all -- saturn_scratch_alloc returns NULL
+ |   and the story prints its own failure line -- so it is what this floor holds
+ |   back: 64 KB of scratch and the 4 KB of slack every other gate in the client
+ |   asks for on top of its own claim.
+ |
+ |   The area archive is deliberately not in it. Those run 16 KB (GENA) to 418 KB
+ |   (BCEL) plus a 76.8 KB decode target, and no fixed reserve is at once large
+ |   enough for the biggest and small enough to leave the samples anywhere to go.
+ |   It is handled the other way round instead, by sound_release_cache.
+ | Author: suinevere
+ ----------------------*/
+#define SLICE_KEEP_FREE (65536 + 4096)
+
+/*----------------------
  | load_slice
- | Description: Reads a full PCM sample into a fresh High Work RAM buffer using the
+ | Description: Reads a full PCM sample into a fresh Low Work RAM buffer using the
  |   same sector-addressed load as cd_reader (Seek() is broken on-device): it reads
  |   the sector span covering [off, off+len) straight into the buffer, shifts the
  |   sample down to the buffer start, then pads to slPCMOn's 0x900 minimum with
  |   silence. Retries the flaky first-access read, behind the same absent-name
  |   check cd_reader carries: a .BLB that goes missing mid-session would otherwise
  |   stall play for eight seconds per sample asked for.
+ |
+ |   Gated on free space before it allocates rather than on a NULL afterwards, the
+ |   way item_art_open and load_area are, so the floor above survives a sample that
+ |   would technically have fitted. The long-alignment check is LoadBytes's own
+ |   requirement; the High Work RAM version never made it, which was survivable
+ |   only because the heap allocator happened to hand back aligned blocks.
  | Author: suinevere
  | Dependencies: SRL (Cd::File, Memory)
  | Globals: g_blb
@@ -157,8 +202,10 @@ static int8_t* load_slice(unsigned int off, unsigned int len) {
     unsigned int secoff = off % CD_SECTOR;
     uint32_t rbytes = ((secoff + len + CD_SECTOR - 1) / CD_SECTOR) * CD_SECTOR;
     uint32_t bufsz  = rbytes > play ? rbytes : play;
-    int8_t* b = (int8_t*) SRL::Memory::HighWorkRam::Malloc(bufsz);
+    if (SRL::Memory::LowWorkRam::GetFreeSpace() < bufsz + SLICE_KEEP_FREE) return nullptr;
+    int8_t* b = (int8_t*) SRL::Memory::LowWorkRam::Malloc(bufsz);
     if (!b) return nullptr;
+    if (((unsigned int) b & 3) != 0) { SRL::Memory::LowWorkRam::Free(b); return nullptr; }
     for (int attempt = 0; attempt < 60; attempt++) {
         SRL::Cd::File f(g_blb);
         int32_t got = f.LoadBytes((size_t) sec, (int32_t) rbytes, (uint8_t*) b);
@@ -169,7 +216,7 @@ static int8_t* load_slice(unsigned int off, unsigned int len) {
         }
         for (int i = 0; i < 8; i++) SRL::Core::Synchronize();
     }
-    SRL::Memory::Free(b);
+    SRL::Memory::LowWorkRam::Free(b);
     return nullptr;
 }
 
@@ -238,6 +285,42 @@ extern "C" void sound_stop_all(void) {
         if (g_cache[i].buf) { SRL::Memory::Free(g_cache[i].buf); g_cache[i].buf = nullptr; }
         g_cache[i].number = 0;
     }
+}
+
+/*----------------------
+ | sound_release_cache
+ | Description: Gives the cached slices back to Low Work RAM, keeping only those a
+ |   slot is still sounding. Exists so the zone's largest claimant can reclaim from
+ |   its smallest: an area archive runs to 418 KB and its load refuses silently
+ |   when it will not fit, which shows as rooms with no picture and no message,
+ |   while a cached slice is only a CD read already paid for. Nothing is lost but
+ |   that read, and the caller is on a path that is seeking anyway, so the seek a
+ |   re-load costs is one the player was already waiting on.
+ |
+ |   Skipping the live ones is not tidiness: a sounding slot's SlicePcm still points
+ |   into its buffer, and SRL hands that pointer to the chip, so freeing it under a
+ |   playing channel plays whatever the allocator puts there next.
+ | Author: suinevere
+ | Dependencies: SRL (Memory)
+ | Globals: g_cache, g_slot
+ | Params: N/A
+ | Returns: 1 when anything was actually given back, so a caller knows whether
+ |   asking again is worth the second check
+ ----------------------*/
+extern "C" int sound_release_cache(void) {
+    int freed = 0;
+    for (int i = 0; i < NCACHE; i++) {
+        if (g_cache[i].buf == nullptr) continue;
+        int live = 0;
+        for (int j = 0; j < NSLOT; j++)
+            if (g_slot[j].number != 0 && g_slot[j].number == g_cache[i].number) { live = 1; break; }
+        if (live) continue;
+        SRL::Memory::LowWorkRam::Free(g_cache[i].buf);
+        g_cache[i].buf = nullptr;
+        g_cache[i].number = 0;
+        freed = 1;
+    }
+    return freed;
 }
 
 /*----------------------
@@ -327,21 +410,27 @@ extern "C" void sound_fade_level(int level) {
  | Dependencies: SRL (via load_slice)
  | Globals: g_cache
  | Params: number -- Z sound number; off/len -- its byte range; play_out --
- |   receives the padded playable size; rate -- sample rate to cache
- | Returns: the slice buffer (cache-owned), or nullptr on load failure
+ |   receives the padded playable size; rate -- sample rate to cache; cached_out --
+ |   receives 1 when the cache took ownership of the buffer and 0 when the caller
+ |   must free it
+ | Returns: the slice buffer, or nullptr on load failure
  ----------------------*/
 static int8_t* cached_slice(int number, unsigned int off, unsigned int len,
-                            uint32_t* play_out, unsigned short rate) {
+                            uint32_t* play_out, unsigned short rate, int* cached_out) {
+    *cached_out = 1;
     for (int i = 0; i < NCACHE; i++)
         if (g_cache[i].number == number && g_cache[i].buf) { *play_out = g_cache[i].play; return g_cache[i].buf; }
     int8_t* buf = load_slice(off, len);
     if (!buf) return nullptr;
     uint32_t play = len < 0x900 ? 0x900 : len;
-    for (int i = 0; i < NCACHE; i++)
-        if (g_cache[i].number == 0) {
-            g_cache[i].number = number; g_cache[i].buf = buf;
-            g_cache[i].play = play; g_cache[i].rate = rate; break;
-        }
+    int entry = -1;
+    for (int i = 0; i < NCACHE; i++) if (g_cache[i].number == 0) { entry = i; break; }
+    if (entry >= 0) {
+        g_cache[entry].number = number; g_cache[entry].buf = buf;
+        g_cache[entry].play = play; g_cache[entry].rate = rate;
+    } else {
+        *cached_out = 0;
+    }
     *play_out = play; return buf;
 }
 
@@ -380,10 +469,11 @@ extern "C" void saturn_sound_effect(int number, int effect, int volume) {
     if (free < 0) return;
 
     uint32_t play = 0;
-    int8_t* buf = cached_slice(number, off, len, &play, rate);
+    int cached = 0;
+    int8_t* buf = cached_slice(number, off, len, &play, rate, &cached);
     if (!buf) return;
     Slot& s = g_slot[free];
-    s.number = number; s.loops = loops; s.buf = nullptr;
+    s.number = number; s.loops = loops; s.buf = cached ? nullptr : buf;
     s.channel2 = -1;
     s.pcm.set(buf, play, rate);
     s.vol = (volume == 255 || volume <= 0) ? 100 : (uint8_t)((volume > 8 ? 8 : volume) * 127 / 8);

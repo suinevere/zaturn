@@ -40,6 +40,20 @@ void sound_service(void);
 void sound_stop_all(void);
 
 /*----------------------
+ | sound_release_cache
+ | Description: Returns every cached sample buffer to Low Work RAM except those a
+ |   slot is still sounding, so a larger claimant in that zone can have the space.
+ |   Samples are held there rather than in the C heap because the story heap has
+ |   6,200 bytes free behind the one game that has any (see sound.cxx), and the
+ |   claimant this yields to is room_art's area archive, which runs to 418 KB and
+ |   refuses silently when it will not fit. Costs nothing but the CD read, which
+ |   the next trigger pays again on a path that is already seeking.
+ | Author: suinevere
+ | Returns: 1 when anything was released, 0 when there was nothing to give
+ ----------------------*/
+int sound_release_cache(void);
+
+/*----------------------
  | sound_has_audio / sound_set_enabled / sound_set_level
  | Description: has_audio is 1 when a .BLB loaded (PCM effects available);
  |   set_enabled is the Options toggle (disabling stops everything); set_level sets

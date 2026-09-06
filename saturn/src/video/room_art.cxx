@@ -2,7 +2,7 @@
  | room_art.cxx
  | Description: See room_art.h.
  | Author: suinevere
- | Dependencies: SRL, cgl.h, room_art.h, title.h, scene/presentation.h
+ | Dependencies: SRL, cgl.h, room_art.h, title.h, scene/presentation.h, sound.h
  | Globals: g_release, g_serial, g_have_game, g_area, g_archive, g_archive_len,
  |   g_pixels, g_clut
  ----------------------*/
@@ -11,6 +11,9 @@
 #include "video/room_art.h"
 #include "video/title.h"
 #include "scene/presentation.h"
+extern "C" {
+#include "sound/sound.h"
+}
 
 /*----------------------
  | g_release / g_serial / g_have_game
@@ -117,8 +120,18 @@ static bool frame_of(unsigned int obj, int *image) {
  |   was there. Also frees the block it just allocated if that block is not
  |   long-aligned or the read comes up short. g_area stays -1 until the read
  |   fully succeeds.
+ |
+ |   A refusal on headroom asks the PCM slice cache for its space back and checks
+ |   once more before giving up. Those slices are 7.7 KB to 60 KB of Low Work RAM
+ |   holding a CD read already paid for, and the archives run 16 KB (GENA) to
+ |   418 KB (BCEL) -- so a zone that suits the samples on one screen will not suit
+ |   the archive on the next, and a fixed reserve big enough for BCEL would leave
+ |   the samples nowhere at all. Yielding costs the next trigger a re-read, on a
+ |   path that is seeking here anyway. This is the only direction the trade runs:
+ |   the archive never yields to a sample, because a missing background is silent
+ |   and a missing sound is not.
  | Author: suinevere
- | Dependencies: SRL, title.h (cd_enter_root, cd_restore_z3)
+ | Dependencies: SRL, title.h (cd_enter_root, cd_restore_z3), sound.h
  | Globals: g_area, g_archive, g_archive_len
  | Params: area -- the area index to make resident
  | Returns: true when the archive is resident
@@ -149,8 +162,11 @@ static bool load_area(int area) {
         if (!f.Exists()) { art_dir_restore(); return false; }
         {
             const uint32_t bytes = (uint32_t) f.Size.Bytes;
-            if (bytes == 0 || SRL::Memory::LowWorkRam::GetFreeSpace()
-                              < bytes + CGL_FRAME_BYTES + 4096) {
+            if (bytes == 0) { art_dir_restore(); return false; }
+            const uint32_t want = bytes + CGL_FRAME_BYTES + 4096;
+            if (SRL::Memory::LowWorkRam::GetFreeSpace() < want
+                && (!sound_release_cache()
+                    || SRL::Memory::LowWorkRam::GetFreeSpace() < want)) {
                 art_dir_restore();
                 return false;
             }

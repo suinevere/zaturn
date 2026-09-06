@@ -1,6 +1,6 @@
 ---
 name: lwram-sound-and-image-trim-handoff
-description: The netbin's music was silent on real hardware because sound RAM was written a byte at a time behind the SCSP's sixteen-bit B-bus, which no emulator can fail; also Lurking Horror's fourteen sound effects now fit, in Low Work RAM, and both budget floors are clear -- one by taking 57 KB of build scratch out of .bss, one by building the synth's waveform tables on the machine.
+description: The netbin's music is wrong on real hardware for two reasons no emulator can reproduce -- it arrives on a chip PlanetWeb has been playing through and released only four of its thirty-two slots, and sound RAM was written a byte at a time behind the SCSP's sixteen-bit bus; also Lurking Horror's fourteen sound effects now fit, in Low Work RAM, and both budget floors are clear.
 metadata:
   type: project
 ---
@@ -11,9 +11,16 @@ tree still carries the owner's own unstaged `MEDNAFEN_ALLOWMULTI=1` in
 `saturn/run_with_mednafen.bat` and an untracked `out.wav` from 4 September;
 neither is mine.
 
-**Read the sound RAM section first.** It was found last and it is the one that
-matters; the two sections before it describe work that is good and finished but
-was never what was silencing anything.
+**Read "the chip was inherited" first.** It was found last and it is the best
+explanation of the thing that was actually wrong; the sections before it describe
+work that is good and finished but was never what was silencing anything.
+
+Two faults in this note are real, hardware-only, and were each chased for a
+session in the wrong layer -- the inherited chip and the byte-wide sound RAM
+write. Both are invisible under Mednafen, which performs the write and hands over
+a chip nobody else has touched. That is the lesson, and it is the same one the
+eleven earlier SCSP faults taught: the emulator agreeing with you is not
+evidence.
 
 Supersedes [[lurking-sound-budget-handoff]] on the route and every number in it.
 That note's diagnosis was right and its arithmetic was right when written; what

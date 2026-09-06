@@ -175,23 +175,23 @@ int main(void) {
         /* Nine fits with a cell to spare; cells hold the candidates in order
            and the spare cell is null. Every cell carries a word now -- none is
            given up to a paging marker. */
-        cp_fill(c, 9, 0, &w);
+        cp_fill(c, 9, 0, CP_WORD_ROWS, &w);
         assert(w.n == 9 && w.top == 0 && w.rows == 5);
         for (j = 0; j < 9; j++) assert(strcmp(w.word[j], c[j]) == 0);
         assert(w.word[9] == 0);
 
         /* Ten fills every cell exactly, in order. */
-        cp_fill(c, 10, 0, &w);
+        cp_fill(c, 10, 0, CP_WORD_ROWS, &w);
         assert(w.n == 10 && w.rows == 5);
         for (j = 0; j < 10; j++) assert(strcmp(w.word[j], c[j]) == 0);
 
         /* Eleven needs a sixth row, which the window reaches by scrolling one
            row rather than turning a page: the second row of the scrolled window
            is the first list row repeated one place up. */
-        cp_fill(c, 11, 0, &w);
+        cp_fill(c, 11, 0, CP_WORD_ROWS, &w);
         assert(w.n == 10 && w.top == 0 && w.rows == 6);
         for (j = 0; j < 10; j++) assert(strcmp(w.word[j], c[j]) == 0);
-        cp_fill(c, 11, 1, &w);
+        cp_fill(c, 11, 1, CP_WORD_ROWS, &w);
         assert(w.n == 9 && w.top == 1 && w.rows == 6);
         for (j = 0; j < 9; j++) assert(strcmp(w.word[j], c[2 + j]) == 0);
         assert(w.word[9] == 0);
@@ -204,10 +204,10 @@ int main(void) {
 
         /* A scroll past the end is pulled back so the window always sits on
            real candidates. */
-        cp_fill(c, 19, 99, &w);
+        cp_fill(c, 19, 99, CP_WORD_ROWS, &w);
         assert(w.top == 5 && w.n == 9);
         assert(strcmp(w.word[0], c[10]) == 0);
-        cp_fill(c, 9, 3, &w);
+        cp_fill(c, 9, 3, CP_WORD_ROWS, &w);
         assert(w.top == 0);
 
         /* Every candidate is reachable by scrolling a row at a time, in order,
@@ -216,7 +216,7 @@ int main(void) {
             int top, seen[19], k;
             for (k = 0; k < 19; k++) seen[k] = 0;
             for (top = 0; top <= cp_word_rows(19) - 1; top++) {
-                cp_fill(c, 19, top, &w);
+                cp_fill(c, 19, top, CP_WORD_ROWS, &w);
                 for (j = 0; j < w.n; j++) seen[w.top * CP_WORD_COLS + j] = 1;
                 for (j = w.n; j < CP_WORD_CELLS; j++) assert(w.word[j] == 0);
             }
@@ -243,44 +243,44 @@ int main(void) {
 
         /* Right from column 0 lands on column 1 of the same row; right again
            reports the edge without moving. */
-        assert(cp_word_move(&p, 1, 0, 19) == 0 && p.cursor == 1);
-        assert(cp_word_move(&p, 1, 0, 19) == 1 && p.cursor == 1);
+        assert(cp_word_move(&p, 1, 0, 19, CP_WORD_ROWS) == 0 && p.cursor == 1);
+        assert(cp_word_move(&p, 1, 0, 19, CP_WORD_ROWS) == 1 && p.cursor == 1);
         /* Left from column 0 reports the other edge -- it does not wrap up to
            the end of the row above. */
-        assert(cp_word_move(&p, -1, 0, 19) == 0 && p.cursor == 0);
-        assert(cp_word_move(&p, -1, 0, 19) == -1 && p.cursor == 0);
+        assert(cp_word_move(&p, -1, 0, 19, CP_WORD_ROWS) == 0 && p.cursor == 0);
+        assert(cp_word_move(&p, -1, 0, 19, CP_WORD_ROWS) == -1 && p.cursor == 0);
 
         /* Down through the window, then one more press scrolls a row instead of
            stopping, leaving the cursor on the bottom row. */
-        for (i = 0; i < CP_WORD_ROWS - 1; i++) assert(cp_word_move(&p, 0, 1, 19) == 0);
+        for (i = 0; i < CP_WORD_ROWS - 1; i++) assert(cp_word_move(&p, 0, 1, 19, CP_WORD_ROWS) == 0);
         assert(p.cursor == (CP_WORD_ROWS - 1) * CP_WORD_COLS && p.top == 0);
-        assert(cp_word_move(&p, 0, 1, 19) == 0);
+        assert(cp_word_move(&p, 0, 1, 19, CP_WORD_ROWS) == 0);
         assert(p.top == 1 && p.cursor == (CP_WORD_ROWS - 1) * CP_WORD_COLS);
 
         /* It stops at the bottom of the list rather than scrolling into blanks. */
-        for (i = 0; i < 20; i++) cp_word_move(&p, 0, 1, 19);
+        for (i = 0; i < 20; i++) cp_word_move(&p, 0, 1, 19, CP_WORD_ROWS);
         assert(p.top == cp_word_rows(19) - CP_WORD_ROWS);
         /* Nineteen is odd, so the last row has one cell; the cursor cannot sit
            on the empty one beside it. */
-        assert(cp_word_move(&p, 1, 0, 19) == 1);
+        assert(cp_word_move(&p, 1, 0, 19, CP_WORD_ROWS) == 1);
 
         /* And back up to the top the same way. */
-        for (i = 0; i < 20; i++) cp_word_move(&p, 0, -1, 19);
+        for (i = 0; i < 20; i++) cp_word_move(&p, 0, -1, 19, CP_WORD_ROWS);
         assert(p.top == 0 && p.cursor / CP_WORD_COLS == 0);
 
         /* Arriving from either side lands on the row asked for, in the column
            nearest the edge it came through. */
-        cp_word_enter(&p, 2, 0, 19);
+        cp_word_enter(&p, 2, 0, 19, CP_WORD_ROWS);
         assert(p.box == CP_BOX_WORD && p.cursor == 2 * CP_WORD_COLS);
-        cp_word_enter(&p, 2, 1, 19);
+        cp_word_enter(&p, 2, 1, 19, CP_WORD_ROWS);
         assert(p.cursor == 2 * CP_WORD_COLS + 1);
-        cp_word_enter(&p, 99, 1, 19);
+        cp_word_enter(&p, 99, 1, 19, CP_WORD_ROWS);
         assert(p.cursor / CP_WORD_COLS == CP_WORD_ROWS - 1);
 
         /* An empty list leaves the cursor at rest rather than out of range. */
-        cp_word_enter(&p, 3, 1, 0);
+        cp_word_enter(&p, 3, 1, 0, CP_WORD_ROWS);
         assert(p.cursor == 0);
-        assert(cp_word_move(&p, 0, 1, 0) == 0 && p.cursor == 0 && p.top == 0);
+        assert(cp_word_move(&p, 0, 1, 0, CP_WORD_ROWS) == 0 && p.cursor == 0 && p.top == 0);
     }
 
     /* The overlay fills a noun slot, but is a viewer only when a verb is what
@@ -447,13 +447,128 @@ int main(void) {
     cp_init(&p);
     p.cursor = CP_WORD_CELLS - 1;
     p.top    = 6;
-    cp_clamp(&p, 3);                    /* three candidates, one part-full row */
+    cp_clamp(&p, 3, CP_WORD_ROWS);                    /* three candidates, one part-full row */
     assert(p.top == 0);
     assert(p.cursor < 3);
 
-    cp_clamp(&p, 0);                    /* and an empty list is not a crash */
+    cp_clamp(&p, 0, CP_WORD_ROWS);      /* and an empty list is not a crash */
     assert(p.top == 0);
     assert(p.cursor == 0);
+
+    /* The strip is entered by pressing up at the top of an unscrolled list --
+       the one press in that module that did nothing at all before. */
+    cp_init(&p);
+    p.box = CP_BOX_WORD;
+    p.zone = CP_ZONE_LIST;
+    p.cursor = 0;
+    p.top = 0;
+    cp_word_move(&p, 0, -1, 20, CP_WORD_ROWS);
+    assert(p.zone == CP_ZONE_TABS);
+    assert(p.tab == CP_TAB_VERB);
+
+    /* Along the strip, and off its right end into the module beyond. */
+    assert(cp_tab_move(&p, +1) == 0);
+    assert(p.tab == CP_TAB_NOUN);
+    assert(cp_tab_move(&p, +1) == 0);
+    assert(cp_tab_move(&p, +1) == 0);
+    assert(p.tab == CP_TAB_AZ);
+    assert(cp_tab_move(&p, +1) == 1);
+    assert(p.tab == CP_TAB_AZ);
+    assert(cp_tab_move(&p, -1) == 0);
+    assert(p.tab == CP_TAB_PREP);
+    while (cp_tab_move(&p, -1) == 0) { }
+    assert(p.tab == CP_TAB_VERB);
+
+    /* Down leaves the strip for the list. */
+    cp_word_move(&p, 0, +1, 20, CP_WORD_ROWS);
+    assert(p.zone == CP_ZONE_LIST);
+
+    /* Up on a scrolled list still scrolls: the strip is reachable from the top
+       of the list and nowhere else. */
+    p.top = 1;
+    p.cursor = 0;
+    cp_word_move(&p, 0, -1, 20, CP_WORD_ROWS);
+    assert(p.zone == CP_ZONE_LIST);
+    assert(p.top == 0);
+
+    /* An override lasts exactly one pick. */
+    cp_init(&p);
+    p.zone = CP_ZONE_TABS;
+    p.tab = CP_TAB_PREP;
+    p.tab_override = 1;
+    cp_pick(&p, "look", CP_SLOT_NOUN);
+    assert(p.tab_override == 0);
+    assert(p.tab == cp_tab_for_slot(CP_SLOT_NOUN));
+    assert(p.zone == CP_ZONE_LIST);
+
+    /* The default tab follows the slot while nothing is overriding it, and stops
+       following the moment something is. */
+    assert(cp_tab_for_slot(CP_SLOT_VERB) == CP_TAB_VERB);
+    assert(cp_tab_for_slot(CP_SLOT_NOUN) == CP_TAB_NOUN);
+    assert(cp_tab_for_slot(CP_SLOT_PREP) == CP_TAB_PREP);
+    cp_set_slot(&p, CP_SLOT_PREP);
+    assert(p.tab == CP_TAB_PREP);
+    p.tab_override = 1;
+    p.tab = CP_TAB_VERB;
+    cp_set_slot(&p, CP_SLOT_NOUN);
+    assert(p.tab == CP_TAB_VERB);
+
+    /* A-Z: the letter grid sits between the strip and a three-row list, and the
+       cursor walks all three zones without leaving the module. */
+    cp_init(&p);
+    p.box = CP_BOX_WORD;
+    p.zone = CP_ZONE_TABS;
+    p.tab = CP_TAB_AZ;
+    p.letter = 0;
+    cp_word_move(&p, 0, +1, 40, CP_WORD_ROWS - 2);
+    assert(p.zone == CP_ZONE_LETTERS);
+    assert(p.letter == 0);
+
+    assert(cp_letter_move(&p, +1, 0) == 0);
+    assert(p.letter == 1);
+    assert(cp_letter_move(&p, 0, +1) == 0);
+    assert(p.letter == 14);
+    assert(cp_letter_move(&p, 0, -1) == 0);
+    assert(p.letter == 1);
+    assert(cp_letter_move(&p, 0, -1) == 0);
+    assert(p.zone == CP_ZONE_TABS);
+
+    /* The grid's sides are the module's sides. */
+    p.zone = CP_ZONE_LETTERS;
+    p.letter = 25;
+    assert(cp_letter_move(&p, +1, 0) == 1);
+    assert(p.letter == 25);
+    p.letter = 0;
+    assert(cp_letter_move(&p, -1, 0) == -1);
+
+    /* Down off the bottom row of letters enters the words. */
+    p.zone = CP_ZONE_LETTERS;
+    p.letter = 20;
+    assert(cp_letter_move(&p, 0, +1) == 0);
+    assert(p.zone == CP_ZONE_LIST);
+
+    /* Up from the top of that shortened list goes back to the letters, not past
+       them to the strip. */
+    p.cursor = 0;
+    p.top = 0;
+    cp_word_move(&p, 0, -1, 40, CP_WORD_ROWS - 2);
+    assert(p.zone == CP_ZONE_LETTERS);
+
+    /* Three visible rows, not five: the window must not offer a fourth. */
+    {
+        CommandWords w2;
+        const char *cands[8] = { "a", "b", "c", "d", "e", "f", "g", "h" };
+        cp_fill(cands, 8, 0, CP_WORD_ROWS - 2, &w2);
+        assert(w2.n == 6);
+    }
+
+    /* Leaving A-Z for another tab puts the cursor back in the list rather than
+       leaving it indexing a letter grid that is no longer drawn. */
+    p.zone = CP_ZONE_LETTERS;
+    p.tab = CP_TAB_AZ;
+    assert(cp_tab_move(&p, -1) == 0);
+    assert(p.tab == CP_TAB_PREP);
+    assert(p.zone != CP_ZONE_LETTERS);
 
     printf("test_command_panel ok\n");
     return 0;

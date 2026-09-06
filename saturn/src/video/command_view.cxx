@@ -79,6 +79,30 @@ static int g_strip_top = 0;
 #define CV_LIST_ROW0 1
 
 /*----------------------
+ | cv_list_rows
+ | Description: How many rows of words the module is showing: all five, or the
+ |   three left under the A-Z tab's two rows of letters.
+ | Author: suinevere
+ | Dependencies: command_panel.h
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: the row count
+ ----------------------*/
+/*----------------------
+ | CV_LETTER_COLS
+ | Description: The alphabet's thirteen columns, matching command_panel.c's own
+ |   CP_LETTER_COLS -- the grid the cursor walks and the grid drawn here are the
+ |   same grid.
+ | Author: suinevere
+ ----------------------*/
+#define CV_LETTER_COLS 13
+
+static int cv_list_rows(const CommandPanel &p) {
+    return (p.tab == CP_TAB_AZ) ? (CP_WORD_ROWS - 2) : CP_WORD_ROWS;
+}
+
+
+/*----------------------
  | CV_CMD_MENU .. CV_CMD_N / CV_CMD_ROW
  | Description: The fixed command module's entries, in display order, and how
  |   many. Every one routes to a mechanism that already exists, so none of them
@@ -510,6 +534,31 @@ static int cv_build_prep_cands(TrieNode *root, const char **out) {
 }
 
 /*----------------------
+ | cv_build_letter_cands
+ | Description: Sources the A-Z tab: every word in the trie beginning with
+ |   `letter`, whatever its part of speech, or the whole vocabulary when `letter`
+ |   is negative. No type filter is what makes this tab the way to reach a word
+ |   the extractor typed wrong or could not type at all.
+ | Author: suinevere
+ | Dependencies: typeahead.h
+ | Globals: N/A
+ | Params: root -- typeahead trie, may be null; letter -- 0..25 for a..z, or
+ |   negative for no filter; out -- receives candidates
+ | Returns: candidate count
+ ----------------------*/
+static int cv_build_letter_cands(TrieNode *root, int letter, const char **out) {
+    char prefix[2];
+    DictionaryWord *hot[CV_PRED_MAX];
+    int n = 0, i, nh;
+    if (root == 0 || letter > 25) return 0;
+    prefix[0] = (letter < 0) ? '\0' : (char) ('a' + letter);
+    prefix[1] = '\0';
+    nh = predict_candidates(root, 0, prefix, hot, CV_PRED_MAX, 0);
+    for (i = 0; i < nh; i++) n = cv_add_cand(out, n, hot[i]->text);
+    return n;
+}
+
+/*----------------------
  | cv_last_word
  | Description: Looks up the trie word for the last space-separated token of
  |   the panel's sentence so far -- the verb while the noun slot is being
@@ -642,7 +691,7 @@ static void cv_truncate_all(const char **cand, int n) {
  ----------------------*/
 static int cv_cache_stale(const CommandPanel &p, TrieNode *root) {
     static int   last_slot = -1, last_diff = -1, last_gen = -1, last_len = -1;
-    static int   last_lobby = -1;
+    static int   last_lobby = -1, last_tab = -1, last_letter = -1;
     static TrieNode *last_root = 0;
     static char  last_line[CP_LINE_MAX];
     int gen = typeahead_screen_gen();
@@ -651,13 +700,15 @@ static int cv_cache_stale(const CommandPanel &p, TrieNode *root) {
        changes nothing else the key is watching. */
     int i, same = (p.slot == last_slot && g_difficulty == last_diff && gen == last_gen
                    && root == last_root && p.line_len == last_len
-                   && g_cv_lobby == last_lobby);
+                   && g_cv_lobby == last_lobby && p.tab == last_tab
+                   && p.letter == last_letter);
     if (same)
         for (i = 0; i < p.line_len; i++)
             if (p.line[i] != last_line[i]) { same = 0; break; }
     if (same) return 0;
     last_slot = p.slot; last_diff = g_difficulty; last_gen = gen;
     last_root = root;   last_len = p.line_len;  last_lobby = g_cv_lobby;
+    last_tab = p.tab;    last_letter = p.letter;
     for (i = 0; i < p.line_len && i < CP_LINE_MAX; i++) last_line[i] = p.line[i];
     return 1;
 }
@@ -694,13 +745,16 @@ static int cv_refill_words(CommandPanel &p, TrieNode *root, CommandWords &w) {
             for (i = 0; i < CV_LOBBY_WORDS_N; i++)
                 g_cv_ncand = cv_add_cand(g_cv_cand, g_cv_ncand, CV_LOBBY_WORDS[i]);
             core_n = g_cv_ncand;
-        } else if (p.slot == CP_SLOT_VERB) {
+        } else if (p.tab == CP_TAB_VERB) {
             g_cv_ncand = cv_build_verb_cands(root, g_cv_cand, &core_n);
-        } else if (p.slot == CP_SLOT_NOUN) {
+        } else if (p.tab == CP_TAB_NOUN) {
             prev = cv_last_word(p, root);
             g_cv_ncand = cv_build_noun_cands(root, prev, g_cv_cand, &core_n);
-        } else if (p.slot == CP_SLOT_PREP) {
+        } else if (p.tab == CP_TAB_PREP) {
             g_cv_ncand = cv_build_prep_cands(root, g_cv_cand);
+        } else if (p.tab == CP_TAB_AZ) {
+            g_cv_ncand = cv_build_letter_cands(root, p.letter, g_cv_cand);
+            core_n = g_cv_ncand;
         }
         cv_reorder(g_cv_cand, g_cv_ncand, prev, core_n);
         cv_truncate_all(g_cv_cand, g_cv_ncand);
@@ -711,8 +765,8 @@ static int cv_refill_words(CommandPanel &p, TrieNode *root, CommandWords &w) {
     // else clamps on a refill; cp_clamp_cursor was only ever reached from
     // cp_word_move, so an out-of-range place survived until the player pushed
     // the stick.
-    cp_clamp(&p, g_cv_ncand);
-    cp_fill(g_cv_cand, g_cv_ncand, p.top, &w);
+    cp_clamp(&p, g_cv_ncand, cv_list_rows(p));
+    cp_fill(g_cv_cand, g_cv_ncand, p.top, cv_list_rows(p), &w);
     return g_cv_ncand;
 }
 
@@ -794,6 +848,67 @@ static int cv_pad_field(const char *text, char *field) {
         for (; i < 7; i++) field[i] = ' ';
         field[7] = '\0';
         return used;
+    }
+}
+
+/*----------------------
+ | CV_TAB_LABEL
+ | Description: The strip's four labels in CP_TAB_* order, two characters each so
+ |   all four and their brackets fit the fourteen columns the word rows occupy.
+ | Author: suinevere
+ ----------------------*/
+static const char *const CV_TAB_LABEL[CP_TAB_N] = { "Vb", "Nn", "Pr", "AZ" };
+
+/*----------------------
+ | cv_draw_tab_row
+ | Description: Draws the tab strip on the word module's own top row, which was
+ |   blank: the showing tab at full brightness, the rest dim, and a bracket
+ |   against the one the cursor is on while the strip holds focus.
+ | Author: suinevere
+ | Dependencies: command_panel.h, text_map.h
+ | Globals: N/A
+ | Params: p -- panel state; y -- the text row to draw on
+ | Returns: N/A
+ ----------------------*/
+static void cv_draw_tab_row(const CommandPanel &p, int y) {
+    int t;
+    for (t = 0; t < CP_TAB_N; t++) {
+        int x = CV_WORD_X + 1 + t * 4;
+        char field[4];
+        int on = (p.tab == t);
+        int aimed = (p.box == CP_BOX_WORD && p.zone == CP_ZONE_TABS && on);
+        field[0] = aimed ? '[' : ' ';
+        field[1] = CV_TAB_LABEL[t][0];
+        field[2] = CV_TAB_LABEL[t][1];
+        field[3] = '\0';
+        if (on) text_print(x, y, field);
+        else text_print_dim(x, y, field);
+    }
+}
+
+/*----------------------
+ | cv_draw_letter_row
+ | Description: Draws one of the A-Z grid's two rows of thirteen letters, dim,
+ |   with the letter under the cursor at full brightness while the letter zone
+ |   holds focus.
+ | Author: suinevere
+ | Dependencies: command_panel.h, text_map.h
+ | Globals: N/A
+ | Params: row -- 0 for A-M, 1 for N-Z; p -- panel state; y -- the text row
+ | Returns: N/A
+ ----------------------*/
+static void cv_draw_letter_row(int row, const CommandPanel &p, int y) {
+    char field[2];
+    int i;
+    field[1] = '\0';
+    for (i = 0; i < CV_LETTER_COLS; i++) {
+        int idx = row * CV_LETTER_COLS + i;
+        int x = CV_WORD_X + 1 + i;
+        field[0] = (char) ('A' + idx);
+        if (p.box == CP_BOX_WORD && p.zone == CP_ZONE_LETTERS && p.letter == idx)
+            text_print(x, y, field);
+        else
+            text_print_dim(x, y, field);
     }
 }
 
@@ -1081,7 +1196,11 @@ void render_command_panel(const CommandPanel &p, const RoomModel &m, const Comma
             if (!dash) text_print(0, y, "|");
             cv_draw_rose_row(row, exits, y, sel);
             if (!dash) text_print(14, y, "|");
-            if (inner >= 0 && inner < CP_WORD_ROWS) cv_draw_word_row(inner, p, w, y);
+            if (inner == -1) cv_draw_tab_row(p, y);
+            else if (p.tab == CP_TAB_AZ && inner >= 0 && inner < 2)
+                cv_draw_letter_row(inner, p, y);
+            else if (inner >= 0 && inner < CP_WORD_ROWS)
+                cv_draw_word_row(inner - (p.tab == CP_TAB_AZ ? 2 : 0), p, w, y);
             if (!dash) text_print(30, y, "|");
             if (inner >= 0 && inner < ncmd) cv_draw_cmd_row(inner, p, y);
             if (!dash) text_print(39, y, "|");
@@ -1150,7 +1269,7 @@ static void cv_travel_dpad(CommandPanel &p, const unsigned char *exits, int ncan
 
     edge = cr_move(exits, dir, dx, dy, &dir);
     p.cursor = dir;
-    if (edge > 0) cp_word_enter(&p, cr_dir_row(dir) - CV_LIST_ROW0, 0, ncand);
+    if (edge > 0) cp_word_enter(&p, cr_dir_row(dir) - CV_LIST_ROW0, 0, ncand, cv_list_rows(p));
 }
 
 /*----------------------
@@ -1170,11 +1289,13 @@ static void cv_travel_dpad(CommandPanel &p, const unsigned char *exits, int ncan
 static void cv_word_dpad(CommandPanel &p, const unsigned char *exits, int ncand) {
     int dx = (pad_fired(Button::Right) ? 1 : 0) - (pad_fired(Button::Left) ? 1 : 0);
     int dy = (pad_fired(Button::Down)  ? 1 : 0) - (pad_fired(Button::Up)   ? 1 : 0);
-    int row = p.cursor / CP_WORD_COLS;
+    int row = (p.zone == CP_ZONE_TABS)    ? 0
+            : (p.zone == CP_ZONE_LETTERS) ? p.letter / CV_LETTER_COLS
+                                          : p.cursor / CP_WORD_COLS;
     int edge;
 
     if (dx == 0 && dy == 0) return;
-    edge = cp_word_move(&p, dx, dy, ncand);
+    edge = cp_word_move(&p, dx, dy, ncand, cv_list_rows(p));
     if (edge < 0)      cv_enter_travel(p, exits, row + CV_LIST_ROW0);
     else if (edge > 0) { p.box = CP_BOX_CMD; p.cursor = row; }
 }
@@ -1197,7 +1318,7 @@ static void cv_cmd_dpad(CommandPanel &p, int ncand) {
     if (pad_fired(Button::Down)) cp_move(&p,  1, cv_cmd_count());
     /* The word list is the shorter of the two, so the row the cursor left from
        may not exist in it; cp_word_enter clamps to what is showing. */
-    if (pad_fired(Button::Left)) cp_word_enter(&p, row, 1, ncand);
+    if (pad_fired(Button::Left)) cp_word_enter(&p, row, 1, ncand, cv_list_rows(p));
 }
 
 /*----------------------

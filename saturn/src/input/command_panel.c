@@ -96,6 +96,10 @@ void cp_init(CommandPanel *p) {
     p->box = CP_BOX_WORD;
     p->cursor = 0;
     p->top = 0;
+    p->zone = CP_ZONE_LIST;
+    p->tab = CP_TAB_VERB;
+    p->tab_override = 0;
+    p->letter = 0;
     p->action = CP_ACT_NONE;
     cp_reset(p);
 }
@@ -183,6 +187,12 @@ void cp_pick(CommandPanel *p, const char *word, int next_slot) {
 
     p->slot = (next_slot >= CP_SLOT_VERB && next_slot <= CP_SLOT_DONE)
             ? next_slot : CP_SLOT_DONE;
+    // The override is spent by the word it was made for, so the next slot opens
+    // on the list its own grammar asked for rather than on the one the player
+    // reached past it for.
+    p->tab_override = 0;
+    p->tab = cp_tab_for_slot(p->slot);
+    p->zone = CP_ZONE_LIST;
     slot_restore(p);
     // A pick made from the overlay filled a noun slot, and the sentence carries
     // on in the word module -- the cursor slot_restore just set is a word cell,
@@ -209,7 +219,48 @@ void cp_pick(CommandPanel *p, const char *word, int next_slot) {
 void cp_set_slot(CommandPanel *p, int slot) {
     if (slot < CP_SLOT_VERB || slot > CP_SLOT_DONE) return;
     p->slot = slot;
+    if (!p->tab_override) p->tab = cp_tab_for_slot(slot);
     slot_restore(p);
+}
+
+/*----------------------
+ | cp_tab_for_slot
+ | Description: Maps the slot onto its list. DONE shows no list at all, so the
+ |   verb tab stands in for it rather than a fifth value nothing would draw.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: slot -- one of CP_SLOT_*
+ | Returns: one of CP_TAB_*
+ ----------------------*/
+int cp_tab_for_slot(int slot) {
+    if (slot == CP_SLOT_NOUN) return CP_TAB_NOUN;
+    if (slot == CP_SLOT_PREP) return CP_TAB_PREP;
+    return CP_TAB_VERB;
+}
+
+/*----------------------
+ | cp_tab_move
+ | Description: Walks the strip, clamped at both ends and reporting the edge it
+ |   was stopped at, and resets the list beneath it -- the new tab is a different
+ |   list, so the place remembered in the old one names nothing in it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; dx -- -1 or +1
+ | Returns: -1 or +1 at the ends, 0 otherwise
+ ----------------------*/
+int cp_tab_move(CommandPanel *p, int dx) {
+    int t = p->tab + dx;
+    if (t < 0) return -1;
+    if (t >= CP_TAB_N) return 1;
+    p->tab = t;
+    p->tab_override = 1;
+    p->letter = 0;
+    p->cursor = 0;
+    p->top = 0;
+    if (p->zone == CP_ZONE_LETTERS) p->zone = CP_ZONE_LIST;
+    return 0;
 }
 
 void cp_pick_whole(CommandPanel *p, const char *word) {
@@ -348,12 +399,12 @@ int cp_word_rows(int ncand) {
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: ncand -- candidate count
+ | Params: ncand -- candidate count; rows_visible -- rows the module is showing
  | Returns: the largest valid `top`, never negative
  ----------------------*/
-static int cp_top_max(int ncand) {
+static int cp_top_max(int ncand, int rows_visible) {
     int rows = cp_word_rows(ncand);
-    return (rows > CP_WORD_ROWS) ? (rows - CP_WORD_ROWS) : 0;
+    return (rows > rows_visible) ? (rows - rows_visible) : 0;
 }
 
 /*----------------------
@@ -364,7 +415,8 @@ static int cp_top_max(int ncand) {
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: p -- panel state; ncand -- candidate count
+ | Params: p -- panel state; ncand -- candidate count; rows_visible -- rows the
+ |   module is showing
  | Returns: N/A
  ----------------------*/
 /*----------------------
@@ -375,20 +427,21 @@ static int cp_top_max(int ncand) {
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: p -- panel state; ncand -- candidate count for the current slot
+ | Params: p -- panel state; ncand -- candidate count for the current slot;
+ |   rows_visible -- rows the module is showing
  | Returns: N/A
  ----------------------*/
-static void cp_clamp_cursor(CommandPanel *p, int ncand);
+static void cp_clamp_cursor(CommandPanel *p, int ncand, int rows_visible);
 
-void cp_clamp(CommandPanel *p, int ncand) {
+void cp_clamp(CommandPanel *p, int ncand, int rows_visible) {
     if (p->top < 0) p->top = 0;
-    if (p->top > cp_top_max(ncand)) p->top = cp_top_max(ncand);
-    cp_clamp_cursor(p, ncand);
+    if (p->top > cp_top_max(ncand, rows_visible)) p->top = cp_top_max(ncand, rows_visible);
+    cp_clamp_cursor(p, ncand, rows_visible);
 }
 
-static void cp_clamp_cursor(CommandPanel *p, int ncand) {
+static void cp_clamp_cursor(CommandPanel *p, int ncand, int rows_visible) {
     int filled = ncand - p->top * CP_WORD_COLS;
-    if (filled > CP_WORD_CELLS) filled = CP_WORD_CELLS;
+    if (filled > rows_visible * CP_WORD_COLS) filled = rows_visible * CP_WORD_COLS;
     if (filled <= 0) { p->cursor = 0; return; }
     if (p->cursor >= filled) p->cursor = filled - 1;
     if (p->cursor < 0) p->cursor = 0;
@@ -406,7 +459,8 @@ static void cp_clamp_cursor(CommandPanel *p, int ncand) {
  |   candidate row to show; out -- receives the window
  | Returns: N/A
  ----------------------*/
-void cp_fill(const char *const *cands, int ncand, int top, CommandWords *out) {
+void cp_fill(const char *const *cands, int ncand, int top, int rows_visible,
+             CommandWords *out) {
     int start, room, i;
 
     out->n = 0;
@@ -416,24 +470,73 @@ void cp_fill(const char *const *cands, int ncand, int top, CommandWords *out) {
     if (cands == 0 || ncand <= 0) return;
 
     if (top < 0) top = 0;
-    if (top > cp_top_max(ncand)) top = cp_top_max(ncand);
+    if (top > cp_top_max(ncand, rows_visible)) top = cp_top_max(ncand, rows_visible);
 
     start = top * CP_WORD_COLS;
     room = ncand - start;
-    if (room > CP_WORD_CELLS) room = CP_WORD_CELLS;
+    if (room > rows_visible * CP_WORD_COLS) room = rows_visible * CP_WORD_COLS;
     for (i = 0; i < room; i++) out->word[i] = cands[start + i];
     out->n = room;
     out->top = top;
     out->rows = cp_word_rows(ncand);
 }
 
-int cp_word_move(CommandPanel *p, int dx, int dy, int ncand) {
+/*----------------------
+ | CP_LETTER_COLS
+ | Description: The alphabet's thirteen columns over two rows, which is what fits
+ |   the word module's fourteen.
+ | Author: suinevere
+ ----------------------*/
+#define CP_LETTER_COLS 13
+
+/*----------------------
+ | cp_letter_move
+ | Description: See command_panel.h. The two rows are one grid rather than two
+ |   lists, so leaving the top of it and leaving the bottom of it arrive in
+ |   different zones.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; dx -- -1, 0 or +1; dy -- -1, 0 or +1
+ | Returns: -1 or +1 at the module's sides, 0 otherwise
+ ----------------------*/
+int cp_letter_move(CommandPanel *p, int dx, int dy) {
+    int row = p->letter / CP_LETTER_COLS;
+    int col = p->letter % CP_LETTER_COLS;
+    if (dx != 0) {
+        int nc = col + dx;
+        if (nc < 0) return -1;
+        if (nc >= CP_LETTER_COLS) return 1;
+        p->letter = row * CP_LETTER_COLS + nc;
+        return 0;
+    }
+    if (dy < 0) {
+        if (row == 0) { p->zone = CP_ZONE_TABS; return 0; }
+        p->letter = col;
+        return 0;
+    }
+    if (dy > 0) {
+        if (row == 1) { p->zone = CP_ZONE_LIST; p->cursor = 0; p->top = 0; return 0; }
+        p->letter = CP_LETTER_COLS + col;
+        return 0;
+    }
+    return 0;
+}
+
+int cp_word_move(CommandPanel *p, int dx, int dy, int ncand, int rows_visible) {
     int row = p->cursor / CP_WORD_COLS;
     int col = p->cursor % CP_WORD_COLS;
     int vis;
 
+    if (p->zone == CP_ZONE_LETTERS) return cp_letter_move(p, dx, dy);
+    if (p->zone == CP_ZONE_TABS) {
+        if (dx != 0) return cp_tab_move(p, dx);
+        if (dy > 0) p->zone = (p->tab == CP_TAB_AZ) ? CP_ZONE_LETTERS : CP_ZONE_LIST;
+        return 0;
+    }
+
     if (p->top < 0) p->top = 0;
-    if (p->top > cp_top_max(ncand)) p->top = cp_top_max(ncand);
+    if (p->top > cp_top_max(ncand, rows_visible)) p->top = cp_top_max(ncand, rows_visible);
 
     if (dx != 0) {
         int nc = col + dx;
@@ -449,28 +552,36 @@ int cp_word_move(CommandPanel *p, int dx, int dy, int ncand) {
     if (dy != 0) {
         int nr = row + dy;
         vis = cp_word_rows(ncand) - p->top;
-        if (vis > CP_WORD_ROWS) vis = CP_WORD_ROWS;
+        if (vis > rows_visible) vis = rows_visible;
         if (nr < 0) {
+            // Nothing to scroll means the press has somewhere else to go: the
+            // strip above, which is why up at the top of an unscrolled list
+            // used to do nothing at all.
             if (p->top > 0) p->top--;
+            else p->zone = (p->tab == CP_TAB_AZ) ? CP_ZONE_LETTERS : CP_ZONE_TABS;
         } else if (nr >= vis) {
-            if (p->top < cp_top_max(ncand)) p->top++;
+            if (p->top < cp_top_max(ncand, rows_visible)) p->top++;
         } else {
             p->cursor = nr * CP_WORD_COLS + col;
         }
-        cp_clamp_cursor(p, ncand);
+        cp_clamp_cursor(p, ncand, rows_visible);
     }
     return 0;
 }
 
-void cp_word_enter(CommandPanel *p, int row, int from_right, int ncand) {
+void cp_word_enter(CommandPanel *p, int row, int from_right, int ncand,
+                   int rows_visible) {
     int vis;
     p->box = CP_BOX_WORD;
+    // Arriving from a neighbouring module lands on a word, never on the strip:
+    // the row asked for is a list row.
+    p->zone = CP_ZONE_LIST;
     if (p->top < 0) p->top = 0;
-    if (p->top > cp_top_max(ncand)) p->top = cp_top_max(ncand);
+    if (p->top > cp_top_max(ncand, rows_visible)) p->top = cp_top_max(ncand, rows_visible);
     vis = cp_word_rows(ncand) - p->top;
-    if (vis > CP_WORD_ROWS) vis = CP_WORD_ROWS;
+    if (vis > rows_visible) vis = rows_visible;
     if (row < 0) row = 0;
     if (vis > 0 && row >= vis) row = vis - 1;
     p->cursor = row * CP_WORD_COLS + (from_right ? CP_WORD_COLS - 1 : 0);
-    cp_clamp_cursor(p, ncand);
+    cp_clamp_cursor(p, ncand, rows_visible);
 }

@@ -65,6 +65,25 @@ enum { CP_SLOT_VERB = 0, CP_SLOT_NOUN, CP_SLOT_PREP, CP_SLOT_DONE };
 enum { CP_ACT_NONE = 0, CP_ACT_MAP, CP_ACT_MENU, CP_ACT_SWAP };
 
 /*----------------------
+ | CP_TAB_VERB .. CP_TAB_N
+ | Description: The four word lists the module can show, left to right along the
+ |   strip above it: the verbs, the objects, the prepositions, and the whole
+ |   dictionary by first letter. The slot picks one by default; the player may
+ |   pick another, and that choice lasts until the next word is picked.
+ | Author: suinevere
+ ----------------------*/
+enum { CP_TAB_VERB = 0, CP_TAB_NOUN, CP_TAB_PREP, CP_TAB_AZ, CP_TAB_N };
+
+/*----------------------
+ | CP_ZONE_LIST / CP_ZONE_TABS / CP_ZONE_LETTERS
+ | Description: Which part of the word module the cursor is in, and so what its
+ |   index means: a cell of the word grid, a tab of the strip above it, or a
+ |   letter of the alphabet grid the A-Z tab opens.
+ | Author: suinevere
+ ----------------------*/
+enum { CP_ZONE_LIST = 0, CP_ZONE_TABS, CP_ZONE_LETTERS };
+
+/*----------------------
  | CommandPanel
  | Description: One prompt's panel state.
  | Author: suinevere
@@ -85,6 +104,10 @@ typedef struct {
     char line[CP_LINE_MAX];
     int  line_len;
     int  submitted;
+    int  zone;          /* CP_ZONE_* -- what the cursor is indexing */
+    int  tab;           /* CP_TAB_* -- which list is showing */
+    int  tab_override;  /* 1 while the player's tab outranks the slot's */
+    int  letter;        /* 0..25, the A-Z grid's cursor */
     int  overlay;   /* 1 while the inventory overlay is up */
     int  action;    /* CP_ACT_* the host loop owes, CP_ACT_NONE when none */
 } CommandPanel;
@@ -297,7 +320,8 @@ typedef struct {
  |   candidate row to show; out -- receives the window
  | Returns: N/A
  ----------------------*/
-void cp_fill(const char *const *cands, int ncand, int top, CommandWords *out);
+void cp_fill(const char *const *cands, int ncand, int top, int rows_visible,
+             CommandWords *out);
 
 /*----------------------
  | cp_clamp
@@ -312,7 +336,7 @@ void cp_fill(const char *const *cands, int ncand, int top, CommandWords *out);
  | Params: p -- panel state; ncand -- candidate count for the current slot
  | Returns: N/A
  ----------------------*/
-void cp_clamp(CommandPanel *p, int ncand);
+void cp_clamp(CommandPanel *p, int ncand, int rows_visible);
 
 /*----------------------
  | cp_word_rows
@@ -341,7 +365,45 @@ int cp_word_rows(int ncand);
  | Returns: 0 when the cursor stayed in the module, -1 when it stepped off the
  |   left edge, +1 when it stepped off the right
  ----------------------*/
-int cp_word_move(CommandPanel *p, int dx, int dy, int ncand);
+int cp_word_move(CommandPanel *p, int dx, int dy, int ncand, int rows_visible);
+
+/*----------------------
+ | cp_tab_for_slot
+ | Description: The list a slot asks for while nothing is overriding it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: slot -- one of CP_SLOT_*
+ | Returns: one of CP_TAB_*; the verb tab for DONE, which shows no list
+ ----------------------*/
+int cp_tab_for_slot(int slot);
+
+/*----------------------
+ | cp_tab_move
+ | Description: Steps along the tab strip, marking the choice as the player's. A
+ |   step off either end is the module's edge, reported the way cp_word_move
+ |   reports the list's column edges so focus crosses out by the same rule.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; dx -- -1 or +1
+ | Returns: -1 or +1 when the step left the strip sideways, 0 when it did not
+ ----------------------*/
+int cp_tab_move(CommandPanel *p, int dx);
+
+/*----------------------
+ | cp_letter_move
+ | Description: Walks the A-Z tab's two rows of thirteen letters. Up off the top
+ |   row returns to the tab strip and down off the bottom row enters the word
+ |   list, so the three zones are one column the cursor walks; a step off either
+ |   side is the module's edge, reported as cp_word_move reports it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; dx -- -1, 0 or +1; dy -- -1, 0 or +1
+ | Returns: -1 or +1 when the step left the module sideways, 0 otherwise
+ ----------------------*/
+int cp_letter_move(CommandPanel *p, int dx, int dy);
 
 /*----------------------
  | cp_word_enter
@@ -356,7 +418,8 @@ int cp_word_move(CommandPanel *p, int dx, int dy, int ncand);
  |   focus arrived from the module to the right; ncand -- candidate count
  | Returns: N/A
  ----------------------*/
-void cp_word_enter(CommandPanel *p, int row, int from_right, int ncand);
+void cp_word_enter(CommandPanel *p, int row, int from_right, int ncand,
+                   int rows_visible);
 
 #ifdef __cplusplus
 }

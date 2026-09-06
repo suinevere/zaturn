@@ -33,7 +33,9 @@ switch after that one fails instead.
 Run as a human-readable report: python saturn/tests/test_hwram_budget.py
 Run as tests: pytest saturn/tests/test_hwram_budget.py
 """
+import os
 import re
+import subprocess
 import sys
 import pathlib
 
@@ -44,6 +46,8 @@ SRC = ROOT / "saturn" / "src"
 Z3_DIR = ROOT / "saturn" / "cd" / "data" / "Z3"
 MAP_FILE = (ROOT / "saturn" / "BuildDrop"
             / "Zaturn (USA) (Netlink Edition).map")
+COMPILE = ROOT / "saturn" / "compile.bat"
+TOOLCHAIN = ROOT / "SaturnRingLib" / "Compiler" / "sh2eb-elf" / "bin"
 
 
 def outdated_map():
@@ -63,18 +67,54 @@ def outdated_map():
 
 
 NO_HEAP = ("no link map in BuildDrop, or one older than the sources it would "
-           "be measuring -- build once to measure the heap")
+           "be measuring, and no toolchain here to build one -- run "
+           "saturn/compile.bat to measure the heap")
+
+_BUILT = []
+
+
+def build_map():
+    """Build once, if that is what it takes to have a map worth reading.
+
+    The heap is a property of the built image, so a heap test without a build
+    behind it is measuring nothing -- it either reports the last build's number
+    long after that build stopped existing, or it skips and the floor silently
+    stops being held. Both happened. So the build is the test's dependency and
+    is run on demand, at most once a session, and only where there is a
+    toolchain to run it with; ZATURN_NO_BUILD=1 opts out for anywhere that
+    would rather skip than spend the minutes.
+    """
+    if MAP_FILE.is_file() and not outdated_map():
+        return True
+    if _BUILT:
+        return _BUILT[0]
+    if (os.environ.get("ZATURN_NO_BUILD") or not COMPILE.is_file()
+            or not TOOLCHAIN.is_dir()):
+        return False
+    print(f"\n{MAP_FILE.name} is stale; running {COMPILE.name} to measure the "
+          "heap against the build it describes", flush=True)
+    try:
+        done = subprocess.run(["cmd", "/c", str(COMPILE)], cwd=str(COMPILE.parent),
+                              capture_output=True, text=True, timeout=3600)
+    except (OSError, subprocess.SubprocessError):
+        _BUILT.append(False)
+        return False
+    ok = MAP_FILE.is_file() and not outdated_map()
+    if not ok:
+        print(done.stdout[-2000:], done.stderr[-2000:], flush=True)
+    _BUILT.append(ok)
+    return ok
 
 
 def heap_bytes():
     """The HWRAM C heap, measured off the link map.
 
     __heap_start moves with .bss, so this is a property of the build and not a
-    constant anything declares. Returns None when there is no map to read --
-    BuildDrop is not committed, so a clean checkout has none -- and when the
-    map is older than the sources, because a stale number is worse than none.
+    constant anything declares -- which is why a missing or stale map is built
+    rather than worked around. Returns None only when there is no way to get
+    one: no toolchain in this checkout, or ZATURN_NO_BUILD set.
     """
-    if not MAP_FILE.is_file() or outdated_map():
+    if not build_map():
         return None
     text = MAP_FILE.read_text(encoding="utf-8", errors="replace")
     start = re.search(r"(?m)^\s*(0x[0-9a-fA-F]+)\s+__heap_start\s*=", text)

@@ -1,26 +1,61 @@
 ---
 name: lwram-sound-and-image-trim-handoff
-description: The netbin's music is wrong on real hardware for two reasons no emulator can reproduce -- it arrives on a chip PlanetWeb has been playing through and released only four of its thirty-two slots, and sound RAM was written a byte at a time behind the SCSP's sixteen-bit bus; also Lurking Horror's fourteen sound effects now fit, in Low Work RAM, and both budget floors are clear.
+description: SOLVED -- the netbin's music was silent on real hardware because the sound block was left off and MEM4MB was never set, two things no emulator can fail; four theories reasoned from code were wrong and a probe served as zaturn.netbin settled it in three loads. Also Lurking Horror's fourteen sound effects now fit, in Low Work RAM, and both budget floors are clear with room -- the netbin by 18,624 bytes after a tracker cell became a one-byte index into a 173-entry pair table.
 metadata:
   type: project
 ---
 
-Branch `synth-music`. Three squashed commits went out as `v0.0.9` (`9bf95a1`,
-`ea31947`, `4a71363`), and the B-bus fix and this note followed them. The working
-tree still carries the owner's own unstaged `MEDNAFEN_ALLOWMULTI=1` in
+Branch `synth-music`, level with `origin/main` at `cba830c`. Three squashed
+commits went out as `v0.0.9` (`9bf95a1`, `ea31947`, `4a71363`); everything after
+that was pushed one commit at a time while the sound fault was being chased on
+hardware, so the log reads as the search and not as a plan. The working tree
+carries the owner's own unstaged `MEDNAFEN_ALLOWMULTI=1` in
 `saturn/run_with_mednafen.bat` and an untracked `out.wav` from 4 September;
 neither is mine.
 
-**Read "the chip was inherited" first.** It was found last and it is the best
-explanation of the thing that was actually wrong; the sections before it describe
-work that is good and finished but was never what was silencing anything.
+The release workflow is byte-identical to its pre-hunt state -- the probe was
+published *as* `zaturn.netbin` for three loads and that hook is fully removed
+(`git diff 65f7aa2 -- .github/workflows/release.yml` is empty). The probe itself
+stays at `tools/scspfx`, buildable as a disc (`tools/assets/scspfx.bat`), as a
+driverless disc (`scspfx-nodrv.bat`) or as a netbin (`scspfx-netbin.bat`). The
+netbin form is the one that found the fault, and it is the one to reach for
+again, because a CD boot arrives on a chip nobody else has touched.
 
-Two faults in this note are real, hardware-only, and were each chased for a
-session in the wrong layer -- the inherited chip and the byte-wide sound RAM
-write. Both are invisible under Mednafen, which performs the write and hands over
-a chip nobody else has touched. That is the lesson, and it is the same one the
-eleven earlier SCSP faults taught: the emulator agreeing with you is not
-evidence.
+## The answer, since the sections below record the search rather than the result
+
+The netbin's music was silent on hardware for **two** reasons, both invisible to
+every emulator this project has ever used:
+
+1. **The sound block was left off.** `synth_target_init` called SMPC SNDOFF and
+   then drove the SCSP from the SH-2. The chip does not sound while the block is
+   in reset -- registers take writes, sound RAM takes writes, no audio comes out.
+   Fixed by parking the 68K on a two-byte `0x60FE` spin loop at its reset vector
+   and calling SNDON.
+2. **MEM4MB was never set.** Bit 9 of the SCSP's common register tells the chip
+   sound RAM is 512 KB. The SH-2 reaches all of it through the SCU regardless --
+   which is exactly why a read-back check passed 256 of 256 at three separate
+   addresses while every slot stayed silent. The chip's own sample fetch honours
+   the bit, so waveforms at 0x70000 were fetched from 0x30000. `SND_Init` sets
+   it; nothing in a driverless build did. One bit, and it is the whole fault.
+
+Confirmed on a real Saturn over NetLink: all thirty-two slots sound, and the
+game's music plays.
+
+**Four theories were wrong before those two were right**, and every one of them
+was reasoned from code that Mednafen ran correctly: the synth level, a byte-wide
+sound RAM write, an inherited chip with slots left keyed, and PlanetWeb ignoring
+SNDOFF. Nothing moved until numbers came off the real machine. That is the same
+lesson the eleven earlier SCSP faults taught, and it cost four more rounds to
+learn again: **the emulator agreeing with you is not evidence.**
+
+Two pieces of code survive from the dead theories -- the word-wide sound RAM
+write and `scsp_silence_all`. Both are kept on their own merits and both have had
+their comments corrected so neither claims to have fixed anything.
+
+The probe that settled it is `tools/scspfx`, and the thing that made it work was
+publishing it **as** `zaturn.netbin` so it arrived by the browser's own route.
+That hook is out of the release workflow again (the file is byte-identical to its
+pre-hunt state); `tools/assets/scspfx-netbin.bat` still builds it on demand.
 
 Supersedes [[lurking-sound-budget-handoff]] on the route and every number in it.
 That note's diagnosis was right and its arithmetic was right when written; what
@@ -55,7 +90,12 @@ size.
 
 ## Both floors are clear, and neither by the obvious route
 
-| | was | now | floor |
+These were the numbers when the two trims below landed. Both moved again
+afterwards -- the netbin when the cell packing arrived, the heap when other work
+rebased through -- so **the current figures are in "The netbin image, after the
+cell packing"** and these are kept only to show what each trim was worth.
+
+| | was | after these two trims | floor |
 |---|---|---|---|
 | CD heap behind `LURKING.Z3` | 6,200 | 63,096 | 16,384 |
 | netbin spare under 307,200 | 30,048 | 34,512 | 32,768 |
@@ -83,7 +123,8 @@ kept free of includes and `test_synth_waves.py` **compiles it with a host
 compiler and diffs all 5,120 against `genwaves.py`**. It passes. Do not weaken
 that test into a reading of the two implementations side by side.
 
-348 of 349 host tests pass. The one failure is the pre-existing
+That was 348 of 349 host tests at the time; it is 380 of 381 now. The one
+failure has always been the pre-existing
 `test_every_frame_lies_inside_its_archive` -- Lurking's eight areas still have no
 `.CGL` staged, which is art-v2's to finish and was failing before this session.
 
@@ -258,45 +299,62 @@ cannot be the cause -- the silence predates it -- but it is new code on that
 path, so rule it out first by checking the four commits above out one at a time
 if the silence turns out to have moved.
 
+## The netbin image, after the cell packing
+
+Commit `cba830c` has the reasoning and the traps; the numbers are here because
+the budget tests are the thing a fresh session trips over first.
+
+| | before | after | floor | margin |
+|---|---|---|---|---|
+| netbin image | 275,520 | **255,808** | 274,432 | **+18,624** |
+| CD heap behind `LURKING.Z3` | -- | 63,704 free | 16,384 | **+47,320** |
+| CD's LWRAM tune slot | 8,704 | **4,608** | -- | -- |
+
+380 host tests pass. The one failure is the pre-existing
+`test_every_frame_lies_inside_its_archive` -- Lurking's eight areas have no
+`.CGL` staged, which is art-v2's and was failing before any of this started.
+
 ## Open
 
-1. **Put the netbin on real hardware again** and hear whether the word-wide
-   sound RAM write fixed it. Everything else waits on that, and nothing about it
-   can be settled under an emulator, which cannot reproduce the fault.
-2. **Re-run both SCSP sweeps** now that the probe writes its tone in words. The
-   "all thirty-two are ours" answer was measured against a tone laid down by the
-   broken path, and `scsp.h` currently records it as settled.
-3. **The synth level is applied to a logarithmic field.** `synth_note_on` passes
-   `(vol * g_level) / 7` to `scsp_key_on`, which writes it to DISDL -- register
-   0x16, three bits, 6 dB a step. The tune's own volumes are 4 to 6, so at the
-   default level of 5 they become 2, 3 and 4: every voice about 12 dB down, and
-   the quiet ones about 5 dB further down than the loud ones because the division
-   truncates. drums-chip hardcodes level 7, which is why it has never shown this.
-   The player's level belongs on the master volume (MVOL, register 0x400, four
-   bits, already written by `scsp_enable_output`) rather than multiplied into
-   each voice's send level -- but MVOL is global, so on the CD build it would
-   duck CD-DA and the PCM effects too. That fork is unresolved.
-2. **Sweep again with a PCM effect playing.** The driver was idle for the sweep
-   that answered "all thirty-two", and the CD build's effects go through it. If
-   it keys 28-31 while playing, an effect disrupts the music.
-3. **Nothing in this session has been heard or seen.** The LWRAM slices, the
-   reclaim path, the rebuilt probe, the boot-built waveform tables. The tables
-   are proven byte-identical on the host, which is as far as a host can go.
-4. **~19.8 KB more netbin, available and not taken.** `MUSIC_CELLS` is 20,160
-   two-byte cells using only **173 distinct (note, flags) pairs**, so a one-byte
-   index into a pair table saves 19,814 bytes. Not done: it touches the tracker's
-   hot path while the tracker is under suspicion, and 1,744 bytes of margin was
-   enough to clear the floor. It is the lever to reach for next, after the
-   silence is understood.
-5. The item-pane exclusion is load-bearing for the sound budget. If a second
-   story ever gets an item-picture table, `test_sound_slice_budget` fails and
-   should be believed.
+1. **None of Lurking Horror's sound effects has ever been played.** The whole
+   first half of this session -- `load_slice` moved to Low Work RAM, the gate,
+   the reclaim path, the leak fix -- is host-tested arithmetic and nothing more.
+   The music works on hardware now, so the PCM path is the next thing that
+   should be heard. `LURKING.BLB` is the only sound blorb on the disc.
+2. **The synth level is multiplied into a logarithmic field, and that is a real
+   bug.** `synth_note_on` passes `(vol * g_level) / 7` to `scsp_key_on`, which
+   writes DISDL -- register 0x16, three bits, 6 dB a step. The tunes use volumes
+   4 to 6, so at the default level of 5 they become 2, 3 and 4: every voice about
+   12 dB down, the quiet ones about 5 dB further because the division truncates.
+   `drums-chip.bat` hardcodes level 7, which is why it never showed. The player's
+   level belongs on MVOL (register 0x400, four bits, already written by
+   `scsp_enable_output`), but MVOL is global and on the CD build would duck
+   CD-DA and the effects too. **That fork is unresolved** -- it needs a decision,
+   not an implementation.
+3. **Sweep with a PCM effect playing.** Every "all thirty-two slots are ours"
+   answer was taken with the SGL driver *loaded but idle*, and the CD build's
+   effects go through that driver. If it keys 28-31 while playing, an effect
+   disrupts the music. `scsp.h` records the assumption this would break.
+4. The item-pane exclusion is load-bearing for the sound budget: the largest
+   sample clears it by 3,264 bytes only because Zork I is the one story with an
+   item-picture table. If a second story gets one, `test_sound_slice_budget`
+   fails and should be believed rather than adjusted.
+
+Closed by measurement, so nobody re-opens them: slots 7/13/20/27 popping was
+MEM4MB aliasing and is gone; the byte-vs-word sound RAM write and the inherited
+chip were both disproved (see "What was chased before that").
 
 ## Suggested skills
 
-* **`superpowers:verification-before-completion`** -- carried over from the note
-  this supersedes, and earned again twice: the probe's format bug, and the slice
-  budget's own check failing the moment the heap moved, which is what forced the
-  re-derivation rather than a shrug.
-* **`superpowers:systematic-debugging`** -- for the netbin silence, which has
-  four candidates and no symptom that distinguishes them.
+* **`superpowers:verification-before-completion`** -- the governing lesson, and
+  it was earned four times over. Every wrong theory in this note was reasoned
+  from code that Mednafen ran correctly, and each one was stated with more
+  confidence than the evidence carried. Do not report anything on this path as
+  working until hardware has said so.
+* **`superpowers:systematic-debugging`** -- specifically its instruction to build
+  an instrument rather than iterate on hypotheses. Four rebuilds were spent
+  guessing; the probe answered it in three loads once it could report a number
+  instead of asking someone to listen.
+* **`superpowers:brainstorming`** -- before touching open item 2. The level fork
+  has no obviously right answer and the wrong one is a regression on the CD
+  build, which is the shape of decision that wants the owner in the loop.

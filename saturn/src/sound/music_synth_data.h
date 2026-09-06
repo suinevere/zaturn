@@ -94,6 +94,20 @@ extern "C" {
 #endif
 
 /*----------------------
+ | MUSIC_SYNTH_PAIRS
+ | Description: How many distinct (note, wv) pairs the whole catalogue uses, and
+ |   so how long the table every cell indexes is.
+ |
+ |   Outside the #if above, unlike the cell and order counts. Those are cut to a
+ |   prefix on the CD target because that build links one tune; this one is not,
+ |   because that build still plays the other eleven off /BG/MUSIC.PAT and their
+ |   cells are indices into the whole table. Cut it to the CD prefix and every
+ |   disc tune reads pairs that are not there.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SYNTH_PAIRS    173
+
+/*----------------------
  | MUSIC_SYNTH_DEFAULT
  | Description: The tune played where nothing has chosen one -- the boot menus,
  |   the netbin, and any CD-DA track the mood table does not reach.
@@ -125,7 +139,7 @@ extern "C" {
  ----------------------*/
 #define MUSIC_PAT_FILE         "MUSIC.PAT"
 #define MUSIC_PAT_HEADER_BYTES 512
-#define MUSIC_PAT_SLOT_BYTES   8192
+#define MUSIC_PAT_SLOT_BYTES   4096
 #define MUSIC_PAT_SECTOR       2048
 
 /*----------------------
@@ -161,6 +175,14 @@ int music_synth_song_count(void);
  | Returns: a song valid for the life of the program
  ----------------------*/
 const TrackerSong *music_synth_song_at(int index);
+
+/*----------------------
+ | music_synth_pairs
+ | Description: The catalogue's (note, wv) pair table, which every cell in both
+ |   the linked tunes and the ones on /BG/MUSIC.PAT is an index into.
+ | Author: suinevere
+ ----------------------*/
+const TrackerPair *music_synth_pairs(void);
 
 /*----------------------
  | music_synth_song_name

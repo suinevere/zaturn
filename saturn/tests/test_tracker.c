@@ -30,20 +30,33 @@ static void sink(int channel, int semitone, int octave, int wave, int vol) {
 }
 
 /* Two channels, two rows per pattern, two patterns. Note 26 is semitone
-   index 24, which is semitone 0 at octave 0 (24 % 12 = 0, 24 / 12 - 2 = 0). */
+   index 24, which is semitone 0 at octave 0 (24 % 12 = 0, 24 / 12 - 2 = 0).
+
+   A cell is an index into PAIRS rather than the note and wv themselves -- the
+   catalogue reuses 173 pairs across 20,160 cells, so it is stored that way to
+   keep the netbin image under its ceiling (see tracker.h). These fixtures name
+   the pairs so the events below still read as notes. */
+static const TrackerPair PAIRS[] = {
+    { 26, 0x07 },   /* 0 */
+    {  0, 0x00 },   /* 1: hold */
+    {  1, 0x00 },   /* 2: key off */
+    { 38, 0x15 },   /* 3 */
+    { 27, 0x07 },   /* 4 */
+};
 static const TrackerCell CELLS[] = {
     /* pattern 0 */
-    { 26, 0x07 }, {  0, 0x00 },
-    {  1, 0x00 }, { 38, 0x15 },
+    0, 1,
+    2, 3,
     /* pattern 1 */
-    { 27, 0x07 }, {  0, 0x00 },
-    {  0, 0x00 }, {  1, 0x00 },
+    4, 1,
+    1, 2,
 };
 static const unsigned char ORDER[] = { 0, 1 };
 
 static TrackerSong song(unsigned char speed, unsigned char loop_to) {
     TrackerSong s;
     s.cells = CELLS;
+    s.pairs = PAIRS;
     s.rows = 2;
     s.channels = 2;
     s.order = ORDER;

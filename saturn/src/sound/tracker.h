@@ -24,7 +24,27 @@ extern "C" {
 typedef struct {
     unsigned char note;
     unsigned char wv;
-} TrackerCell;
+} TrackerPair;
+
+/*----------------------
+ | TrackerCell
+ | Description: One channel on one row, as an index into the song's pair table
+ |   rather than the note and wv bytes themselves.
+ |
+ |   The catalogue is 20,160 cells and uses 173 distinct (note, wv) pairs
+ |   between all twelve tunes -- music repeats, and four channels of it repeat
+ |   hard. Held as pairs that was 40,320 bytes of .rodata in the netbin image,
+ |   which is bounded by file size because PlanetWeb refuses an oversized one;
+ |   held as indices into a 173-entry table it is 20,160 plus 346, and the
+ |   19,814 bytes that buys were the difference between the image having room to
+ |   grow and not. The cost is one table lookup per channel per row, which is
+ |   four per tick at 60 Hz.
+ |
+ |   A byte cannot hold more than 256 pairs, and tools/assets/mid2pat.py refuses
+ |   to emit a catalogue that needs more rather than truncating one.
+ | Author: suinevere
+ ----------------------*/
+typedef unsigned char TrackerCell;
 
 /*----------------------
  | TrackerSong
@@ -41,6 +61,7 @@ typedef struct {
  ----------------------*/
 typedef struct {
     const TrackerCell   *cells;
+    const TrackerPair   *pairs;
     unsigned char        rows;
     unsigned char        channels;
     const unsigned char *order;

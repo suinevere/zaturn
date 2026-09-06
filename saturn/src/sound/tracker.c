@@ -50,13 +50,13 @@ void tracker_tick(void) {
     const TrackerCell *row = s->cells + ((pattern * s->rows + g_row) * s->channels);
 
     for (int c = 0; c < s->channels; c++) {
-        unsigned char note = row[c].note;
-        if (note == 0) continue;
-        if (note == 1) {
+        TrackerPair p = s->pairs[row[c]];
+        if (p.note == 0) continue;
+        if (p.note == 1) {
             g_sink(c, -1, 0, 0, 0);
         } else {
-            int index = note - 2;
-            g_sink(c, index % 12, index / 12 - 2, row[c].wv >> 4, row[c].wv & 0x0F);
+            int index = p.note - 2;
+            g_sink(c, index % 12, index / 12 - 2, p.wv >> 4, p.wv & 0x0F);
         }
     }
 

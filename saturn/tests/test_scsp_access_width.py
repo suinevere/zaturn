@@ -6,16 +6,21 @@ anything behind that bus is not narrowed on your behalf -- it is an access the
 bus has no way to express, and what the chip does with it is not defined.
 
 scsp.c copied waveforms into sound RAM one `signed char` at a time for as long as
-the synth has existed. Every run that anyone called working was under Mednafen,
-which simply performs the write; the first time it went over NetLink onto a real
-Saturn it came back as a waveform table that was part right and part whatever had
-been there before. That is not silence and it is not music -- it is a run of
-bleeps, a different run of bleeps, and sometimes nothing, from one unchanged
-binary. Two sessions were spent above the tracker looking for it.
+the synth existed, and it was changed on the theory that this was what silenced
+the netbin on real hardware.
 
-Nothing on a host can execute this, and the emulator cannot fail it, so what is
-left is to hold the shape of the code: the copy goes through a 16-bit pointer,
-and no byte-wide store into sound RAM comes back.
+**That theory was wrong**, and this file should not be read as recording a fault.
+Measured from a netbin over NetLink, a region written by bytes and a region
+written by words both read back 256 of 256 correct. The netbin's silence was
+MEM4MB -- bit 9 of the SCSP's common register, which tells the chip sound RAM is
+512 KB. The SH-2 reaches all of it regardless, so a read-back check passes either
+way; the chip's own sample fetch is what honours the bit, and with it clear every
+slot keyed onto an address nothing had been written to.
+
+The word write stays because a word is the access the sixteen-bit B-bus is built
+for and it costs nothing. What this file holds is that shape, so nobody
+reintroduces a byte loop into sound RAM by accident -- not a claim that doing so
+was ever observed to break anything.
 
 Run as tests: pytest saturn/tests/test_scsp_access_width.py
 """
@@ -46,8 +51,8 @@ def test_the_engine_writes_sound_ram_in_words():
         "is uploading waveforms now is not doing it in words.")
     assert not re.search(r"g_wave\s*\[[^\]]+\]\s*=", src), (
         "scsp.c assigns through g_wave, the byte-wide view of sound RAM. That "
-        "is the write that made the netbin's music come back as bleeps on one "
-        "run of real hardware and silence on the next.")
+        "is the access the sixteen-bit B-bus is not built for; see this file's "
+        "header for why that is a shape to hold and not a fault that was observed.")
 
 
 def test_the_probe_writes_its_tone_in_words():

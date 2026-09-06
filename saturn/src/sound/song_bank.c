@@ -177,7 +177,7 @@ static const TrackerSong *slot_song(const unsigned char *entry, int bytes) {
     int patterns = rd16(g_slot);
     int order_len = rd16(g_slot + 2);
     long cells = (long) patterns * MUSIC_SYNTH_ROWS * MUSIC_SYNTH_CHANNELS;
-    long need = PAT_REC_HEAD + cells * 2 + order_len;
+    long need = PAT_REC_HEAD + cells + order_len;
     int i;
 
     if (patterns < 1 || order_len < 1) return 0;
@@ -186,12 +186,16 @@ static const TrackerSong *slot_song(const unsigned char *entry, int bytes) {
        two was read from the wrong place, and playing either would be noise. */
     if (order_len != (int) entry[6]) return 0;
     for (i = 0; i < order_len; i++)
-        if (g_slot[PAT_REC_HEAD + cells * 2 + i] >= patterns) return 0;
+        if (g_slot[PAT_REC_HEAD + cells + i] >= patterns) return 0;
 
+    /* One byte per cell, indexing the same pair table the linked tunes use --
+       the disc carries indices, not pairs, so the table has to come from the
+       image whichever tune is playing. */
     g_song.cells      = (const TrackerCell *) (g_slot + PAT_REC_HEAD);
+    g_song.pairs      = music_synth_pairs();
     g_song.rows       = MUSIC_SYNTH_ROWS;
     g_song.channels   = MUSIC_SYNTH_CHANNELS;
-    g_song.order      = g_slot + PAT_REC_HEAD + cells * 2;
+    g_song.order      = g_slot + PAT_REC_HEAD + cells;
     g_song.order_len  = (unsigned char) order_len;
     g_song.loop_to    = entry[7];
     g_song.speed      = entry[8];

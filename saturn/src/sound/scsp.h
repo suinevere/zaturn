@@ -23,9 +23,11 @@ extern "C" {
  |   This used to say the driver allocates from the bottom and that a probe had
  |   confirmed slot 31. Only 31 was ever confirmed; 28, 29 and 30 were inferred
  |   from the allocation story, and the story was never checked. tools/scspfx
- |   checks it now -- it keys every one of the thirty-two in turn with the driver
- |   loaded and asks a listener -- and the answer is that **all thirty-two
- |   sound**. 28-31 is fine, and so would any other four have been.
+ |   checks it now -- it keys every one of the thirty-two in turn and asks a
+ |   listener -- and the answer is that **all thirty-two sound**. 28-31 is fine,
+ |   and so would any other four have been. Confirmed twice under Mednafen from a
+ |   CD boot, and once on a real Saturn from a netbin over NetLink, which is the
+ |   only one of the three that counts for anything the emulator cannot model.
  |
  |   With one limit worth keeping in view: the driver was loaded, not playing.
  |   The CD build's PCM sound effects go through SRL's slPCMOn, which is this

@@ -101,6 +101,27 @@ using namespace SRL::Types;
 #define CHK_BYTE_RAM16 ((volatile unsigned short*) 0x25A64000)
 
 /*----------------------
+ | CHK_OFF_RAM / CHK_ON_RAM / CHK_CYCLE_RAM
+ | Description: One region per sound-block state, so no state can be read a
+ |   leftover of another's.
+ |
+ |   Measured on hardware, from a netbin, with the block off: 1 of 256 bytes
+ |   survived -- and 1 is exactly the score a region of zeroes gets, because
+ |   position 219 is the only offset whose wanted byte is itself zero. Both write
+ |   widths scored it. So the chip was not returning what was written, it was
+ |   returning nothing, and the width was never the question.
+ |
+ |   What is left is whether the SCSP answers at all while SMPC SNDOFF holds the
+ |   sound block in reset, which is the state the netbin puts it in before it
+ |   writes a single waveform. Under Mednafen the chip answers regardless, which
+ |   is why every build has looked correct for as long as this has existed.
+ | Author: suinevere
+ ----------------------*/
+#define CHK_OFF_RAM    ((volatile unsigned short*) 0x25A62000)
+#define CHK_ON_RAM     ((volatile unsigned short*) 0x25A66000)
+#define CHK_CYCLE_RAM  ((volatile unsigned short*) 0x25A68000)
+
+/*----------------------
  | NSLOTS / MARK_UNKNOWN / MARK_HEARD / MARK_SILENT
  | Description: The slots to walk, and the three states an answer can be in. All
  |   thirty-two are walked, not just the high ones: the answer for 0-27 is as
@@ -143,7 +164,7 @@ static volatile unsigned short *slot_regs(int slot) {
  | Dependencies: N/A
  | Globals: N/A
  | Params: N/A
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void write_tone(void) {
     volatile unsigned short *ram = (volatile unsigned short *) TONE_RAM;
@@ -170,7 +191,7 @@ static void write_tone(void) {
  | Dependencies: N/A
  | Globals: N/A
  | Params: slot -- 0..31
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void key_slot(int slot) {
     volatile unsigned short *s = slot_regs(slot);
@@ -198,12 +219,56 @@ static void key_slot(int slot) {
  | Dependencies: N/A
  | Globals: N/A
  | Params: slot -- 0..31
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void unkey_slot(int slot) {
     volatile unsigned short *s = slot_regs(slot);
     s[0x00 / 2] = (unsigned short) (s[0x00 / 2] & ~(1u << 11));
     s[0x00 / 2] = (unsigned short) (s[0x00 / 2] | (1u << 12));
+}
+
+/*----------------------
+ | count_keyed
+ | Description: How many of the thirty-two slots have KYONB set -- how many are
+ |   sounding, or would be the moment the chip scans them.
+ |
+ |   Read three times: on arrival, after SNDOFF, and after every slot has been
+ |   cleared by hand. Those three numbers are the whole question when a program
+ |   inherits the chip from another one. A browser that plays audio leaves slots
+ |   keyed; SNDOFF halts the 68K that would have released them but does not touch
+ |   the registers it left behind; and a keyed slot loops its waveform for as
+ |   long as the machine is on. Nothing about that is visible from a CD boot,
+ |   where the chip arrives quiet.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: 0..32
+ ----------------------*/
+static int count_keyed(void) {
+    int n = 0;
+    for (int i = 0; i < NSLOTS; i++)
+        if ((slot_regs(i)[0x00 / 2] & (1u << 11)) != 0u) n++;
+    return n;
+}
+
+/*----------------------
+ | silence_all
+ | Description: Zeroes every slot and pulses KYONEX once, the same thing
+ |   scsp_silence_all does in the engine. KYONEX makes the chip scan every
+ |   slot's KYONB at once, so one pulse at the end releases all of them.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: how many of CHK_N bytes read back as written
+ ----------------------*/
+static void silence_all(void) {
+    for (int i = 0; i < NSLOTS; i++) {
+        volatile unsigned short *s = slot_regs(i);
+        for (int j = 0; j < 0x20 / 2; j++) s[j] = 0;
+    }
+    slot_regs(0)[0x00 / 2] = (unsigned short) (1u << 12);
 }
 
 /*----------------------
@@ -232,35 +297,26 @@ static unsigned char chk_expect(int i) {
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: word_ok/byte_ok -- receive the surviving byte counts out of CHK_N;
- |   wfirst/bfirst -- receive the first four bytes read back each way
- | Returns: N/A
+ | Params: ram -- the region to test; first -- receives the first four bytes read
+ |   back, or 0 for none
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
-static void chk_run(int *word_ok, int *byte_ok,
-                    unsigned char *wfirst, unsigned char *bfirst) {
-    int i;
+static int chk_run(volatile unsigned short *ram, unsigned char *first) {
+    int i, ok = 0;
     for (i = 0; i < CHK_N; i += 2)
-        CHK_WORD_RAM[i >> 1] = (unsigned short)
+        ram[i >> 1] = (unsigned short)
             (((unsigned int) chk_expect(i) << 8) | chk_expect(i + 1));
-    for (i = 0; i < CHK_N; i++)
-        CHK_BYTE_RAM[i] = (signed char) chk_expect(i);
-
-    *word_ok = 0;
-    *byte_ok = 0;
     for (i = 0; i < CHK_N; i += 2) {
-        unsigned short w = CHK_WORD_RAM[i >> 1];
-        unsigned short b = CHK_BYTE_RAM16[i >> 1];
-        if (((w >> 8) & 0xFFu) == chk_expect(i))     (*word_ok)++;
-        if ((w & 0xFFu) == chk_expect(i + 1))        (*word_ok)++;
-        if (((b >> 8) & 0xFFu) == chk_expect(i))     (*byte_ok)++;
-        if ((b & 0xFFu) == chk_expect(i + 1))        (*byte_ok)++;
+        unsigned short w = ram[i >> 1];
+        if (((w >> 8) & 0xFFu) == chk_expect(i)) ok++;
+        if ((w & 0xFFu) == chk_expect(i + 1))    ok++;
     }
-    for (i = 0; i < 4; i++) {
-        unsigned short w = CHK_WORD_RAM[i >> 1];
-        unsigned short b = CHK_BYTE_RAM16[i >> 1];
-        wfirst[i] = (unsigned char) ((i & 1) ? (w & 0xFFu) : ((w >> 8) & 0xFFu));
-        bfirst[i] = (unsigned char) ((i & 1) ? (b & 0xFFu) : ((b >> 8) & 0xFFu));
-    }
+    if (first != 0)
+        for (i = 0; i < 4; i++) {
+            unsigned short w = ram[i >> 1];
+            first[i] = (unsigned char) ((i & 1) ? (w & 0xFFu) : ((w >> 8) & 0xFFu));
+        }
+    return ok;
 }
 
 /*----------------------
@@ -330,31 +386,79 @@ static const char *verdict(const char *mark, int first, int last) {
  |   SND_Init, and SND_Init is what sets the master volume -- which is why the CD
  |   build's splash jingle is audible without anybody asking for it.
  |
- |   Without the driver, this reproduces what saturn/src/sound/synth_target.cxx
- |   does on the netbin, and it has to, or the sweep answers the wrong question.
- |   PlanetWeb leaves the sound block wherever its own audio finished, so it is
- |   put into a known state; and with no driver nothing sets the master volume at
- |   all, so every slot plays into a muted output -- correct registers, total
- |   silence. That was measured on the netbin, not guessed, and a probe that
- |   forgot it would report thirty-two dead slots and blame the driver for a
- |   volume register.
+ |   Without the driver, the block is turned ON with the 68K parked, and that is
+ |   the correction this whole probe was built to find. It used to leave the
+ |   block OFF: SNDOFF, then set the master volume, then drive slots from the
+ |   SH-2. Measured on hardware from a netbin, that state writes and reads sound
+ |   RAM perfectly -- 256 of 256, right byte order -- and produces no audio at
+ |   all, on any of the thirty-two slots. The registers take the writes and the
+ |   chip does not sound. Mednafen generates audio whatever the block state is,
+ |   which is why every build and every probe has looked correct since the day
+ |   this was written.
+ |
+ |   So SNDON, which needs the 68K to have somewhere harmless to be: with no
+ |   driver loaded it would otherwise run whatever the browser left in sound RAM.
+ |   Its reset vectors are the first eight bytes of that RAM, so a stack pointer
+ |   and an entry address go there, and at that address a single instruction --
+ |   0x60FE, `bra.s` to itself -- which is a two-byte program that spins forever
+ |   and touches nothing. Then the master volume, which nothing else sets when
+ |   there is no driver to set it, and MEM4MB with it.
+ |
+ |   MEM4MB is bit 9 of the same register and it is why the block-on version
+ |   still did not play a tone. The Saturn has 512 KB of sound RAM and the SH-2
+ |   reaches all of it whatever that bit says -- which is exactly why this
+ |   probe's own read-back check passed 256 of 256 at three addresses while the
+ |   sweep stayed silent. The chip's sample fetch is what honours it: with the
+ |   bit clear the tone at 0x60000 is fetched from 0x20000, where nothing was
+ |   written, and a slot keyed onto that is a pop rather than a note. SND_Init
+ |   sets it; nothing in a driverless build does.
  | Author: suinevere
- | Dependencies: SGL (slSoundOffWait) when driverless
+ | Dependencies: SGL (slSoundOffWait, slSoundOnWait) when driverless
  | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
 static void sound_env_init(void) {
 #if !DRIVER_ON
+    volatile unsigned short *ram  = (volatile unsigned short *) 0x25A00000;
     volatile unsigned short *ctrl = SCSP_REGS + (0x400 / 2);
     slSoundOffWait();
-    ctrl[0] = (unsigned short) ((ctrl[0] & 0xFFF0u) | 0x000Fu);
+    ram[0x000 / 2] = 0x0000;
+    ram[0x002 / 2] = 0x0FFC;
+    ram[0x004 / 2] = 0x0000;
+    ram[0x006 / 2] = 0x0100;
+    ram[0x100 / 2] = 0x60FE;
+    slSoundOnWait();
+    ctrl[0] = (unsigned short) ((ctrl[0] & 0xFFF0u) | 0x0200u | 0x000Fu);
 #endif
 }
 
 int main() {
     SRL::Core::Initialize(HighColor::Colors::Black);
+
+    int keyed_arrival = count_keyed();
+
+    /* Three states, one region each, because the question this build exists to
+       answer is which of them lets the SH-2 reach the chip at all. On hardware
+       from a netbin the block-off case scored 1 of 256, and 1 is what a region
+       of zeroes scores. Whichever of these reads back 256 is the sequence the
+       engine has to use before it uploads a single waveform. */
+    slSoundOffWait();
+    int ok_off = chk_run(CHK_OFF_RAM, 0);
+
+    slSoundOnWait();
+    int ok_on = chk_run(CHK_ON_RAM, 0);
+
+    slSoundOffWait();
+    slSoundOnWait();
+    unsigned char cfirst[4];
+    int ok_cycle = chk_run(CHK_CYCLE_RAM, cfirst);
+
     sound_env_init();
+    int keyed_after_off = count_keyed();
+    silence_all();
+    int keyed_after_clear = count_keyed();
+
     write_tone();
 
     SRL::Input::Digital d0(0), d1(1);
@@ -365,28 +469,27 @@ int main() {
     char row0[17], row1[17];
     int i, slot = 0, done = 0, answered;
 
-    int word_ok = 0, byte_ok = 0;
-    unsigned char wfirst[4], bfirst[4];
+
+
 
     for (i = 0; i < NSLOTS; i++) mark[i] = MARK_UNKNOWN;
     mark[NSLOTS] = 0;
     row0[16] = 0;
     row1[16] = 0;
 
-    chk_run(&word_ok, &byte_ok, wfirst, bfirst);
+
     while (1) {
-        SRL::Debug::Print(2, 2, "SOUND RAM WRITE CHECK");
-        SRL::Debug::Print(2, 4, "16-bit stores  %d of %d   ", word_ok, CHK_N);
-        SRL::Debug::Print(2, 5, " 8-bit stores  %d of %d   ", byte_ok, CHK_N);
-        SRL::Debug::Print(2, 7, "want   %02x %02x %02x %02x",
+        SRL::Debug::Print(2, 2, "CAN THE SH-2 REACH THE CHIP?");
+        SRL::Debug::Print(2, 4, "block OFF      %d of %d   ", ok_off, CHK_N);
+        SRL::Debug::Print(2, 5, "block ON       %d of %d   ", ok_on, CHK_N);
+        SRL::Debug::Print(2, 6, "OFF then ON    %d of %d   ", ok_cycle, CHK_N);
+        SRL::Debug::Print(2, 8, "want       %02x %02x %02x %02x",
                           chk_expect(0), chk_expect(1), chk_expect(2), chk_expect(3));
-        SRL::Debug::Print(2, 8, "16-bit %02x %02x %02x %02x",
-                          wfirst[0], wfirst[1], wfirst[2], wfirst[3]);
-        SRL::Debug::Print(2, 9, " 8-bit %02x %02x %02x %02x",
-                          bfirst[0], bfirst[1], bfirst[2], bfirst[3]);
-        SRL::Debug::Print(2, 11, "16-bit short, or back in the");
-        SRL::Debug::Print(2, 12, "wrong order, means no waveform");
-        SRL::Debug::Print(2, 13, "ever reaches the chip intact.");
+        SRL::Debug::Print(2, 9, "OFF then ON %02x %02x %02x %02x",
+                          cfirst[0], cfirst[1], cfirst[2], cfirst[3]);
+        SRL::Debug::Print(2, 11, "slots keyed on arrival  %d   ", keyed_arrival);
+        SRL::Debug::Print(2, 12, "        after SNDOFF    %d   ", keyed_after_off);
+        SRL::Debug::Print(2, 13, "        after clearing  %d   ", keyed_after_clear);
         SRL::Debug::Print(2, 15, "A or RIGHT for the slot sweep");
         SRL::Core::Synchronize();
         if (pressed(SRL::Input::Digital::Button::A)

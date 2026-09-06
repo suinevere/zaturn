@@ -848,8 +848,8 @@ def song_record(entry):
     out = bytearray()
     out += struct.pack(">HH", len(blocks), len(order))
     for block in blocks:
-        for note, wv in block:
-            out += struct.pack(">BB", note, wv)
+        for cell in block:
+            out += struct.pack(">B", entry["pair_index"][cell])
     out += bytes(order)
     while len(out) % PAT_SECTOR:
         out += b"\x00"
@@ -900,7 +900,7 @@ def write_pat(path, entries, default_index, track_min, track_song):
         # The record's real length, not its padded one: the console reads whole
         # sectors but only the leading bytes mean anything, and the slot is
         # sized from the padded maximum below.
-        real = 4 + len(e["blocks"]) * ROWS_PER_PATTERN * CHANNELS * 2 + e["order_len"]
+        real = 4 + len(e["blocks"]) * ROWS_PER_PATTERN * CHANNELS + e["order_len"]
         directory += struct.pack(">HHHBBBB", sectors[i], len(records[i]) // PAT_SECTOR,
                                  real, e["order_len"], 0, e["speed"], e["frac"])
         directory += struct.pack(">H", id_rel[i])
@@ -980,26 +980,50 @@ def emit_manifest(manifest_path, out_path, pat_path=None):
     cell_lines, order_all, entries = [], [], []
     cell_off = 0
     cd_cells = cd_order = 0
-    for n_song, s in enumerate(songs):
-        # Where the CD build's copy of each array ends. Everything past here is
-        # inside the #if below, and both builds read the same prefix.
-        if n_song == cd_songs:
-            cd_cells, cd_order = cell_off, len(order_all)
-            cell_lines.append("#if MUSIC_SYNTH_SONGS > MUSIC_SYNTH_SONGS_CD")
+
+    # Converted first, emitted second, because a cell is written as an index
+    # into a table of every distinct (note, wv) pair in the whole catalogue --
+    # and that table cannot be known until the last tune has been converted.
+    converted = []
+    for s in songs:
         got = convert(s["midi"], grid=s["grid"], speed_arg=0,
                       max_rows=s["max_rows"], no_drums=False,
                       bpm_override=s["bpm"], fold=s["fold"],
                       drum_tab=s["drums_tab"], tab_beats=s["tab_beats"])
         patterns, order = pack_patterns(got["cells"])
         check_length(patterns, order, s["id"])
+        converted.append((got, patterns, order))
+
+    pairs, pair_index = [], {}
+    for _, patterns, _ in converted:
+        for block in patterns:
+            for cell in block:
+                if cell not in pair_index:
+                    pair_index[cell] = len(pairs)
+                    pairs.append(cell)
+    if len(pairs) > 256:
+        raise SystemExit(
+            "the catalogue uses %d distinct (note, wv) pairs and a cell is one "
+            "byte, so at most 256 can be named. Nothing here truncates a tune "
+            "to fit: either drop one from the manifest or widen TrackerCell in "
+            "saturn/src/sound/tracker.h and this emitter together."
+            % len(pairs))
+
+    for n_song, s in enumerate(songs):
+        got, patterns, order = converted[n_song]
+        # Where the CD build's copy of each array ends. Everything past here is
+        # inside the #if below, and both builds read the same prefix.
+        if n_song == cd_songs:
+            cd_cells, cd_order = cell_off, len(order_all)
+            cell_lines.append("#if MUSIC_SYNTH_SONGS > MUSIC_SYNTH_SONGS_CD")
         cell_lines.append("    /* %s -- %d patterns of %d rows, from cell %d */"
                           % (s["id"], len(patterns), ROWS_PER_PATTERN, cell_off))
         for n, block in enumerate(patterns):
             cell_lines.append("    /* %s pattern %d */" % (s["id"], n))
             for r in range(ROWS_PER_PATTERN):
                 row = block[r * CHANNELS:(r + 1) * CHANNELS]
-                cell_lines.append("    " + " ".join("{ %3d, 0x%02X },"
-                                                    % (a, b) for a, b in row))
+                cell_lines.append("    " + " ".join("%3d," % pair_index[c]
+                                                    for c in row))
         seconds = len(got["cells"]) * (got["speed"] + got["frac"] / 256.0) / 60.0
         entries.append({
             "id": s["id"], "name": s["name"], "source": s["source"],
@@ -1010,6 +1034,7 @@ def emit_manifest(manifest_path, out_path, pat_path=None):
             "drums": "drums" if got["has_drums"] else "no drums",
             "rows": len(got["cells"]),
             "blocks": patterns, "order_list": order,
+            "pair_index": pair_index,
         })
         cell_off += len(patterns) * ROWS_PER_PATTERN * CHANNELS
         order_all.extend(order)
@@ -1030,7 +1055,7 @@ def emit_manifest(manifest_path, out_path, pat_path=None):
         song_rows.append("    /* %d %-12s %3d patterns, %3d order, %5.1f s, %s */"
                          % (i, e["id"] + ":", e["patterns"], e["order_len"],
                             e["seconds"], e["drums"]))
-        song_rows.append("    { MUSIC_CELLS + %6d, MUSIC_SYNTH_ROWS, "
+        song_rows.append("    { MUSIC_CELLS + %6d, MUSIC_PAIRS, MUSIC_SYNTH_ROWS, "
                          "MUSIC_SYNTH_CHANNELS, MUSIC_ORDER + %4d, %3d, 0, %3d, %3d },"
                          % (e["cell_off"], e["order_off"], e["order_len"],
                             e["speed"], e["frac"]))
@@ -1046,11 +1071,20 @@ def emit_manifest(manifest_path, out_path, pat_path=None):
                              e["id"], e["name"], e["source"])
                           for i, e in enumerate(entries))
     fields = {
-        "command": ("tools/assets/mid2pat.py --manifest %s --out %s"
-                    % (manifest_path, out_path)),
+        # Relative, and deliberately not the paths this run was given: a
+        # regeneration launched from a .bat passes absolute ones, and writing
+        # those into the file makes every rebuild on another machine a diff.
+        "command": ("tools/assets/mid2pat.py --manifest "
+                    "tools/assets/music/songs.json "
+                    "--out saturn/src/sound/music_synth_data.c"),
         "songs": len(entries),
         "cells": "\n".join(cell_lines),
         "cell_total": cell_off,
+        "pair_total": len(pairs),
+        "pairs": "\n".join(
+            "    " + " ".join("{ %3d, 0x%02X }," % (n, w)
+                              for n, w in pairs[i:i + 6])
+            for i in range(0, len(pairs), 6)),
         "order": order_text(order_all, cd_order),
         "order_total": len(order_all),
         "rows": ROWS_PER_PATTERN,
@@ -1087,7 +1121,7 @@ def emit_manifest(manifest_path, out_path, pat_path=None):
     out.with_suffix(".h").write_text(MANIFEST_HEADER % fields, encoding="utf-8")
 
     def image_bytes(cells, order, count):
-        return cells * 2 + order + count * 12 + len(track_song)
+        return cells + len(pairs) * 2 + order + count * 12 + len(track_song)
     for i, e in enumerate(entries):
         print("%-4s %-12s rows=%5d patterns=%3d order=%3d %6.1f s  %s"
               % ("disc" if songs[i]["cd"] else "net", e["id"], e["rows"],
@@ -1312,6 +1346,20 @@ extern "C" {
 #endif
 
 /*----------------------
+ | MUSIC_SYNTH_PAIRS
+ | Description: How many distinct (note, wv) pairs the whole catalogue uses, and
+ |   so how long the table every cell indexes is.
+ |
+ |   Outside the #if above, unlike the cell and order counts. Those are cut to a
+ |   prefix on the CD target because that build links one tune; this one is not,
+ |   because that build still plays the other eleven off /BG/MUSIC.PAT and their
+ |   cells are indices into the whole table. Cut it to the CD prefix and every
+ |   disc tune reads pairs that are not there.
+ | Author: suinevere
+ ----------------------*/
+#define MUSIC_SYNTH_PAIRS    %(pair_total)d
+
+/*----------------------
  | MUSIC_SYNTH_DEFAULT
  | Description: The tune played where nothing has chosen one -- the boot menus,
  |   the netbin, and any CD-DA track the mood table does not reach.
@@ -1379,6 +1427,14 @@ int music_synth_song_count(void);
  | Returns: a song valid for the life of the program
  ----------------------*/
 const TrackerSong *music_synth_song_at(int index);
+
+/*----------------------
+ | music_synth_pairs
+ | Description: The catalogue's (note, wv) pair table, which every cell in both
+ |   the linked tunes and the ones on /BG/MUSIC.PAT is an index into.
+ | Author: suinevere
+ ----------------------*/
+const TrackerPair *music_synth_pairs(void);
 
 /*----------------------
  | music_synth_song_name
@@ -1470,6 +1526,30 @@ MANIFEST_TEMPLATE = '''/*----------------------
  |   off. wv packs the waveform in the high nibble and the volume in the low.
  | Author: suinevere
  ----------------------*/
+static const TrackerPair MUSIC_PAIRS[MUSIC_SYNTH_PAIRS] = {
+%(pairs)s
+};
+
+/*----------------------
+ | music_pairs_length_check
+ | Description: The same guard the cells and the order list carry. A short pair
+ |   table is the worst of the three: C zero-fills it, every missing index reads
+ |   as note 0, and note 0 means "hold whatever is sounding" -- so the tune plays
+ |   at the right tempo with notes quietly missing from it.
+ | Author: suinevere
+ ----------------------*/
+typedef char music_pairs_length_check[
+    (sizeof(MUSIC_PAIRS) / sizeof(MUSIC_PAIRS[0]) == MUSIC_SYNTH_PAIRS) ? 1 : -1];
+
+/*----------------------
+ | music_synth_pairs
+ | Description: The pair table, for the disc path. A tune read off /BG/MUSIC.PAT
+ |   carries indices and not pairs, so song_bank has to get the table from the
+ |   image whichever tune is resident.
+ | Author: suinevere
+ ----------------------*/
+const TrackerPair *music_synth_pairs(void) { return MUSIC_PAIRS; }
+
 static const TrackerCell MUSIC_CELLS[MUSIC_SYNTH_CELLS] = {
 %(cells)s
 };

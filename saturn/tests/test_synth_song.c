@@ -95,16 +95,33 @@ static void test_no_song_reads_past_its_own_patterns(void) {
     }
 }
 
-static void test_every_cell_is_playable(void) {
-    const TrackerCell *base = music_synth_song_at(0)->cells;
-    for (int i = 0; i < MUSIC_SYNTH_CELLS; i++) {
-        unsigned char note = base[i].note;
+/* A cell is an index into the pair table now, so this splits in two: every
+   pair has to be playable, and every cell has to name a pair that exists. The
+   second half is the one that matters -- an index past the end of the table
+   reads whatever the linker put after it, and the note byte it finds there
+   would be played. */
+static void test_every_pair_is_playable(void) {
+    const TrackerPair *pairs = music_synth_pairs();
+    for (int i = 0; i < MUSIC_SYNTH_PAIRS; i++) {
+        unsigned char note = pairs[i].note;
         if (note < 2) continue;
         int index = note - 2;
         assert(index / 12 - 2 >= -8 && index / 12 - 2 <= 7);
-        assert((base[i].wv >> 4) <= 4);
-        assert((base[i].wv & 0x0F) <= 7);
+        assert((pairs[i].wv >> 4) <= 4);
+        assert((pairs[i].wv & 0x0F) <= 7);
     }
+}
+
+static void test_every_cell_names_a_pair(void) {
+    const TrackerCell *base = music_synth_song_at(0)->cells;
+    for (int i = 0; i < MUSIC_SYNTH_CELLS; i++)
+        assert(base[i] < MUSIC_SYNTH_PAIRS);
+}
+
+static void test_every_song_points_at_the_pair_table(void) {
+    const TrackerPair *pairs = music_synth_pairs();
+    for (int i = 0; i < MUSIC_SYNTH_SONGS; i++)
+        assert(music_synth_song_at(i)->pairs == pairs);
 }
 
 static void test_every_cd_track_names_a_real_song(void) {
@@ -137,7 +154,9 @@ int main(void) {
     test_every_song_has_a_name();
     test_a_bad_index_gives_the_default();
     test_no_song_reads_past_its_own_patterns();
-    test_every_cell_is_playable();
+    test_every_pair_is_playable();
+    test_every_cell_names_a_pair();
+    test_every_song_points_at_the_pair_table();
     test_every_cd_track_names_a_real_song();
     test_a_track_off_the_disc_gives_the_default();
     test_a_null_sink_does_not_start_playback();

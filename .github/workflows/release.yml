@@ -14,18 +14,21 @@ permissions:
   contents: write   # needed to create / upload to releases
 
 env:
-  # TEMPORARY, and the only line to change to end it.
+  # "true" publishes the SCSP probe AS zaturn.netbin, so suin.uk serves the probe
+  # without anything changing at the other end -- the only way to see the chip in
+  # the state PlanetWeb hands it over in, since it has to arrive by the same
+  # route the client does.
   #
-  # "true" publishes the SCSP probe AS zaturn.netbin, so suin.uk serves the
-  # probe without anything changing at the other end. That is the whole point:
-  # the netbin's music is wrong only when PlanetWeb hands the machine over, the
-  # probe is the only thing that can see the chip in that state, and it has to
-  # arrive by the same route the client does to see it.
+  # It earned its keep: four sessions of the netbin's silent music had been spent
+  # reasoning about code that an emulator ran correctly every time, and the probe
+  # settled it in three loads. The answer was MEM4MB, and the reason nothing else
+  # found it is that the bit is invisible from the SH-2 side -- see
+  # scsp_enable_output.
   #
-  # While this is "true" a tagged release ships the probe under the client's
-  # name. Anyone pulling zaturn.netbin from the release gets a slot sweep, not a
-  # game. Set it to "false" the moment the sound question is answered.
-  SHIP_PROBE_AS_CLIENT: "true"
+  # Leave it "false" unless there is a live question that only the chip can
+  # answer. While it is "true" a tagged release ships a slot sweep under the
+  # game's name, to everyone.
+  SHIP_PROBE_AS_CLIENT: "false"
 
 jobs:
   build:

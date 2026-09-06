@@ -84,13 +84,14 @@ void scsp_silence(void) {
  |
  |   scsp_silence clears the four slots this synth uses, which is right when the
  |   rest of the chip belongs to the SGL driver -- clearing those would stop the
- |   CD-DA and the sound effects. It is not right when the previous owner has
- |   gone. PlanetWeb is a browser that plays audio, and the netbin arrives in the
- |   middle of that: SMPC SNDOFF stops the 68K, but the 68K is only what writes
- |   the registers, and a slot left keyed goes on looping its own waveform
- |   forever with nothing left running to release it. What that sounds like is
- |   one instrument that is not any of ours, over or instead of the music, and
- |   different every time depending on what the browser happened to be playing.
+ |   CD-DA and the sound effects. This is for the netbin, where the previous
+ |   owner has gone and nothing else is entitled to a slot.
+ |
+ |   It was added on the theory that PlanetWeb hands over slots still keyed,
+ |   which the probe then disproved: measured over NetLink, the count of keyed
+ |   slots on arrival was zero. It stays because a program taking a chip over
+ |   should not inherit its state on trust, and because it costs thirty-two
+ |   register writes once -- not because it fixed the fault it was written for.
  |
  |   KYONEX is a single execute bit that makes the chip scan every slot's KYONB
  |   at once, so it is pulsed once at the end rather than per slot.
@@ -142,15 +143,16 @@ void scsp_enable_output(void) {
  | Description: Copies `len` sample bytes into sound RAM at byte offset `off`,
  |   writing whole 16-bit words.
  |
- |   The word is the point. Sound RAM is behind the SCSP on the Saturn's B-bus,
- |   which is sixteen bits wide, and a byte write there is not narrowed for you --
- |   it is the access the bus has no way to express. This copy was a byte loop
- |   through a `signed char *` for as long as the synth has existed, and every
- |   time anyone called that synth working it was under an emulator, where the
- |   write is simply performed. On the machine it comes back as a waveform table
- |   that is part right and part whatever was there before, which is not silence
- |   and is not music: it is a run of bleeps, and a different run of them, and
- |   sometimes nothing at all -- which is what the netbin does over NetLink.
+ |   Words rather than bytes because sound RAM is behind the SCSP on the Saturn's
+ |   sixteen-bit B-bus, and a word is the access that bus is built for. This was
+ |   a byte loop through a `signed char *` for as long as the synth existed.
+ |
+ |   It was changed on the theory that the byte write was what silenced the
+ |   netbin on hardware, and that theory was wrong: measured from a netbin, a
+ |   region written by bytes and a region written by words both read back 256 of
+ |   256 correct. The fault was MEM4MB (see scsp_enable_output). The word write
+ |   stays because it is the right access for the bus and costs nothing, not
+ |   because it ever fixed anything.
  |
  |   Every caller is word-aligned and even-length (the tables are 256 bytes at
  |   multiples of 256, the noise 4096), so the odd-end paths below are never

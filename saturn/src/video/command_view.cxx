@@ -1523,9 +1523,11 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
         }
 
         /* The D-pad is the cursor AND the direction half of every chord, so it
-           stops moving the selection while a shift is held -- otherwise a recall
-           or a scroll drags the cursor across the module underneath it. */
-        if (!chord_shift_held()) {
+           stops moving the selection while the modifier is held -- otherwise a
+           recall or a scroll drags the cursor across the module underneath it.
+           It is the modifier itself that is asked, not a fixed list of shift
+           buttons: the player picks which button that is. */
+        if (!chord_mod_held()) {
             if      (p.box == CP_BOX_TRAVEL) cv_travel_dpad(p, exits, ncand);
             else if (p.box == CP_BOX_WORD)   cv_word_dpad(p, exits, ncand);
             else if (p.box == CP_BOX_CMD)    cv_cmd_dpad(p, ncand);

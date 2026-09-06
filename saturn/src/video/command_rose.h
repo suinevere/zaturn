@@ -1,7 +1,8 @@
 /*----------------------
  | command_rose.h
  | Description: Composition of the travel module's compass rose from decoded
- |   exit states, and the grid the cursor walks over it. Seven rows of thirteen
+ |   exit states, the chord key that stands in for it while the modifier is held,
+ |   and the grid the cursor walks over the rose. Seven rows of thirteen
  |   columns, drawn so that an unavailable direction erases its own spoke as well
  |   as its label -- the rose is a map of the room rather than a menu of twelve
  |   buttons. Pure string building and index arithmetic; the view prints what
@@ -65,6 +66,59 @@ extern "C" {
  | Returns: N/A
  ----------------------*/
 void cr_row(const unsigned char *exits, int row, char *out);
+
+/*----------------------
+ | CR_KEY_MID / CR_KEY_LABEL_W
+ | Description: The chord key's centre column -- the rose's own, so the two
+ |   blocks share an axis -- and the width one label may take. Four columns is
+ |   what the row through the centre affords on each side of the marker, and it is
+ |   why a chord's two directions are named rather than described.
+ | Author: suinevere
+ ----------------------*/
+#define CR_KEY_MID      6
+#define CR_KEY_LABEL_W  4
+
+/*----------------------
+ | CrKey
+ | Description: What the chord does, by direction: the D-pad's vertical and
+ |   horizontal pairs and the trigger pair, each label null where that gesture is
+ |   unbound or unreachable. A trigger is unreachable when the modifier is that
+ |   trigger -- the modifier cannot be its own direction.
+ |     Labels rather than action names: the block is a compass, and a compass says
+ |   which way a press goes, not what the thing it moves is called. Line and Page
+ |   are deliberately both "Up"/"Down" because four columns cannot tell them
+ |   apart, and a player holding the modifier is asking which way, not which
+ |   binding.
+ | Author: suinevere
+ ----------------------*/
+typedef struct {
+    const char *up, *down;      /* the modifier + D-pad Up/Down slot */
+    const char *left, *right;   /* the modifier + D-pad Left/Right slot */
+    const char *ltrig, *rtrig;  /* the modifier + L/R trigger slot */
+} CrKey;
+
+/*----------------------
+ | cr_key_row
+ | Description: Composes one row of the chord key into `out` as exactly CR_COLS
+ |   characters plus a NUL -- the block the travel module shows in the rose's
+ |   place while the modifier is held. It is the rose's own shape with the chord's
+ |   labels in it: the trigger pair on the corner row, the vertical pair above and
+ |   below the centre with arrows for spokes, and the horizontal pair through the
+ |   centre marker, which is always drawn exactly as the rose's is. An unbound
+ |   pair takes its arrows with it, the way an absent exit takes its spoke.
+ |   Nothing else is written here -- the bare tap is a real gesture but not a
+ |   direction, and a line of prose under a compass reads as a caption on it.
+ |     Takes composed labels rather than the mapping itself so this stays a
+ |   layout function in C: the slot and action constants live in input.h, which is
+ |   C++, and the caller is already the side that knows which button the modifier
+ |   is on.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the labels; row -- 0..CR_ROWS-1; out -- receives CR_COLS + 1 bytes
+ | Returns: N/A
+ ----------------------*/
+void cr_key_row(const CrKey *k, int row, char *out);
 
 /*----------------------
  | cr_grid_dir

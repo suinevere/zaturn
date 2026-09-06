@@ -1,10 +1,11 @@
 /*----------------------
  | test_command_rose.c
- | Description: Host test for the compass rose's row composition and its cursor
- |   grid. The rose is drawn from the decoded exit states alone, so an absent
- |   exit erases both its label and its spoke and a conditional one lowercases
- |   it. Asserts the exact 13-column rows, which is what keeps the module inside
- |   its 40-column strip, and walks the grid to pin that a press always lands on
+ | Description: Host test for the compass rose's row composition, the chord key
+ |   that replaces it while the modifier is held, and the cursor grid. The rose is
+ |   drawn from the decoded exit states alone, so an absent exit erases both its
+ |   label and its spoke and a conditional one lowercases it. Asserts the exact
+ |   13-column rows of both blocks, which is what keeps the module inside its
+ |   40-column strip, and walks the grid to pin that a press always lands on
  |   an available direction or reports the edge.
  | Author: suinevere
  | Dependencies: ../src/video/command_rose.h and command_rose.c,
@@ -296,6 +297,99 @@ static void test_dir_words(void) {
     assert(strcmp(cr_dir_word(RM_DIR_N), "") == 0);
 }
 
+
+/* ---- the chord key, which stands in for the rose while the modifier is held.
+   Same 13 columns and same seven rows, and the same compass: the cells say which
+   way the D-pad goes under the modifier instead of which exits the room has. */
+
+static void key_all(const CrKey *k, char out[CR_ROWS][CR_COLS + 1]) {
+    int r;
+    for (r = 0; r < CR_ROWS; r++) cr_key_row(k, r, out[r]);
+}
+
+static void test_key_rows(void) {
+    char k[CR_ROWS][CR_COLS + 1];
+    CrKey d = { "Up", "Down", "Home", "End", 0, 0 };
+    int r;
+
+    /* The factory mapping: Line on the D-pad's vertical, Home/End on its
+       horizontal, no trigger chord. The centre marker is drawn exactly as the
+       rose's is, and every row is exactly CR_COLS. */
+    key_all(&d, k);
+    assert(strcmp(k[0], "             ") == 0);
+    assert(strcmp(k[1], "     Up      ") == 0);
+    assert(strcmp(k[2], "      ^      ") == 0);
+    assert(strcmp(k[3], "Home <+> End ") == 0);
+    assert(strcmp(k[4], "      v      ") == 0);
+    assert(strcmp(k[5], "    Down     ") == 0);
+    assert(strcmp(k[6], "             ") == 0);
+    for (r = 0; r < CR_ROWS; r++) assert(strlen(k[r]) == CR_COLS);
+}
+
+static void test_key_unbound_pairs_take_their_arrows(void) {
+    char k[CR_ROWS][CR_COLS + 1];
+    CrKey vert = { "Up", "Down", 0, 0, 0, 0 };
+    CrKey horz = { 0, 0, "Prev", "Next", 0, 0 };
+    CrKey none = { 0, 0, 0, 0, 0, 0 };
+    int r;
+
+    /* An unbound pair erases its own arrows along with its labels, the way an
+       absent exit takes its spoke -- but never the centre. */
+    key_all(&vert, k);
+    assert(strcmp(k[1], "     Up      ") == 0);
+    assert(strcmp(k[2], "      ^      ") == 0);
+    assert(strcmp(k[3], "      +      ") == 0);
+    assert(strcmp(k[5], "    Down     ") == 0);
+
+    key_all(&horz, k);
+    assert(strcmp(k[1], "             ") == 0);
+    assert(strcmp(k[2], "             ") == 0);
+    assert(strcmp(k[3], "Prev <+> Next") == 0);
+    assert(strcmp(k[4], "             ") == 0);
+    assert(strcmp(k[5], "             ") == 0);
+
+    /* Nothing bound at all still shows the centre, and nothing else: the block
+       is a compass and carries no prose to fall back on. */
+    key_all(&none, k);
+    for (r = 0; r < CR_ROWS; r++) {
+        assert(strcmp(k[r], r == 3 ? "      +      " : "             ") == 0);
+        assert(strlen(k[r]) == CR_COLS);
+    }
+}
+
+static void test_key_triggers_take_the_corner_row(void) {
+    char row[CR_COLS + 1];
+    CrKey both = { 0, 0, 0, 0, "Prev", "Next" };
+    CrKey left = { 0, 0, 0, 0, "Home", 0 };
+    CrKey right = { 0, 0, 0, 0, 0, "End" };
+
+    /* The widest trigger row -- both triggers, both labels at the full width --
+       is exactly CR_COLS. */
+    cr_key_row(&both, 0, row);
+    assert(strcmp(row, "L:Prev R:Next") == 0);
+    assert(strlen(row) == CR_COLS);
+
+    /* A trigger modifier leaves only the other trigger reachable, and the one
+       that is stays in its own half of the row. */
+    cr_key_row(&left, 0, row);
+    assert(strcmp(row, "L:Home       ") == 0);
+    cr_key_row(&right, 0, row);
+    assert(strcmp(row, "       R:End ") == 0);
+}
+
+static void test_key_clips_long_labels(void) {
+    char row[CR_COLS + 1];
+    CrKey wide = { "Upward", "Downward", "Homeward", "Endward", 0, 0 };
+    /* A label longer than the four columns beside the marker is cut there rather
+       than allowed to run into it or off the module. */
+    cr_key_row(&wide, 3, row);
+    assert(strcmp(row, "Home <+> Endw") == 0);
+    assert(strlen(row) == CR_COLS);
+    cr_key_row(&wide, 1, row);
+    assert(strcmp(row, "    Upwa     ") == 0);
+    assert(strlen(row) == CR_COLS);
+}
+
 int main(void) {
     test_rows();
     test_labels_land_where_drawn();
@@ -307,6 +401,10 @@ int main(void) {
     test_move_never_picks_a_missing_direction();
     test_enter_keeps_its_row();
     test_dir_words();
+    test_key_rows();
+    test_key_unbound_pairs_take_their_arrows();
+    test_key_triggers_take_the_corner_row();
+    test_key_clips_long_labels();
     printf("test_command_rose ok\n");
     return 0;
 }

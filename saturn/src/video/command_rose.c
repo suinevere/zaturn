@@ -137,6 +137,76 @@ void cr_row(const unsigned char *exits, int row, char *out) {
     }
 }
 
+/*----------------------
+ | key_len / key_put / key_centre
+ | Description: A label's drawn length, writing one at a column, and writing one
+ |   centred on the key's axis. All three take the field width and stop at it and
+ |   at the row's end, so a label longer than its field is cut rather than allowed
+ |   to run into the marker or off the module. A null label draws nothing, which
+ |   is how an unbound pair leaves its cells empty.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: s -- the text or null; w -- field width; out -- the row; col -- first
+ |   column
+ | Returns: key_len returns the clipped length
+ ----------------------*/
+static int key_len(const char *s, int w) {
+    int n = 0;
+    while (s != 0 && s[n] && n < w) n++;
+    return n;
+}
+
+static void key_put(char *out, int col, const char *s, int w) {
+    int i;
+    if (s == 0) return;
+    for (i = 0; s[i] && i < w && col + i < CR_COLS; i++)
+        if (col + i >= 0) out[col + i] = s[i];
+}
+
+static void key_centre(char *out, const char *s, int w) {
+    key_put(out, CR_KEY_MID - key_len(s, w) / 2, s, w);
+}
+
+void cr_key_row(const CrKey *k, int row, char *out) {
+    int i;
+    for (i = 0; i < CR_COLS; i++) out[i] = ' ';
+    out[CR_COLS] = '\0';
+
+    switch (row) {
+        case 0:
+            /* The triggers, on the row the rose spends on Up and In: they are the
+               pair with no place on a compass, and this is where the rose already
+               puts the two directions that have none either. */
+            if (k->ltrig != 0) {
+                key_put(out, 0, "L:", 2);
+                key_put(out, 2, k->ltrig, CR_KEY_LABEL_W);
+            }
+            if (k->rtrig != 0) {
+                key_put(out, CR_KEY_MID + 1, "R:", 2);
+                key_put(out, CR_KEY_MID + 3, k->rtrig, CR_KEY_LABEL_W);
+            }
+            break;
+        case 1: key_centre(out, k->up, CR_KEY_LABEL_W); break;
+        case 2: if (k->up != 0) out[CR_KEY_MID] = '^'; break;
+        case 3:
+            out[CR_KEY_MID] = '+';
+            if (k->left != 0) {
+                out[CR_KEY_MID - 1] = '<';
+                key_put(out, CR_KEY_MID - 2 - key_len(k->left, CR_KEY_LABEL_W),
+                        k->left, CR_KEY_LABEL_W);
+            }
+            if (k->right != 0) {
+                out[CR_KEY_MID + 1] = '>';
+                key_put(out, CR_KEY_MID + 3, k->right, CR_KEY_LABEL_W);
+            }
+            break;
+        case 4: if (k->down != 0) out[CR_KEY_MID] = 'v'; break;
+        case 5: key_centre(out, k->down, CR_KEY_LABEL_W); break;
+        default: break;
+    }
+}
+
 int cr_grid_dir(int grow, int gcol) {
     int d;
     if (grow < 0 || grow >= CR_GRID_ROWS || gcol < 0 || gcol >= CR_GRID_COLS) return -1;

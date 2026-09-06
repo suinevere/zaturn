@@ -672,10 +672,10 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
            keyboard's job -- its own Left/Right do it below -- and on a pad it cost
            a gesture to do something a player reaches faster by rubbing the word
            out and typing it again. */
-        // X joined Z and Y as a chord shift when Recall moved onto X+Up/Dn, so
-        // the grid cursor has to stand still for it too -- chord_shift_held is
-        // the one place that knows which buttons those are.
-        if (!chord_shift_held()) {
+        // The grid cursor stands still while the chord modifier is held, for the
+        // reason command_view gives: the D-pad is the direction half of the
+        // chord as well as the cursor.
+        if (!chord_mod_held()) {
             if (g_in_game) game_kb_dpad(k);
             else
             {

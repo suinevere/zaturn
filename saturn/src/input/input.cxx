@@ -149,6 +149,20 @@ const char *slot_name(int slot) {
 }
 
 /*----------------------
+ | chord_mod_held
+ | Description: See input.h. Null-guarded because it is read from the renderer,
+ |   which runs on frames the input side has not claimed a pad on.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: true while the modifier is held
+ ----------------------*/
+bool chord_mod_held(void) {
+    return g_pad != nullptr && g_pad->IsHeld(chord_btn_button());
+}
+
+/*----------------------
  | chord_btn_name
  | Description: See input.h.
  | Author: suinevere
@@ -285,7 +299,10 @@ static ChordRep g_chordrep[SL_N];
  |   whether any direction was taken while it was, and whether the release
  |   completed a tap. Measured on the release rather than on the press because a
  |   chord begins with the same press -- fired on the press, every scroll the
- |   player asked for would be preceded by one they did not.
+ |   player asked for would be preceded by one they did not. A tap is the Down
+ |   half of the line chord, not the Up half: the reader who taps is following the
+ |   text, and the direction that follows it is the one that has to be reachable
+ |   without a second button.
  | Author: suinevere
  ----------------------*/
 static bool g_tap_held  = false;
@@ -324,7 +341,7 @@ bool chord_ticked(void);
  |   faster PAD_SCROLL_RATE. SL_NONE is skipped -- it is the absence of a gesture,
  |   and giving it a repeat timer would let every switched-off action fire at once.
  |     Also runs the modifier's tap detector: a press that is released without any
- |   direction having been taken under it is one line back.
+ |   direction having been taken under it is one line forward.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -401,7 +418,7 @@ bool chord_tap_fired(void) {
  | Returns: N/A
  ----------------------*/
 void pad_scroll_update(void) {
-    if (chord_tap_fired())           g_scroll += 1;
+    if (chord_tap_fired())           g_scroll -= 1;
     if (chord_fired(CA_LINE,    -1)) g_scroll += 1;
     if (chord_fired(CA_LINE,    +1)) g_scroll -= 1;
     if (chord_fired(CA_HOMEEND, -1)) g_scroll  = SCROLL_ALL;
@@ -616,25 +633,6 @@ const char *history_recall_text(int older) {
     if (g_hist_browse > 0) { g_hist_browse--; return history_entry(); }
     g_hist_browse = -1;
     return "";
-}
-
-/*----------------------
- | chord_shift_held
- | Description: Whether any shift button that a chord slot is built on is down.
- |   The D-pad is the direction half of every shift chord as well as the cursor
- |   for both interfaces, so a cursor must stand still while one of these is
- |   held or a scroll or a recall drags the selection along with it. One place
- |   rather than a test per call site, so a slot added on a fourth shift button
- |   reaches every cursor at once.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad
- | Params: N/A
- | Returns: true while Z, Y or X is held
- ----------------------*/
-bool chord_shift_held(void) {
-    return g_pad->IsHeld(Button::Z) || g_pad->IsHeld(Button::Y) ||
-           g_pad->IsHeld(Button::X);
 }
 
 /*----------------------

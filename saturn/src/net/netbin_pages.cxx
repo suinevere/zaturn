@@ -547,7 +547,8 @@ static void controls_sheet_page(DevKind dev, int sheet) {
         if (sel == r_back) { if (act) break; }
         else if (act && rows[sel].kind == CK_SHEET) {
             /* The sheet this row opens, faded either way like every other page
-               boundary in the menus. */
+               boundary in the menus: out before it draws, in on the way back. */
+            page_fade_out(g_menu_page_fade);
             controls_sheet_page(dev, rows[sel].idx);
             need_fade_in = true;
             continue;
@@ -766,6 +767,7 @@ static bool controls_page(void) {
             bool fwd = right || (clicked && (r.kind == CK_FACE || r.kind == CK_CHORDBTN ||
                                              r.kind == CK_MSPEED));
             if (act && r.kind == CK_SHEET) {
+                page_fade_out(g_menu_page_fade);
                 controls_sheet_page(dev, r.idx);
                 need_fade_in = true;
                 continue;

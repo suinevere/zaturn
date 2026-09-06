@@ -178,11 +178,32 @@ const char *chord_btn_name(void);
 Button chord_btn_button(void);
 
 /*----------------------
+ | chord_mod_held
+ | Description: Whether the chord modifier is physically down this frame. Two
+ |   things ask: the travel module, which trades the compass rose for the chord
+ |   key while it is held, and every D-pad cursor, which must stand still while
+ |   it is -- the D-pad is the direction half of every chord as well as the
+ |   cursor for both interfaces, so a scroll or a recall would otherwise drag the
+ |   selection along under it.
+ |     This replaced chord_shift_held, which named Z, Y and X: those were the
+ |   shift buttons of the old eight-slot vocabulary, and the modifier has been one
+ |   remappable button (FA_CHORD, R by default) since. The old test froze the
+ |   cursor under buttons no chord uses and let it walk under the one that does.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: N/A
+ | Returns: true while the modifier is held, false with no pad at all
+ ----------------------*/
+bool chord_mod_held(void);
+
+/*----------------------
  | chord_tap_fired
  | Description: Whether the chord modifier was tapped -- pressed and released with
- |   no direction taken under it -- which scrolls back one line. It is the one
- |   thing the shift button does on its own, and it exists because a reader who
- |   only wants the line above should not have to hold a button and press another.
+ |   no direction taken under it -- which scrolls forward one line, the same as
+ |   holding it and pressing Down. It is the one thing the shift button does on its
+ |   own, and it exists because a reader who only wants the next line should not
+ |   have to hold a button and press another.
  |   Reading it clears it, like the chord edges themselves.
  | Author: suinevere
  | Dependencies: N/A
@@ -448,19 +469,6 @@ void history_recall(KeyboardState *k, int older);
  |   line); nullptr when nothing moved (empty history, or an end reached)
  ----------------------*/
 const char *history_recall_text(int older);
-
-/*----------------------
- | chord_shift_held
- | Description: Whether a shift button any chord slot is built on (Z, Y or X) is
- |   currently down, so a cursor can hold still while a chord is being pressed --
- |   the D-pad is both the cursor and the direction half of every chord.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad
- | Params: N/A
- | Returns: true while Z, Y or X is held
- ----------------------*/
-bool chord_shift_held(void);
 
 /*----------------------
  | face_assign

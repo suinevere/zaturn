@@ -16,8 +16,15 @@
  |   overprints the selected direction's label at full brightness. A row with no
  |   selection on it stays dim throughout, which is also what the whole rose
  |   looks like while the focus is somewhere else.
+ |     While the chord modifier is held this draws the chord key instead -- the
+ |   same seven rows in the same columns, and the same compass, with each cell
+ |   naming what the D-pad does that way under the player's own bindings rather
+ |   than which exit the room has. The swap is here rather than at the call sites
+ |   because both interfaces draw their travel module through this one call, and
+ |   `exits` and `sel` are simply unread on those frames.
  | Author: suinevere
- | Dependencies: command_rose.h, text_map.h, command_view.h (CV_TRAVEL_X)
+ | Dependencies: command_rose.h, text_map.h, command_view.h (CV_TRAVEL_X),
+ |   input.h (the live mapping and whether the modifier is down)
  | Globals: N/A
  | Params: row -- rose row 0..CR_ROWS-1; exits -- RM_DIR_N exit states;
  |   y -- text-map cell row; sel -- selected RM_* direction, or negative for none

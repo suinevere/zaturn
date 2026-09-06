@@ -207,6 +207,50 @@ static void unkey_slot(int slot) {
 }
 
 /*----------------------
+ | count_keyed
+ | Description: How many of the thirty-two slots have KYONB set -- how many are
+ |   sounding, or would be the moment the chip scans them.
+ |
+ |   Read three times: on arrival, after SNDOFF, and after every slot has been
+ |   cleared by hand. Those three numbers are the whole question when a program
+ |   inherits the chip from another one. A browser that plays audio leaves slots
+ |   keyed; SNDOFF halts the 68K that would have released them but does not touch
+ |   the registers it left behind; and a keyed slot loops its waveform for as
+ |   long as the machine is on. Nothing about that is visible from a CD boot,
+ |   where the chip arrives quiet.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: 0..32
+ ----------------------*/
+static int count_keyed(void) {
+    int n = 0;
+    for (int i = 0; i < NSLOTS; i++)
+        if ((slot_regs(i)[0x00 / 2] & (1u << 11)) != 0u) n++;
+    return n;
+}
+
+/*----------------------
+ | silence_all
+ | Description: Zeroes every slot and pulses KYONEX once, the same thing
+ |   scsp_silence_all does in the engine. KYONEX makes the chip scan every
+ |   slot's KYONB at once, so one pulse at the end releases all of them.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void silence_all(void) {
+    for (int i = 0; i < NSLOTS; i++) {
+        volatile unsigned short *s = slot_regs(i);
+        for (int j = 0; j < 0x20 / 2; j++) s[j] = 0;
+    }
+    slot_regs(0)[0x00 / 2] = (unsigned short) (1u << 12);
+}
+
+/*----------------------
  | chk_expect
  | Description: What byte belongs at offset i. A stride of seven so no two
  |   neighbours share a value: a swapped pair, a dropped store and a store that
@@ -354,7 +398,13 @@ static void sound_env_init(void) {
 
 int main() {
     SRL::Core::Initialize(HighColor::Colors::Black);
+
+    int keyed_arrival = count_keyed();
     sound_env_init();
+    int keyed_after_off = count_keyed();
+    silence_all();
+    int keyed_after_clear = count_keyed();
+
     write_tone();
 
     SRL::Input::Digital d0(0), d1(1);
@@ -384,9 +434,9 @@ int main() {
                           wfirst[0], wfirst[1], wfirst[2], wfirst[3]);
         SRL::Debug::Print(2, 9, " 8-bit %02x %02x %02x %02x",
                           bfirst[0], bfirst[1], bfirst[2], bfirst[3]);
-        SRL::Debug::Print(2, 11, "16-bit short, or back in the");
-        SRL::Debug::Print(2, 12, "wrong order, means no waveform");
-        SRL::Debug::Print(2, 13, "ever reaches the chip intact.");
+        SRL::Debug::Print(2, 11, "slots keyed on arrival  %d   ", keyed_arrival);
+        SRL::Debug::Print(2, 12, "        after SNDOFF    %d   ", keyed_after_off);
+        SRL::Debug::Print(2, 13, "        after clearing  %d   ", keyed_after_clear);
         SRL::Debug::Print(2, 15, "A or RIGHT for the slot sweep");
         SRL::Core::Synchronize();
         if (pressed(SRL::Input::Digital::Button::A)

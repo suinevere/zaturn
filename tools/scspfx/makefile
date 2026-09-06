@@ -23,6 +23,19 @@ SRL_MAX_CD_RETRIES = 5
 # and a sweep in it says whether the fault is below the tracker or above it.
 # tools/assets/scspfx-nodrv.bat is that build.
 SRL_USE_SGL_SOUND_DRIVER ?= 1
+
+# --- .netbin build ------------------------------------------------------
+# `make NETBIN=1 LDFILE=./sgl-netbin.linker` links this probe the way the client
+# is linked for PlanetWeb, and that is the only way it can answer the question it
+# now exists for. Every probe before this was a CD image, which boots onto a chip
+# nobody else has touched -- so none of them could see what the browser leaves
+# behind, and three faults in a row were chased in the wrong layer because of it.
+# tools/assets/scspfx-netbin.bat builds it.
+ifeq ($(strip $(NETBIN)),1)
+SRL_USE_SGL_SOUND_DRIVER = 0
+BUILD_NETBIN = $(BUILD_DROP)/scspfx.netbin
+SRL_CUSTOM_CCFLAGS += -DNETBIN
+endif
 SRL_ENABLE_FREQ_ANALYSIS = 0
 SGL_MAX_VERTICES = 100
 SGL_MAX_POLYGONS = 100

@@ -76,6 +76,31 @@ using namespace SRL::Types;
 #define TONE_PERIOD 128
 
 /*----------------------
+ | CHK_N / CHK_WORD_RAM / CHK_BYTE_RAM / CHK_BYTE_RAM16
+ | Description: A read-back check of sound RAM, and the two ways of writing it
+ |   laid side by side: CHK_WORD_RAM is filled with 16-bit stores and
+ |   CHK_BYTE_RAM with 8-bit ones, then both are read back as words and compared
+ |   against what was meant to be there.
+ |
+ |   This exists because three sessions of this fault were spent reasoning about
+ |   code that an emulator ran correctly every time. The SCSP is behind a
+ |   sixteen-bit bus, so a byte store into sound RAM is an access that bus cannot
+ |   express -- but "cannot express" is a claim about hardware, and the only
+ |   place to settle it is on hardware. The counts say whether a write lands at
+ |   all; the four bytes printed under them say whether it lands where it was
+ |   aimed, which is what would show a byte order that does not match the SH-2's.
+ |
+ |   Both regions sit above the highest address BOOTSND.MAP names under any
+ |   reading (~0x48600) and below the synth's own area at 0x70000, so neither
+ |   walks on the driver or on the tone.
+ | Author: suinevere
+ ----------------------*/
+#define CHK_N          256
+#define CHK_WORD_RAM   ((volatile unsigned short*) 0x25A62000)
+#define CHK_BYTE_RAM   ((volatile signed char*)    0x25A64000)
+#define CHK_BYTE_RAM16 ((volatile unsigned short*) 0x25A64000)
+
+/*----------------------
  | NSLOTS / MARK_UNKNOWN / MARK_HEARD / MARK_SILENT
  | Description: The slots to walk, and the three states an answer can be in. All
  |   thirty-two are walked, not just the high ones: the answer for 0-27 is as
@@ -182,6 +207,63 @@ static void unkey_slot(int slot) {
 }
 
 /*----------------------
+ | chk_expect
+ | Description: What byte belongs at offset i. A stride of seven so no two
+ |   neighbours share a value: a swapped pair, a dropped store and a store that
+ |   landed one byte over all read differently, which a constant or a simple ramp
+ |   would not distinguish.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: i -- byte offset within the checked region
+ | Returns: the byte that should be readable there
+ ----------------------*/
+static unsigned char chk_expect(int i) {
+    return (unsigned char) (i * 7 + 3);
+}
+
+/*----------------------
+ | chk_run
+ | Description: Fills both check regions, reads them back as words, and counts
+ |   how many bytes survived each way. Read back as words in both cases on
+ |   purpose -- the read is then the same access for both, so any difference in
+ |   the counts is a difference between the two writes and not between two ways
+ |   of looking.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: word_ok/byte_ok -- receive the surviving byte counts out of CHK_N;
+ |   wfirst/bfirst -- receive the first four bytes read back each way
+ | Returns: N/A
+ ----------------------*/
+static void chk_run(int *word_ok, int *byte_ok,
+                    unsigned char *wfirst, unsigned char *bfirst) {
+    int i;
+    for (i = 0; i < CHK_N; i += 2)
+        CHK_WORD_RAM[i >> 1] = (unsigned short)
+            (((unsigned int) chk_expect(i) << 8) | chk_expect(i + 1));
+    for (i = 0; i < CHK_N; i++)
+        CHK_BYTE_RAM[i] = (signed char) chk_expect(i);
+
+    *word_ok = 0;
+    *byte_ok = 0;
+    for (i = 0; i < CHK_N; i += 2) {
+        unsigned short w = CHK_WORD_RAM[i >> 1];
+        unsigned short b = CHK_BYTE_RAM16[i >> 1];
+        if (((w >> 8) & 0xFFu) == chk_expect(i))     (*word_ok)++;
+        if ((w & 0xFFu) == chk_expect(i + 1))        (*word_ok)++;
+        if (((b >> 8) & 0xFFu) == chk_expect(i))     (*byte_ok)++;
+        if ((b & 0xFFu) == chk_expect(i + 1))        (*byte_ok)++;
+    }
+    for (i = 0; i < 4; i++) {
+        unsigned short w = CHK_WORD_RAM[i >> 1];
+        unsigned short b = CHK_BYTE_RAM16[i >> 1];
+        wfirst[i] = (unsigned char) ((i & 1) ? (w & 0xFFu) : ((w >> 8) & 0xFFu));
+        bfirst[i] = (unsigned char) ((i & 1) ? (b & 0xFFu) : ((b >> 8) & 0xFFu));
+    }
+}
+
+/*----------------------
  | g_d0 / g_d1 / g_a0 / g_a1
  | Description: Both ports on both pad families, so a controller works whichever
  |   port it is in and whatever mode a 3D pad is switched to. Pointers rather
@@ -283,10 +365,37 @@ int main() {
     char row0[17], row1[17];
     int i, slot = 0, done = 0, answered;
 
+    int word_ok = 0, byte_ok = 0;
+    unsigned char wfirst[4], bfirst[4];
+
     for (i = 0; i < NSLOTS; i++) mark[i] = MARK_UNKNOWN;
     mark[NSLOTS] = 0;
     row0[16] = 0;
     row1[16] = 0;
+
+    chk_run(&word_ok, &byte_ok, wfirst, bfirst);
+    while (1) {
+        SRL::Debug::Print(2, 2, "SOUND RAM WRITE CHECK");
+        SRL::Debug::Print(2, 4, "16-bit stores  %d of %d   ", word_ok, CHK_N);
+        SRL::Debug::Print(2, 5, " 8-bit stores  %d of %d   ", byte_ok, CHK_N);
+        SRL::Debug::Print(2, 7, "want   %02x %02x %02x %02x",
+                          chk_expect(0), chk_expect(1), chk_expect(2), chk_expect(3));
+        SRL::Debug::Print(2, 8, "16-bit %02x %02x %02x %02x",
+                          wfirst[0], wfirst[1], wfirst[2], wfirst[3]);
+        SRL::Debug::Print(2, 9, " 8-bit %02x %02x %02x %02x",
+                          bfirst[0], bfirst[1], bfirst[2], bfirst[3]);
+        SRL::Debug::Print(2, 11, "16-bit short, or back in the");
+        SRL::Debug::Print(2, 12, "wrong order, means no waveform");
+        SRL::Debug::Print(2, 13, "ever reaches the chip intact.");
+        SRL::Debug::Print(2, 15, "A or RIGHT for the slot sweep");
+        SRL::Core::Synchronize();
+        if (pressed(SRL::Input::Digital::Button::A)
+         || pressed(SRL::Input::Digital::Button::C)
+         || pressed(SRL::Input::Digital::Button::Right)) break;
+    }
+    for (i = 2; i <= 15; i++)
+        SRL::Debug::Print(2, (uint8_t) i, "                                    ");
+
     key_slot(slot);
 
     while (1) {

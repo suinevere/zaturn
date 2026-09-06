@@ -101,6 +101,27 @@ using namespace SRL::Types;
 #define CHK_BYTE_RAM16 ((volatile unsigned short*) 0x25A64000)
 
 /*----------------------
+ | CHK_OFF_RAM / CHK_ON_RAM / CHK_CYCLE_RAM
+ | Description: One region per sound-block state, so no state can be read a
+ |   leftover of another's.
+ |
+ |   Measured on hardware, from a netbin, with the block off: 1 of 256 bytes
+ |   survived -- and 1 is exactly the score a region of zeroes gets, because
+ |   position 219 is the only offset whose wanted byte is itself zero. Both write
+ |   widths scored it. So the chip was not returning what was written, it was
+ |   returning nothing, and the width was never the question.
+ |
+ |   What is left is whether the SCSP answers at all while SMPC SNDOFF holds the
+ |   sound block in reset, which is the state the netbin puts it in before it
+ |   writes a single waveform. Under Mednafen the chip answers regardless, which
+ |   is why every build has looked correct for as long as this has existed.
+ | Author: suinevere
+ ----------------------*/
+#define CHK_OFF_RAM    ((volatile unsigned short*) 0x25A62000)
+#define CHK_ON_RAM     ((volatile unsigned short*) 0x25A66000)
+#define CHK_CYCLE_RAM  ((volatile unsigned short*) 0x25A68000)
+
+/*----------------------
  | NSLOTS / MARK_UNKNOWN / MARK_HEARD / MARK_SILENT
  | Description: The slots to walk, and the three states an answer can be in. All
  |   thirty-two are walked, not just the high ones: the answer for 0-27 is as
@@ -143,7 +164,7 @@ static volatile unsigned short *slot_regs(int slot) {
  | Dependencies: N/A
  | Globals: N/A
  | Params: N/A
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void write_tone(void) {
     volatile unsigned short *ram = (volatile unsigned short *) TONE_RAM;
@@ -170,7 +191,7 @@ static void write_tone(void) {
  | Dependencies: N/A
  | Globals: N/A
  | Params: slot -- 0..31
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void key_slot(int slot) {
     volatile unsigned short *s = slot_regs(slot);
@@ -198,7 +219,7 @@ static void key_slot(int slot) {
  | Dependencies: N/A
  | Globals: N/A
  | Params: slot -- 0..31
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void unkey_slot(int slot) {
     volatile unsigned short *s = slot_regs(slot);
@@ -240,7 +261,7 @@ static int count_keyed(void) {
  | Dependencies: N/A
  | Globals: N/A
  | Params: N/A
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void silence_all(void) {
     for (int i = 0; i < NSLOTS; i++) {
@@ -276,35 +297,26 @@ static unsigned char chk_expect(int i) {
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: word_ok/byte_ok -- receive the surviving byte counts out of CHK_N;
- |   wfirst/bfirst -- receive the first four bytes read back each way
- | Returns: N/A
+ | Params: ram -- the region to test; first -- receives the first four bytes read
+ |   back, or 0 for none
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
-static void chk_run(int *word_ok, int *byte_ok,
-                    unsigned char *wfirst, unsigned char *bfirst) {
-    int i;
+static int chk_run(volatile unsigned short *ram, unsigned char *first) {
+    int i, ok = 0;
     for (i = 0; i < CHK_N; i += 2)
-        CHK_WORD_RAM[i >> 1] = (unsigned short)
+        ram[i >> 1] = (unsigned short)
             (((unsigned int) chk_expect(i) << 8) | chk_expect(i + 1));
-    for (i = 0; i < CHK_N; i++)
-        CHK_BYTE_RAM[i] = (signed char) chk_expect(i);
-
-    *word_ok = 0;
-    *byte_ok = 0;
     for (i = 0; i < CHK_N; i += 2) {
-        unsigned short w = CHK_WORD_RAM[i >> 1];
-        unsigned short b = CHK_BYTE_RAM16[i >> 1];
-        if (((w >> 8) & 0xFFu) == chk_expect(i))     (*word_ok)++;
-        if ((w & 0xFFu) == chk_expect(i + 1))        (*word_ok)++;
-        if (((b >> 8) & 0xFFu) == chk_expect(i))     (*byte_ok)++;
-        if ((b & 0xFFu) == chk_expect(i + 1))        (*byte_ok)++;
+        unsigned short w = ram[i >> 1];
+        if (((w >> 8) & 0xFFu) == chk_expect(i)) ok++;
+        if ((w & 0xFFu) == chk_expect(i + 1))    ok++;
     }
-    for (i = 0; i < 4; i++) {
-        unsigned short w = CHK_WORD_RAM[i >> 1];
-        unsigned short b = CHK_BYTE_RAM16[i >> 1];
-        wfirst[i] = (unsigned char) ((i & 1) ? (w & 0xFFu) : ((w >> 8) & 0xFFu));
-        bfirst[i] = (unsigned char) ((i & 1) ? (b & 0xFFu) : ((b >> 8) & 0xFFu));
-    }
+    if (first != 0)
+        for (i = 0; i < 4; i++) {
+            unsigned short w = ram[i >> 1];
+            first[i] = (unsigned char) ((i & 1) ? (w & 0xFFu) : ((w >> 8) & 0xFFu));
+        }
+    return ok;
 }
 
 /*----------------------
@@ -386,7 +398,7 @@ static const char *verdict(const char *mark, int first, int last) {
  | Dependencies: SGL (slSoundOffWait) when driverless
  | Globals: N/A
  | Params: N/A
- | Returns: N/A
+ | Returns: how many of CHK_N bytes read back as written
  ----------------------*/
 static void sound_env_init(void) {
 #if !DRIVER_ON
@@ -400,6 +412,23 @@ int main() {
     SRL::Core::Initialize(HighColor::Colors::Black);
 
     int keyed_arrival = count_keyed();
+
+    /* Three states, one region each, because the question this build exists to
+       answer is which of them lets the SH-2 reach the chip at all. On hardware
+       from a netbin the block-off case scored 1 of 256, and 1 is what a region
+       of zeroes scores. Whichever of these reads back 256 is the sequence the
+       engine has to use before it uploads a single waveform. */
+    slSoundOffWait();
+    int ok_off = chk_run(CHK_OFF_RAM, 0);
+
+    slSoundOnWait();
+    int ok_on = chk_run(CHK_ON_RAM, 0);
+
+    slSoundOffWait();
+    slSoundOnWait();
+    unsigned char cfirst[4];
+    int ok_cycle = chk_run(CHK_CYCLE_RAM, cfirst);
+
     sound_env_init();
     int keyed_after_off = count_keyed();
     silence_all();
@@ -415,25 +444,24 @@ int main() {
     char row0[17], row1[17];
     int i, slot = 0, done = 0, answered;
 
-    int word_ok = 0, byte_ok = 0;
-    unsigned char wfirst[4], bfirst[4];
+
+
 
     for (i = 0; i < NSLOTS; i++) mark[i] = MARK_UNKNOWN;
     mark[NSLOTS] = 0;
     row0[16] = 0;
     row1[16] = 0;
 
-    chk_run(&word_ok, &byte_ok, wfirst, bfirst);
+
     while (1) {
-        SRL::Debug::Print(2, 2, "SOUND RAM WRITE CHECK");
-        SRL::Debug::Print(2, 4, "16-bit stores  %d of %d   ", word_ok, CHK_N);
-        SRL::Debug::Print(2, 5, " 8-bit stores  %d of %d   ", byte_ok, CHK_N);
-        SRL::Debug::Print(2, 7, "want   %02x %02x %02x %02x",
+        SRL::Debug::Print(2, 2, "CAN THE SH-2 REACH THE CHIP?");
+        SRL::Debug::Print(2, 4, "block OFF      %d of %d   ", ok_off, CHK_N);
+        SRL::Debug::Print(2, 5, "block ON       %d of %d   ", ok_on, CHK_N);
+        SRL::Debug::Print(2, 6, "OFF then ON    %d of %d   ", ok_cycle, CHK_N);
+        SRL::Debug::Print(2, 8, "want       %02x %02x %02x %02x",
                           chk_expect(0), chk_expect(1), chk_expect(2), chk_expect(3));
-        SRL::Debug::Print(2, 8, "16-bit %02x %02x %02x %02x",
-                          wfirst[0], wfirst[1], wfirst[2], wfirst[3]);
-        SRL::Debug::Print(2, 9, " 8-bit %02x %02x %02x %02x",
-                          bfirst[0], bfirst[1], bfirst[2], bfirst[3]);
+        SRL::Debug::Print(2, 9, "OFF then ON %02x %02x %02x %02x",
+                          cfirst[0], cfirst[1], cfirst[2], cfirst[3]);
         SRL::Debug::Print(2, 11, "slots keyed on arrival  %d   ", keyed_arrival);
         SRL::Debug::Print(2, 12, "        after SNDOFF    %d   ", keyed_after_off);
         SRL::Debug::Print(2, 13, "        after clearing  %d   ", keyed_after_clear);

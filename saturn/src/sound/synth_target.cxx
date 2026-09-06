@@ -60,8 +60,31 @@ void synth_target_init(void) {
        PlanetWeb leaves the block in whatever state its own audio finished in,
        so put it into a known one rather than inheriting it. In the CD build the
        driver is already up and this is left alone. */
+    /* The sound block is turned ON, with the 68K parked, and that is not a
+       detail. This used to leave it OFF -- SNDOFF, then set the master volume,
+       then drive the slots from the SH-2 -- and measured on hardware from a
+       netbin that state writes and reads sound RAM perfectly, 256 of 256 with
+       the right byte order, and produces no audio on any of the thirty-two
+       slots. The registers take the writes and the chip does not sound. Every
+       emulator run agreed with the old version, because Mednafen generates
+       audio whatever the block state is.
+
+       SNDON needs the 68K to have somewhere harmless to be: with no driver
+       loaded it would otherwise run whatever PlanetWeb left in sound RAM. Its
+       reset vectors are the first eight bytes of that RAM -- stack pointer,
+       then entry address -- and at the entry a single instruction, 0x60FE,
+       `bra.s` to itself: two bytes that spin forever and touch nothing. */
 #ifdef NETBIN
-    slSoundOffWait();
+    {
+        volatile unsigned short *sram = (volatile unsigned short *) 0x25A00000;
+        slSoundOffWait();
+        sram[0x000 / 2] = 0x0000;
+        sram[0x002 / 2] = 0x0FFC;
+        sram[0x004 / 2] = 0x0000;
+        sram[0x006 / 2] = 0x0100;
+        sram[0x100 / 2] = 0x60FE;
+        slSoundOnWait();
+    }
 #endif
 
     synth_bind(SYNTH_SCSP_REGS, SYNTH_WAVE_RAM, SYNTH_WAVE_SA);

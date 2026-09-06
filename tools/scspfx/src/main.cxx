@@ -386,24 +386,40 @@ static const char *verdict(const char *mark, int first, int last) {
  |   SND_Init, and SND_Init is what sets the master volume -- which is why the CD
  |   build's splash jingle is audible without anybody asking for it.
  |
- |   Without the driver, this reproduces what saturn/src/sound/synth_target.cxx
- |   does on the netbin, and it has to, or the sweep answers the wrong question.
- |   PlanetWeb leaves the sound block wherever its own audio finished, so it is
- |   put into a known state; and with no driver nothing sets the master volume at
- |   all, so every slot plays into a muted output -- correct registers, total
- |   silence. That was measured on the netbin, not guessed, and a probe that
- |   forgot it would report thirty-two dead slots and blame the driver for a
- |   volume register.
+ |   Without the driver, the block is turned ON with the 68K parked, and that is
+ |   the correction this whole probe was built to find. It used to leave the
+ |   block OFF: SNDOFF, then set the master volume, then drive slots from the
+ |   SH-2. Measured on hardware from a netbin, that state writes and reads sound
+ |   RAM perfectly -- 256 of 256, right byte order -- and produces no audio at
+ |   all, on any of the thirty-two slots. The registers take the writes and the
+ |   chip does not sound. Mednafen generates audio whatever the block state is,
+ |   which is why every build and every probe has looked correct since the day
+ |   this was written.
+ |
+ |   So SNDON, which needs the 68K to have somewhere harmless to be: with no
+ |   driver loaded it would otherwise run whatever the browser left in sound RAM.
+ |   Its reset vectors are the first eight bytes of that RAM, so a stack pointer
+ |   and an entry address go there, and at that address a single instruction --
+ |   0x60FE, `bra.s` to itself -- which is a two-byte program that spins forever
+ |   and touches nothing. Then the master volume, which nothing else sets when
+ |   there is no driver to set it.
  | Author: suinevere
- | Dependencies: SGL (slSoundOffWait) when driverless
+ | Dependencies: SGL (slSoundOffWait, slSoundOnWait) when driverless
  | Globals: N/A
  | Params: N/A
- | Returns: how many of CHK_N bytes read back as written
+ | Returns: N/A
  ----------------------*/
 static void sound_env_init(void) {
 #if !DRIVER_ON
+    volatile unsigned short *ram  = (volatile unsigned short *) 0x25A00000;
     volatile unsigned short *ctrl = SCSP_REGS + (0x400 / 2);
     slSoundOffWait();
+    ram[0x000 / 2] = 0x0000;
+    ram[0x002 / 2] = 0x0FFC;
+    ram[0x004 / 2] = 0x0000;
+    ram[0x006 / 2] = 0x0100;
+    ram[0x100 / 2] = 0x60FE;
+    slSoundOnWait();
     ctrl[0] = (unsigned short) ((ctrl[0] & 0xFFF0u) | 0x000Fu);
 #endif
 }

@@ -46,14 +46,35 @@ MAP_FILE = (ROOT / "saturn" / "BuildDrop"
             / "Zaturn (USA) (Netlink Edition).map")
 
 
+def outdated_map():
+    """How many sources are newer than the link map.
+
+    A map measures the build that produced it and nothing else, so one older
+    than the code it is being read about describes an image nobody is running.
+    That is not a heap regression and must not be reported as one: it cost an
+    hour once, the map having been written 80 minutes before the commit that
+    took the story heap from 135,616 to 192,800.
+    """
+    if not MAP_FILE.is_file() or not SRC.is_dir():
+        return 0
+    when = MAP_FILE.stat().st_mtime
+    return sum(1 for f in SRC.rglob("*")
+               if f.is_file() and f.stat().st_mtime > when)
+
+
+NO_HEAP = ("no link map in BuildDrop, or one older than the sources it would "
+           "be measuring -- build once to measure the heap")
+
+
 def heap_bytes():
     """The HWRAM C heap, measured off the link map.
 
     __heap_start moves with .bss, so this is a property of the build and not a
     constant anything declares. Returns None when there is no map to read --
-    BuildDrop is not committed, so a clean checkout has none.
+    BuildDrop is not committed, so a clean checkout has none -- and when the
+    map is older than the sources, because a stale number is worse than none.
     """
-    if not MAP_FILE.is_file():
+    if not MAP_FILE.is_file() or outdated_map():
         return None
     text = MAP_FILE.read_text(encoding="utf-8", errors="replace")
     start = re.search(r"(?m)^\s*(0x[0-9a-fA-F]+)\s+__heap_start\s*=", text)
@@ -231,7 +252,7 @@ def test_two_stories_do_not_fit():
     """
     heap = heap_bytes()
     if heap is None:
-        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+        pytest.skip(NO_HEAP)
     require_full_library()
     ranked = stories()
     (n1, s1), (n2, s2) = ranked[0], ranked[1]
@@ -252,7 +273,7 @@ def test_each_claimant_fits_the_heap_alone():
     produces, and it has to hold or nothing works at all."""
     heap = heap_bytes()
     if heap is None:
-        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+        pytest.skip(NO_HEAP)
     require_full_library()
     name, size = stories()[0]
     assert size <= heap, (
@@ -292,7 +313,7 @@ def test_the_largest_story_leaves_room_to_run_in():
     """
     heap = heap_bytes()
     if heap is None:
-        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+        pytest.skip(NO_HEAP)
     require_full_library()
     name, size = stories()[0]
     assert size + STORY_HEADROOM <= heap, (
@@ -315,7 +336,7 @@ def test_title_wallpaper_needs_the_story_gone():
     """
     heap = heap_bytes()
     if heap is None:
-        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+        pytest.skip(NO_HEAP)
     require_full_library()
     name, size = stories()[0]
     gate = tga_gate("TITLE.TGA")

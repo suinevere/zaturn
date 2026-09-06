@@ -249,7 +249,7 @@ def test_a_sample_would_spend_the_story_runway():
                     "(cd/data/Z3/*.z3 is gitignored)")
     heap = hwram.heap_bytes()
     if heap is None:
-        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+        pytest.skip(hwram.NO_HEAP)
     behind = heap - STORY.stat().st_size
     biggest = samples()[0][1]
     assert behind - biggest < hwram.STORY_HEADROOM, (
@@ -277,7 +277,7 @@ def test_the_story_heap_could_never_hold_the_cache():
                     "(cd/data/Z3/*.z3 is gitignored)")
     heap = hwram.heap_bytes()
     if heap is None:
-        pytest.skip("no link map in BuildDrop -- build once to measure the heap")
+        pytest.skip(hwram.NO_HEAP)
     behind = heap - STORY.stat().st_size
     two = sum(s[1] for s in samples()[:2])
     assert two > behind, (

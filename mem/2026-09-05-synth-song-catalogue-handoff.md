@@ -5,6 +5,13 @@ metadata:
   type: project
 ---
 
+**ALSO STALE ON EVERY TUNE'S NAME**, and on open item 3 -- the three unmatched
+tunes -- both superseded by
+[[nes-rips-and-octave-corrections-handoff]], which matched each MIDI to a
+recording of the NES original by measurement: three of the titles below were
+read off a filename and are wrong, two tunes are the same piece, and one is
+unidentified. Its `track_songs.json` is the current one.
+
 **STALE ON THE NUMBERS IN THIS PARAGRAPH ONLY**, and on the two open items the
 next note closes; superseded there by [[lurking-sound-budget-handoff]], which
 carries the figures measured after the rebase onto the controller work. Nothing

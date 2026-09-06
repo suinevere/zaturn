@@ -61,8 +61,7 @@ def test_the_damaged_tune_in_the_manifest_still_converts():
     # being asserted is that this particular file ships.
     songs, _ = mid2pat.load_manifest(MANIFEST)
     dragon = [s for s in songs if s["id"] == "dragon"][0]
-    got = mid2pat.convert(dragon["midi"], grid=dragon["grid"],
-                          fold=dragon["fold"])
+    got = mid2pat.convert_song(dragon)
     assert len(got["cells"]) > 0
 
 
@@ -110,10 +109,7 @@ def test_every_shipped_tune_fits_the_tracker():
     songs, default_index = mid2pat.load_manifest(MANIFEST)
     assert 0 <= default_index < len(songs)
     for s in songs:
-        got = mid2pat.convert(s["midi"], grid=s["grid"], speed_arg=0,
-                              max_rows=s["max_rows"], no_drums=False,
-                              bpm_override=s["bpm"], fold=s["fold"],
-                              drum_tab=s["drums_tab"], tab_beats=s["tab_beats"])
+        got = mid2pat.convert_song(s)
         patterns, order = mid2pat.pack_patterns(got["cells"])
         assert 0 < len(patterns) <= 255, s["id"]
         assert 0 < len(order) <= 255, s["id"]
@@ -161,3 +157,48 @@ def test_the_track_map_names_only_real_songs():
     assert len(table) == hi - lo + 1
     for index in table:
         assert 0 <= index < len(songs)
+
+
+def test_an_octave_correction_moves_only_its_own_lane():
+    # The whole point of the field: sglake.mid writes its bass an octave below
+    # the NES original -- 42 per cent of our energy sat in an octave the
+    # original puts 0.1 per cent in -- and the correction has to lift that one
+    # voice without touching the others. Compared cell by cell against the same
+    # tune converted without it, because "the bass moved" and "everything moved"
+    # sound identical in a band measurement.
+    songs, _ = mid2pat.load_manifest(MANIFEST)
+    lake = [s for s in songs if s["id"] == "lake"][0]
+    assert lake["octaves"][0] == 1, "lake's measured correction has been lost"
+    with_it = mid2pat.convert_song(lake)
+    without = mid2pat.convert_song(dict(lake, octaves=[0, 0, 0, 0]))
+    assert len(with_it["cells"]) == len(without["cells"])
+    moved = 0
+    for a, b in zip(with_it["cells"], without["cells"]):
+        for lane, ((na, wa), (nb, wb)) in enumerate(zip(a, b)):
+            assert wa == wb, "an octave changed a waveform or a level"
+            if lane == 0:
+                if na >= 2 and nb >= 2:
+                    assert na - nb == 12, "the bass did not move one octave"
+                    moved += 1
+                else:
+                    assert na == nb
+            else:
+                assert na == nb, "lane %d moved and should not have" % lane
+    assert moved > 0, "no bass note moved at all"
+
+
+def test_an_octave_correction_is_refused_when_it_is_not_one():
+    # A float, a string or an absurd number in this field would otherwise reach
+    # the conversion as a transposition nobody meant.
+    src = pathlib.Path(mid2pat.load_manifest(MANIFEST)[0][0]["midi"])
+    for bad in (1.5, "1", 9, [0, 0, 0, 0, 0]):
+        doc = {"default": "a",
+               "songs": [{"id": "a", "name": "A", "midi": src.name, "cd": True,
+                          "octaves": bad if isinstance(bad, list) else [bad]}]}
+        p = src.parent / "songs-test-octaves.json"
+        p.write_text(json.dumps(doc), encoding="utf-8")
+        try:
+            with pytest.raises(SystemExit):
+                mid2pat.load_manifest(p)
+        finally:
+            p.unlink()

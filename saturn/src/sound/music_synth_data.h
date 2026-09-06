@@ -8,17 +8,17 @@
  |
  |   The catalogue, in emit order:
  |     disc castle-halls Shadowgate, Entryway       castle-halls.mid, a fan sequence; drums authored separately in 3/4
- |     net  title        Shadowgate, Title          sgtitle.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  halls        Shadowgate, Halls          sghalls.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  banquet      Shadowgate, Banquet        sgbanqet.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  title        Shadowgate, Title Screen   sgtitle.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  halls        Shadowgate, Hall of Mirrors sghalls.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  banquet      Shadowgate, Banquet Hall   sgbanqet.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
  |     net  court        Shadowgate, Courtyard      sgcourt.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  dragon       Shadowgate, Dragon         sgdragon.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  lake         Shadowgate, Lake           sglake.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  corridor     Shadowgate, Lit Corridor   sglitrod.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  mirror       Shadowgate, Mirror         sgmirror.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  overworld    Shadowgate, Overworld      sgover.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  shadow7      Shadowgate, Shadow 7       shadow7.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
- |     net  shadow8      Shadowgate, Shadow 8       shadow8.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  dragon       Shadowgate, Dragon's Den   sgdragon.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  lake         Shadowgate, Subterranean Cavern sglake.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  corridor     Shadowgate, Twilight       sglitrod.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  mirror       Shadowgate, sgmirror (unidentified) sgmirror.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  overworld    Shadowgate, Game Over      sgover.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  shadow7      Shadowgate, Subterranean Cavern shadow7.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
+ |     net  shadow8      Shadowgate, Danger         shadow8.mid, a fan sequence of Shadowgate (NES, 1989), music by Hiroyuki Masuno
  |
  |   Default: Shadowgate, Entryway.
  | Author: suinevere
@@ -86,7 +86,7 @@ extern "C" {
  | Author: suinevere
  ----------------------*/
 #ifdef NETBIN
-#define MUSIC_SYNTH_CELLS    20160
+#define MUSIC_SYNTH_CELLS    19968
 #define MUSIC_SYNTH_ORDER    569
 #else
 #define MUSIC_SYNTH_CELLS    1088
@@ -105,7 +105,7 @@ extern "C" {
  |   disc tune reads pairs that are not there.
  | Author: suinevere
  ----------------------*/
-#define MUSIC_SYNTH_PAIRS    173
+#define MUSIC_SYNTH_PAIRS    183
 
 /*----------------------
  | MUSIC_SYNTH_DEFAULT

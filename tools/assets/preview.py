@@ -136,9 +136,7 @@ def main():
                                 ", ".join(s["id"] for s in songs)))
         s = picked[0]
         print("%s -- %s" % (s["id"], s["name"]))
-        song = mid2pat.convert(s["midi"], s["grid"], 0, s["max_rows"], False,
-                               s["bpm"], s["fold"], s["drums_tab"],
-                               s["tab_beats"])
+        song = mid2pat.convert_song(s)
     else:
         if not args.midi:
             raise SystemExit("give a MIDI file, or --song ID")

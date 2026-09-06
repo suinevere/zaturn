@@ -75,10 +75,7 @@ def render_tune(song):
      | Params: song -- a settings dict from mid2pat.load_manifest
      | Returns: a float32 array in -1..1
      ----------------------*/"""
-    got = mid2pat.convert(song["midi"], grid=song["grid"], speed_arg=0,
-                          max_rows=song["max_rows"], no_drums=False,
-                          bpm_override=song["bpm"], fold=song["fold"],
-                          drum_tab=song["drums_tab"], tab_beats=song["tab_beats"])
+    got = mid2pat.convert_song(song)
     buf = preview.render(got["cells"], got["speed"], got["frac"],
                          got["ch_wave"], SECONDS)
     sig = np.asarray(buf, dtype=np.float32)

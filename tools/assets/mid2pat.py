@@ -40,7 +40,7 @@ theme and both are off by default.
 Usage:
   python tools/assets/mid2pat.py IN.mid OUT.c --name "Title" --source "Credit"
 """
-import argparse, struct, sys, pathlib
+import argparse, statistics, struct, sys, pathlib
 
 ROWS_PER_PATTERN = 16
 CHANNELS = 4
@@ -130,6 +130,21 @@ DRUM_FAST_SEMITONES = 3
 WAVE_NAMES = ["SYNTH_WAVE_PULSE12", "SYNTH_WAVE_PULSE25",
               "SYNTH_WAVE_TRIANGLE", "SYNTH_WAVE_PULSE50", "SYNTH_WAVE_NOISE"]
 WAVE_NOISE = 4
+WAVE_TRIANGLE = 2
+# What separates a part carrying two lines from a part carrying one thickened.
+# Measured over the catalogue: where a part sounds two notes at once, sglake and
+# sgmirror hold them 23 to 36 semitones apart on every such row and sgbanqet 13
+# to 19, while sgmirror's neighbours in the same files stay monophonic and the
+# genuine chord parts -- shadow8's channel 1 at 5 to 6 semitones, sghalls'
+# channel 6 at 10 -- never reach an octave at all. Twelve separates them with
+# nothing near the line, and a majority is asked for so one stray overlap at a
+# note-off cannot split a part that is really one line.
+WIDE_PART_SEMITONES = 12
+WIDE_PART_SHARE = 0.6
+# Where a separated line's part number comes from. MIDI channels are 0 to 15,
+# so 16 upward belongs to nobody and a separated line can carry a number that
+# orders and compares like any other part's.
+SPLIT_PART_BASE = 16
 
 BASE_MIDI = 53
 MIN_INDEX = 0
@@ -436,6 +451,96 @@ def plan_parts(parts, slots):
     return (lanes + [None] * slots)[:slots]
 
 
+def separate_wide_parts(parts):
+    """/*----------------------
+     | separate_wide_parts
+     | Description: Give each line of a part that is really two a part of its
+     |     own. A sequencer writing a melody and a bass on one MIDI channel
+     |     leaves a part that sounds two notes at once, which plan_parts cannot
+     |     follow; the members are two or three octaves apart and which of them
+     |     a row's lowest note is depends on whether the bass is resting, so
+     |     the pitch-order fallback puts the melody on the bass voice whenever
+     |     it is. In sglake.mid that reached 1228 Hz on the NES triangle, whose
+     |     32-step staircase lives in a 256-sample table and has 1.1 samples a
+     |     stair at that pitch -- no staircase, and aliasing in its place.
+     |
+     |     The split is at the midpoint of the two registers, taken from the
+     |     medians of the members rather than from any one row, so a line that
+     |     crosses briefly does not change part halfway through a phrase.
+     |
+     |     Must run AFTER fold_octaves. A raw sequence doubling its bass at the
+     |     octave looks exactly like two lines on one channel to this, and
+     |     castle-halls -- which every voicing constant was swept against --
+     |     is one: separated before the fold, its triangle goes from eleven
+     |     semitones to forty-six.
+     | Author: suinevere
+     | Dependencies: statistics
+     | Globals: WIDE_PART_SEMITONES, WIDE_PART_SHARE, SPLIT_PART_BASE
+     | Params: parts -- one dict of part number to pitch set per row
+     | Returns: new rows, or the same object when nothing wanted separating
+     ----------------------*/"""
+    cuts = {}
+    for chan in {c for row in parts for c in row}:
+        gaps = [max(p) - min(p) for row in parts
+                for p in (row.get(chan) or (),) if len(p) > 1]
+        if not gaps:
+            continue
+        wide = [g for g in gaps if g >= WIDE_PART_SEMITONES]
+        if len(wide) < WIDE_PART_SHARE * len(gaps):
+            continue
+        lows = [min(p) for row in parts
+                for p in (row.get(chan) or (),) if len(p) > 1]
+        highs = [max(p) for row in parts
+                 for p in (row.get(chan) or (),) if len(p) > 1]
+        cuts[chan] = (statistics.median(lows) + statistics.median(highs)) / 2.0
+    if not cuts:
+        return parts
+    out = []
+    for row in parts:
+        made = {}
+        for chan, pitches in row.items():
+            if chan not in cuts:
+                made[chan] = pitches
+                continue
+            lower = {p for p in pitches if p <= cuts[chan]}
+            upper = {p for p in pitches if p > cuts[chan]}
+            if lower:
+                made[chan] = lower
+            if upper:
+                made[chan + SPLIT_PART_BASE] = upper
+        out.append(made)
+    return out
+
+
+def plan_lanes(parts, slots):
+    """/*----------------------
+     | plan_lanes
+     | Description: The parts to reduce from and the lane plan for them. One
+     |     call rather than two because the repair changes both: a part that
+     |     cannot be planned may be two lines written on one channel, and
+     |     separating them is only worth doing if the result can then be
+     |     planned -- so the parts a tune is converted from depend on whether
+     |     the plan succeeded.
+     |
+     |     The repair is attempted only where the plan already failed. Applied
+     |     unconditionally it damages tunes whose parts were fine, and one of
+     |     them is the tune every voicing constant was measured against.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: parts -- one dict per row; slots -- tonal voices available
+     | Returns: (parts to use, lane plan or None)
+     ----------------------*/"""
+    lanes = plan_parts(parts, slots)
+    if lanes is not None:
+        return parts, lanes
+    separated = separate_wide_parts(parts)
+    if separated is parts:
+        return parts, None
+    lanes = plan_parts(separated, slots)
+    return (separated, lanes) if lanes is not None else (parts, None)
+
+
 def echo_delay(parts, lead, answer, max_shift=16):
     """The row delay at which one part is another repeated, or None.
 
@@ -458,7 +563,8 @@ def echo_delay(parts, lead, answer, max_shift=16):
 
 
 def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
-            bpm_override=0.0, fold="off", drum_tab=None, tab_beats=4):
+            bpm_override=0.0, fold="off", drum_tab=None, tab_beats=4,
+            octaves=None):
     """Run the whole reduction and return everything both callers need.
 
     The offline preview renders from this, and the build emits C from it, so
@@ -494,7 +600,7 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
         hits.append(set())
     if drum_tab:
         hits = tab_hits(read_drum_tab(drum_tab, tab_beats), len(parts), grid)
-    lanes = plan_parts(parts, tonal_slots)
+    parts, lanes = plan_lanes(parts, tonal_slots)
     tonal = [sounding(row) for row in parts]
 
     # A part that is another part repeated is the same instrument heard twice,
@@ -519,6 +625,16 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
         shift += 12
     while (highest + shift - BASE_MIDI) + 24 > MAX_INDEX:
         shift -= 12
+    # Per-lane octave corrections, from the manifest. shift above moves the
+    # whole tune to fit the note range and is arithmetic; this moves one voice
+    # because a fan sequence wrote that voice in the wrong octave, and it is
+    # measured against a recording of the NES original by tools/voicecmp.py.
+    # Tonal lanes only: the percussion lane's note is the shift register's
+    # clock rate and is calibrated at DRUM_NOTE, so moving it is not a
+    # transposition but a different drum.
+    lane_oct = [0] * CHANNELS
+    for ch in range(min(tonal_slots, len(octaves or ()))):
+        lane_oct[ch] = 12 * int(octaves[ch])
 
     cells = []
     previous = [None] * CHANNELS
@@ -534,7 +650,7 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             if pitch is None:
                 row.append((1, 0) if previous[ch] is not None else (0, 0))
             elif pitch != previous[ch]:
-                index = (pitch + shift - BASE_MIDI) + 24
+                index = (pitch + shift + lane_oct[ch] - BASE_MIDI) + 24
                 index = max(MIN_INDEX, min(MAX_INDEX, index))
                 row.append((index + 2, (ch_wave[ch] << 4) | CH_VOL[ch]))
             else:
@@ -566,7 +682,8 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             "frames": frames,
             "has_drums": has_drums, "tonal_slots": tonal_slots,
             "lanes": lanes, "echoes": echoes,
-            "ch_wave": ch_wave, "shift": shift, "thick": thick}
+            "ch_wave": ch_wave, "shift": shift, "thick": thick,
+            "octaves": [o // 12 for o in lane_oct]}
 
 
 def pack_patterns(cells):
@@ -727,6 +844,54 @@ def main():
     return 0
 
 
+def convert_song(record):
+    """/*----------------------
+     | convert_song
+     | Description: One tune, converted with every setting its manifest record
+     |     carries. Four callers used to spell the same eight arguments out --
+     |     the emitter, the preview, the mood measurement and the tests -- and a
+     |     field added to the manifest reached whichever of them was remembered.
+     |     This is the one spelling.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: N/A
+     | Params: record -- a settings dict from load_manifest
+     | Returns: what convert returns
+     ----------------------*/"""
+    return convert(record["midi"], grid=record["grid"], speed_arg=0,
+                   max_rows=record["max_rows"], no_drums=False,
+                   bpm_override=record["bpm"], fold=record["fold"],
+                   drum_tab=record["drums_tab"], tab_beats=record["tab_beats"],
+                   octaves=record.get("octaves"))
+
+
+def _octaves(entry):
+    """/*----------------------
+     | _octaves
+     | Description: One whole-octave correction per tonal lane, from a
+     |     manifest entry. A fan sequence writing a voice in the wrong octave
+     |     is a fault of that sequence and not of the conversion, so it is
+     |     recorded per tune beside grid and bpm rather than guessed at
+     |     conversion time. Written short: [1] moves only the bass.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: CHANNELS
+     | Params: entry -- one songs.json record
+     | Returns: a list of CHANNELS ints, each an octave count
+     ----------------------*/"""
+    got = entry.get("octaves") or []
+    if not isinstance(got, list) or len(got) > CHANNELS:
+        raise SystemExit("%s: octaves must be a list of at most %d numbers"
+                         % (entry.get("id"), CHANNELS))
+    out = []
+    for v in got:
+        if not isinstance(v, int) or isinstance(v, bool) or abs(v) > 3:
+            raise SystemExit("%s: an octave correction is a whole number of "
+                             "octaves within +/-3, not %r" % (entry.get("id"), v))
+        out.append(v)
+    return out + [0] * (CHANNELS - len(out))
+
+
 def load_manifest(path):
     """/*----------------------
      | load_manifest
@@ -759,6 +924,7 @@ def load_manifest(path):
             "grid": int(s.get("grid", 32)),
             "bpm": float(s.get("bpm", 0.0)),
             "fold": s.get("fold", "off"),
+            "octaves": _octaves(s),
             "max_rows": int(s.get("max_rows", 0)),
             "drums_tab": str(root / tab) if tab else None,
             "tab_beats": int(s.get("tab_beats", 4)),
@@ -986,10 +1152,7 @@ def emit_manifest(manifest_path, out_path, pat_path=None):
     # and that table cannot be known until the last tune has been converted.
     converted = []
     for s in songs:
-        got = convert(s["midi"], grid=s["grid"], speed_arg=0,
-                      max_rows=s["max_rows"], no_drums=False,
-                      bpm_override=s["bpm"], fold=s["fold"],
-                      drum_tab=s["drums_tab"], tab_beats=s["tab_beats"])
+        got = convert_song(s)
         patterns, order = pack_patterns(got["cells"])
         check_length(patterns, order, s["id"])
         converted.append((got, patterns, order))
@@ -1510,7 +1673,9 @@ MANIFEST_TEMPLATE = '''/*----------------------
  |     %(command)s
  |
  |   Each is reduced to %(channels)d monophonic voices, transposed in whole octaves
- |   until its lowest note is representable, and packed by collapsing identical
+ |   until its lowest note is representable -- and, where the manifest carries an
+ |   "octaves" correction, by one more octave on one voice, because the sequence
+ |   wrote that voice in the wrong one -- then packed by collapsing identical
  |   patterns. All of them share the two arrays below and point at their own
  |   offset inside them, which is why the cell array is one block and not
  |   %(songs)d of them.

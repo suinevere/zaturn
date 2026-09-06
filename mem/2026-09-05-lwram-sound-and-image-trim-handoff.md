@@ -122,7 +122,38 @@ ever breaks up when an effect plays, that is the sweep to run.
 None of this blocks the LWRAM route that shipped: those effects go through SRL's
 PCM and claim no slots of ours.
 
-## The netbin has no music, and it is not any of the above
+## The netbin's music: sound RAM was being written a byte at a time
+
+**This is the session's largest finding and it invalidates the framing of
+everything above it.** `scsp_upload_wave` copied waveforms into sound RAM through
+a `volatile signed char *`, one byte per store, for as long as the synth has
+existed. The SCSP is behind the Saturn's B-bus, which is sixteen bits wide; a
+byte write there is not narrowed on your behalf, it is an access the bus has no
+way to express.
+
+Mednafen performs it anyway. The chip does not, and what comes back is a
+waveform table that is part right and part whatever was there before -- which is
+neither silence nor music. Over NetLink onto a real Saturn, one unchanged binary
+gave "bleeps and bloops, no instrument" on one run and silence on the next.
+`scsp.c` writes words now, and `tools/scspfx` lays its own tone down the same
+way, since a probe answering which slots are usable against a waveform the chip
+may never have received would be wrong convincingly.
+
+**Every result this session called good was Mednafen.** drums-chip sounding
+great, both thirty-two-slot sweeps, the "all slots are ours" conclusion in
+`scsp.h` -- all emulator, none hardware. The sweeps are probably still right,
+but they were taken with a tone written by the broken path, so they are not
+evidence about the chip and should be re-run now that the probe writes properly.
+`saturn/tests/test_scsp_access_width.py` holds the shape of both, because nothing
+on a host can execute this and no emulator can fail it.
+
+The level bug below is real and still worth fixing, but it is not what was
+silencing the netbin.
+
+## What was chased before that, and ruled out
+
+None of it was the cause. Kept because it is all still true, and because the
+next fault in this area will be looked for in the same places.
 
 Reported mid-session and not chased, because it is a different fault. What was
 ruled out by reading:
@@ -187,9 +218,22 @@ if the silence turns out to have moved.
 
 ## Open
 
-1. **Run `tools\assets\drums-chip.bat`.** One disc, and it splits the netbin's
-   silence into "the synth stack" or "the netbin's wiring". Nothing else here is
-   worth doing first. Both SCSP sweeps are done and both say the chip is fine.
+1. **Put the netbin on real hardware again** and hear whether the word-wide
+   sound RAM write fixed it. Everything else waits on that, and nothing about it
+   can be settled under an emulator, which cannot reproduce the fault.
+2. **Re-run both SCSP sweeps** now that the probe writes its tone in words. The
+   "all thirty-two are ours" answer was measured against a tone laid down by the
+   broken path, and `scsp.h` currently records it as settled.
+3. **The synth level is applied to a logarithmic field.** `synth_note_on` passes
+   `(vol * g_level) / 7` to `scsp_key_on`, which writes it to DISDL -- register
+   0x16, three bits, 6 dB a step. The tune's own volumes are 4 to 6, so at the
+   default level of 5 they become 2, 3 and 4: every voice about 12 dB down, and
+   the quiet ones about 5 dB further down than the loud ones because the division
+   truncates. drums-chip hardcodes level 7, which is why it has never shown this.
+   The player's level belongs on the master volume (MVOL, register 0x400, four
+   bits, already written by `scsp_enable_output`) rather than multiplied into
+   each voice's send level -- but MVOL is global, so on the CD build it would
+   duck CD-DA and the PCM effects too. That fork is unresolved.
 2. **Sweep again with a PCM effect playing.** The driver was idle for the sweep
    that answered "all thirty-two", and the CD build's effects go through it. If
    it keys 28-31 while playing, an effect disrupts the music.

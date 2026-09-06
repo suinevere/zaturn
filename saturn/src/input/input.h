@@ -85,11 +85,14 @@ extern MultiPad *g_pad;
 //   Group 1 (face buttons): Accept, Backspace/Cancel, Type-letter and Space --
 //     always a permutation of {A,B,C,Y}; reassigning one swaps with whoever held
 //     that button ("alternate when changed").
-//   Group 2 (shift chords): Autocomplete, Recall, Home/End, Line, Cursor-move and
-//     Page -- each in one of eight slots {L/R, Z+Up/Dn, Z+L/R, Z+Left/Right,
-//     Y+Up/Dn, Y+Left/Right, Y+L/R, X+Up/Dn}; reassigning to a used slot swaps, to
-//     a free spare just moves ("alternate iff already used").
-//   Fixed: L+R swaps the dashboard's Keyboard and Command Panel modes.
+//   Group 2 (shift chords): Autocomplete, Recall, Home/End, Line and Page -- each
+//     either Unset or in one of three slots held under the chord
+//     modifier: chord+Up/Dn, chord+Left/Right, chord+L/R. Reassigning to a used
+//     slot swaps; Unset is not a slot and never swaps, so any number of actions
+//     can be off at once. The slots are named from the modifier rather than
+//     written down, so moving the modifier renames all of them at once.
+//   Fixed: L alone swaps the dashboard's Keyboard and Command Panel modes, and Z
+//     opens the map.
 // Everything reads through face_button()/chord_fired() so both editors honor it.
 //
 // Space joined group 1 rather than staying the fixed X it was: it is a typing
@@ -104,25 +107,28 @@ extern MultiPad *g_pad;
 // nothing on the Panel/Keyboard swap, which has moved off the shift buttons
 // entirely and onto the fixed L+R combo (mode_combo_fired).
 enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_N };
-enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_CURSOR, CA_PAGE, CA_N };
+enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_PAGE, CA_N };
 
 /*----------------------
- | CG_ACTIONS / CG_SCROLL
- | Description: The controls.xls sheet a chord action is configured on. Each sheet
- |   is its own configuration group: a slot swap stays inside one.
+ | CG_CHORDS
+ | Description: The configuration group a chord action is edited in. There is one
+ |   now: every chord lives on the Chords sheet, so a swap has nowhere else to
+ |   reach and the group is what says so rather than an unwritten assumption. It is
+ |   kept as a group rather than deleted because the sheets were separate once and
+ |   the next reader will want to know that the answer is deliberate.
  | Author: suinevere
  ----------------------*/
-enum { CG_ACTIONS = 0, CG_SCROLL };
+enum { CG_CHORDS = 0 };
 
 /*----------------------
  | chord_group
- | Description: Which configuration group (CG_ACTIONS / CG_SCROLL) chord action
+ | Description: Which configuration group (CG_CHORDS) chord action
  |   `a` is edited in.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: a -- one of the CA_* constants
- | Returns: CG_ACTIONS or CG_SCROLL
+ | Returns: CG_CHORDS
  ----------------------*/
 int chord_group(int a);
 
@@ -136,22 +142,67 @@ int chord_group(int a);
  ----------------------*/
 #define FA_BTN_N 4
 
-// Directional chord slots. Y shifts home-end/page, Z shifts line/cursor, X shifts
-// recall. Suffix: "t" = shoulder triggers L/R, "d" = D-pad Left/Right. The spare
-// directional slots are SL_ZLRd and SL_YLRt; the mode swap rides the fixed L+R
-// combo instead of a slot.
+// Chord slots, all held under one modifier the player picks (g_chord_btn, R by
+// default): SL_CUD is that button plus Up/Down, SL_CLR plus Left/Right, SL_CT
+// plus a shoulder trigger. SL_NONE is not a gesture at all -- it is the action
+// switched off, which is where Page, Recall and Autocomplete start.
 //
-// SL_XUD is last so the numbers already written into a save keep their meaning --
-// the slot list is persisted by index, and inserting in the middle would silently
-// re-read every stored chord as its neighbour.
+// SL_CT is one-directional when the modifier is itself a trigger: R+R cannot be
+// held, so under the default modifier only R+L is reachable and it counts as the
+// "previous" direction. Pick a modifier that is not a trigger to get both.
 //
-// Y carries chords *and* is the default Space button, which is the one overlap in
-// the set: in the Command Panel interface Space has no job, so Y is free, but in
-// the Keyboard interface Y+Up both types a space and pages. Harmless in practice
-// -- the scroll redraws over the stray space's frame -- and remappable either way.
-// Z and Y do nothing alone: both are shift buttons only, now that the mode swap
-// has moved off them onto L+R.
-enum { SL_LR, SL_ZUD, SL_ZLRt, SL_ZLRd, SL_YUD, SL_YLRd, SL_YLRt, SL_XUD, SL_N };
+// The whole vocabulary changed here -- these numbers are persisted by index, and
+// a blob written before the change stores the old eight-slot numbering, so the
+// mapping block carries a sentinel of its own and an older one is read for its
+// face buttons alone. See options.cxx.
+enum { SL_NONE, SL_CUD, SL_CLR, SL_CT, SL_N };
+
+/*----------------------
+ | CB_R / CB_Z / CB_Y / CB_X / CB_N
+ | Description: The buttons the chord modifier can be, and how many there are. L
+ |   is not among them: L alone swaps the dashboard between its Keyboard and
+ |   Command Panel interfaces, and a chord held on the swap button would fire the
+ |   swap every time a scroll began.
+ | Author: suinevere
+ ----------------------*/
+enum { CB_R, CB_Z, CB_Y, CB_X, CB_N };
+
+/*----------------------
+ | g_chord_btn
+ | Description: Which of the CB_* buttons is the chord modifier; persisted with
+ |   the rest of the mapping. Every slot name is written from it, so changing this
+ |   row renames every row on the Chords sheet.
+ | Author: suinevere
+ ----------------------*/
+extern int g_chord_btn;
+
+/*----------------------
+ | chord_btn_name / chord_btn_button
+ | Description: The chord modifier as a name for a menu row, and as the Button to
+ |   test. Both read g_chord_btn.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_chord_btn
+ | Params: N/A
+ | Returns: name gives "R"/"Z"/"Y"/"X"; button gives the Button
+ ----------------------*/
+const char *chord_btn_name(void);
+Button chord_btn_button(void);
+
+/*----------------------
+ | chord_tap_fired
+ | Description: Whether the chord modifier was tapped -- pressed and released with
+ |   no direction taken under it -- which scrolls back one line. It is the one
+ |   thing the shift button does on its own, and it exists because a reader who
+ |   only wants the line above should not have to hold a button and press another.
+ |   Reading it clears it, like the chord edges themselves.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: true on the frame the tap completes
+ ----------------------*/
+bool chord_tap_fired(void);
 
 /*----------------------
  | g_face_btn
@@ -204,6 +255,21 @@ const char *face_btn_name(int action);
  | Returns: the slot's display string
  ----------------------*/
 const char *slot_name(int slot);
+
+/*----------------------
+ | pad_nav
+ | Description: One frame's menu direction: the pad's own edge on that button, or
+ |   the same direction synthesised for a device that has no D-pad to press it
+ |   with -- a racing wheel's steering and paddles. Every menu reads its
+ |   Up/Down/Left/Right through this rather than through g_pad, which is what makes
+ |   one wheel reading reach every page instead of each page growing its own.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: g_pad
+ | Params: b -- Button::Up, ::Down, ::Left or ::Right
+ | Returns: true on the frame that direction fires
+ ----------------------*/
+bool pad_nav(Button b);
 
 /*----------------------
  | mode_combo_fired
@@ -314,17 +380,6 @@ void pad_repeat_update(void);
  ----------------------*/
 bool pad_fired(Button b);
 
-/*----------------------
- | pad_fired_raw
- | Description: pad_fired without the Mouse Mode gate on the four directions, for
- |   the map, which owns the whole display and steers a crosshair of its own.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad
- | Params: b -- the button to check
- | Returns: true if it fired (pressed or repeated) this frame
- ----------------------*/
-bool pad_fired_raw(Button b);
 
 /*----------------------
  | scroll_handle_key

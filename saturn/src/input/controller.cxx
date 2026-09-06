@@ -124,61 +124,62 @@ static int mouse_delta(int now, int last) {
 }
 
 /*----------------------
- | g_dpad_held
- | Description: Frames the current digital direction has been held, which is what
- |   the cursor's ramp is measured in. Reset the moment nothing is held.
- | Author: suinevere
- ----------------------*/
-static int g_dpad_held = 0;
-
-/*----------------------
  | TWIN_TRIG_L / TWIN_TRIG_R / TWIN_TOP_L / TWIN_TOP_R
- | Description: PROVISIONAL. Which bits of a standard digital report the Twin
- |   Stick's four thumb and trigger buttons are assumed to sit on. A Twin Stick
- |   reports id 0x02 like any control pad, so nothing here has been read off real
- |   hardware; this table is the single place to correct once somebody has.
+ | Description: Which bits of a standard digital report the Twin Stick's two index
+ |   triggers and two thumb-top buttons sit on. Supplied by the project owner as
+ |   the device's own table, not inferred here: a Twin Stick reports id 0x02 like
+ |   any control pad, so the report says nothing about which is which and the two
+ |   this file had guessed wrong -- the left thumb top is Z, not A, and A belongs
+ |   to the right stick.
  | Author: suinevere
  ----------------------*/
 static const Button TWIN_TRIG_L = Button::L;
 static const Button TWIN_TRIG_R = Button::R;
-static const Button TWIN_TOP_L  = Button::A;
+static const Button TWIN_TOP_L  = Button::Z;
 static const Button TWIN_TOP_R  = Button::C;
 
 /*----------------------
+ | TWIN_RS_UP / TWIN_RS_DOWN / TWIN_RS_LEFT / TWIN_RS_RIGHT
+ | Description: The four bits the Twin Stick's right stick reports on, from the
+ |   same owner-supplied table as the buttons above. The left stick is the digital
+ |   D-pad, which is why it has no table of its own.
+ | Author: suinevere
+ ----------------------*/
+static const Button TWIN_RS_UP    = Button::X;
+static const Button TWIN_RS_DOWN  = Button::B;
+static const Button TWIN_RS_LEFT  = Button::Y;
+static const Button TWIN_RS_RIGHT = Button::A;
+
+/*----------------------
+ | g_rstick_held
+ | Description: Frames the Twin Stick's right stick has been held one way, which
+ |   is what its cursor ramp is measured in. Reset the moment it centres.
+ | Author: suinevere
+ ----------------------*/
+static int g_rstick_held = 0;
+
+/*----------------------
  | CSRC_NAME
- | Description: What each device calls its two cursor sources, indexed
- |   [DevKind][CSRC_*]. An empty string means that device has no such source: a
- |   Twin Stick has no D-pad to speak of -- the digital directions *are* its left
- |   stick -- and a control pad has no axis at all.
+ | Description: What each device calls the input that drives the cursor, and what
+ |   it calls the one that steps the selection, indexed [DevKind][CSRC_*]. An empty
+ |   stick column means that device has no cursor of its own: a control pad has no
+ |   axis at all, and the two that do call the same reading different things -- a
+ |   3D Control Pad's Analogue Stick is a Mission Stick's Right Stick.
+ |     There is nothing to choose between them. The selection input and the cursor
+ |   input are different hardware on every device that has both, so neither has to
+ |   be switched off for the other to work, which is what the Mouse Mode switch and
+ |   the source picker were both for.
  | Author: suinevere
  ----------------------*/
 static const char *const CSRC_NAME[DEV_KIND_N][CSRC_N] = {
-    { "",           ""               },  /* DEV_NONE   */
-    { "D-Pad",      ""               },  /* DEV_PAD    */
-    { "D-Pad",      "Left Stick"     },  /* DEV_FLIGHT */
-    { "D-Pad",      "Analogue Stick" },  /* DEV_ANALOG */
-    { "",           ""               },  /* DEV_MOUSE  */
-    { "Left Stick", ""               },  /* DEV_TWIN   */
-    { "",           ""               },  /* DEV_GUN    */
-    { "",           ""               },  /* DEV_KBD    */
-};
-
-/*----------------------
- | g_cursor_src
- | Description: The chosen cursor source per device. Defaulted to the stick where
- |   a device has one, because that is what the workbook's Mouse Mode sheet names
- |   for the two devices that do.
- | Author: suinevere
- ----------------------*/
-static uint8_t g_cursor_src[DEV_KIND_N] = {
-    CSRC_DPAD,  /* DEV_NONE   */
-    CSRC_DPAD,  /* DEV_PAD    */
-    CSRC_STICK, /* DEV_FLIGHT */
-    CSRC_STICK, /* DEV_ANALOG */
-    CSRC_DPAD,  /* DEV_MOUSE  */
-    CSRC_DPAD,  /* DEV_TWIN   */
-    CSRC_DPAD,  /* DEV_GUN    */
-    CSRC_DPAD,  /* DEV_KBD    */
+    { "",            ""               },  /* DEV_NONE   */
+    { "D-Pad",       ""               },  /* DEV_PAD    */
+    { "Left Stick",  "Right Stick"    },  /* DEV_FLIGHT */
+    { "D-Pad",       "Analogue Stick" },  /* DEV_ANALOG */
+    { "",            ""               },  /* DEV_MOUSE  */
+    { "Left Stick",  "Right Stick"    },  /* DEV_TWIN   */
+    { "",            ""               },  /* DEV_GUN    */
+    { "",            ""               },  /* DEV_KBD    */
 };
 
 /*----------------------
@@ -223,13 +224,20 @@ static DevPointer g_ptr;
 static int        g_ptr_fallback = -1;
 
 /*----------------------
- | g_twin / g_mouse_mode / g_wedged
- | Description: The player's Twin Stick profile switch, the Mouse Mode switch, and
- |   the latch recording that a wedged port has been seen at least once.
+ | g_nav
+ | Description: This frame's menu directions from a device that has no D-pad to
+ |   report them with; rebuilt from nothing by every controller_tick.
+ | Author: suinevere
+ ----------------------*/
+static uint8_t g_nav[NAV_N];
+
+/*----------------------
+ | g_twin / g_wedged
+ | Description: The player's Twin Stick profile switch, and the latch recording
+ |   that a wedged port has been seen at least once.
  | Author: suinevere
  ----------------------*/
 static int g_twin       = 0;
-static int g_mouse_mode = 0;
 static int g_wedged     = 0;
 
 /*----------------------
@@ -402,6 +410,36 @@ int controller_kind_port(DevKind k) {
  ----------------------*/
 int controller_present(DevKind k) {
     return controller_kind_port(k) >= 0 ? 1 : 0;
+}
+
+/*----------------------
+ | controller_wheel_present
+ | Description: Walks the ports for a racing wheel's own id, which is what tells
+ |   one apart from the 3D Control Pad it shares a column with.
+ | Author: suinevere
+ | Dependencies: SRL (Input::Management)
+ | Globals: N/A
+ | Params: N/A
+ | Returns: 1 when a wheel is attached, 0 otherwise
+ ----------------------*/
+int controller_wheel_present(void) {
+    for (int p = 0; p < PORT_N; p++)
+        if (raw_id(p) == (uint8_t) SRL::Input::PeripheralType::Racing) return 1;
+    return 0;
+}
+
+/*----------------------
+ | controller_nav_fired
+ | Description: Reads back one of this frame's synthesised menu directions.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_nav
+ | Params: nav -- one of the NAV_* constants
+ | Returns: nonzero if that direction fired
+ ----------------------*/
+int controller_nav_fired(int nav) {
+    if (nav < 0 || nav >= NAV_N) return 0;
+    return g_nav[nav];
 }
 
 /*----------------------
@@ -620,6 +658,11 @@ static void read_pad_family(void) {
     if (g_pad == nullptr) return;
 
     if (g_pad->WasPressed(Button::START)) mark(DA_MENU, 0);
+    /* Map is Z, which is the workbook's own cell for it. Skipped when Z is the
+       chord modifier: the map would then open on the press that begins every
+       scroll, and a screen that takes the whole display is not something to open
+       by accident. */
+    if (chord_btn_button() != Button::Z && g_pad->WasPressed(Button::Z)) mark(DA_MAP, 0);
 
     /* Edges, not pad_fired: this runs on screens that never call
        pad_repeat_update -- every menu, and the title -- where pad_fired reports
@@ -660,6 +703,21 @@ static void read_twin(void) {
     if (g_pad->WasPressed(TWIN_TRIG_L))   mark(DA_BACK,   0);
     if (g_pad->WasPressed(TWIN_TOP_R))    mark(DA_SPACE,  0);
     if (g_pad->WasPressed(TWIN_TOP_L))    mark(DA_ACCEPT, 0);
+
+    /* The right stick is the cursor and the left one steps the selection, which
+       is what having two sticks is for. A held direction accelerates the same way
+       a D-pad cursor used to: one pixel a frame to begin with, so a cell can be
+       picked at all, working up to CURSOR_STEP_MAX so the far corner stays
+       reachable. */
+    int dx = g_pad->IsHeld(TWIN_RS_RIGHT) ? 1 : g_pad->IsHeld(TWIN_RS_LEFT) ? -1 : 0;
+    int dy = g_pad->IsHeld(TWIN_RS_DOWN)  ? 1 : g_pad->IsHeld(TWIN_RS_UP)   ? -1 : 0;
+    if (!dx && !dy) { g_rstick_held = 0; return; }
+    int step = CURSOR_STEP_MIN + g_rstick_held / CURSOR_RAMP;
+    if (step > CURSOR_STEP_MAX) step = CURSOR_STEP_MAX;
+    g_rstick_held++;
+    g_ptr.x = (int16_t) (g_ptr.x + dx * step);
+    g_ptr.y = (int16_t) (g_ptr.y + dy * step);
+    clamp_cursor();
 }
 
 /*----------------------
@@ -670,7 +728,7 @@ static void read_twin(void) {
  |   are blank, so only the flight stick contributes scroll edges.
  | Author: suinevere
  | Dependencies: SRL (Input::Analog)
- | Globals: g_ptr, g_mouse_mode
+ | Globals: g_ptr
  | Params: port -- the port to read; kind -- DEV_FLIGHT or DEV_ANALOG
  | Returns: N/A
  ----------------------*/
@@ -690,7 +748,12 @@ static void read_sticks(int port, DevKind kind) {
         if (sx) mark(DA_PAGE,    sx);
     }
 
-    if (g_mouse_mode && g_cursor_src[kind] == CSRC_STICK) {
+    /* The stick drives the cursor, always: it is not the input the selection steps
+       on, so there is nothing for it to be switched away from. A wheel is the one
+       exception -- it answers GetAxis(Axis2) with a zero it does not have, which
+       reads as a stick held hard up, and the cursor would climb on its own for as
+       long as the wheel was plugged in. */
+    if (!controller_wheel_present()) {
         int tx = axis_travel(x);
         int ty = axis_travel(y);
         if (tx || ty) {
@@ -702,30 +765,28 @@ static void read_sticks(int port, DevKind kind) {
 }
 
 /*----------------------
- | read_dpad_cursor
- | Description: Drives the cursor from the D-pad while Mouse Mode is on, which is
- |   the control pad's and the twin stick's cell on that sheet -- neither reports
- |   an axis, so neither reaches read_sticks, and without this a pad in Mouse Mode
- |   shows a cursor that cannot be moved. A held direction accelerates: one pixel a
- |   frame to begin with, so a cell can be picked at all, working up to
- |   CURSOR_STEP_MAX so the far corner is still reachable.
+ | read_wheel
+ | Description: Turns a racing wheel into the four menu directions it has no D-pad
+ |   to send. Steering is Left and Right, through the same repeat the analogue
+ |   sheets use, so a held lock walks a list rather than jumping it; the two
+ |   paddles are Up and Down -- right pulls up, left pulls down, which is the way
+ |   the paddles read on the wheel itself. The wheel has nothing else on it: no
+ |   D-pad, no second stick, and its own Start is already the menu.
  | Author: suinevere
- | Dependencies: input.h
- | Globals: g_pad, g_ptr
- | Params: N/A
+ | Dependencies: SRL (Input::Analog)
+ | Globals: g_nav
+ | Params: port -- the port the wheel is on
  | Returns: N/A
  ----------------------*/
-static void read_dpad_cursor(void) {
-    if (g_pad == nullptr) return;
-    int dx = g_pad->IsHeld(Button::Right) ? 1 : g_pad->IsHeld(Button::Left) ? -1 : 0;
-    int dy = g_pad->IsHeld(Button::Down)  ? 1 : g_pad->IsHeld(Button::Up)   ? -1 : 0;
-    if (!dx && !dy) { g_dpad_held = 0; return; }
-    int step = CURSOR_STEP_MIN + g_dpad_held / CURSOR_RAMP;
-    if (step > CURSOR_STEP_MAX) step = CURSOR_STEP_MAX;
-    g_dpad_held++;
-    g_ptr.x = (int16_t) (g_ptr.x + dx * step);
-    g_ptr.y = (int16_t) (g_ptr.y + dy * step);
-    clamp_cursor();
+static void read_wheel(int port) {
+    SRL::Input::Analog a(port);
+    if (!a.IsConnected()) return;
+
+    int step = axis_step(port, 0, axis_dir((int) a.GetAxis(SRL::Input::Analog::Axis::Axis1)));
+    if (step < 0) g_nav[NAV_LEFT]  = 1;
+    if (step > 0) g_nav[NAV_RIGHT] = 1;
+    if (a.WasPressed(Button::R)) g_nav[NAV_UP]   = 1;
+    if (a.WasPressed(Button::L)) g_nav[NAV_DOWN] = 1;
 }
 
 /*----------------------
@@ -815,6 +876,39 @@ static void read_gun(int port) {
 }
 
 /*----------------------
+ | g_twin_chord_was
+ | Description: The Twin Stick toggle chord's held latch, so the switch flips once
+ |   per press rather than once per frame it is held.
+ | Author: suinevere
+ ----------------------*/
+static bool g_twin_chord_was = false;
+
+/*----------------------
+ | twin_chord_tick
+ | Description: Flips the Twin Stick profile on the rising edge of L+R+Z+X. That
+ |   profile is the only thing that can tell a Twin Stick from a control pad -- the
+ |   two report the same id and the same button word -- and it used to be a row on
+ |   the Controls page, which is a poor place for it: a player whose stick is being
+ |   read as a pad has to work a menu with the wrong bindings to say so. A chord
+ |   works from wherever they are, and the same four buttons exist on both devices.
+ |     Run from controller_tick, which every menu and both game loops call, so
+ |   "anywhere" means anywhere. Not persisted: it says what is plugged in right
+ |   now, and the next boot asks again.
+ | Author: suinevere
+ | Dependencies: input.h
+ | Globals: g_pad, g_twin, g_twin_chord_was
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void twin_chord_tick(void) {
+    if (g_pad == nullptr) { g_twin_chord_was = false; return; }
+    bool now = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R) &&
+               g_pad->IsHeld(Button::Z) && g_pad->IsHeld(Button::X);
+    if (now && !g_twin_chord_was) g_twin = g_twin ? 0 : 1;
+    g_twin_chord_was = now;
+}
+
+/*----------------------
  | controller_tick
  | Description: Clears the frame's edges, then walks every port folding whatever
  |   is on it into actions and pointer motion. The pad and analogue families are
@@ -835,6 +929,9 @@ void controller_tick(void) {
     g_ptr.offscreen = 0;
     g_ptr.valid = 0;
     g_ptr_fallback = -1;
+    for (int d = 0; d < NAV_N; d++) g_nav[d] = 0;
+
+    twin_chord_tick();
 
     int saw_pad = 0;
     int saw_twin = 0;
@@ -846,7 +943,11 @@ void controller_tick(void) {
             case DEV_PAD:  saw_pad  = 1; break;
             case DEV_TWIN: saw_twin = 1; saw_stick = 1; break;
             case DEV_FLIGHT:
-            case DEV_ANALOG: saw_pad = 1; saw_stick = 1; read_sticks(p, k); break;
+            case DEV_ANALOG:
+                saw_pad = 1; saw_stick = 1;
+                if (raw_id(p) == (uint8_t) SRL::Input::PeripheralType::Racing) read_wheel(p);
+                else                                                          read_sticks(p, k);
+                break;
             case DEV_MOUSE:  g_ptr.valid = 1; read_mouse(p); break;
             case DEV_GUN:
                 if (p == SRL::Input::Gun::Player::Player1 ||
@@ -858,10 +959,11 @@ void controller_tick(void) {
 
     if (saw_pad)  read_pad_family();
     if (saw_twin) read_twin();
-    if (g_mouse_mode && (saw_stick || saw_pad)) {
-        g_ptr.valid = 1;
-        if (controller_dpad_is_cursor()) read_dpad_cursor();
-    }
+    /* A cursor exists wherever something is free to drive one. A device with a
+       stick has that stick; a plain control pad has only its D-pad, and the D-pad
+       is what steps the selection, so a pad gets no cursor rather than a cursor
+       that fights the menu for the same four bits. */
+    if (saw_stick) g_ptr.valid = 1;
 }
 
 /*----------------------
@@ -1037,57 +1139,6 @@ const char *controller_cursor_src_name(DevKind k, int src) {
 }
 
 /*----------------------
- | controller_cursor_src_set
- | Description: Stores the cursor source for one device, refusing a source that
- |   device does not have so a stored value can never name an empty name.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_cursor_src
- | Params: k -- the device kind; src -- CSRC_DPAD or CSRC_STICK
- | Returns: N/A
- ----------------------*/
-void controller_cursor_src_set(DevKind k, int src) {
-    if (k < 0 || k >= DEV_KIND_N || src < 0 || src >= CSRC_N) return;
-    if (CSRC_NAME[k][src][0] == 0) return;
-    g_cursor_src[k] = (uint8_t) src;
-}
-
-/*----------------------
- | controller_cursor_src_get
- | Description: Reads the cursor source for one device.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_cursor_src
- | Params: k -- the device kind
- | Returns: CSRC_DPAD or CSRC_STICK
- ----------------------*/
-int controller_cursor_src_get(DevKind k) {
-    if (k < 0 || k >= DEV_KIND_N) return CSRC_DPAD;
-    return g_cursor_src[k];
-}
-
-/*----------------------
- | controller_dpad_is_cursor
- | Description: True while Mouse Mode is on and some attached device is pointed at
- |   its digital directions -- a control pad always is, having nothing else, and a
- |   Twin Stick always is, its directions being what it calls the left stick.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_mouse_mode, g_cursor_src
- | Params: N/A
- | Returns: nonzero while the D-pad belongs to the cursor
- ----------------------*/
-int controller_dpad_is_cursor(void) {
-    if (!g_mouse_mode) return 0;
-    for (int p = 0; p < PORT_N; p++) {
-        DevKind k = controller_kind(p);
-        if (controller_cursor_src_count(k) == 0) continue;
-        if (g_cursor_src[k] == CSRC_DPAD) return 1;
-    }
-    return 0;
-}
-
-/*----------------------
  | controller_mouse_speed_set
  | Description: Stores the mouse speed step, clamped into range.
  | Author: suinevere
@@ -1112,28 +1163,6 @@ void controller_mouse_speed_set(int n) {
  | Returns: the step
  ----------------------*/
 int controller_mouse_speed_get(void) { return g_mouse_speed; }
-
-/*----------------------
- | controller_mouse_mode_set
- | Description: Stores the Mouse Mode switch.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_mouse_mode
- | Params: on -- nonzero for cursor, zero for selection
- | Returns: N/A
- ----------------------*/
-void controller_mouse_mode_set(int on) { g_mouse_mode = on ? 1 : 0; }
-
-/*----------------------
- | controller_mouse_mode_get
- | Description: Reads the Mouse Mode switch.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_mouse_mode
- | Params: N/A
- | Returns: the current setting
- ----------------------*/
-int controller_mouse_mode_get(void) { return g_mouse_mode; }
 
 /*----------------------
  | controller_wedged
@@ -1177,14 +1206,15 @@ void controller_init(void) {
     for (int p = 0; p < PORT_N; p++) { g_axis[p][0] = AxisRep{0, 0}; g_axis[p][1] = AxisRep{0, 0}; }
     for (int i = 0; i < DEV_HOLD_N; i++) g_hold[i] = HoldRep{0, -1};
     for (int p = 0; p < PORT_N; p++) { g_mouse_seen[p] = 0; g_mouse_last[p][0] = 0; g_mouse_last[p][1] = 0; }
-    g_mouse_rem[0] = g_mouse_rem[1] = 0;
-    g_dpad_held = 0;
+    g_mouse_rem[0] = g_mouse_rem[1] = 0;
+    g_rstick_held = 0;
     g_ptr = DevPointer{0, 0, 0, 0,
                        (int16_t) (g_bound_w / 2), (int16_t) (g_bound_h / 2),
                        0, 0, DEV_BTN_LEFT};
     clamp_cursor();
     g_ptr_fallback = -1;
     g_wedged = 0;
+    g_twin_chord_was = false;
 }
 
 /*----------------------

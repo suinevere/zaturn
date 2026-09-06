@@ -668,8 +668,10 @@ void typeahead_edit(KeyboardState &k, TrieNode *root,
     if (pad) {
         if (chord_fired(CA_RECALL, -1)) history_recall(&k, 1);
         if (chord_fired(CA_RECALL, +1)) history_recall(&k, 0);
-        if (chord_fired(CA_CURSOR, -1)) keyboard_caret_left(&k);
-        if (chord_fired(CA_CURSOR, +1)) keyboard_caret_right(&k);
+        /* No caret chord. Moving the insertion point one character at a time is a
+           keyboard's job -- its own Left/Right do it below -- and on a pad it cost
+           a gesture to do something a player reaches faster by rubbing the word
+           out and typing it again. */
         // X joined Z and Y as a chord shift when Recall moved onto X+Up/Dn, so
         // the grid cursor has to stand still for it too -- chord_shift_held is
         // the one place that knows which buttons those are.

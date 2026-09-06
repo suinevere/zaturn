@@ -27,21 +27,23 @@ MultiPad *g_pad = nullptr;
  | Author: suinevere
  ----------------------*/
 int g_face_btn[FA_N]   = { 0, 1, 2, 3 };
-int g_chord_slot[CA_N] = { SL_LR, SL_XUD, SL_YLRd, SL_ZUD, SL_ZLRt, SL_YUD };
+int g_chord_slot[CA_N] = { SL_NONE, SL_NONE, SL_CLR, SL_CUD, SL_NONE };
+int g_chord_btn        = CB_R;
 
 /*----------------------
- | FACE_DEFAULT / CHORD_DEFAULT
- | Description: The factory mappings, copied back over g_face_btn/g_chord_slot by
- |   mapping_reset_defaults. The chord defaults are the Command Panel's layout --
- |   recall on X+Up/Dn, line on Z+Up/Dn, page on Y+Up/Dn, home/end on Y+Left/Right
- |   -- because the panel is the interface a pad starts a game in. Autocomplete and
- |   Cursor Move keep L/R and Z+L/R: neither row shows in the panel view (the panel
- |   has no completion list, and its D-pad moves the rose cursor with no shift), so
- |   they take the two slots the panel layout leaves free.
+ | FACE_DEFAULT / CHORD_DEFAULT / CHORD_BTN_DEFAULT
+ | Description: The factory mappings, copied back over g_face_btn/g_chord_slot/
+ |   g_chord_btn by mapping_reset_defaults. Only the two things a reader reaches
+ |   for start bound: the line above and below on the modifier plus Up/Down, and
+ |   the top and bottom of the scrollback on Left/Right. Page, Recall and
+ |   Autocomplete start Unset -- a page at a time is what
+ |   holding the line chord already does, and the other two are conveniences that
+ |   cost a gesture a player has not asked for.
  | Author: suinevere
  ----------------------*/
 static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2, 3 };
-static const int CHORD_DEFAULT[CA_N] = { SL_LR, SL_XUD, SL_YLRd, SL_ZUD, SL_ZLRt, SL_YUD };
+static const int CHORD_DEFAULT[CA_N] = { SL_NONE, SL_NONE, SL_CLR, SL_CUD, SL_NONE };
+static const int CHORD_BTN_DEFAULT   = CB_R;
 
 /*----------------------
  | SCROLL_PAGE / SCROLL_ALL
@@ -135,9 +137,49 @@ const char *face_btn_name(int action) {
  | Returns: the slot's display string
  ----------------------*/
 const char *slot_name(int slot) {
-    static const char *N[SL_N] = { "L/R", "Z+Up/Dn", "Z+L/R", "Z+Left/Right",
-                                   "Y+Up/Dn", "Y+Left/Right", "Y+L/R", "X+Up/Dn" };
-    return N[slot];
+    static char buf[SL_N][16];
+    static const char *SUFFIX[SL_N] = { "", "+Up/Dn", "+Left/Right", "+L/R" };
+    if (slot <= SL_NONE || slot >= SL_N) return "Unset";
+    const char *c = chord_btn_name();
+    char *b = buf[slot];
+    int n = 0;
+    while (*c && n < 14) b[n++] = *c++;
+    for (const char *t = SUFFIX[slot]; *t && n < 15; t++) b[n++] = *t;
+    b[n] = 0;
+    return b;
+}
+
+/*----------------------
+ | chord_btn_name
+ | Description: See input.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_chord_btn
+ | Params: N/A
+ | Returns: the modifier's display name
+ ----------------------*/
+const char *chord_btn_name(void) {
+    static const char *N[CB_N] = { "R", "Z", "Y", "X" };
+    if (g_chord_btn < 0 || g_chord_btn >= CB_N) return N[CB_R];
+    return N[g_chord_btn];
+}
+
+/*----------------------
+ | chord_btn_button
+ | Description: See input.h.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_chord_btn
+ | Params: N/A
+ | Returns: the modifier as a Button
+ ----------------------*/
+Button chord_btn_button(void) {
+    switch (g_chord_btn) {
+        case CB_Z: return Button::Z;
+        case CB_Y: return Button::Y;
+        case CB_X: return Button::X;
+        default:   return Button::R;
+    }
 }
 
 /*----------------------
@@ -155,22 +197,40 @@ const char *slot_name(int slot) {
  | Returns: -1 (L/Up/Left), +1 (R/Down/Right), or 0 (idle / shift mismatch)
  ----------------------*/
 static int slot_raw(int slot) {
-    bool z = g_pad->IsHeld(Button::Z), y = g_pad->IsHeld(Button::Y);
-    bool x = g_pad->IsHeld(Button::X);
-    bool l = g_pad->IsHeld(Button::L), r = g_pad->IsHeld(Button::R);
+    Button c = chord_btn_button();
+    if (slot <= SL_NONE || slot >= SL_N || !g_pad->IsHeld(c)) return 0;
     bool up = g_pad->IsHeld(Button::Up),   dn = g_pad->IsHeld(Button::Down);
     bool lt = g_pad->IsHeld(Button::Left), rt = g_pad->IsHeld(Button::Right);
+    bool l  = g_pad->IsHeld(Button::L),    r  = g_pad->IsHeld(Button::R);
     switch (slot) {
-        case SL_LR:   if (z || y || (l && r)) return 0; return l ? -1 : r ? 1 : 0;
-        case SL_ZUD:  if (!z) return 0;                 return up ? -1 : dn ? 1 : 0;
-        case SL_ZLRt: if (!z || (l && r)) return 0;     return l ? -1 : r ? 1 : 0;
-        case SL_ZLRd: if (!z) return 0;                 return lt ? -1 : rt ? 1 : 0;
-        case SL_YUD:  if (!y) return 0;                 return up ? -1 : dn ? 1 : 0;
-        case SL_YLRd: if (!y) return 0;                 return lt ? -1 : rt ? 1 : 0;
-        case SL_YLRt: if (!y || (l && r)) return 0;     return l ? -1 : r ? 1 : 0;
-        case SL_XUD:  if (!x) return 0;                 return up ? -1 : dn ? 1 : 0;
+        case SL_CUD: return up ? -1 : dn ? 1 : 0;
+        case SL_CLR: return lt ? -1 : rt ? 1 : 0;
+        /* The modifier cannot be its own direction: under the default R that
+           leaves only R+L, which counts as the previous direction. */
+        case SL_CT:  if (c == Button::L) return r ? 1 : 0;
+                     if (c == Button::R) return l ? -1 : 0;
+                     return l ? -1 : r ? 1 : 0;
     }
     return 0;
+}
+
+/*----------------------
+ | pad_nav
+ | Description: See input.h. The pad's edge first, so a pad and a wheel plugged in
+ |   together still behave like a pad.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: g_pad
+ | Params: b -- one of the four direction buttons
+ | Returns: true on the frame that direction fires
+ ----------------------*/
+bool pad_nav(Button b) {
+    if (g_pad->WasPressed(b)) return true;
+    if (b == Button::Up)    return controller_nav_fired(NAV_UP)    != 0;
+    if (b == Button::Down)  return controller_nav_fired(NAV_DOWN)  != 0;
+    if (b == Button::Left)  return controller_nav_fired(NAV_LEFT)  != 0;
+    if (b == Button::Right) return controller_nav_fired(NAV_RIGHT) != 0;
+    return false;
 }
 
 /*----------------------
@@ -194,8 +254,7 @@ static bool g_mtog_was = false;
  | Returns: true on the frame the combo first becomes held
  ----------------------*/
 bool mode_combo_fired(void) {
-    bool now = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R)
-             && !g_pad->IsHeld(Button::Z) && !g_pad->IsHeld(Button::Y);
+    bool now = g_pad->IsHeld(Button::L) && !g_pad->IsHeld(chord_btn_button());
     bool fired = now && !g_mtog_was;
     g_mtog_was = now;
     return fired;
@@ -229,6 +288,19 @@ struct ChordRep { int dir; int timer; bool fired; };
 static ChordRep g_chordrep[SL_N];
 
 /*----------------------
+ | g_tap_held / g_tap_used / g_tap_fired
+ | Description: The modifier's tap detector: whether it was held last frame,
+ |   whether any direction was taken while it was, and whether the release
+ |   completed a tap. Measured on the release rather than on the press because a
+ |   chord begins with the same press -- fired on the press, every scroll the
+ |   player asked for would be preceded by one they did not.
+ | Author: suinevere
+ ----------------------*/
+static bool g_tap_held  = false;
+static bool g_tap_used  = false;
+static bool g_tap_fired = false;
+
+/*----------------------
  | g_chord_ticked
  | Description: Whether chord_tick has run since the last time anyone asked. The
  |   chord state is a per-frame result, and the screens that do not tick it -- every
@@ -253,11 +325,14 @@ bool chord_ticked(void);
 
 /*----------------------
  | chord_tick
- | Description: For each of the SL_N slots, reads slot_raw and compares it to the
- |   slot's stored direction: idle resets the timer and clears fired; a changed
- |   direction fires immediately and arms the PAD_SCROLL_DELAY timer; an
- |   unchanged held direction fires again each time the timer counts down to 0,
- |   then rearms at the faster PAD_SCROLL_RATE.
+ | Description: For each real slot, reads slot_raw and compares it to the slot's
+ |   stored direction: idle resets the timer and clears fired; a changed direction
+ |   fires immediately and arms the PAD_SCROLL_DELAY timer; an unchanged held
+ |   direction fires again each time the timer counts down to 0, then rearms at the
+ |   faster PAD_SCROLL_RATE. SL_NONE is skipped -- it is the absence of a gesture,
+ |   and giving it a repeat timer would let every switched-off action fire at once.
+ |     Also runs the modifier's tap detector: a press that is released without any
+ |   direction having been taken under it is one line back.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -272,14 +347,21 @@ bool chord_ticked(void) {
 
 void chord_tick(void) {
     g_chord_ticked = true;
-    for (int s = 0; s < SL_N; s++) {
+    bool any = false;
+    for (int s = SL_NONE + 1; s < SL_N; s++) {
         int d = slot_raw(s);
         ChordRep &r = g_chordrep[s];
+        if (d != 0) any = true;
         if (d == 0)              { r.dir = 0; r.timer = 0; r.fired = false; }
         else if (d != r.dir)     { r.dir = d; r.timer = PAD_SCROLL_DELAY; r.fired = true; }
         else if (--r.timer <= 0) { r.timer = PAD_SCROLL_RATE; r.fired = true; }
         else                     { r.fired = false; }
     }
+    bool held = g_pad->IsHeld(chord_btn_button());
+    if (held && any)          g_tap_used = true;
+    if (held && !g_tap_held)  g_tap_used = any;
+    if (!held && g_tap_held && !g_tap_used) g_tap_fired = true;
+    g_tap_held = held;
 }
 
 /*----------------------
@@ -293,8 +375,25 @@ void chord_tick(void) {
  | Returns: true if that action's slot fired in that direction this frame
  ----------------------*/
 bool chord_fired(int action, int dir) {
+    if (g_chord_slot[action] == SL_NONE) return false;
     const ChordRep &r = g_chordrep[g_chord_slot[action]];
     return r.fired && r.dir == dir;
+}
+
+/*----------------------
+ | chord_tap_fired
+ | Description: See input.h. Cleared by the read, so the frame that acts on a tap
+ |   is the only one that sees it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_tap_fired
+ | Params: N/A
+ | Returns: true once per completed tap
+ ----------------------*/
+bool chord_tap_fired(void) {
+    bool r = g_tap_fired;
+    g_tap_fired = false;
+    return r;
 }
 
 /*----------------------
@@ -310,6 +409,7 @@ bool chord_fired(int action, int dir) {
  | Returns: N/A
  ----------------------*/
 void pad_scroll_update(void) {
+    if (chord_tap_fired())           g_scroll += 1;
     if (chord_fired(CA_LINE,    -1)) g_scroll += 1;
     if (chord_fired(CA_LINE,    +1)) g_scroll -= 1;
     if (chord_fired(CA_HOMEEND, -1)) g_scroll  = SCROLL_ALL;
@@ -366,50 +466,18 @@ void pad_repeat_update(void) {
 }
 
 /*----------------------
- | is_direction
- | Description: Whether `b` is one of the four D-pad directions.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: b -- the button to test
- | Returns: true for Up, Down, Left or Right
- ----------------------*/
-static bool is_direction(Button b) {
-    return b == Button::Up || b == Button::Down ||
-           b == Button::Left || b == Button::Right;
-}
-
-/*----------------------
  | pad_fired
  | Description: Looks `b` up in g_padrep; if tracked, returns its repeat-aware
- |   fired flag, otherwise falls back to a plain WasPressed edge -- except that the
- |   four directions report nothing while the D-pad is steering the cursor, so it
- |   does one job at a time. Menus are unaffected: they read the pad directly, and
- |   still need the D-pad to navigate.
+ |   fired flag, otherwise falls back to a plain WasPressed edge. There is no
+ |   longer a second, ungated form of this: the D-pad never steers the cursor now,
+ |   so there is nothing for a direction to be withheld from.
  | Author: suinevere
- | Dependencies: controller.h
+ | Dependencies: N/A
  | Globals: g_pad
  | Params: b -- the button to check
  | Returns: true if it fired (pressed or repeated) this frame
  ----------------------*/
 bool pad_fired(Button b) {
-    if (controller_dpad_is_cursor() && is_direction(b)) return false;
-    return pad_fired_raw(b);
-}
-
-/*----------------------
- | pad_fired_raw
- | Description: pad_fired without the Mouse Mode gate, for the one screen that
- |   wants the D-pad whatever the cursor is doing: the map owns the whole display
- |   and has a crosshair of its own, so a pad in Mouse Mode must still be able to
- |   drive it.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: g_pad
- | Params: b -- the button to check
- | Returns: true if it fired (pressed or repeated) this frame
- ----------------------*/
-bool pad_fired_raw(Button b) {
     for (auto &r : g_padrep) if (r.btn == b) return r.fired;
     return g_pad->WasPressed(b);
 }
@@ -577,21 +645,20 @@ void face_assign(int a, int b) {
 
 /*----------------------
  | chord_group
- | Description: Which controls.xls sheet a chord action belongs to. Autocomplete
- |   and Cursor Move are in neither sheet, being keyboard-interface conveniences
- |   the workbook does not list; they sit with Actions because that is the page
- |   they are edited from.
+ | Description: Which configuration group a chord action belongs to. All six are
+ |   on the Chords sheet now -- Recall and Autocomplete moved there from Actions,
+ |   which is where a reader looking for "what does the modifier do" expects to
+ |   find them -- so there is one group and a swap cannot reach a row the player
+ |   is not looking at.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: a -- one of the CA_* constants
- | Returns: CG_ACTIONS or CG_SCROLL
+ | Returns: CG_CHORDS
  ----------------------*/
 int chord_group(int a) {
-    switch (a) {
-        case CA_LINE: case CA_PAGE: case CA_HOMEEND: return CG_SCROLL;
-        default:                                     return CG_ACTIONS;
-    }
+    (void) a;
+    return CG_CHORDS;
 }
 
 /*----------------------
@@ -609,9 +676,13 @@ int chord_group(int a) {
  | Returns: N/A
  ----------------------*/
 void chord_assign(int a, int s) {
-    for (int o = 0; o < CA_N; o++)
-        if (o != a && g_chord_slot[o] == s && chord_group(o) == chord_group(a))
-            g_chord_slot[o] = g_chord_slot[a];
+    /* Unset is not a slot and so has no owner to displace: without this guard,
+       giving one action Unset would hand its gesture to whichever other action
+       happened to be off, which is the opposite of switching something off. */
+    if (s != SL_NONE)
+        for (int o = 0; o < CA_N; o++)
+            if (o != a && g_chord_slot[o] == s && chord_group(o) == chord_group(a))
+                g_chord_slot[o] = g_chord_slot[a];
     g_chord_slot[a] = s;
 }
 
@@ -628,4 +699,5 @@ void chord_assign(int a, int s) {
 void mapping_reset_defaults(void) {
     for (int a = 0; a < FA_N; a++) g_face_btn[a]   = FACE_DEFAULT[a];
     for (int a = 0; a < CA_N; a++) g_chord_slot[a] = CHORD_DEFAULT[a];
+    g_chord_btn = CHORD_BTN_DEFAULT;
 }

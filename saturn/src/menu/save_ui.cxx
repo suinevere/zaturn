@@ -226,8 +226,8 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 int idx = menu_visible_digit(ke.ch, 0, SAVE_SLOTS, SAVE_SLOTS);
                 if (idx >= 0) { sel = idx; pick = true; }
             } else {
-                if (g_pad->WasPressed(Button::Up))   sel = (sel - 1 + SAVE_SLOTS) % SAVE_SLOTS;
-                if (g_pad->WasPressed(Button::Down)) sel = (sel + 1) % SAVE_SLOTS;
+                if (pad_nav(Button::Up))   sel = (sel - 1 + SAVE_SLOTS) % SAVE_SLOTS;
+                if (pad_nav(Button::Down)) sel = (sel + 1) % SAVE_SLOTS;
                 if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                     || g_pad->WasPressed(Button::START)) pick = true;
                 if (g_pad->WasPressed(Button::B) || menu_pointer_back()) cancel = true;
@@ -264,10 +264,10 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
             else if (ke.kind == SATURN_KEY_BACKSPACE) keyboard_backspace(&k);
             else if (ke.kind == SATURN_KEY_CHAR) { if (k.input_len < maxchars) keyboard_type_char(&k, ke.ch); }
             else {
-                if (g_pad->WasPressed(Button::Up))    keyboard_move(&k, 0, -1);
-                if (g_pad->WasPressed(Button::Down))  keyboard_move(&k, 0,  1);
-                if (g_pad->WasPressed(Button::Left))  keyboard_move(&k, -1, 0);
-                if (g_pad->WasPressed(Button::Right)) keyboard_move(&k,  1, 0);
+                if (pad_nav(Button::Up))    keyboard_move(&k, 0, -1);
+                if (pad_nav(Button::Down))  keyboard_move(&k, 0,  1);
+                if (pad_nav(Button::Left))  keyboard_move(&k, -1, 0);
+                if (pad_nav(Button::Right)) keyboard_move(&k,  1, 0);
                 if (g_pad->WasPressed(Button::C))     { if (k.input_len < maxchars) keyboard_type(&k); }
                 if (g_pad->WasPressed(face_button(FA_SPACE)))
                                                      { if (k.input_len < maxchars) keyboard_type_char(&k, ' '); }

@@ -154,13 +154,16 @@ def test_keyboard_column_binds_only_menu_and_map():
         assert a not in body, "controller_feed_key binds %s, which is a blank cell" % a
 
 
-def test_twin_stick_table_is_flagged_provisional():
-    """The twin stick's bits are a guess; the flag is what stops a later reader
-    treating them as measured."""
-    src = _read(SRC)
-    m = re.search(r"TWIN_TRIG_L.*?----------------------\*/", src, re.S)
-    assert m, "the TWIN_* table lost its header block"
-    assert "PROVISIONAL" in m.group(0), "the TWIN_* table is no longer flagged provisional"
+def test_the_twin_stick_table_is_the_owners():
+    """The bits are no longer a guess -- the owner supplied the device's own table
+    -- and the two this file had wrong are the two worth pinning: the left thumb
+    top is Z, and A belongs to the right stick, not to a thumb button."""
+    src = _nocomments(_read(SRC))
+    for want in ("TWIN_TRIG_L = Button::L", "TWIN_TRIG_R = Button::R",
+                 "TWIN_TOP_L  = Button::Z", "TWIN_TOP_R  = Button::C",
+                 "TWIN_RS_UP    = Button::X", "TWIN_RS_DOWN  = Button::B",
+                 "TWIN_RS_LEFT  = Button::Y", "TWIN_RS_RIGHT = Button::A"):
+        assert want in src, "the twin table no longer says " + want
 
 
 def test_space_default_is_y():
@@ -242,14 +245,12 @@ def test_cursor_source_is_named_per_device():
         assert want in tbl, "CSRC_NAME lost %s" % want
 
 
-def test_dpad_is_gated_while_it_steers_the_cursor():
-    """One job at a time: with Mouse Mode on and the D-pad chosen, the four
-    directions must stop stepping selections."""
-    body = _body(_read(INPUT_CXX), "pad_fired")
-    assert "controller_dpad_is_cursor" in body, "pad_fired no longer gates directions"
-    assert "is_direction" in body, "the gate no longer distinguishes directions"
-    raw = _body(_read(INPUT_CXX), "pad_fired_raw")
-    assert "controller_dpad_is_cursor" not in raw, "the ungated read gained the gate"
+def test_the_dpad_only_ever_steps_the_selection():
+    """There is no Mouse Mode and no D-pad cursor, so the four directions have one
+    job and need no gate -- and nothing may quietly grow one again."""
+    src = _nocomments(_read(INPUT_CXX))
+    assert "controller_dpad_is_cursor" not in src, "the D-pad steers the cursor again"
+    assert "pad_fired_raw" not in src, "the ungated twin of pad_fired is back"
 
 
 def test_mouse_y_is_not_inverted():
@@ -268,15 +269,17 @@ def test_pointer_reaches_menus():
     assert "render_pointer" in body, "menus no longer draw the cursor"
 
 
-def test_sheets_are_separate_configuration_groups():
-    """A slot swap must stay inside one controls.xls sheet, or remapping a
-    Scrolling row silently moves an Actions row the player cannot see."""
-    body = _body(_read(INPUT_CXX), "chord_assign")
+def test_a_swap_stays_inside_its_configuration_group():
+    """Every chord is on one sheet now, so the group has nowhere else to reach --
+    but the group is still what says so, and Unset is not a slot: switching one
+    action off must not hand its gesture to another that is already off."""
+    body = _nocomments(_body(_read(INPUT_CXX), "chord_assign"))
     assert "chord_group" in body, "chord_assign swaps across sheets again"
+    assert "SL_NONE" in body, "Unset swaps like a real slot again"
 
 
 def test_caps_has_no_pad_binding():
-    """Caps is an Options row now; L+R carries the dashboard swap instead."""
+    """Caps is an Options row now; L alone carries the dashboard swap instead."""
     src = _read(INPUT_CXX)
     assert "mode_combo_fired" in src, "the L+R combo is gone"
     assert "caps_combo_fired" not in src, "Caps is back on the pad"
@@ -333,18 +336,33 @@ def test_cursor_overlay_paints_after_the_block_copy():
     assert paint > copy, "the cursor is painted before the block copy erases it"
 
 
-def test_mouse_mode_is_reachable():
-    """A Mouse Mode nothing can switch on is a cursor that never moves."""
-    src = _read(ROOT / "src" / "menu" / "menu_pages.cxx")
-    assert "controller_mouse_mode_set" in src, "no Mouse Mode toggle on the Controls page"
-    assert "controller_twin_set" in src, "no Twin Stick toggle on the Controls page"
+def test_there_is_no_mouse_mode_switch():
+    """The cursor and the selection are driven by different hardware, so neither
+    has to be switched off for the other to work and the switch that did it is
+    gone. The Twin Stick profile still needs its own, being the only thing that
+    can tell one from a control pad."""
+    src = _nocomments(_read(ROOT / "src" / "menu" / "menu_pages.cxx"))
+    assert "controller_mouse_mode" not in src, "the Mouse Mode switch is back"
+    assert "controller_twin_set" not in src, "the Twin Stick row is back on the page"
+
+
+def test_the_twin_stick_profile_is_a_chord():
+    """A stick being read as a pad has to be worked with the wrong bindings to
+    reach a menu, so the switch that says which it is cannot live in one. L+R+Z+X
+    exists on both devices and fires once per press."""
+    body = _nocomments(_body(_read(SRC), "twin_chord_tick"))
+    for btn in ("Button::L", "Button::R", "Button::Z", "Button::X"):
+        assert btn in body, "the toggle chord lost " + btn
+    assert "g_twin_chord_was" in body, "the chord fires every frame it is held"
+    tick = _nocomments(_body(_read(SRC), "controller_tick"))
+    assert "twin_chord_tick" in tick, "the chord is never polled"
 
 
 def test_every_pointing_device_updates_its_cell():
     """col/row come from clamp_cursor, so any reader that moves the cursor has to
     call it -- the gun sets absolute coordinates and once did not."""
     src = _read(SRC)
-    for fn in ("read_gun", "read_mouse", "read_sticks", "read_dpad_cursor"):
+    for fn in ("read_gun", "read_mouse", "read_sticks", "read_twin"):
         body = _body(src, fn)
         assert "clamp_cursor" in body, "%s moves the cursor without recomputing its cell" % fn
 
@@ -375,8 +393,8 @@ def test_the_cursor_accelerates():
     """Constant speed is unusable for pointing and too slow for crossing: every
     source ramps or scales."""
     src = _read(SRC)
-    dpad = _body(src, "read_dpad_cursor")
-    assert "g_dpad_held" in dpad, "a held direction no longer accelerates"
+    rstick = _body(src, "read_twin")
+    assert "g_rstick_held" in rstick, "a held right stick no longer accelerates"
     travel = _body(src, "axis_travel")
     assert "CURSOR_STEP_MAX" in travel, "the stick no longer scales with deflection"
     mouse = _body(src, "mouse_travel")
@@ -563,3 +581,83 @@ def test_every_menu_page_answers_a_pointer():
             body = _nocomments(_body(src, fn))
             hit = ("menu_pointer_" in body) or ("menu_yesno_input" in body)
             assert hit, path + ": " + fn + " answers no pointing device"
+
+
+def test_chord_slots_are_written_from_the_modifier():
+    """The Chords sheet names every gesture after the button that holds it, so
+    moving the modifier renames the whole sheet rather than leaving five rows
+    describing a button the player no longer uses."""
+    body = _nocomments(_body(_read(INPUT_CXX), "slot_name"))
+    assert "chord_btn_name" in body, "slot names no longer follow the modifier"
+    assert "Unset" in body, "an unbound action no longer says so"
+
+
+def test_only_the_reading_chords_start_bound():
+    """Page, Recall and Autocomplete start off: a page at a time is what holding
+    the line chord already does, and the other two cost a gesture nobody asked
+    for. Order is CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_PAGE."""
+    src = _nocomments(_read(INPUT_CXX))
+    m = re.search(r"CHORD_DEFAULT\[CA_N\]\s*=\s*\{([^}]*)\}", src)
+    assert m, "the chord defaults table is gone"
+    got = [v.strip() for v in m.group(1).split(",")]
+    assert got == ["SL_NONE", "SL_NONE", "SL_CLR", "SL_CUD", "SL_NONE"], got
+
+
+def test_a_wheel_can_move_in_a_menu():
+    """A racing wheel has a steering axis and two paddles and no D-pad at all, so
+    without a synthesised direction a player holding one can open a menu and not
+    move in it. Every page's four directions go through the one helper."""
+    body = _nocomments(_body(_read(SRC), "read_wheel"))
+    for nav in ("NAV_LEFT", "NAV_RIGHT", "NAV_UP", "NAV_DOWN"):
+        assert nav in body, "the wheel no longer reports " + nav
+    nav_body = _nocomments(_body(_read(ROOT / "src" / "input" / "input.cxx"), "pad_nav"))
+    assert "controller_nav_fired" in nav_body, "pad_nav no longer takes a wheel"
+    for page in ("menu/menu.cxx", "menu/menu_pages.cxx", "menu/save_ui.cxx",
+                 "net/netbin_pages.cxx"):
+        src = _nocomments(_read(ROOT / "src" / page))
+        for d in ("Up", "Down", "Left", "Right"):
+            assert "g_pad->WasPressed(Button::%s)" % d not in src,                 page + " reads Button::" + d + " past pad_nav, so a wheel cannot work it"
+
+
+def test_the_wheels_phantom_axis_cannot_drive_the_cursor():
+    """SRL answers GetAxis(Axis2) with a zero the wheel does not have, which reads
+    as a stick held hard up -- the cursor climbed on its own."""
+    body = _nocomments(_body(_read(SRC), "read_sticks"))
+    assert "controller_wheel_present" in body, "the phantom second axis is back"
+
+
+def test_map_is_z_and_the_interface_swap_is_l():
+    """Both come off controls.xls: Z opens the map, and the swap that used to need
+    both triggers is one button now."""
+    body = _nocomments(_body(_read(SRC), "read_pad_family"))
+    assert "Button::Z" in body and "DA_MAP" in body, "Map is no longer on Z"
+    swap = _nocomments(_body(_read(ROOT / "src" / "input" / "input.cxx"), "mode_combo_fired"))
+    assert "Button::L" in swap, "the interface swap is no longer on L"
+    assert "Button::R" not in swap, "the swap wants both triggers again"
+    for host in ("engine/saturn_glue.cxx", "net/online.cxx"):
+        src = _nocomments(_read(ROOT / "src" / host))
+        assert "controller_fired(DA_MAP, 0)" in src, host + " never opens the map"
+
+
+def test_every_controls_page_fades_like_its_siblings():
+    """A page that cuts in where every other one ramps reads as a glitch, not as a
+    shortcut. Both levels of Controls fade, including the sheet a sheet opens."""
+    for path, fn in ((ROOT / "src" / "menu" / "menu_pages.cxx", "controls_sheet_page"),
+                     (ROOT / "src" / "net" / "netbin_pages.cxx", "controls_sheet_page"),
+                     (ROOT / "src" / "menu" / "menu_pages.cxx", "controls_page"),
+                     (ROOT / "src" / "net" / "netbin_pages.cxx", "controls_page")):
+        body = _nocomments(_body(_read(path), fn))
+        assert "page_fade_in" in body, fn + " no longer fades in"
+        assert "page_fade_out" in body, fn + " no longer fades out"
+
+
+def test_the_caret_chord_is_gone_from_the_pad():
+    """Moving the insertion point one character at a time is a keyboard's job. On
+    a pad it cost a gesture to do something a player reaches faster by rubbing the
+    word out, so the chord and its action are gone rather than merely unbound."""
+    for path in ("input/input.h", "input/input.cxx", "video/console_view.cxx",
+                 "menu/menu_pages.cxx", "net/netbin_pages.cxx"):
+        src = _nocomments(_read(ROOT / "src" / path))
+        assert "CA_CURSOR" not in src, path + " still carries the caret chord"
+    kb = _nocomments(_read(ROOT / "src" / "video" / "console_view.cxx"))
+    assert "keyboard_caret_left" in kb, "the keyboard lost its own caret keys too"

@@ -504,6 +504,18 @@ void online_mode(void) {
         controller_tick();
         controller_feed_key(ke);
 
+#ifdef NETBIN
+        /* Map is Z on a pad and F8 on a keyboard, both of which reach here as one
+           action, and it belongs to both interfaces rather than to the panel that
+           also has a row for it. Netbin only, like the panel's own Map row: the CD
+           build links this file for its dial page and has no map_view in it. */
+        if (controller_fired(DA_MAP, 0)) {
+            map_view_show();
+            mode_toggle_reset(); controller_pointer_flush();
+            menu_clear();
+            continue;
+        }
+#endif
         bool lr = g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R);
         lr_hold = lr ? (lr_hold + 1) : 0;
         if (ke.kind == SATURN_KEY_ESCAPE || lr_hold >= LR_DISCONNECT_HOLD) {

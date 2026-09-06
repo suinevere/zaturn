@@ -269,12 +269,30 @@ void options_load(void) {
        block behind it. A sentinel-2 blob carries no Space byte, so Space keeps
        its compiled default of X -- which is where it always fired. */
     const int FA_N_V1 = 3;
+    /* Sentinel 4 carried a sixth chord, the caret move, which no longer exists:
+       its block is one byte wider than 5's and everything behind it sits at a
+       different offset. Both widths are read for that reason, and only a 5 has its
+       chords taken -- a 4 is one build old and its numbering is already gone. */
+    const int CA_N_V4 = CA_N + 1;
     int m = i + 3;
-    int fa_stored = (buf[m] == 3) ? FA_N : FA_N_V1;
-    int btn_max   = (buf[m] == 3) ? FA_BTN_N : FA_N_V1;
-    if (m + 1 + fa_stored + CA_N <= (int) sizeof(buf) && (buf[m] == 2 || buf[m] == 3)) {
-        for (int a = 0; a < fa_stored; a++) { int v = buf[m + 1 + a];             if (v < btn_max) g_face_btn[a]   = v; }
-        for (int a = 0; a < CA_N; a++)      { int v = buf[m + 1 + fa_stored + a]; if (v < SL_N)    g_chord_slot[a] = v; }
+    int ver = buf[m];
+    int fa_stored = (ver >= 3) ? FA_N : FA_N_V1;
+    int btn_max   = (ver >= 3) ? FA_BTN_N : FA_N_V1;
+    /* Sentinel 4 added the chord modifier byte and a slot vocabulary that shares
+       no numbering with the eight fixed shift chords 2 and 3 wrote; 5 dropped the
+       caret chord from the middle of the action list. Either way an older blob is
+       read for its face buttons alone and its chords are left at the compiled
+       defaults, which is the only reading that cannot silently bind something the
+       player never asked for. */
+    int cb_stored = (ver >= 4) ? 1 : 0;
+    int ca_stored = (ver >= 5) ? CA_N : CA_N_V4;
+    if (m + 1 + fa_stored + ca_stored + cb_stored <= (int) sizeof(buf) && ver >= 2 && ver <= 5) {
+        for (int a = 0; a < fa_stored; a++) { int v = buf[m + 1 + a]; if (v < btn_max) g_face_btn[a] = v; }
+        if (ver >= 5) {
+            for (int a = 0; a < CA_N; a++) { int v = buf[m + 1 + fa_stored + a]; if (v < SL_N) g_chord_slot[a] = v; }
+            int cb = buf[m + 1 + fa_stored + CA_N];
+            if (cb < CB_N) g_chord_btn = cb;
+        }
     }
     /* The sound block used to carry a mix mode and a track number, both long
        gone. Its three bytes now carry the generated music's level under a new
@@ -282,7 +300,7 @@ void options_load(void) {
        blob keeps the compiled default rather than reading a track number as a
        volume. The width is unchanged either way, which is what every block
        behind it depends on. */
-    int s = m + 1 + fa_stored + CA_N;
+    int s = m + 1 + fa_stored + ca_stored + cb_stored;
     if (s + OPTS_SOUND_BLOCK_BYTES <= (int) sizeof(buf))
         opts_sound_block_decode(&buf[s], &g_synth_level, &g_music_source);
     /* The gameplay block sits between the sound block and the display one because
@@ -340,9 +358,10 @@ void options_save(void) {
     buf[n++] = 0;
     buf[n++] = (uint8_t) g_music_level;           // audio levels: [music][pcm], 0..7
     buf[n++] = (uint8_t) g_pcm_level;
-    buf[n++] = 3;                                 // controller-mapping format sentinel: + Space
+    buf[n++] = 5;                                 // controller-mapping format sentinel: - caret chord
     for (int a = 0; a < FA_N && n < 62; a++) buf[n++] = (uint8_t) g_face_btn[a];
     for (int a = 0; a < CA_N && n < 62; a++) buf[n++] = (uint8_t) g_chord_slot[a];
+    buf[n++] = (uint8_t) g_chord_btn;
     opts_sound_block_encode(&buf[n], g_synth_level, g_music_source);   // sound block: sentinel 10, the synth level, the music source
     n += OPTS_SOUND_BLOCK_BYTES;
     buf[n++] = 7;                                 // gameplay-block sentinel, v2

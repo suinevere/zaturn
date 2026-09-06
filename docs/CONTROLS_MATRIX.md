@@ -25,7 +25,7 @@ back to another column. The flight stick's top/bottom-page cell says so out loud
 | Map | Z | Z | Z | Click "Map" in command menu | — | — | F8 |
 | Recall (2) | X (cycles up only) | X (cycles up only) | X (cycles up only) | Click Prompt to go up, Right Click prompt to go down | — | — | — |
 
-## Scrolling
+## Chords (the workbook's Scrolling sheet)
 
 | Action | 6 pad | Flight Stick | Analogue | mouse | twin stick | light gun | Keyboard |
 |---|---|---|---|---|---|---|---|
@@ -39,6 +39,92 @@ back to another column. The flight stick's top/bottom-page cell says so out loud
 |---|---|---|---|---|---|---|---|
 | Move selection | Dpad | Right Stick | Dpad | N/A (no mouse on/off) | Left Stick | — | — |
 | Mouse cursor move | Dpad | Right Stick | Analogue Stick | Movement | Left Stick | pointed at screen | mouse if available in other controller port |
+
+## The chord model
+
+Everything that needs a second button is held under **one modifier the player
+picks** -- the Actions sheet's `Chord` row, R by default -- and the sheet it
+governs is called Chords rather than Scrolling, because Recall and Autocomplete
+sit on it beside Line, Page and Home/End. There is no caret chord: moving the
+insertion point one character at a time is a keyboard's job, its own Left/Right
+do it, and on a pad it cost a gesture to do something a player reaches faster by
+rubbing the word out and typing it again. Three gestures exist:
+modifier+Up/Down, modifier+Left/Right, and modifier+L/R. A fourth value, Unset,
+is not a gesture: it is the action switched off, and any number of actions can be
+off at once.
+
+Defaults: Line = R+Up/Down, Home/End = R+Left/Right, and Page, Recall and
+Autocomplete start Unset. A **tap of the modifier** -- pressed and
+released with no direction taken under it -- scrolls back one line, which is the
+one thing the shift button does alone. It is measured on the release: fired on the
+press, every chord the player asked for would be preceded by one they did not.
+
+Two consequences of naming the slots after the modifier. Moving the `Chord` row
+renames every row on the Chords sheet at once, which is the point. And when the
+modifier is itself a trigger -- as R is -- the modifier+L/R gesture has only one
+direction, because R+R cannot be held; pick a modifier that is not a trigger to
+get both.
+
+Map is **Z** and the Keyboard/Command-Panel swap is **L**, both alone, both off
+the workbook. Z is skipped as a map key while it is the chord modifier, or the map
+would open on the press that begins every scroll.
+
+## Devices without a D-pad
+
+A racing wheel has a steering axis, two paddles and nothing else. Steering is menu
+Left and Right (through the same repeat the analogue sheets use), the right paddle
+is Up and the left one Down, and both reach every page because every page's four
+directions go through `pad_nav` rather than through the pad directly. The same
+readings steer the map's crosshair.
+
+Its Mouse Mode sheet is hidden: a wheel has no second stick and no D-pad, so there
+is nothing on it to describe. It shares the Analogue column with
+the 3D Control Pad, which does have one, so the test is for the wheel's own id and
+not for the column. SRL answers a wheel's second axis with a zero it does not have,
+which reads as a stick held hard up, so the cursor is guarded against it too.
+
+## There is no Mouse Mode switch
+
+The cursor and the selection are driven by different hardware on every device that
+has both, so neither ever has to be switched off for the other to work. The stick
+drives the cursor, always; the D-pad steps the selection, always; the Mouse Mode
+on/off row and the source picker beside it are both gone, and the Mouse Mode sheet
+prints what the device does rather than offering to change it.
+
+A device with no stick has no cursor. A plain control pad has only its D-pad, and
+the D-pad is what steps the selection, so it gets no cursor rather than a cursor
+fighting the menu for the same four bits.
+
+A Mission Stick and a Twin Stick have two sticks and no argument about which does
+what: **Left Joystick moves the selection, Right Joystick moves the cursor**.
+
+The Twin Stick's report is the owner's own table, no longer a guess. Its left stick
+is the digital D-pad; everything else is:
+
+| Twin Stick input | Digital bit |
+|---|---|
+| Right stick up / down / left / right | X / B / Y / A |
+| Left stick trigger (index) | L |
+| Right stick trigger (index) | R |
+| Left stick top button (thumb) | Z |
+| Right stick top button (thumb) | C |
+| Start (centre base) | Start |
+
+Because a Twin Stick and a control pad report the same id and the same button word,
+something has to say which is plugged in. That switch is the **L+R+Z+X chord**, live
+anywhere -- every menu and both game loops poll it -- rather than a row on the
+Controls page: a stick being read as a pad has to be worked with the wrong bindings
+to reach a menu at all. The four buttons exist on both devices, it fires once per
+press, and it is not persisted, so each boot starts as a control pad.
+
+## One configuration, both interfaces
+
+The Actions sheet used to change shape with the Interface row above it: no Space in
+the Command Panel, no completion list, "Type Word" instead of "Type Letter". That
+made the same button answer to two names depending on a row on another page, and
+made a binding set under one interface look lost under the other. It is one set of
+buttons on one pad, so there is one configuration; a row whose job the current
+interface has no use for simply does nothing there.
 
 ## Where the build departs from the workbook
 

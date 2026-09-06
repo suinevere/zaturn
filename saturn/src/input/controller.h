@@ -245,6 +245,43 @@ const char *controller_port_name(int port);
 const char *controller_kind_label(DevKind k);
 
 /*----------------------
+ | NAV_UP / NAV_DOWN / NAV_LEFT / NAV_RIGHT / NAV_N
+ | Description: The four menu directions a device with no D-pad can still ask for.
+ |   A racing wheel has a steering axis and two paddles and nothing else: without
+ |   these a player holding one can see a menu and not move in it.
+ | Author: suinevere
+ ----------------------*/
+enum { NAV_UP, NAV_DOWN, NAV_LEFT, NAV_RIGHT, NAV_N };
+
+/*----------------------
+ | controller_nav_fired
+ | Description: Whether a device without a D-pad asked for menu direction `nav`
+ |   this frame. Rebuilt by controller_tick and read through pad_nav, which is what
+ |   every menu's Up/Down/Left/Right goes through, so one wheel reading reaches all
+ |   of them.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: nav -- one of the NAV_* constants
+ | Returns: nonzero on the frame that direction fires
+ ----------------------*/
+int controller_nav_fired(int nav);
+
+/*----------------------
+ | controller_wheel_present
+ | Description: Whether any port carries a racing wheel. A wheel reports the
+ |   analogue family and is sorted into DEV_ANALOG with the 3D Control Pad, but it
+ |   has one axis and no second stick, so the pages that offer a cursor have
+ |   nothing to offer it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: nonzero when a wheel is attached
+ ----------------------*/
+int controller_wheel_present(void);
+
+/*----------------------
  | controller_pointer
  | Description: This frame's pointer state.
  | Author: suinevere
@@ -301,7 +338,9 @@ void controller_pointer_flush(void);
  | controller_twin_set
  | Description: Turns the Twin Stick profile on or off. A Twin Stick reports the
  |   same id 0x02 as a control pad and cannot be told apart from one, so this is
- |   the only thing that makes DEV_TWIN appear.
+ |   the only thing that makes DEV_TWIN appear. The player flips it with the
+ |   L+R+Z+X chord from anywhere rather than from a menu row: a stick being read as
+ |   a pad has to be worked with the wrong bindings to reach a menu at all.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -322,37 +361,12 @@ void controller_twin_set(int on);
 int controller_twin_get(void);
 
 /*----------------------
- | controller_mouse_mode_set
- | Description: Turns Mouse Mode on or off -- the controls.xls sheet where a stick
- |   or D-pad drives the free cursor instead of stepping a selection. A real mouse
- |   ignores it and is always a cursor, which is that sheet's "N/A (no mouse
- |   on/off)".
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: on -- nonzero for cursor, zero for selection
- | Returns: N/A
- ----------------------*/
-void controller_mouse_mode_set(int on);
-
-/*----------------------
- | controller_mouse_mode_get
- | Description: Whether Mouse Mode is on.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: N/A
- | Returns: nonzero when a stick or D-pad is driving the cursor
- ----------------------*/
-int controller_mouse_mode_get(void);
-
-/*----------------------
  | CSRC_DPAD / CSRC_STICK / CSRC_N
- | Description: Which input drives the cursor while Mouse Mode is on. The two
- |   values are what they read from -- the digital direction bits, or an analogue
- |   axis pair -- not what they are called: a 3D Control Pad calls its axes the
- |   Analogue Stick and a Mission Stick calls the same reading its Left Stick, so
- |   the *names* come from controller_cursor_src_name and differ per device.
+ | Description: The two inputs a device may steer with: the digital directions,
+ |   which step the selection, and an analogue axis pair, which drives the cursor.
+ |   Which is which is fixed -- they are different hardware, so neither has to be
+ |   switched off for the other to work -- and only the names differ per device,
+ |   which is what controller_cursor_src_name is for.
  | Author: suinevere
  ----------------------*/
 enum { CSRC_DPAD = 0, CSRC_STICK, CSRC_N };
@@ -384,34 +398,6 @@ int controller_cursor_src_count(DevKind k);
  | Returns: the display string, or "" when that device has no such source
  ----------------------*/
 const char *controller_cursor_src_name(DevKind k, int src);
-
-/*----------------------
- | controller_cursor_src_set / controller_cursor_src_get
- | Description: Set or read which source drives the cursor for device `k`.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: k -- the device kind; src -- CSRC_DPAD or CSRC_STICK
- | Returns: get returns the current source
- ----------------------*/
-void controller_cursor_src_set(DevKind k, int src);
-int  controller_cursor_src_get(DevKind k);
-
-/*----------------------
- | controller_dpad_is_cursor
- | Description: Whether the D-pad is currently steering the cursor rather than
- |   stepping a selection -- Mouse Mode on, and some attached device pointed at its
- |   digital directions. Gameplay reads this through pad_fired, which refuses the
- |   four direction buttons while it is true, so the D-pad does one job at a time.
- |   Menus are deliberately outside it: they read the pad directly and still need
- |   the D-pad to navigate.
- | Author: suinevere
- | Dependencies: N/A
- | Globals: N/A
- | Params: N/A
- | Returns: nonzero while the D-pad belongs to the cursor
- ----------------------*/
-int controller_dpad_is_cursor(void);
 
 /*----------------------
  | CTL_MOUSE_SPEED_N

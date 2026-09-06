@@ -1358,12 +1358,13 @@ extern "C" void map_view_show(void) {
         pad_repeat_update();
         {
             int nx = hx, ny = hy, np = page, x0, x1, y0, y1;
-            /* _raw: the map owns the whole display and steers its own crosshair,
-               so a pad in Mouse Mode must still be able to drive it. */
-            if (pad_fired_raw(Button::Left))  nx--;
-            if (pad_fired_raw(Button::Right)) nx++;
-            if (pad_fired_raw(Button::Up))    ny--;
-            if (pad_fired_raw(Button::Down))  ny++;
+            /* A wheel steers the crosshair and paddles it up and down: the map
+               is the one screen with no rows to step, and without this a player
+               holding one can open it and not move on it. */
+            if (pad_fired(Button::Left)  || controller_nav_fired(NAV_LEFT))  nx--;
+            if (pad_fired(Button::Right) || controller_nav_fired(NAV_RIGHT)) nx++;
+            if (pad_fired(Button::Up)    || controller_nav_fired(NAV_UP))    ny--;
+            if (pad_fired(Button::Down)  || controller_nav_fired(NAV_DOWN))  ny++;
             if (pad_fired(Button::L))     np--;
             if (pad_fired(Button::R))     np++;
             /* A click on an arrow turns the floor; a click anywhere on the paper

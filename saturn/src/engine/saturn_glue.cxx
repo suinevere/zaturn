@@ -676,6 +676,19 @@ extern "C" void saturn_readline(char *buf, int maxlen) {
             if (vcmd) { submit_command(k, vcmd); continue; }
             continue;
         }
+        /* Map is Z on a pad and F8 on a keyboard, both of which reach here as one
+           action. At the top of the loop rather than inside the panel branch
+           below: the map belongs to both interfaces, and the panel's own Map row
+           is only how the panel asks for it. */
+        if (controller_fired(DA_MAP, 0)) {
+            item_art_hide();
+            menu_ramp_down();
+            map_view_show();
+            mode_toggle_reset(); controller_pointer_flush();
+            menu_clear();
+            reveal_owed = true;
+            continue;
+        }
         if (ke.kind == SATURN_KEY_F11) {
             item_art_hide();
             menu_ramp_down();

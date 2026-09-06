@@ -262,8 +262,8 @@ int menu_yesno_input(MenuYesNo *s, int x0, int w, int y) {
     SaturnKeyEvent ke = saturn_keyboard_poll();
     note_input_device(ke);
 
-    if (g_pad->WasPressed(Button::Left)  || g_pad->WasPressed(Button::Right) ||
-        g_pad->WasPressed(Button::Up)    || g_pad->WasPressed(Button::Down)  ||
+    if (pad_nav(Button::Left)  || pad_nav(Button::Right) ||
+        pad_nav(Button::Up)    || pad_nav(Button::Down)  ||
         ke.kind == SATURN_KEY_LEFT || ke.kind == SATURN_KEY_RIGHT ||
         ke.kind == SATURN_KEY_UP   || ke.kind == SATURN_KEY_DOWN) s->yes = !s->yes;
 
@@ -967,8 +967,8 @@ static int select_at(const char *title, const char *const *items, int count,
     controller_pointer_flush();
     for (;;) {
         check_soft_reset();   // A+B+C+Start -> back to the title screen
-        if (g_pad->WasPressed(Button::Up))    sel = (sel - 1 + count) % count;
-        if (g_pad->WasPressed(Button::Down))  sel = (sel + 1) % count;
+        if (pad_nav(Button::Up))    sel = (sel - 1 + count) % count;
+        if (pad_nav(Button::Down))  sel = (sel + 1) % count;
         bool pick = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                  || g_pad->WasPressed(Button::START);
         /* The window's rows sit one per line from y0 + 4, so the cursor's row is

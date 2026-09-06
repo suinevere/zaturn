@@ -149,29 +149,98 @@ static const char* const PREP_PREF[] = {
 
 /*----------------------
  | working state (d_* / o_* / attr_* / prep_canon / S / SLEN)
- | Description: Build scratch, file-static to keep it off the stack and reused each
- |   build. Dictionary side: d_text/d_flags/d_id/d_word and d_count. Object side:
- |   o_attrs/o_name and o_count. Grammar side: attr_nouns/attr_n (nouns per object
- |   attribute class) and prep_canon (canonical word per preposition id). S/SLEN are
- |   the story image being decoded.
+ | Description: Build scratch. Dictionary side: d_text/d_flags/d_id/d_word and
+ |   d_count. Object side: o_attrs/o_name and o_count. Grammar side:
+ |   attr_nouns/attr_n (nouns per object attribute class) and prep_canon (canonical
+ |   word per preposition id). S/SLEN are the story image being decoded.
+ |
+ |   The seven large ones are pointers into a block borrowed for the build and
+ |   given back at the end of it, not arrays. As arrays they were 57,592 bytes of
+ |   .bss, and .bss is where __heap_start begins -- so a table that nothing can
+ |   read after build_typeahead_from_story returns (it is the only non-static
+ |   function here, and create_word copies every string it is given) was costing
+ |   the C heap 57 KB for the whole session. That heap is what the story image
+ |   loads into: LURKING.Z3 is 129,704 bytes of it, and the 16 KB it has to leave
+ |   behind itself was 10,184 short. The types are declared so that every use site
+ |   below indexes them exactly as it did when they were arrays.
+ |
+ |   The small ones stay static. attr_n, prep_canon, the counts and the story
+ |   pointer are 1,200 bytes between them, which is not worth a second failure
+ |   path.
  | Author: suinevere
  ----------------------*/
-static char    d_text[MAXW][12];
-static unsigned char d_flags[MAXW];
-static unsigned char d_id[MAXW];
-static DictionaryWord* d_word[MAXW];
+static char    (*d_text)[12];
+static unsigned char* d_flags;
+static unsigned char* d_id;
+static DictionaryWord** d_word;
 static int     d_count;
 
-static unsigned int   o_attrs[MAXOBJ];
-static char    o_name[MAXOBJ][NAMELEN];
+static unsigned int*  o_attrs;
+static char    (*o_name)[NAMELEN];
 static int     o_count;
 
-static DictionaryWord* attr_nouns[32][CLASSCAP];
+static DictionaryWord* (*attr_nouns)[CLASSCAP];
 static int     attr_n[32];
 static DictionaryWord* prep_canon[256];
 
 static const unsigned char* S;
 static unsigned int         SLEN;
+
+/*----------------------
+ | SCRATCH_BYTES / scratch_open / scratch_close
+ | Description: The one block the seven build tables are carved out of, and the
+ |   pair that lends and returns it. One allocation rather than seven because it
+ |   is one failure path, and one order rather than seven because the pointer-sized
+ |   tables are placed first: everything after them is a multiple of four bytes
+ |   long, so each table starts long-aligned without any padding arithmetic.
+ |
+ |   TYPEAHEAD_MALLOC rather than a zone named here, so this lands wherever the
+ |   trie it is building lands -- Low Work RAM on the Saturn, the host allocator
+ |   under the tests -- and the zone stays decided in one place.
+ |
+ |   scratch_open leaves every pointer NULL on failure and returns 0; the caller
+ |   then builds nothing. A story with no typeahead completes and suggests
+ |   nothing, which is a great deal better than one that indexes through NULL.
+ | Author: suinevere
+ | Dependencies: typeahead.h (TYPEAHEAD_MALLOC / TYPEAHEAD_FREE)
+ | Globals: g_scratch, d_text, d_flags, d_id, d_word, o_attrs, o_name, attr_nouns
+ | Params: N/A
+ | Returns: scratch_open 1 when the tables are usable, 0 when they are not;
+ |   scratch_close N/A
+ ----------------------*/
+#define SCRATCH_BYTES ( MAXW * (int) sizeof(DictionaryWord*)                  \
+                      + 32 * CLASSCAP * (int) sizeof(DictionaryWord*)         \
+                      + MAXOBJ * (int) sizeof(unsigned int)                   \
+                      + MAXW * 12                                             \
+                      + MAXOBJ * NAMELEN                                      \
+                      + MAXW + MAXW )
+
+static unsigned char* g_scratch;
+
+static int scratch_open(void) {
+    unsigned char* p;
+    if (g_scratch != NULL) return 1;
+    g_scratch = (unsigned char*) TYPEAHEAD_MALLOC(SCRATCH_BYTES);
+    if (g_scratch == NULL) return 0;
+    p = g_scratch;
+    d_word     = (DictionaryWord**) p;          p += MAXW * sizeof(DictionaryWord*);
+    attr_nouns = (DictionaryWord* (*)[CLASSCAP]) p;
+                                                p += 32 * CLASSCAP * sizeof(DictionaryWord*);
+    o_attrs    = (unsigned int*) p;             p += MAXOBJ * sizeof(unsigned int);
+    d_text     = (char (*)[12]) p;              p += MAXW * 12;
+    o_name     = (char (*)[NAMELEN]) p;         p += MAXOBJ * NAMELEN;
+    d_flags    = p;                             p += MAXW;
+    d_id       = p;
+    return 1;
+}
+
+static void scratch_close(void) {
+    if (g_scratch == NULL) return;
+    TYPEAHEAD_FREE(g_scratch);
+    g_scratch = NULL;
+    d_text = NULL; d_flags = NULL; d_id = NULL; d_word = NULL;
+    o_attrs = NULL; o_name = NULL; attr_nouns = NULL;
+}
 
 /*----------------------
  | rd16
@@ -379,6 +448,7 @@ static int specific(int a) { return a > 0 && a < 32 && attr_n[a] >= 1 && attr_n[
 void build_typeahead_from_story(TrieNode* root, const unsigned char* story, unsigned int len) {
     S = story; SLEN = len;
     if (len < 0x40 || story[0] != 3) return;           // v3 only
+    if (!scratch_open()) return;
 
     unsigned int dict_addr = rd16(0x08);
     unsigned int abbr = rd16(0x18);
@@ -543,4 +613,6 @@ void build_typeahead_from_story(TrieNode* root, const unsigned char* story, unsi
                 add_next_word(prep_canon[id], attr_nouns[a][m], W_PREP_NOUN);
         }
     }
+
+    scratch_close();
 }

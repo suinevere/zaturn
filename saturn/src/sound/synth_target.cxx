@@ -65,6 +65,19 @@ void synth_target_init(void) {
 #endif
 
     synth_bind(SYNTH_SCSP_REGS, SYNTH_WAVE_RAM, SYNTH_WAVE_SA);
+
+    /* Only where no driver runs, and for the same reason the sound block is put
+       into a known state above: this build arrives on a chip PlanetWeb has been
+       playing through. SNDOFF stops the 68K, but the 68K is only what writes the
+       registers -- a slot it left keyed loops its own waveform forever with
+       nothing running to release it, which is heard as one instrument that is
+       none of ours, over the music or instead of it, and different on every
+       load. The CD build must not do this: the driver owns the other slots
+       there, and clearing them would stop the CD-DA and the effects. */
+#ifdef NETBIN
+    scsp_silence_all();
+#endif
+
     synth_init();
 
     /* Only where no sound driver runs. The master volume is the machine's, not

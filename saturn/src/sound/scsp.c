@@ -76,6 +76,39 @@ void scsp_silence(void) {
     }
 }
 
+/*----------------------
+ | scsp_silence_all
+ | Description: Clears every one of the chip's thirty-two slots and then pulses
+ |   KYONEX so the release is executed, for a program that is taking the SCSP
+ |   over from another one rather than starting it.
+ |
+ |   scsp_silence clears the four slots this synth uses, which is right when the
+ |   rest of the chip belongs to the SGL driver -- clearing those would stop the
+ |   CD-DA and the sound effects. It is not right when the previous owner has
+ |   gone. PlanetWeb is a browser that plays audio, and the netbin arrives in the
+ |   middle of that: SMPC SNDOFF stops the 68K, but the 68K is only what writes
+ |   the registers, and a slot left keyed goes on looping its own waveform
+ |   forever with nothing left running to release it. What that sounds like is
+ |   one instrument that is not any of ours, over or instead of the music, and
+ |   different every time depending on what the browser happened to be playing.
+ |
+ |   KYONEX is a single execute bit that makes the chip scan every slot's KYONB
+ |   at once, so it is pulsed once at the end rather than per slot.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_regs
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void scsp_silence_all(void) {
+    for (int v = 0; v < SCSP_SLOTS; v++) {
+        volatile unsigned short *s = g_regs + (v * (0x20 / 2));
+        for (int i = 0; i < 0x20 / 2; i++) s[i] = 0;
+    }
+    g_regs[0x00 / 2] = (unsigned short) (1u << 12);
+    scsp_settle();
+}
+
 void scsp_enable_output(void) {
     volatile unsigned short *ctrl = g_regs + (0x400 / 2);
     ctrl[0] = (unsigned short)((ctrl[0] & 0xFFF0u) | 0x000Fu);

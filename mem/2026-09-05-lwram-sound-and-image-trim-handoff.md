@@ -1,14 +1,19 @@
 ---
 name: lwram-sound-and-image-trim-handoff
-description: Lurking Horror's fourteen sound effects now have somewhere to live -- Low Work RAM, where all fourteen fit -- and both budget floors are clear, one by taking 57 KB of build scratch out of .bss and one by building the synth's waveform tables on the machine; the SCSP probe was answering nothing because its slot number never printed, and the netbin's music is silent for a reason none of this touches.
+description: The netbin's music was silent on real hardware because sound RAM was written a byte at a time behind the SCSP's sixteen-bit B-bus, which no emulator can fail; also Lurking Horror's fourteen sound effects now fit, in Low Work RAM, and both budget floors are clear -- one by taking 57 KB of build scratch out of .bss, one by building the synth's waveform tables on the machine.
 metadata:
   type: project
 ---
 
-Branch `synth-music`, four commits ahead of `origin/main` (`abf8a28`, `0ae366b`,
-`a50bd7b`, `43e9e92`). The working tree still carries the owner's own unstaged
-`MEDNAFEN_ALLOWMULTI=1` in `saturn/run_with_mednafen.bat` and an untracked
-`out.wav` from 4 September; neither is mine.
+Branch `synth-music`. Three squashed commits went out as `v0.0.9` (`9bf95a1`,
+`ea31947`, `4a71363`), and the B-bus fix and this note followed them. The working
+tree still carries the owner's own unstaged `MEDNAFEN_ALLOWMULTI=1` in
+`saturn/run_with_mednafen.bat` and an untracked `out.wav` from 4 September;
+neither is mine.
+
+**Read the sound RAM section first.** It was found last and it is the one that
+matters; the two sections before it describe work that is good and finished but
+was never what was silencing anything.
 
 Supersedes [[lurking-sound-budget-handoff]] on the route and every number in it.
 That note's diagnosis was right and its arithmetic was right when written; what

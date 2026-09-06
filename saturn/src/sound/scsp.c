@@ -109,9 +109,32 @@ void scsp_silence_all(void) {
     scsp_settle();
 }
 
+/*----------------------
+ | scsp_enable_output
+ | Description: Sets the chip's master volume, and the bit that tells it how wide
+ |   sound RAM is.
+ |
+ |   MEM4MB (bit 9) is not optional here and its absence is invisible from the
+ |   SH-2 side. The Saturn has 512 KB of sound RAM -- 4 Mbit -- and the SH-2
+ |   reaches all of it through the SCU whatever this bit says, so a read-back
+ |   check of any address passes either way. The chip's own sample fetch is what
+ |   honours it: with the bit clear, a slot's start address is taken as 18 bits,
+ |   and this synth's waveforms at 0x70000 are fetched from 0x30000 instead --
+ |   where nothing has been written. Measured on hardware as slots that key onto
+ |   silence and produce a pop rather than a note, while a read-back of the very
+ |   region they were meant to be playing came back 256 of 256 correct.
+ |
+ |   SND_Init sets it, which is why the CD build never had to. The netbin has no
+ |   driver, so nothing sets it there but this.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_regs
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
 void scsp_enable_output(void) {
     volatile unsigned short *ctrl = g_regs + (0x400 / 2);
-    ctrl[0] = (unsigned short)((ctrl[0] & 0xFFF0u) | 0x000Fu);
+    ctrl[0] = (unsigned short)((ctrl[0] & 0xFFF0u) | 0x0200u | 0x000Fu);
 }
 
 /*----------------------

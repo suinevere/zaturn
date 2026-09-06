@@ -402,7 +402,16 @@ static const char *verdict(const char *mark, int first, int last) {
  |   and an entry address go there, and at that address a single instruction --
  |   0x60FE, `bra.s` to itself -- which is a two-byte program that spins forever
  |   and touches nothing. Then the master volume, which nothing else sets when
- |   there is no driver to set it.
+ |   there is no driver to set it, and MEM4MB with it.
+ |
+ |   MEM4MB is bit 9 of the same register and it is why the block-on version
+ |   still did not play a tone. The Saturn has 512 KB of sound RAM and the SH-2
+ |   reaches all of it whatever that bit says -- which is exactly why this
+ |   probe's own read-back check passed 256 of 256 at three addresses while the
+ |   sweep stayed silent. The chip's sample fetch is what honours it: with the
+ |   bit clear the tone at 0x60000 is fetched from 0x20000, where nothing was
+ |   written, and a slot keyed onto that is a pop rather than a note. SND_Init
+ |   sets it; nothing in a driverless build does.
  | Author: suinevere
  | Dependencies: SGL (slSoundOffWait, slSoundOnWait) when driverless
  | Globals: N/A
@@ -420,7 +429,7 @@ static void sound_env_init(void) {
     ram[0x006 / 2] = 0x0100;
     ram[0x100 / 2] = 0x60FE;
     slSoundOnWait();
-    ctrl[0] = (unsigned short) ((ctrl[0] & 0xFFF0u) | 0x000Fu);
+    ctrl[0] = (unsigned short) ((ctrl[0] & 0xFFF0u) | 0x0200u | 0x000Fu);
 #endif
 }
 

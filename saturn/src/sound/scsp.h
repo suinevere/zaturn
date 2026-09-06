@@ -38,6 +38,15 @@ extern "C" {
 #define SCSP_SLOT_FIRST 28
 
 /*----------------------
+ | SCSP_SLOTS
+ | Description: How many slots the chip has, which is not how many this synth
+ |   uses. Only scsp_silence_all wants the whole number, and only because taking
+ |   the chip over from another program means releasing that program's slots too.
+ | Author: suinevere
+ ----------------------*/
+#define SCSP_SLOTS      32
+
+/*----------------------
  | SCSP_WAVES / SCSP_WAVE_MAX
  | Description: Four waveforms, 256 samples each, laid end to end in the
  |   waveform area. 256 samples at OCT 0 sounds 44100/256 = 172 Hz, about F3,
@@ -165,6 +174,21 @@ void scsp_bind(volatile unsigned short *regs, volatile signed char *wave_ram, un
  | Returns: N/A
  ----------------------*/
 void scsp_silence(void);
+
+/*----------------------
+ | scsp_silence_all
+ | Description: Zeroes all thirty-two slots and executes the release. For taking
+ |   the chip over from another program, not for starting it: on the CD build the
+ |   SGL driver owns the slots this does not, and clearing those would stop the
+ |   CD-DA and the sound effects. See the box on the implementation for what a
+ |   slot left keyed by PlanetWeb sounds like.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+void scsp_silence_all(void);
 
 /*----------------------
  | scsp_enable_output

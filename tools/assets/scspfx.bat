@@ -5,7 +5,14 @@ REM out of sound RAM instead of a heap that has 6,200 bytes left.
 REM
 REM   tools\assets\scspfx.bat
 REM
-REM Builds a disc that writes a tone into sound RAM and keys the slots one at a
+REM It opens on a SOUND RAM WRITE CHECK, which is the screen that matters on real
+REM hardware: it fills one region with 16-bit stores and another with 8-bit ones,
+REM reads both back as words, and prints how many bytes of each survived plus the
+REM first four of each. 16-bit short of 256, or coming back in a different order
+REM than "want", means no waveform ever reaches the chip intact and no slot answer
+REM below it means anything. Press A or RIGHT to go on to the sweep.
+REM
+REM Then it writes a tone into sound RAM and keys the slots one at a
 REM time, then launches the emulator on it. It holds each slot until you answer
 REM for it: press A or C if you hear the tone, B if you hear nothing, and LEFT
 REM to go back and re-test the slot before. Thirty-two answers, at your pace.

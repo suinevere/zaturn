@@ -171,6 +171,17 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
 }
 
+void cp_pick_whole(CommandPanel *p, const char *word) {
+    int i = 0;
+    if (word == 0 || word[0] == '\0') return;
+    if (p->overlay) cp_overlay_close(p);
+    p->line_len = 0;
+    while (word[i] && p->line_len < CP_LINE_MAX - 1) p->line[p->line_len++] = word[i++];
+    p->line[p->line_len] = '\0';
+    p->slot = CP_SLOT_DONE;
+    p->submitted = 1;
+}
+
 /*----------------------
  | cp_submit
  | Description: Sends the command as it stands, however far short of the grammar

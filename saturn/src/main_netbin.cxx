@@ -172,14 +172,19 @@ static const int SOFT_RESET_HOLD = 30;
  |   and this build's first dial. net_connect_reset() only gets as far as ATH0
  |   answering OK; the hook is still releasing and the far end has not dropped
  |   its carrier yet, so an ATDT sent straight after it dials over the browser's
- |   own connection tone and trains against it. ~3s at 60Hz, long enough for
+ |   own connection tone and trains against it. ~15s at 60Hz, long enough for
  |   both ends to fall quiet and short enough to read as a pause rather than a
  |   hang. Only the boot path waits: it sits above the reboot landing point, so
  |   a reboot -- whose hangup was deliberate and whose line is already idle --
  |   goes straight back to dialing.
+ |
+ |   Fifteen and not the three this was first written for, because the two costs
+ |   are not the same size: overshooting is a longer pause on a screen that says
+ |   to wait, and undershooting is a dial that trains against the browser's own
+ |   carrier and fails.
  | Author: suinevere
  ----------------------*/
-static const int LINE_SETTLE_FRAMES = 600;
+static const int LINE_SETTLE_FRAMES = 900;
 
 /*----------------------
  | check_soft_reset
@@ -280,7 +285,7 @@ int main(void) {
     net_connect_reset();
 
     for (int f = 0; f < LINE_SETTLE_FRAMES; f++) {
-        menu_message("NETWORK", "Hanging up ...", "");
+        menu_message("NETWORK", "Please wait...", "");
         menu_sync();
     }
 

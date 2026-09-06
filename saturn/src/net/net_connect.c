@@ -33,6 +33,21 @@ static int                g_open = 0;
 #define MODEM_DIAL_TIMEOUT 105000000u
 
 /*----------------------
+ | DIAL_POLL_SLICE
+ | Description: How long dial_polled waits on the wire before handing the frame
+ |   back to the caller's poll. In the same made-up units MODEM_DIAL_TIMEOUT is
+ |   counted in -- saturn_uart_getc_timeout's loop counter -- where that constant
+ |   calls 105,000,000 about thirty-five seconds, so this is about a sixtieth of
+ |   a second and the poll gets offered every frame.
+ |
+ |   Small on purpose. The cost of a short slice is one extra pass round a loop
+ |   that is doing nothing anyway; the cost of a long one is a button press the
+ |   player has to hold until the slice ends.
+ | Author: suinevere
+ ----------------------*/
+#define DIAL_POLL_SLICE 50000u
+
+/*----------------------
  | detect_uart
  | Description: Powers the modem on via SMPC, then probes the two known NetLink
  |   cart-port base addresses (verbatim from the coup examples) until one responds.
@@ -58,24 +73,103 @@ static int detect_uart(void) {
 }
 
 /*----------------------
- | net_connect_open
+ | dial_polled
+ | Description: modem_dial's wait, reassembled here so the caller gets a frame
+ |   between reads. modem.h is vendored from coup-saturn and its own dial spins
+ |   inside saturn_uart_getc_timeout for the whole thirty-five seconds without
+ |   ever coming up for air, which is why a cancel gesture could be held through
+ |   an entire call and never be seen; this sends the same ATDT and parses the
+ |   same replies through the same modem.h helpers, and only differs in waiting
+ |   one slice at a time.
+ |
+ |   The deadline advances only on slices that expired, matching what
+ |   modem_command_timeout does when it restarts its timeout for each character:
+ |   a modem still talking is a modem still working.
+ | Author: suinevere
+ | Dependencies: saturn_uart16550.h, modem.h
+ | Globals: N/A
+ | Params: uart -- the detected UART; number -- what to dial; timeout -- the
+ |   whole-dial budget in getc_timeout units; poll -- may be NULL; ctx -- passed
+ |   to poll; cancelled -- receives 1 if poll asked to stop
+ | Returns: the modem result, MODEM_TIMEOUT_ERR on a dial that never answered
+ ----------------------*/
+static modem_result_t dial_polled(const saturn_uart16550_t *uart,
+                                  const char *number, uint32_t timeout,
+                                  net_connect_poll_fn poll, void *ctx,
+                                  int *cancelled) {
+    char line[MODEM_LINE_MAX];
+    int      idx   = 0;
+    uint32_t spent = 0;
+
+    *cancelled = 0;
+    saturn_uart_puts(uart, "ATDT");
+    saturn_uart_puts(uart, number);
+    saturn_uart_puts(uart, "\r");
+
+    while (spent < timeout) {
+        int c = saturn_uart_getc_timeout(uart, DIAL_POLL_SLICE);
+        if (c < 0) {
+            spent += DIAL_POLL_SLICE;
+            if (poll != 0 && poll(ctx)) { *cancelled = 1; return MODEM_NO_CARRIER; }
+            continue;
+        }
+        /* Leading CR/LF are the separators before the reply, not the reply, so
+           a terminator with nothing behind it is dropped -- modem_read_line's
+           own rule, kept because the replies being parsed are the same ones. */
+        if (c == '\r' || c == '\n') {
+            if (idx > 0) {
+                modem_result_t r;
+                line[idx] = '\0';
+                idx = 0;
+                r = modem_parse_response(line);
+                if (r != MODEM_UNKNOWN) return r;
+            }
+        } else if (idx < MODEM_LINE_MAX - 1) {
+            line[idx++] = (char) c;
+        }
+    }
+    return MODEM_TIMEOUT_ERR;
+}
+
+/*----------------------
+ | net_connect_open / net_connect_open_poll
  | Description: Runs the full connect sequence -- detect UART, probe and init the
  |   modem, dial -- and on a carrier connect builds the transport and marks the
  |   link open. Distinguishes a missing/unresponsive modem from a failed dial so
- |   the caller can redial only when redialing might help.
+ |   the caller can redial only when redialing might help, and a dial the player
+ |   called off from either, so the caller can say nothing about it. The poll-less
+ |   form is the same call with nothing to interrupt it, so the two can never
+ |   drift.
  | Author: suinevere
  | Dependencies: saturn_uart16550.h, modem.h, transport_uart.h
  | Globals: g_uart, g_transport, g_open
- | Params: dial_number -- the phone number to dial
- | Returns: NET_OK, NET_NO_MODEM, or NET_DIAL_FAIL
+ | Params: dial_number -- the phone number to dial; poll/ctx -- see net_connect.h
+ | Returns: NET_OK, NET_NO_MODEM, NET_DIAL_FAIL, or NET_CANCELLED
  ----------------------*/
 net_connect_result_t net_connect_open(const char *dial_number) {
+    return net_connect_open_poll(dial_number, 0, 0);
+}
+
+net_connect_result_t net_connect_open_poll(const char *dial_number,
+                                           net_connect_poll_fn poll, void *ctx) {
+    modem_result_t rc;
+    int cancelled = 0;
+
     g_open = 0;
     if (!detect_uart())                    return NET_NO_MODEM;
     if (modem_probe(&g_uart) != MODEM_OK)  return NET_NO_MODEM;
     if (modem_init(&g_uart) != MODEM_OK)   return NET_NO_MODEM;
-    if (modem_dial(&g_uart, dial_number, MODEM_DIAL_TIMEOUT) != MODEM_CONNECT)
-        return NET_DIAL_FAIL;
+
+    rc = dial_polled(&g_uart, dial_number, MODEM_DIAL_TIMEOUT, poll, ctx, &cancelled);
+    if (cancelled) {
+        /* Any character ends a call the modem is still placing; the hangup
+           after it is for the case where it had already finished placing it. */
+        saturn_uart_puts(&g_uart, "\r");
+        modem_hangup(&g_uart);
+        return NET_CANCELLED;
+    }
+    if (rc != MODEM_CONNECT) return NET_DIAL_FAIL;
+
     g_transport = transport_uart_make(&g_uart);
     g_open = 1;
     return NET_OK;

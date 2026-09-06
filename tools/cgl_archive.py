@@ -23,10 +23,12 @@
  |     archive the original disc shipped, so adding generated art cannot
  |     make that budget worse than the measured frames already make it.
  | Author: suinevere
- | Dependencies: hashlib, string, cgl_encode, zork_cgl
+ | Dependencies: concurrent.futures, hashlib, os, string, cgl_encode, zork_cgl
  | Globals: CAP, MAX_STEM
  ----------------------*/"""
+import concurrent.futures
 import hashlib
+import os
 import pathlib
 import string
 import sys
@@ -174,7 +176,91 @@ def verify(archives, placements, frames):
                              f"past archive {a}, which is {len(archives[a])} bytes")
 
 
-def build(frames, prefix, cap=CAP, keys=None):
+
+def _one(frame):
+    """/*----------------------
+     | _one
+     | Description: One frame encoded. Top level and taking a single argument
+     |     so a worker process can be handed it by name.
+     | Author: suinevere
+     | Dependencies: cgl_encode
+     | Globals: N/A
+     | Params: frame -- a (palette, pixels) pair
+     | Returns: the CGL record
+     ----------------------*/"""
+    pal, pix = frame
+    return cgl_encode.record(pal, pix)
+
+
+def default_jobs():
+    """/*----------------------
+     | default_jobs
+     | Description: How many encoders to run at once when nobody says. A third
+     |     of the machine, never all of it: this runs for half an hour on the
+     |     owner's own desktop while they are using it, and a pool sized at
+     |     os.cpu_count() took every core and locked the machine up until it
+     |     was killed part way through.
+     | Author: suinevere
+     | Dependencies: os
+     | Globals: N/A
+     | Params: N/A
+     | Returns: a worker count of at least one
+     ----------------------*/"""
+    return max(1, (os.cpu_count() or 1) // 3)
+
+
+def _encode(frames, progress=None, jobs=None):
+    """/*----------------------
+     | _encode
+     | Description: Every frame encoded, across processes when there is more
+     |     than one frame and more than one worker to run them.
+     |
+     |     A record is a pure function of its own palette and pixels, so this
+     |     is the same bytes in the same order however many workers run it --
+     |     which matters, because a frame's offset and its archive's checksum
+     |     are written down and a rebuild that produced different bytes would
+     |     invalidate a table it is not rewriting. Splitting is worth doing
+     |     because the encoder is a byte-at-a-time LZSS in Python at about
+     |     three seconds a picture, which is under two minutes for the disc's
+     |     own supply and near two hours for a picture per room.
+     | Author: suinevere
+     | Dependencies: concurrent.futures, os
+     | Globals: N/A
+     | Params: frames -- a sequence of (palette, pixels); progress -- called
+     |     with (done, total) as records finish, or None; jobs -- how many
+     |     workers, or None for default_jobs(); 1 to stay in this process
+     | Returns: the records, in the order the frames came in
+     ----------------------*/"""
+    frames = list(frames)
+    workers = min(len(frames), jobs if jobs else default_jobs())
+
+    def tick(done):
+        if progress:
+            progress(done, len(frames))
+
+    if workers < 2:
+        out = []
+        for f in frames:
+            out.append(_one(f))
+            tick(len(out))
+        return out
+    try:
+        with concurrent.futures.ProcessPoolExecutor(workers) as pool:
+            out, done = [], 0
+            for rec in pool.map(_one, frames, chunksize=1):
+                out.append(rec)
+                done += 1
+                tick(done)
+            return out
+    except (OSError, ValueError, ImportError):
+        # A machine that cannot start workers still has to be able to build.
+        out = []
+        for f in frames:
+            out.append(_one(f))
+            tick(len(out))
+        return out
+
+def build(frames, prefix, cap=CAP, keys=None, progress=None, jobs=None):
     """/*----------------------
      | build
      | Description: The whole job in one call: encode each (palette, pixels)
@@ -185,11 +271,12 @@ def build(frames, prefix, cap=CAP, keys=None):
      | Globals: CAP
      | Params: frames -- a sequence of (palette, pixels); prefix -- the archive
      |     stem prefix; cap -- the byte ceiling one archive may reach;
-     |     keys -- one grouping key per frame, so an archive never spans two
+     |     keys -- one grouping key per frame, so an archive never spans two;
+     |     progress -- called with (done, total) as records finish, or None
      | Returns: ({stem: bytes}, [{"archive": stem, "offset": int,
      |     "length": int}], {stem: sha256 hex})
      ----------------------*/"""
-    records = [cgl_encode.record(pal, pix) for pal, pix in frames]
+    records = _encode(frames, progress, jobs)
     archives, placements = pack(records, cap, keys)
     verify(archives, placements, [pix for _pal, pix in frames])
     names = stems(prefix, len(archives))

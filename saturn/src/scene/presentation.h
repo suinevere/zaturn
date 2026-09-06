@@ -56,8 +56,8 @@ typedef struct {
  |   they grow every time a generated picture is added to the supply.
  | Author: suinevere
  ----------------------*/
-#define PRES_FRAME_N 483
-#define PRES_AREA_N 65
+#define PRES_FRAME_N 1942
+#define PRES_AREA_N 182
 #define PRES_MAP_BG_N 4
 #endif /* PRES_FRAME_N */
 

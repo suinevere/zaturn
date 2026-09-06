@@ -76,9 +76,16 @@ def load_manifest():
      |     which is the order their frame indices are assigned in, so a plate
      |     may be appended but never reordered or removed without every room
      |     record that names a later one meaning a different picture.
+     |
+     |     A plate is buildable from its raw generation OR from its styled
+     |     plate, which is the source of record and the only one of the two
+     |     that is committed -- so this asks for either, and refuses only a
+     |     plate that has neither. Asking for the raw alone made the documented
+     |     checkout-with-no-raw-generations case impossible, and refused every
+     |     plate of the scene supply on a machine that had not drawn it.
      | Author: suinevere
      | Dependencies: json
-     | Globals: MANIFEST, ART
+     | Globals: MANIFEST, ART, PNG_DIR
      | Params: N/A
      | Returns: a list of plate dicts
      ----------------------*/"""
@@ -87,10 +94,12 @@ def load_manifest():
     man = json.loads(MANIFEST.read_text(encoding="utf-8"))
     plates = man.get("plates", [])
     for p in plates:
-        src = ART / p["source"]
-        if not src.is_file():
+        raw, kept = ART / p["source"], PNG_DIR / preview_name(p)
+        if not raw.is_file() and not kept.is_file():
             raise SystemExit(f"gen_art_archive: {p['source']} is in the manifest "
-                             f"but not in {ART.relative_to(ROOT)}")
+                             f"with neither a raw generation in "
+                             f"{ART.relative_to(ROOT)} nor a styled plate at "
+                             f"{kept.relative_to(ROOT)}")
         if not isinstance(p.get("reference"), int):
             raise SystemExit(f"gen_art_archive: {p['source']} names no reference "
                              "frame -- a plate is graded against the picture it "
@@ -381,6 +390,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--cap", type=int, default=cgl_archive.CAP,
                     help="byte ceiling for one archive")
+    ap.add_argument("--jobs", type=int, default=cgl_archive.default_jobs(),
+                    help="how many encoders to run at once; 1 stays in this "
+                         "process and leaves the machine alone")
     args = ap.parse_args(argv)
 
     plates = load_manifest()
@@ -427,9 +439,15 @@ def main(argv=None):
     keys, walk = area_keys(plates)
     order = sorted(range(len(plates)),
                    key=lambda i: (keys[i], walk[i], plates[i]["source"]))
+    # The encoder is a byte-at-a-time LZSS in Python and a picture per room is
+    # half an hour of it, which read as a hang the first time it was waited on.
+    def said(done, total):
+        if done == total or done % 50 == 0:
+            print(f"  encoded {done}/{total} records", flush=True)
+
     blobs, packed, sums = cgl_archive.build(
         [frames[i] for i in order], PREFIX, cap=args.cap,
-        keys=[keys[i] for i in order])
+        keys=[keys[i] for i in order], progress=said, jobs=args.jobs)
     rows = [None] * len(plates)
     for slot, i in enumerate(order):
         rows[i] = packed[slot]

@@ -166,12 +166,17 @@ def test_the_twin_stick_table_is_the_owners():
         assert want in src, "the twin table no longer says " + want
 
 
-def test_space_default_is_y():
-    """controls.xls puts Space on Y, which shipped as the face group's fourth
-    button. If this table goes back to X the workbook and the build disagree."""
-    body = _body(_read(ROOT / "src" / "input" / "input.cxx"), "face_button")
-    assert "Button::Y" in body, "the face group's fourth button is no longer Y"
-    assert "Button::X" not in body, "X is back in the face group"
+def test_the_button_pool_holds_one_action_each():
+    """Five assignable actions over six buttons, so one is always spare: moving
+    onto it just moves and moving onto a used one swaps. Z and L are outside the
+    pool -- they carry Map and the interface swap, and a binding landing on either
+    would take away the way out."""
+    body = _nocomments(_body(_read(ROOT / "src" / "input" / "input.cxx"), "face_button"))
+    for b in ("Button::A", "Button::B", "Button::C", "Button::X",
+              "Button::Y", "Button::R"):
+        assert b in body, "the pool lost " + b
+    assert "Button::Z" not in body, "Z is in the pool, where Map already is"
+    assert "Button::L" not in body, "L is in the pool, where the swap already is"
 
 
 def test_doc_transcription_exists():
@@ -195,62 +200,66 @@ def _table(src, name):
     return src[i:j + 2]
 
 
-def test_controls_root_shows_static_and_submenus():
-    """The root Controls page carries the workbook's Static row and one submenu
-    per configurable sheet; the sheets are pages of their own."""
-    body = _body(_read(MENU_PAGES), "controls_page")
-    assert "Menu (fixed)" in body, "the root page no longer prints the Static row"
-    assert "controls_sheet_page" in body, "the root page opens no sheet submenu"
-    assert "CS_NAME" in body, "the submenu rows are not named from CS_NAME"
+def test_the_root_page_is_the_actions_sheet():
+    """One page, not a tree: the bindings sit on the root beside the Device name
+    and the Mouse row, and the only thing still behind a submenu is Chords."""
+    body = _nocomments(_body(_read(MENU_PAGES), "controls_page"))
+    assert "CS_ACTIONS" in body, "the root page lists no bindings"
+    assert "controls_sheet_page" in body, "the root page cannot open the Chords sheet"
+    assert "Menu (fixed)" not in body, "the Static row is back on the page"
+    assert "IDESC" not in body, "the interface description line is back"
 
 
-def test_controls_pages_only_connected_devices():
-    """A page for a controller nobody has plugged in can only mislead."""
-    body = _body(_read(MENU_PAGES), "ctl_dev_list")
-    assert "controller_present" in body, "the device list is not gated on presence"
+def test_the_device_row_is_read_not_paged():
+    """A page for a controller nobody has plugged in can only mislead, and a name
+    the player has to page to is a worse statement than one that is just true."""
+    body = _nocomments(_body(_read(MENU_PAGES), "ctl_dev_current"))
+    assert "controller_kind" in body, "the device is no longer read from the ports"
+    page = _nocomments(_body(_read(MENU_PAGES), "controls_page"))
+    assert "ctl_dev_current" in page, "the page no longer reads the attached device"
+    assert "last_dev" not in page, "the Device row is a pager again"
 
 
-def test_static_row_matches_the_workbook():
-    """Each device's Static cell, straight off the Static sheet."""
-    tbl = _table(_read(MENU_PAGES), "CTL_DEV")
-    for want in ('"Start"', '"Blue button"', '"Button"', '"ESC"'):
-        assert want in tbl, "CTL_DEV lost the Static value %s" % want
+def test_the_static_menu_button_is_still_honoured():
+    """The Static sheet has one row and it is no longer printed -- it said the same
+    thing on every device with a Start button -- but the module still has to obey
+    it, on the mouse and the gun as much as on a pad."""
+    src = _read(SRC)
+    for fn in ("read_pad_family", "read_twin", "read_mouse", "read_gun"):
+        body = _nocomments(_body(src, fn))
+        assert "DA_MENU" in body, fn + " lost its Static menu button"
 
 
 def test_sheets_applicable_per_device():
-    """"if applicable": neither the light gun nor the twin stick has a Scrolling
-    column, and the mouse's Mouse Mode sheet carries a speed but no on/off, which
-    is that sheet's "N/A (no mouse on/off)"."""
+    """"if applicable" is a property of the rows a device builds now that the
+    sheet masks are gone: the mouse carries a speed and no on/off, which is that
+    sheet's "N/A (no mouse on/off)"."""
     src = _read(MENU_PAGES)
-    tbl = _table(src, "CTL_DEV")
-    rows = {}
-    for line in tbl.splitlines():
-        if "DEV_" in line and "{" in line:
-            key = line[line.index("DEV_"):].split()[0].strip("*/ ")
-            rows[key] = line
-    assert "CSB_SCR" not in rows["DEV_GUN"], "the light gun gained a Scrolling sheet"
-    assert "CSB_SCR" not in rows["DEV_TWIN"], "the twin stick gained a Scrolling sheet"
-    assert "CSB_MOUSE" in rows["DEV_PAD"], "the pad lost its Mouse Mode sheet"
     body = _body(src, "ctl_sheet_rows")
-    mouse = body[body.index("k == DEV_MOUSE && sheet == CS_MOUSE"):]
+    mouse = body[body.index("k == DEV_MOUSE && sheet == CS_ACTIONS"):]
     assert "CK_MSPEED" in mouse, "the mouse lost its speed row"
-    assert "CK_MMODE" not in mouse, "the mouse gained a Mouse Mode on/off it cannot have"
+    assert "CK_MMODE" not in body, "the mouse gained a Mouse Mode on/off it cannot have"
 
 
 def test_cursor_source_is_named_per_device():
-    """The naming is the point: a 3D Control Pad calls it the Analogue Stick and a
-    Mission Stick calls the same reading its Left Stick."""
+    """The naming is the point: a 3D Control Pad calls it the 3D Stick and a
+    Mission Stick calls the same reading its Right Stick. Off is a value like any
+    other, because taking the D-pad for a cursor has to be asked for."""
     tbl = _table(_read(SRC), "CSRC_NAME")
-    for want in ('"D-Pad"', '"Left Stick"', '"Analogue Stick"'):
+    for want in ('"Off"', '"D-Pad"', '"Left Stick"', '"Right Stick"', '"3D Stick"'):
         assert want in tbl, "CSRC_NAME lost %s" % want
 
 
-def test_the_dpad_only_ever_steps_the_selection():
-    """There is no Mouse Mode and no D-pad cursor, so the four directions have one
-    job and need no gate -- and nothing may quietly grow one again."""
-    src = _nocomments(_read(INPUT_CXX))
-    assert "controller_dpad_is_cursor" not in src, "the D-pad steers the cursor again"
-    assert "pad_fired_raw" not in src, "the ungated twin of pad_fired is back"
+def test_the_dpad_does_one_job_at_a_time():
+    """A control pad has only its D-pad to offer a cursor, so the Mouse row can
+    point at it -- and then those directions must stop stepping selections in game.
+    Menus read pad_nav and are unaffected; the map wants them either way."""
+    body = _nocomments(_body(_read(INPUT_CXX), "pad_fired"))
+    assert "controller_dpad_is_cursor" in body, "the gate is gone"
+    raw = _nocomments(_body(_read(INPUT_CXX), "pad_fired_raw"))
+    assert "controller_dpad_is_cursor" not in raw, "the ungated read gained the gate"
+    mapv = _nocomments(_read(ROOT / "src" / "video" / "map_view.cxx"))
+    assert "pad_fired_raw" in mapv, "the map lost its ungated read"
 
 
 def test_mouse_y_is_not_inverted():
@@ -661,3 +670,21 @@ def test_the_caret_chord_is_gone_from_the_pad():
         assert "CA_CURSOR" not in src, path + " still carries the caret chord"
     kb = _nocomments(_read(ROOT / "src" / "video" / "console_view.cxx"))
     assert "keyboard_caret_left" in kb, "the keyboard lost its own caret keys too"
+
+
+def test_turning_the_cursor_on_puts_it_where_the_player_is_looking():
+    """It has been sitting wherever it was last left -- the middle of the screen on
+    a fresh boot -- and a cursor that appears somewhere the player is not looking
+    reads as not having appeared at all."""
+    body = _nocomments(_body(_read(MENU_PAGES), "controls_page"))
+    assert "controller_pointer_place" in body, "the cursor is not placed when switched on"
+    assert "CSRC_OFF" in body, "the placement is not gated on the switch-on"
+
+
+def test_caps_lock_is_a_gameplay_row():
+    """It is a typing setting, not a binding: it says what the keys produce, which
+    is the same kind of thing as how much room text a turn prints."""
+    gp = _nocomments(_body(_read(MENU_PAGES), "gameplay_page"))
+    assert "keyboard_set_caps" in gp, "Gameplay cannot toggle Caps Lock"
+    ctl = _nocomments(_body(_read(MENU_PAGES), "controls_page"))
+    assert "keyboard_set_caps" not in ctl, "Caps Lock is back on the Controls page"

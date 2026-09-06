@@ -1361,12 +1361,12 @@ extern "C" void map_view_show(void) {
             /* A wheel steers the crosshair and paddles it up and down: the map
                is the one screen with no rows to step, and without this a player
                holding one can open it and not move on it. */
-            if (pad_fired(Button::Left)  || controller_nav_fired(NAV_LEFT))  nx--;
-            if (pad_fired(Button::Right) || controller_nav_fired(NAV_RIGHT)) nx++;
-            if (pad_fired(Button::Up)    || controller_nav_fired(NAV_UP))    ny--;
-            if (pad_fired(Button::Down)  || controller_nav_fired(NAV_DOWN))  ny++;
-            if (pad_fired(Button::L))     np--;
-            if (pad_fired(Button::R))     np++;
+            if (pad_fired_raw(Button::Left)  || controller_nav_fired(NAV_LEFT))  nx--;
+            if (pad_fired_raw(Button::Right) || controller_nav_fired(NAV_RIGHT)) nx++;
+            if (pad_fired_raw(Button::Up)    || controller_nav_fired(NAV_UP))    ny--;
+            if (pad_fired_raw(Button::Down)  || controller_nav_fired(NAV_DOWN))  ny++;
+            if (pad_fired_raw(Button::L))     np--;
+            if (pad_fired_raw(Button::R))     np++;
             /* A click on an arrow turns the floor; a click anywhere on the paper
                puts the crosshair on the room nearest it, which is the only way a
                pointing device has of picking a room -- it has no D-pad to walk

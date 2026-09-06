@@ -26,14 +26,13 @@ MultiPad *g_pad = nullptr;
  |   Edited by the Controls page; persisted in MOJOOPTS.
  | Author: suinevere
  ----------------------*/
-int g_face_btn[FA_N]   = { 0, 1, 2, 3 };
+int g_face_btn[FA_N]   = { 0, 1, 2, 4, 5 };
 int g_chord_slot[CA_N] = { SL_NONE, SL_NONE, SL_CLR, SL_CUD, SL_NONE };
-int g_chord_btn        = CB_R;
 
 /*----------------------
  | FACE_DEFAULT / CHORD_DEFAULT / CHORD_BTN_DEFAULT
  | Description: The factory mappings, copied back over g_face_btn/g_chord_slot/
- |   g_chord_btn by mapping_reset_defaults. Only the two things a reader reaches
+ |   mapping_reset_defaults. Only the two things a reader reaches
  |   for start bound: the line above and below on the modifier plus Up/Down, and
  |   the top and bottom of the scrollback on Left/Right. Page, Recall and
  |   Autocomplete start Unset -- a page at a time is what
@@ -41,9 +40,8 @@ int g_chord_btn        = CB_R;
  |   cost a gesture a player has not asked for.
  | Author: suinevere
  ----------------------*/
-static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2, 3 };
+static const int FACE_DEFAULT[FA_N]  = { 0, 1, 2, 4, 5 };
 static const int CHORD_DEFAULT[CA_N] = { SL_NONE, SL_NONE, SL_CLR, SL_CUD, SL_NONE };
-static const int CHORD_BTN_DEFAULT   = CB_R;
 
 /*----------------------
  | SCROLL_PAGE / SCROLL_ALL
@@ -106,7 +104,8 @@ static const int PAD_SCROLL_RATE  = 4;
  | Returns: the Button currently assigned to that action
  ----------------------*/
 Button face_button(int action) {
-    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C, Button::Y };
+    static const Button BTN[FA_BTN_N] = { Button::A, Button::B, Button::C,
+                                          Button::X, Button::Y, Button::R };
     return BTN[g_face_btn[action]];
 }
 
@@ -123,7 +122,7 @@ Button face_button(int action) {
  | Returns: "A", "B", "C" or "Y"
  ----------------------*/
 const char *face_btn_name(int action) {
-    static const char *N[FA_BTN_N] = { "A", "B", "C", "Y" };
+    static const char *N[FA_BTN_N] = { "A", "B", "C", "X", "Y", "R" };
     return N[g_face_btn[action]];
 }
 
@@ -154,14 +153,12 @@ const char *slot_name(int slot) {
  | Description: See input.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_chord_btn
+ | Globals: g_face_btn
  | Params: N/A
  | Returns: the modifier's display name
  ----------------------*/
 const char *chord_btn_name(void) {
-    static const char *N[CB_N] = { "R", "Z", "Y", "X" };
-    if (g_chord_btn < 0 || g_chord_btn >= CB_N) return N[CB_R];
-    return N[g_chord_btn];
+    return face_btn_name(FA_CHORD);
 }
 
 /*----------------------
@@ -169,17 +166,12 @@ const char *chord_btn_name(void) {
  | Description: See input.h.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_chord_btn
+ | Globals: g_face_btn
  | Params: N/A
  | Returns: the modifier as a Button
  ----------------------*/
 Button chord_btn_button(void) {
-    switch (g_chord_btn) {
-        case CB_Z: return Button::Z;
-        case CB_Y: return Button::Y;
-        case CB_X: return Button::X;
-        default:   return Button::R;
-    }
+    return face_button(FA_CHORD);
 }
 
 /*----------------------
@@ -468,9 +460,11 @@ void pad_repeat_update(void) {
 /*----------------------
  | pad_fired
  | Description: Looks `b` up in g_padrep; if tracked, returns its repeat-aware
- |   fired flag, otherwise falls back to a plain WasPressed edge. There is no
- |   longer a second, ungated form of this: the D-pad never steers the cursor now,
- |   so there is nothing for a direction to be withheld from.
+ |   fired flag, otherwise falls back to a plain WasPressed edge -- except that the
+ |   four directions report nothing while a device has its Mouse row pointed at its
+ |   D-pad, so the D-pad does one job at a time. Menus are unaffected: they read the
+ |   pad through pad_nav and still need the D-pad to navigate. The map is the other
+ |   exception and reads the directions itself.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_pad
@@ -478,6 +472,24 @@ void pad_repeat_update(void) {
  | Returns: true if it fired (pressed or repeated) this frame
  ----------------------*/
 bool pad_fired(Button b) {
+    if (controller_dpad_is_cursor() &&
+        (b == Button::Up || b == Button::Down || b == Button::Left || b == Button::Right))
+        return false;
+    return pad_fired_raw(b);
+}
+
+/*----------------------
+ | pad_fired_raw
+ | Description: pad_fired without the cursor gate, for the one screen that wants
+ |   the D-pad whatever the cursor is doing: the map owns the whole display and has
+ |   a crosshair of its own to steer.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: b -- the button to check
+ | Returns: true if it fired (pressed or repeated) this frame
+ ----------------------*/
+bool pad_fired_raw(Button b) {
     for (auto &r : g_padrep) if (r.btn == b) return r.fired;
     return g_pad->WasPressed(b);
 }
@@ -699,5 +711,4 @@ void chord_assign(int a, int s) {
 void mapping_reset_defaults(void) {
     for (int a = 0; a < FA_N; a++) g_face_btn[a]   = FACE_DEFAULT[a];
     for (int a = 0; a < CA_N; a++) g_chord_slot[a] = CHORD_DEFAULT[a];
-    g_chord_btn = CHORD_BTN_DEFAULT;
 }

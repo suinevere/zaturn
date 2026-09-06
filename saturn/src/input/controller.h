@@ -361,15 +361,18 @@ void controller_twin_set(int on);
 int controller_twin_get(void);
 
 /*----------------------
- | CSRC_DPAD / CSRC_STICK / CSRC_N
- | Description: The two inputs a device may steer with: the digital directions,
- |   which step the selection, and an analogue axis pair, which drives the cursor.
- |   Which is which is fixed -- they are different hardware, so neither has to be
- |   switched off for the other to work -- and only the names differ per device,
- |   which is what controller_cursor_src_name is for.
+ | CSRC_OFF / CSRC_DPAD / CSRC_STICK / CSRC_N
+ | Description: What drives the cursor on one device: nothing, its digital
+ |   directions, or its analogue pair. This is the Controls page's Mouse row, and
+ |   it is per device because the answer differs: a control pad can only offer the
+ |   D-pad it also steps selections with, a 3D Control Pad has an axis pair beside
+ |   it, and a Mission or Twin Stick has two sticks and calls them so.
+ |     Off is first and is where a device with nothing spare starts, because taking
+ |   the D-pad for a cursor costs the player the input they were stepping rows
+ |   with, and that should be something they ask for rather than find.
  | Author: suinevere
  ----------------------*/
-enum { CSRC_DPAD = 0, CSRC_STICK, CSRC_N };
+enum { CSRC_OFF = 0, CSRC_DPAD, CSRC_STICK, CSRC_N };
 
 /*----------------------
  | controller_cursor_src_count
@@ -383,6 +386,50 @@ enum { CSRC_DPAD = 0, CSRC_STICK, CSRC_N };
  | Returns: 0, 1 or 2
  ----------------------*/
 int controller_cursor_src_count(DevKind k);
+
+/*----------------------
+ | controller_cursor_src_set / controller_cursor_src_get / controller_cursor_src_cycle
+ | Description: Read, set, or step the cursor source for device `k`. Cycle walks
+ |   Off and whichever real sources that device has, in that order, and skips the
+ |   ones it does not have, so the row never shows a source that reads nothing.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the device kind; src -- a CSRC_* value; dir -- -1 or +1
+ | Returns: get returns the current source
+ ----------------------*/
+void controller_cursor_src_set(DevKind k, int src);
+int  controller_cursor_src_get(DevKind k);
+void controller_cursor_src_cycle(DevKind k, int dir);
+
+/*----------------------
+ | controller_pointer_place
+ | Description: Puts the cursor on a text cell. For the moment a cursor is turned
+ |   on: it has been sitting wherever it was last left, which on a fresh boot is
+ |   the middle of the screen and after a session is anywhere at all, and a cursor
+ |   that appears somewhere the player is not looking reads as not having appeared.
+ |   Dropping it on the row they just switched it on from answers that.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: col -- text column; row -- text row
+ | Returns: N/A
+ ----------------------*/
+void controller_pointer_place(int col, int row);
+
+/*----------------------
+ | controller_dpad_is_cursor
+ | Description: Whether some attached device has its digital directions pointed at
+ |   the cursor, which is what stops those directions doing their other job -- see
+ |   pad_fired. Menus are unaffected: they read the pad through pad_nav and still
+ |   need the D-pad to navigate.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: N/A
+ | Returns: nonzero while the D-pad belongs to the cursor
+ ----------------------*/
+int controller_dpad_is_cursor(void);
 
 /*----------------------
  | controller_cursor_src_name

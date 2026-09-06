@@ -5,6 +5,8 @@ metadata:
   type: project
 ---
 
+**PARTLY STALE (2026-09-05).** The page it describes is gone: the device pager, the per-sheet submenus, the L+R interface swap and the Caps row were all replaced by [[pointer-everywhere-and-one-controls-page-handoff]]. The cursor, the gun targets and the scroll markers still stand.
+
 Twelve commits on `art-v2`, on top of [[controller-module-handoff]]: `d366a6f`
 (L+R and the command module), `50baab5` (gun targeting), `50ea1e8` (the Controls
 page), `498c909` (the cursor), `315caa2`

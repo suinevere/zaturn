@@ -160,26 +160,42 @@ static int g_rstick_held = 0;
 
 /*----------------------
  | CSRC_NAME
- | Description: What each device calls the input that drives the cursor, and what
- |   it calls the one that steps the selection, indexed [DevKind][CSRC_*]. An empty
- |   stick column means that device has no cursor of its own: a control pad has no
- |   axis at all, and the two that do call the same reading different things -- a
- |   3D Control Pad's Analogue Stick is a Mission Stick's Right Stick.
- |     There is nothing to choose between them. The selection input and the cursor
- |   input are different hardware on every device that has both, so neither has to
- |   be switched off for the other to work, which is what the Mouse Mode switch and
- |   the source picker were both for.
+ | Description: What each device calls each thing that could drive its cursor,
+ |   indexed [DevKind][CSRC_*]. An empty entry means that device has no such input:
+ |   a control pad has no axis at all, and the two that do call the same reading
+ |   different things -- a 3D Control Pad's 3D Stick is a Mission Stick's Right
+ |   Stick, and a Twin Stick's left stick is the digital pad every other device
+ |   calls a D-pad.
  | Author: suinevere
  ----------------------*/
 static const char *const CSRC_NAME[DEV_KIND_N][CSRC_N] = {
-    { "",            ""               },  /* DEV_NONE   */
-    { "D-Pad",       ""               },  /* DEV_PAD    */
-    { "Left Stick",  "Right Stick"    },  /* DEV_FLIGHT */
-    { "D-Pad",       "Analogue Stick" },  /* DEV_ANALOG */
-    { "",            ""               },  /* DEV_MOUSE  */
-    { "Left Stick",  "Right Stick"    },  /* DEV_TWIN   */
-    { "",            ""               },  /* DEV_GUN    */
-    { "",            ""               },  /* DEV_KBD    */
+    { "Off", "",            ""             },  /* DEV_NONE   */
+    { "Off", "D-Pad",       ""             },  /* DEV_PAD    */
+    { "Off", "Left Stick",  "Right Stick"  },  /* DEV_FLIGHT */
+    { "Off", "D-Pad",       "3D Stick"     },  /* DEV_ANALOG */
+    { "Off", "",            ""             },  /* DEV_MOUSE  */
+    { "Off", "Left Stick",  "Right Stick"  },  /* DEV_TWIN   */
+    { "Off", "",            ""             },  /* DEV_GUN    */
+    { "Off", "",            ""             },  /* DEV_KBD    */
+};
+
+/*----------------------
+ | g_cursor_src
+ | Description: What drives each device's cursor. A device with an axis pair
+ |   starts on it, since nothing else wants it; a device whose only candidate is
+ |   the D-pad starts Off, because that D-pad is also what steps the selection and
+ |   taking it away is the player's call to make.
+ | Author: suinevere
+ ----------------------*/
+static uint8_t g_cursor_src[DEV_KIND_N] = {
+    CSRC_OFF,   /* DEV_NONE   */
+    CSRC_OFF,   /* DEV_PAD    */
+    CSRC_STICK, /* DEV_FLIGHT */
+    CSRC_STICK, /* DEV_ANALOG */
+    CSRC_OFF,   /* DEV_MOUSE  */
+    CSRC_STICK, /* DEV_TWIN   */
+    CSRC_OFF,   /* DEV_GUN    */
+    CSRC_OFF,   /* DEV_KBD    */
 };
 
 /*----------------------
@@ -748,12 +764,11 @@ static void read_sticks(int port, DevKind kind) {
         if (sx) mark(DA_PAGE,    sx);
     }
 
-    /* The stick drives the cursor, always: it is not the input the selection steps
-       on, so there is nothing for it to be switched away from. A wheel is the one
-       exception -- it answers GetAxis(Axis2) with a zero it does not have, which
-       reads as a stick held hard up, and the cursor would climb on its own for as
-       long as the wheel was plugged in. */
-    if (!controller_wheel_present()) {
+    /* Only when the player has pointed this device's cursor at its stick. A wheel
+       never gets here even if they have: it answers GetAxis(Axis2) with a zero it
+       does not have, which reads as a stick held hard up, and the cursor would
+       climb on its own for as long as the wheel was plugged in. */
+    if (g_cursor_src[kind] == CSRC_STICK && !controller_wheel_present()) {
         int tx = axis_travel(x);
         int ty = axis_travel(y);
         if (tx || ty) {
@@ -787,6 +802,41 @@ static void read_wheel(int port) {
     if (step > 0) g_nav[NAV_RIGHT] = 1;
     if (a.WasPressed(Button::R)) g_nav[NAV_UP]   = 1;
     if (a.WasPressed(Button::L)) g_nav[NAV_DOWN] = 1;
+}
+
+/*----------------------
+ | g_dpad_held
+ | Description: Frames the current digital direction has been held, which is what
+ |   the D-pad cursor's ramp is measured in. Reset the moment nothing is held.
+ | Author: suinevere
+ ----------------------*/
+static int g_dpad_held = 0;
+
+/*----------------------
+ | read_dpad_cursor
+ | Description: Drives the cursor from the D-pad, for a device whose Mouse row
+ |   names it -- a control pad has nothing else to offer, so this is the only way
+ |   one gets a cursor at all. A held direction accelerates: one pixel a frame to
+ |   begin with, so a cell can be picked, working up to CURSOR_STEP_MAX so the far
+ |   corner is still reachable. The cost is that those directions stop stepping the
+ |   selection in game (pad_fired withholds them), which is why the row starts Off.
+ | Author: suinevere
+ | Dependencies: input.h
+ | Globals: g_pad, g_ptr, g_dpad_held
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+static void read_dpad_cursor(void) {
+    if (g_pad == nullptr) return;
+    int dx = g_pad->IsHeld(Button::Right) ? 1 : g_pad->IsHeld(Button::Left) ? -1 : 0;
+    int dy = g_pad->IsHeld(Button::Down)  ? 1 : g_pad->IsHeld(Button::Up)   ? -1 : 0;
+    if (!dx && !dy) { g_dpad_held = 0; return; }
+    int step = CURSOR_STEP_MIN + g_dpad_held / CURSOR_RAMP;
+    if (step > CURSOR_STEP_MAX) step = CURSOR_STEP_MAX;
+    g_dpad_held++;
+    g_ptr.x = (int16_t) (g_ptr.x + dx * step);
+    g_ptr.y = (int16_t) (g_ptr.y + dy * step);
+    clamp_cursor();
 }
 
 /*----------------------
@@ -959,11 +1009,16 @@ void controller_tick(void) {
 
     if (saw_pad)  read_pad_family();
     if (saw_twin) read_twin();
-    /* A cursor exists wherever something is free to drive one. A device with a
-       stick has that stick; a plain control pad has only its D-pad, and the D-pad
-       is what steps the selection, so a pad gets no cursor rather than a cursor
-       that fights the menu for the same four bits. */
-    if (saw_stick) g_ptr.valid = 1;
+    /* A cursor exists where the player has said what drives it. The stick readers
+       above have already moved it if that is what they were pointed at; the D-pad
+       is read here because it belongs to no one port -- MultiPad aggregates every
+       pad's directions into one word. */
+    for (int p = 0; p < PORT_N; p++) {
+        DevKind k = controller_kind(p);
+        if (k > DEV_NONE && k < DEV_KIND_N && g_cursor_src[k] != CSRC_OFF) g_ptr.valid = 1;
+    }
+    if (controller_dpad_is_cursor()) { g_ptr.valid = 1; read_dpad_cursor(); }
+    (void) saw_stick;
 }
 
 /*----------------------
@@ -1120,7 +1175,7 @@ int controller_twin_get(void) { return g_twin; }
 int controller_cursor_src_count(DevKind k) {
     if (k < 0 || k >= DEV_KIND_N) return 0;
     int n = 0;
-    for (int i = 0; i < CSRC_N; i++) if (CSRC_NAME[k][i][0] != 0) n++;
+    for (int c = CSRC_OFF + 1; c < CSRC_N; c++) if (CSRC_NAME[k][c][0]) n++;
     return n;
 }
 
@@ -1136,6 +1191,72 @@ int controller_cursor_src_count(DevKind k) {
 const char *controller_cursor_src_name(DevKind k, int src) {
     if (k < 0 || k >= DEV_KIND_N || src < 0 || src >= CSRC_N) return "";
     return CSRC_NAME[k][src];
+}
+
+/*----------------------
+ | controller_cursor_src_set / controller_cursor_src_get / controller_cursor_src_cycle
+ | Description: See controller.h. Set refuses a source the device does not have,
+ |   so a stored value can never name an empty string; cycle walks the values that
+ |   device does have, Off included, and wraps.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cursor_src
+ | Params: k -- the device kind; src -- a CSRC_* value; dir -- -1 or +1
+ | Returns: get returns the current source
+ ----------------------*/
+void controller_cursor_src_set(DevKind k, int src) {
+    if (k < 0 || k >= DEV_KIND_N || src < 0 || src >= CSRC_N) return;
+    if (src != CSRC_OFF && CSRC_NAME[k][src][0] == 0) return;
+    g_cursor_src[k] = (uint8_t) src;
+}
+
+int controller_cursor_src_get(DevKind k) {
+    if (k < 0 || k >= DEV_KIND_N) return CSRC_OFF;
+    return g_cursor_src[k];
+}
+
+void controller_cursor_src_cycle(DevKind k, int dir) {
+    if (k < 0 || k >= DEV_KIND_N || dir == 0) return;
+    int c = g_cursor_src[k];
+    for (int step = 0; step < CSRC_N; step++) {
+        c = (c + (dir > 0 ? 1 : CSRC_N - 1)) % CSRC_N;
+        if (c == CSRC_OFF || CSRC_NAME[k][c][0]) { g_cursor_src[k] = (uint8_t) c; return; }
+    }
+}
+
+/*----------------------
+ | controller_pointer_place
+ | Description: See controller.h. Clamped like any other cursor move, so a caller
+ |   naming a cell off the bounds rectangle lands on its edge rather than outside.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_ptr
+ | Params: col -- text column; row -- text row
+ | Returns: N/A
+ ----------------------*/
+void controller_pointer_place(int col, int row) {
+    g_ptr.x = (int16_t) (col * CELL_W);
+    g_ptr.y = (int16_t) (row * CELL_H);
+    clamp_cursor();
+}
+
+/*----------------------
+ | controller_dpad_is_cursor
+ | Description: True while some attached device has its digital directions pointed
+ |   at the cursor. A device nobody has plugged in cannot be steering anything, so
+ |   the walk is over the ports rather than over the table.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_cursor_src
+ | Params: N/A
+ | Returns: nonzero while the D-pad belongs to the cursor
+ ----------------------*/
+int controller_dpad_is_cursor(void) {
+    for (int p = 0; p < PORT_N; p++) {
+        DevKind k = controller_kind(p);
+        if (k > DEV_NONE && k < DEV_KIND_N && g_cursor_src[k] == CSRC_DPAD) return 1;
+    }
+    return 0;
 }
 
 /*----------------------

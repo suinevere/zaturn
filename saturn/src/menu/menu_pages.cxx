@@ -293,32 +293,8 @@ struct CtlRow {
  |   modifier is.
  | Author: suinevere
  ----------------------*/
-enum { CS_ACTIONS = 0, CS_SCROLL, CS_MOUSE, CS_N };
-static const char *const CS_NAME[CS_N] = { "Actions", "Chords", "Mouse Mode" };
-
-/*----------------------
- | CSB_ACT / CSB_SCR / CSB_MOUSE / DevCfg / CTL_DEV
- | Description: Which sheets each device configures, and what its row on the
- |   Static sheet says, read off controls.xls. A device with nothing on a sheet
- |   does not get that submenu: the light gun has no Scrolling column and no
- |   selection to step, so it lists Actions alone, and the mouse has no Mouse Mode
- |   because it is always a cursor -- that sheet's "N/A (no mouse on/off)".
- | Author: suinevere
- ----------------------*/
-#define CSB_ACT   1
-#define CSB_SCR   2
-#define CSB_MOUSE 4
-struct DevCfg { unsigned char sheets; const char *menu; };
-static const DevCfg CTL_DEV[DEV_KIND_N] = {
-    { 0,                         ""            },   /* DEV_NONE   */
-    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_PAD    */
-    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_FLIGHT */
-    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Start"       },   /* DEV_ANALOG */
-    { CSB_ACT|CSB_SCR|CSB_MOUSE, "Blue button" },   /* DEV_MOUSE  */
-    { CSB_ACT|CSB_MOUSE,         "Start"       },   /* DEV_TWIN   */
-    { CSB_ACT,                   "Button"      },   /* DEV_GUN    */
-    { CSB_ACT,                   "ESC"         },   /* DEV_KBD    */
-};
+enum { CS_ACTIONS = 0, CS_SCROLL, CS_N };
+static const char *const CS_NAME[CS_N] = { "Actions", "Chords" };
 
 /*----------------------
  | CTL_SHEET_MAX
@@ -332,14 +308,15 @@ static const DevCfg CTL_DEV[DEV_KIND_N] = {
 #define CTL_SHEET_MAX 10
 
 /*----------------------
- | INAMES / IDESC
- | Description: The Interface row's value names and description lines, indexed by
- |   IFACE_KEYBOARD/IFACE_PANEL.
+ | INAMES
+ | Description: The Interface row's value names, indexed by IFACE_KEYBOARD /
+ |   IFACE_PANEL. The description line that used to sit under the row is gone: both
+ |   interfaces now carry the same configuration, so the row picks which surface
+ |   the game opens on and nothing else, and a sentence explaining that took a line
+ |   from the rows that do the work.
  | Author: suinevere
  ----------------------*/
 static const char *const INAMES[] = { "Keyboard", "Command Panel" };
-static const char *const IDESC[]  = { "Type words, autocomplete",
-                                      "Pick words with the pad" };
 
 /*----------------------
  | ctl_dev_editable
@@ -400,22 +377,6 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
             out[n++] = CtlRow{ CK_CHORD, CA_HOMEEND, "Home/End", 0 };
             out[n++] = CtlRow{ CK_CHORD, CA_RECALL, "Recall", 0 };
             out[n++] = CtlRow{ CK_CHORD, CA_AUTO, "Autocomplete", 0 };
-        } else {
-            /* A Mission Stick and a Twin Stick have two sticks and no argument
-               about which does what, so their rows are named for the sticks
-               themselves rather than for the jobs -- which is also the only place
-               the page can say that the two are different sticks. */
-            /* Printed, not offered. There is no Mouse Mode switch and no cursor
-               source to pick: the stick drives the cursor, the D-pad steps the
-               selection, and they are different inputs, so neither has to be
-               turned off for the other to work. A device with no stick has no
-               cursor and says so by having no row for one. */
-            bool twin_sticks = (k == DEV_FLIGHT || k == DEV_TWIN);
-            out[n++] = CtlRow{ CK_FIXED, 0, twin_sticks ? "Left Joystick" : "Move Selection",
-                               twin_sticks ? "Move Selection" : "D-Pad" };
-            if (controller_cursor_src_count(k) > 0)
-                out[n++] = CtlRow{ CK_FIXED, 0, twin_sticks ? "Right Joystick" : "Cursor Move",
-                                   controller_cursor_src_name(k, CSRC_STICK) };
         }
         return n;
     }
@@ -438,9 +399,6 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
             out[n++] = CtlRow{ CK_FIXED, 0, "Backspace/Cancel", "Gun Trigger L" };
             out[n++] = CtlRow{ CK_FIXED, 0, "Space", "Top Trigger R" };
             out[n++] = CtlRow{ CK_FIXED, 0, "Accept", "Top Trigger L" };
-        } else if (sheet == CS_MOUSE) {
-            out[n++] = CtlRow{ CK_FIXED, 0, "Left Joystick", "Move Selection" };
-            out[n++] = CtlRow{ CK_FIXED, 0, "Right Joystick", "Cursor" };
         }
     } else if (k == DEV_GUN) {
         if (sheet == CS_ACTIONS) {
@@ -453,29 +411,17 @@ static int ctl_sheet_rows(DevKind k, int sheet, CtlRow *out) {
     } else if (k == DEV_KBD) {
         if (sheet == CS_ACTIONS) out[n++] = CtlRow{ CK_FIXED, 0, "Map", "F8" };
     }
-    /* The mouse is always a cursor, which is that sheet's "N/A (no mouse on/off)",
-       so its Mouse Mode page carries the one thing it does want set instead. */
-    if (k == DEV_MOUSE && sheet == CS_MOUSE) {
+    /* The mouse's speed sits with its buttons rather than on a sheet of its own:
+       it is the only thing about a mouse that can be set, and the sheet that used
+       to hold it held nothing else a player could change. The live report readout
+       that shared it is gone -- it existed to answer whether SGL accumulates the
+       movement, which the disassembly has since answered. */
+    if (k == DEV_MOUSE && sheet == CS_ACTIONS) {
         static char speed[4];
         speed[0] = (char) ('1' + controller_mouse_speed_get());
         speed[1] = 0;
+        out[n++] = CtlRow{ CK_FIXED, 0, "Cursor", "Movement" };
         out[n++] = CtlRow{ CK_MSPEED, 0, "Speed", speed };
-        out[n++] = CtlRow{ CK_FIXED, 0, "Cursor Move", "Movement" };
-        /* A live readout of what the mouse is actually reporting. SGL's decoder is
-           only in LIBSGL.A, so nothing says whether the movement lands in
-           PerPoint's x/y or stays in the report's own bytes -- this is how that
-           gets answered rather than guessed at a third time. */
-        static char raw0[20], raw1[20], raw2[20];
-        int b[6], xy[2];
-        if (controller_mouse_raw(b, xy)) {
-            SRL::string f;
-            f.snprintfEx(raw0, sizeof raw0, "%d %d %d", b[0], b[1], b[2]);
-            f.snprintfEx(raw1, sizeof raw1, "%d %d %d", b[3], b[4], b[5]);
-            f.snprintfEx(raw2, sizeof raw2, "%d %d", xy[0], xy[1]);
-            out[n++] = CtlRow{ CK_FIXED, 0, "Report 2-4", raw0 };
-            out[n++] = CtlRow{ CK_FIXED, 0, "Report 5-7", raw1 };
-            out[n++] = CtlRow{ CK_FIXED, 0, "PerPoint x y", raw2 };
-        }
     }
     return n;
 }
@@ -499,23 +445,34 @@ static const char *ctl_row_value(const CtlRow &r) {
 }
 
 /*----------------------
- | ctl_dev_list
- | Description: Fills `out` with every device kind currently attached, which is
- |   what the Device row pages over -- a page for a controller nobody has plugged
- |   in is a page that can only mislead. Falls back to the control pad when
- |   nothing at all reports, so the row always has something to name.
+ | ctl_dev_current
+ | Description: The device the Controls page describes: the first port carrying
+ |   one whose bindings can be edited, since that is the one a player opening this
+ |   page came to configure, and failing that the first port carrying anything at
+ |   all so a mouse or a gun on its own still gets its page. Falls back to the
+ |   control pad when nothing reports, so the page always names something.
+ |     Read every frame rather than paged over by hand: the row is a statement
+ |   about what is plugged in, and a statement that needed the player to page to it
+ |   would be a worse one. A Twin Stick appears here the moment the L+R+Z+X chord
+ |   says it is one.
  | Author: suinevere
  | Dependencies: controller.h
  | Globals: N/A
- | Params: out -- at least DEV_KIND_N entries
- | Returns: how many were written, always at least 1
+ | Params: N/A
+ | Returns: the DevKind to describe
  ----------------------*/
-static int ctl_dev_list(DevKind *out) {
-    int n = 0;
-    for (int k = DEV_PAD; k < DEV_KIND_N; k++)
-        if (controller_present((DevKind) k)) out[n++] = (DevKind) k;
-    if (n == 0) out[n++] = DEV_PAD;
-    return n;
+static const int CTL_PORTS = 12;   /* PORT_N, which controller.cxx keeps to itself */
+
+static DevKind ctl_dev_current(void) {
+    for (int p = 0; p < CTL_PORTS; p++) {
+        DevKind k = controller_kind(p);
+        if (ctl_dev_editable(k)) return k;
+    }
+    for (int p = 0; p < CTL_PORTS; p++) {
+        DevKind k = controller_kind(p);
+        if (k != DEV_NONE) return k;
+    }
+    return DEV_PAD;
 }
 
 /*----------------------
@@ -606,8 +563,12 @@ static void controls_sheet_page(DevKind dev, int sheet) {
                               : (g_chord_slot[r.idx] + SL_N - 1) % SL_N;
                 chord_assign(r.idx, n);
             } else if (r.kind == CK_CHORDBTN) {
-                g_chord_btn = right ? (g_chord_btn + 1) % CB_N
-                                    : (g_chord_btn + CB_N - 1) % CB_N;
+                /* face_assign, so moving the modifier onto a button one of the
+                   typing rows holds hands that row the modifier's own button
+                   instead of leaving two things on one button. */
+                int n = right ? (g_face_btn[FA_CHORD] + 1) % FA_BTN_N
+                              : (g_face_btn[FA_CHORD] + FA_BTN_N - 1) % FA_BTN_N;
+                face_assign(FA_CHORD, n);
             } else if (r.kind == CK_MSPEED) {
                 controller_mouse_speed_set(controller_mouse_speed_get() + (right ? 1 : -1));
             }
@@ -636,25 +597,26 @@ static void controls_sheet_page(DevKind dev, int sheet) {
 
 /*----------------------
  | controls_page
- | Description: The Controls root. The Device row pages over every peripheral
- |   currently attached and nothing else, so the page always describes something
- |   the player can actually pick up, and names each by the model its port
- |   reports rather than by the column it configures, so swapping a pad for a
- |   wheel renames the row on the frame it happens; the Interface row under it
- |   is the persisted preference a game starts in, which L+R and the command module's Swap row then
- |   change for the session. Under those sits the workbook's Static sheet, printed
- |   rather than offered, and then one submenu row per sheet the current device
- |   configures. Keyboard Caps is here because it stopped being a pad binding: a
- |   modifier the player cannot see the state of is not worth a combo. Twin Stick
- |   is here rather than in a submenu because it decides what the Device row can
- |   page to at all -- a Twin Stick reports the same id as a control pad, so
- |   nothing else can make one appear.
+ | Description: The whole of Controls, on one page. The Device row names whatever
+ |   is plugged in, read every frame rather than paged over by hand: it is a
+ |   statement about the hardware, so a hot-swap -- or the Twin Stick chord --
+ |   renames it and rebuilds the rows under it where it stands. The Interface row
+ |   under it is the persisted preference a game starts in, which L and the command
+ |   module's Swap row then change for the session; both interfaces carry the same
+ |   bindings now, so it picks a starting surface and nothing else.
+ |     Then the bindings themselves, which used to be a submenu called Actions, and
+ |   under a blank the chord modifier and the one submenu left -- Chords, which is
+ |   every gesture held under that modifier. Then the Mouse row, which is what
+ |   drives this device's cursor and is absent where there is nothing to choose,
+ |   and the three exits.
+ |     Two rows that were here have gone elsewhere: Keyboard Caps to Gameplay,
+ |   being a typing setting rather than a binding, and the Twin Stick switch to the
+ |   L+R+Z+X chord, because a stick being read as a pad has to be worked with the
+ |   wrong bindings to reach a menu at all.
  |
  |   Snapshots g_face_btn/g_chord_slot/g_cmd_iface on entry so Cancel (or
- |   B/Backspace) restores them verbatim, including edits made two levels down in
- |   a sheet; Start/Esc save what is on screen exactly as the Ok row does.
- |   Keyboard Caps takes effect immediately and is not part of that snapshot,
- |   matching the toggles on every other page.
+ |   B/Backspace) restores them verbatim, including edits made one level down in
+ |   the Chords sheet; Start/Esc save what is on screen exactly as the Ok row does.
  |
  |   Returns true, without saving or restoring, if the active input device's
  |   family (pad vs. real keyboard) changed while this page was open, so
@@ -663,8 +625,8 @@ static void controls_sheet_page(DevKind dev, int sheet) {
  |   paused; false on a genuine Ok/Cancel/B/Backspace/Start/Esc exit.
  | Author: suinevere
  | Dependencies: input.c (g_face_btn/g_chord_slot/mapping_reset_defaults),
- |   controller.h (controller_present/controller_kind_label), keyboard.c
- |   (keyboard_get_caps/keyboard_set_caps), console_view.c
+ |   controller.h (controller_kind/controller_kind_label/controller_cursor_src_*),
+ |   console_view.c
  |   (note_input_device/g_kbd_visible), menu.c, menu_layout.c, options.c
  |   (options_save), app_state.h (g_cmd_iface, IFACE_PANEL/IFACE_KEYBOARD),
  |   saturn_keyboard.h
@@ -677,7 +639,7 @@ static bool controls_page(void) {
     const int CTL_ROW_W   = 36;
     const int CTL_LABEL_W = 18;
     const int CTL_IFACE_W = 13;
-    const int CTL_DEV_W   = 14;
+    const int CTL_ARROW_L = 15;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
@@ -685,43 +647,40 @@ static bool controls_page(void) {
     int s_iface = g_cmd_iface;
     for (int a = 0; a < FA_N; a++) s_face[a]  = g_face_btn[a];
     for (int a = 0; a < CA_N; a++) s_chord[a] = g_chord_slot[a];
-    static int last_dev = 0;
     int sel = 0;
     int last_hov = -1;
     bool switched = false;
     for (;;) {
-        DevKind devs[DEV_KIND_N];
-        int ndev = ctl_dev_list(devs);
-        if (last_dev < 0 || last_dev >= ndev) last_dev = 0;
-        DevKind dev = devs[last_dev];
-        int sheets[CS_N], nsheet = 0;
-        for (int s = 0; s < CS_N; s++) {
-            if (!(CTL_DEV[dev].sheets & (1 << s))) continue;
-            /* Chords is reached from inside Actions, under the row naming the
-               modifier, rather than from here: the two belong together. */
-            if (s == CS_SCROLL) continue;
-            /* A wheel has one axis, two paddles and no second stick, so there is
-               no cursor for Mouse Mode to hand anything to. It shares DEV_ANALOG
-               with the 3D Control Pad, which does have one, so the test is for the
-               wheel and not for the column. */
-            if (s == CS_MOUSE && dev == DEV_ANALOG && controller_wheel_present()) continue;
-            sheets[nsheet++] = s;
-        }
-        const int R_DEV = 0, R_IFACE = 1;
-        int r_sheet0 = 2;
-        int r_caps   = r_sheet0 + nsheet;
-        int r_reset  = r_caps + 1;
-        int r_done   = r_caps + 2;
-        int r_cancel = r_caps + 3;
-        int nrows    = r_caps + 4;
+        /* Whatever is plugged in, read fresh every frame: the Device row names it
+           rather than paging over a list, so hot-swapping a pad for a stick
+           renames the row and rebuilds the rows under it where it stands. */
+        DevKind dev = ctl_dev_current();
+        CtlRow rows[CTL_SHEET_MAX];
+        int nact = ctl_sheet_rows(dev, CS_ACTIONS, rows);
+        /* One Mouse row, not a sheet: it is one setting -- what drives this
+           device's cursor -- and a submenu holding one row is a door in front of a
+           room with nothing in it. Absent where there is nothing to choose: a real
+           mouse is always a cursor, a gun is aimed, and a wheel has one axis and no
+           second stick. */
+        bool has_mouse = controller_cursor_src_count(dev) > 0 &&
+                         !(dev == DEV_ANALOG && controller_wheel_present());
+        const int R_IFACE = 0;
+        int r_act0   = 1;
+        int r_mouse  = r_act0 + nact;
+        int r_reset  = r_mouse + (has_mouse ? 1 : 0);
+        int r_done   = r_reset + 1;
+        int r_cancel = r_reset + 2;
+        int nrows    = r_reset + 3;
         if (sel < 0 || sel >= nrows) sel = 0;
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 12, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", CTL_ROW_W, nact + (has_mouse ? 1 : 0) + 8,
+                     &fx, &fy, &fw, &fh);
         /* The one place this page's row positions are written down, so the
            pointer hit-test and the draw below cannot drift apart. */
-        int y_dev = fy + 3, y_iface = fy + 4, y_sheet0 = fy + 9;
-        int y_caps = fy + 9 + CS_N;
-        int y_reset = y_caps + 2, y_done = y_caps + 3, y_cancel = y_caps + 4;
+        int y_dev = fy + 3, y_iface = fy + 4, y_act0 = fy + 6;
+        int y_mouse = y_act0 + nact + 1;
+        int y_reset = y_mouse + (has_mouse ? 1 : 0) + 1;
+        int y_done = y_reset + 1, y_cancel = y_reset + 2;
 
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
@@ -733,34 +692,32 @@ static bool controls_page(void) {
         bool right = pad_nav(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
         /* Hover, only on a frame the pointer moved: a cursor resting on a row
            must not pin `sel` and lock the D-pad out of the page. A click is the
-           exception -- it lands on what it points at, not on whatever the pad
-           last left selected. */
+           exception -- it lands on what it points at. The Device row is not in
+           this list: it is a name, not a setting. */
         int hov = -1;
-        if      (menu_pointer_row(y_dev, 1) == 0)    hov = R_DEV;
-        else if (menu_pointer_row(y_iface, 1) == 0)  hov = R_IFACE;
-        else if (menu_pointer_row(y_sheet0, nsheet) >= 0)
-             hov = r_sheet0 + menu_pointer_row(y_sheet0, nsheet);
-        else if (menu_pointer_row(y_caps, 1) == 0)   hov = r_caps;
+        if      (menu_pointer_row(y_iface, 1) == 0)  hov = R_IFACE;
+        else if (menu_pointer_row(y_act0, nact) >= 0) {
+            hov = r_act0 + menu_pointer_row(y_act0, nact);
+            if (rows[hov - r_act0].kind == CK_BLANK) hov = -1;
+        }
+        else if (has_mouse && menu_pointer_row(y_mouse, 1) == 0) hov = r_mouse;
         else if (menu_pointer_row(y_reset, 1) == 0)  hov = r_reset;
         else if (menu_pointer_row(y_done, 1) == 0)   hov = r_done;
         else if (menu_pointer_row(y_cancel, 1) == 0) hov = r_cancel;
         bool clicked = (hov >= 0) && menu_pointer_act();
         if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
         last_hov = hov;
-        /* The Device and Interface rows page with Left/Right, which a pointing
-           device does not have, so its way through them is the two arrows those
-           rows already draw. Both rows put the `<` at the same column; only the
-           value fields differ in width, so only the `>` does. */
-        const int CTL_ARROW_L = 15;
-        int step  = menu_pointer_step(fx, fw, CTL_ROW_W, y_dev, CTL_ARROW_L,
-                                      CTL_ARROW_L + 2 + CTL_DEV_W + 1);
+        /* The two rows that cycle a value with Left/Right, which a pointing device
+           does not have: its way through them is the arrows they already draw. */
         int istep = menu_pointer_step(fx, fw, CTL_ROW_W, y_iface, CTL_ARROW_L,
                                       CTL_ARROW_L + 2 + CTL_IFACE_W + 1);
-        if (step  < 0 || istep < 0) left  = true;
-        if (step  > 0 || istep > 0) right = true;
+        int mstep = has_mouse ? menu_pointer_step(fx, fw, CTL_ROW_W, y_mouse, CTL_ARROW_L,
+                                                  CTL_ARROW_L + 2 + CTL_IFACE_W + 1) : 0;
+        if (istep < 0 || mstep < 0) left  = true;
+        if (istep > 0 || mstep > 0) right = true;
         bool act   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                    || ke.kind == SATURN_KEY_ENTER
-                   || (clicked && step == 0 && istep == 0);
+                   || (clicked && istep == 0 && mstep == 0);
         bool back  = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE
                    || menu_pointer_back();
         bool done  = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
@@ -773,6 +730,11 @@ static bool controls_page(void) {
         if (done) { options_save(); break; }
         if (up)   sel = (sel - 1 + nrows) % nrows;
         if (down) sel = (sel + 1) % nrows;
+        /* Step over the spacer rather than let the cursor sit on nothing. One
+           extra step is enough because no two spacers are ever adjacent. */
+        if ((up || down) && sel >= r_act0 && sel < r_mouse &&
+            rows[sel - r_act0].kind == CK_BLANK)
+            sel = up ? (sel - 1 + nrows) % nrows : (sel + 1) % nrows;
         if (sel == r_done) { if (act) { options_save(); break; } }
         else if (sel == r_cancel) { if (act) {
             for (int a = 0; a < FA_N; a++) g_face_btn[a]   = s_face[a];
@@ -780,47 +742,70 @@ static bool controls_page(void) {
             g_cmd_iface = s_iface;
             break; } }
         else if (sel == r_reset) { if (act) mapping_reset_defaults(); }
-        else if (sel == r_caps) { if (left || right || act) keyboard_set_caps(!keyboard_get_caps()); }
-        else if (sel == R_DEV) {
-            if (left)  last_dev = (last_dev - 1 + ndev) % ndev;
-            if (right) last_dev = (last_dev + 1) % ndev;
+        else if (has_mouse && sel == r_mouse) {
+            if (left || right || act) {
+                int was = controller_cursor_src_get(dev);
+                controller_cursor_src_cycle(dev, (left && !right) ? -1 : 1);
+                /* Switched on: put the cursor on this row. It has been sitting
+                   wherever it was last left -- the middle of the screen on a fresh
+                   boot -- and a cursor that appears where the player is not looking
+                   reads as not having appeared at all. */
+                if (was == CSRC_OFF && controller_cursor_src_get(dev) != CSRC_OFF)
+                    controller_pointer_place(menu_row_x(fx, fw, CTL_ROW_W) + 3, y_mouse);
+            }
         }
         else if (sel == R_IFACE) {
             if (left  && g_cmd_iface > IFACE_KEYBOARD) g_cmd_iface--;
             if (right && g_cmd_iface < IFACE_PANEL)    g_cmd_iface++;
         }
-        else if (act && sel >= r_sheet0 && sel < r_caps) {
-            controls_sheet_page(dev, sheets[sel - r_sheet0]);
-            need_fade_in = true;
-            continue;
+        else if (sel >= r_act0 && sel < r_mouse) {
+            const CtlRow &r = rows[sel - r_act0];
+            /* A click cycles a binding forward: a pointing device has no Left and
+               Right, and these rows draw no arrows to click instead -- the value
+               is the button name and there is no room beside it. */
+            bool fwd = right || (clicked && (r.kind == CK_FACE || r.kind == CK_CHORDBTN ||
+                                             r.kind == CK_MSPEED));
+            if (act && r.kind == CK_SHEET) {
+                controls_sheet_page(dev, r.idx);
+                need_fade_in = true;
+                continue;
+            }
+            if (left || fwd) {
+                if (r.kind == CK_FACE || r.kind == CK_CHORDBTN) {
+                    /* face_assign, so a row taking a button another row holds hands
+                       that row the button it just left: five actions over six
+                       buttons, and never two on one. */
+                    int idx = (r.kind == CK_CHORDBTN) ? FA_CHORD : r.idx;
+                    int n = fwd ? (g_face_btn[idx] + 1) % FA_BTN_N
+                                : (g_face_btn[idx] + FA_BTN_N - 1) % FA_BTN_N;
+                    face_assign(idx, n);
+                } else if (r.kind == CK_MSPEED) {
+                    controller_mouse_speed_set(controller_mouse_speed_get() + (fwd ? 1 : -1));
+                }
+            }
         }
 
         menu_clear();
         menu_frame(fx, fy, fw, fh, "CONTROLS");
-        int y = y_dev;
-        menu_rowf(fx, fw, y++, sel == R_DEV, CTL_ROW_W, "   Device:     %s %s %s",
-                  ndev > 1 ? "<" : " ",
-                  menu_pad(controller_kind_label(dev), CTL_DEV_W),
-                  ndev > 1 ? ">" : " ");
-        menu_rowf(fx, fw, y++, sel == R_IFACE, CTL_ROW_W, "   Interface:  %s %s %s",
+        menu_rowf(fx, fw, y_dev, 0, CTL_ROW_W, "   Device:     %s",
+                  controller_kind_label(dev));
+        menu_rowf(fx, fw, y_iface, sel == R_IFACE, CTL_ROW_W, "   Interface:  %s %s %s",
                   g_cmd_iface > IFACE_KEYBOARD ? "<" : " ",
                   menu_pad(INAMES[g_cmd_iface], CTL_IFACE_W),
                   g_cmd_iface < IFACE_PANEL ? ">" : " ");
-        menu_text(fx, fw, y++, 0, IDESC[g_cmd_iface]);
-        y++;
-        menu_rowf(fx, fw, y++, 0, CTL_ROW_W, "   %s%s",
-                  menu_pad("Menu (fixed)", CTL_LABEL_W), CTL_DEV[dev].menu);
-        y++;
-        for (int i = 0; i < nsheet; i++)
-            menu_rowf(fx, fw, y++, sel == r_sheet0 + i, CTL_ROW_W, "   %s...",
-                      CS_NAME[sheets[i]]);
-        y = y_caps;
-        menu_rowf(fx, fw, y++, sel == r_caps, CTL_ROW_W, "   Keyboard Caps: %s",
-                  keyboard_get_caps() ? "On" : "Off");
-        y++;
-        menu_row(fx, fw, y++, sel == r_reset,  CTL_ROW_W, "   Reset to Defaults");
-        menu_row(fx, fw, y++, sel == r_done,   CTL_ROW_W, "   Ok");
-        menu_row(fx, fw, y++, sel == r_cancel, CTL_ROW_W, "   Cancel");
+        int y = y_act0;
+        for (int i = 0; i < nact; i++) {
+            if (rows[i].kind == CK_BLANK) { y++; continue; }
+            menu_rowf(fx, fw, y++, sel == r_act0 + i, CTL_ROW_W, "   %s%s",
+                      menu_pad(rows[i].label, CTL_LABEL_W), ctl_row_value(rows[i]));
+        }
+        if (has_mouse)
+            menu_rowf(fx, fw, y_mouse, sel == r_mouse, CTL_ROW_W, "   Mouse:      %s %s %s",
+                      "<", menu_pad(controller_cursor_src_name(dev,
+                                    controller_cursor_src_get(dev)), CTL_IFACE_W), ">");
+        menu_row(fx, fw, y_reset,  sel == r_reset,  CTL_ROW_W, "   Reset to Defaults");
+        menu_row(fx, fw, y_done,   sel == r_done,   CTL_ROW_W, "   Ok");
+        menu_row(fx, fw, y_cancel, sel == r_cancel, CTL_ROW_W, "   Cancel");
         menu_sync();
         if (need_fade_in) { page_fade_in(g_menu_page_fade); need_fade_in = false; }
     }
@@ -1849,8 +1834,8 @@ static void gameplay_page(void) {
     static const char *const VDESC[]  = { "Room names only",
                                           "Full text on first visit",
                                           "Full text every visit" };
-    enum { GR_DIFF, GR_VERB, GR_OK, GR_CANCEL };
-    const int nrows = 4;
+    enum { GR_DIFF, GR_VERB, GR_CAPS, GR_OK, GR_CANCEL };
+    const int nrows = 5;
     static int last_sel = 0;   // held across visits; the four rows never change
     int sel = last_sel;
     int last_hov = -1;
@@ -1859,11 +1844,13 @@ static void gameplay_page(void) {
     int fx, fy, fw, fh;
     /* Sized once, outside the loop: the hit tests below are measured off fx/fw
        and cannot wait for the draw to compute them. */
-    menu_box_fit("GAMEPLAY", 34, 10, &fx, &fy, &fw, &fh);
+    menu_box_fit("GAMEPLAY", 34, 12, &fx, &fy, &fw, &fh);
     /* The one place this page's row positions are written down, so the pointer
        and the draw cannot drift apart. Each slider carries a description line
-       under it, which is why the rows are three apart rather than one. */
-    const int y_diff = fy + 4, y_verb = fy + 7, y_ok = fy + 10;
+       under it, which is why the first two rows are three apart rather than one;
+       Caps Lock carries none -- it is two words and a state, and a sentence under
+       it would only repeat them. */
+    const int y_diff = fy + 4, y_verb = fy + 7, y_caps = fy + 10, y_ok = fy + 12;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
@@ -1888,6 +1875,7 @@ static void gameplay_page(void) {
         int hov = -1;
         if      (menu_pointer_row(y_diff, 1) == 0) hov = GR_DIFF;
         else if (menu_pointer_row(y_verb, 1) == 0) hov = GR_VERB;
+        else if (menu_pointer_row(y_caps, 1) == 0) hov = GR_CAPS;
         else if (menu_pointer_row(y_ok,   2) >= 0) hov = GR_OK + menu_pointer_row(y_ok, 2);
         bool clicked = (hov >= 0) && menu_pointer_act();
         if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
@@ -1910,6 +1898,10 @@ static void gameplay_page(void) {
         }
         if (sel == GR_DIFF) { if (left && diff > DIFF_EASY) diff--; if (right && diff < DIFF_HARD) diff++; }
         else if (sel == GR_VERB) { if (left && verb > VERB_SUPERBRIEF) verb--; if (right && verb < VERB_VERBOSE) verb++; }
+        /* Caps takes effect on the press rather than on Ok, as it did on the
+           Controls page it came from: it is the state of a key, and a key whose
+           state waits for a confirmation is not one a player can reason about. */
+        else if (sel == GR_CAPS) { if (left || right || ok) keyboard_set_caps(!keyboard_get_caps()); }
 
         menu_clear();
         menu_frame(fx, fy, fw, fh, "GAMEPLAY");
@@ -1926,7 +1918,10 @@ static void gameplay_page(void) {
                   menu_num(nums, GR_VERB), verb > VERB_SUPERBRIEF ? "<" : " ",
                   menu_pad(VNAMES[verb], GP_VALUE_W), verb < VERB_VERBOSE ? ">" : " ");
         menu_text(fx, fw, y + 1, 0, VDESC[verb]);
-        y += 3;
+        y = y_caps;
+        menu_rowf(fx, fw, y++, sel == GR_CAPS, GP_ROW_W, "%sCaps Lock:  %s",
+                  menu_num(nums, GR_CAPS), keyboard_get_caps() ? "On" : "Off");
+        y = y_ok;
         menu_rowf(fx, fw, y++, sel == GR_OK,     GP_ROW_W, "%sOk", menu_num(nums, GR_OK));
         menu_rowf(fx, fw, y++, sel == GR_CANCEL, GP_ROW_W, "%sCancel", menu_num(nums, GR_CANCEL));
         menu_sync();

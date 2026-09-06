@@ -106,7 +106,7 @@ extern MultiPad *g_pad;
 // under the Space button the same way Recall used to sit under X. It also costs
 // nothing on the Panel/Keyboard swap, which has moved off the shift buttons
 // entirely and onto the fixed L+R combo (mode_combo_fired).
-enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_N };
+enum { FA_ACCEPT, FA_BACK, FA_TYPE, FA_SPACE, FA_CHORD, FA_N };
 enum { CA_AUTO, CA_RECALL, CA_HOMEEND, CA_LINE, CA_PAGE, CA_N };
 
 /*----------------------
@@ -134,15 +134,20 @@ int chord_group(int a);
 
 /*----------------------
  | FA_BTN_N
- | Description: How many physical buttons the face group permutes over, and so
- |   the modulus the editors cycle a row's assignment by. Equal to FA_N because
- |   the group is a permutation -- named separately because the two are different
- |   things and only one of them is a button count.
+ | Description: How many physical buttons the group draws from -- A, B, C, X, Y, R
+ |   -- and so the modulus the editors cycle a row's assignment by. One more than
+ |   FA_N, so the five actions are an injection into six buttons rather than a
+ |   permutation of their own: exactly one button is spare at any time, moving onto
+ |   it just moves, and moving onto a used one swaps. Either way no two actions can
+ |   hold the same button, which is the whole point of one pool.
+ |     Z and L are not in it. They carry Map and the interface swap, which are
+ |   fixed, and a pool that could take them would let a binding land on top of one
+ |   of the two things a player uses to get out of where they are.
  | Author: suinevere
  ----------------------*/
-#define FA_BTN_N 4
+#define FA_BTN_N 6
 
-// Chord slots, all held under one modifier the player picks (g_chord_btn, R by
+// Chord slots, all held under one modifier the player picks (FA_CHORD, R by
 // default): SL_CUD is that button plus Up/Down, SL_CLR plus Left/Right, SL_CT
 // plus a shoulder trigger. SL_NONE is not a gesture at all -- it is the action
 // switched off, which is where Page, Recall and Autocomplete start.
@@ -158,33 +163,16 @@ int chord_group(int a);
 enum { SL_NONE, SL_CUD, SL_CLR, SL_CT, SL_N };
 
 /*----------------------
- | CB_R / CB_Z / CB_Y / CB_X / CB_N
- | Description: The buttons the chord modifier can be, and how many there are. L
- |   is not among them: L alone swaps the dashboard between its Keyboard and
- |   Command Panel interfaces, and a chord held on the swap button would fire the
- |   swap every time a scroll began.
- | Author: suinevere
- ----------------------*/
-enum { CB_R, CB_Z, CB_Y, CB_X, CB_N };
-
-/*----------------------
- | g_chord_btn
- | Description: Which of the CB_* buttons is the chord modifier; persisted with
- |   the rest of the mapping. Every slot name is written from it, so changing this
- |   row renames every row on the Chords sheet.
- | Author: suinevere
- ----------------------*/
-extern int g_chord_btn;
-
-/*----------------------
  | chord_btn_name / chord_btn_button
  | Description: The chord modifier as a name for a menu row, and as the Button to
- |   test. Both read g_chord_btn.
+ |   test. It is FA_CHORD's button: the modifier is in the same pool as the four
+ |   typing actions, so moving it onto one of theirs displaces that one rather than
+ |   quietly sharing a button with it.
  | Author: suinevere
  | Dependencies: N/A
- | Globals: g_chord_btn
+ | Globals: g_face_btn
  | Params: N/A
- | Returns: name gives "R"/"Z"/"Y"/"X"; button gives the Button
+ | Returns: name gives the button's name; button gives the Button
  ----------------------*/
 const char *chord_btn_name(void);
 Button chord_btn_button(void);
@@ -379,6 +367,19 @@ void pad_repeat_update(void);
  | Returns: true if it fired (pressed or repeated) this frame
  ----------------------*/
 bool pad_fired(Button b);
+
+/*----------------------
+ | pad_fired_raw
+ | Description: pad_fired without the cursor gate, for the map -- it owns the whole
+ |   display and steers a crosshair of its own, so a D-pad given to the cursor must
+ |   still reach it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: g_pad
+ | Params: b -- the button to check
+ | Returns: true if it fired this frame
+ ----------------------*/
+bool pad_fired_raw(Button b);
 
 
 /*----------------------

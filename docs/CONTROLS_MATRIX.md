@@ -83,48 +83,62 @@ the 3D Control Pad, which does have one, so the test is for the wheel's own id a
 not for the column. SRL answers a wheel's second axis with a zero it does not have,
 which reads as a stick held hard up, so the cursor is guarded against it too.
 
-## There is no Mouse Mode switch
+## The Mouse row
 
-The cursor and the selection are driven by different hardware on every device that
-has both, so neither ever has to be switched off for the other to work. The stick
-drives the cursor, always; the D-pad steps the selection, always; the Mouse Mode
-on/off row and the source picker beside it are both gone, and the Mouse Mode sheet
-prints what the device does rather than offering to change it.
+One row on the Controls page, not a sheet, because it is one setting: what drives
+this device's cursor. Its values are that device's own, Off first --
 
-A device with no stick has no cursor. A plain control pad has only its D-pad, and
-the D-pad is what steps the selection, so it gets no cursor rather than a cursor
-fighting the menu for the same four bits.
-
-A Mission Stick and a Twin Stick have two sticks and no argument about which does
-what: **Left Joystick moves the selection, Right Joystick moves the cursor**.
-
-The Twin Stick's report is the owner's own table, no longer a guess. Its left stick
-is the digital D-pad; everything else is:
-
-| Twin Stick input | Digital bit |
+| Device | Mouse row cycles |
 |---|---|
-| Right stick up / down / left / right | X / B / Y / A |
-| Left stick trigger (index) | L |
-| Right stick trigger (index) | R |
-| Left stick top button (thumb) | Z |
-| Right stick top button (thumb) | C |
-| Start (centre base) | Start |
+| Control Pad | Off, D-Pad |
+| 3D Control Pad | Off, D-Pad, 3D Stick |
+| Mission Stick | Off, Left Stick, Right Stick |
+| Twin Stick | Off, Left Stick, Right Stick |
+| Racing wheel | row hidden -- one axis, two paddles, nothing spare |
+| Mouse / light gun | row hidden -- always a cursor, or always aimed |
 
-Because a Twin Stick and a control pad report the same id and the same button word,
-something has to say which is plugged in. That switch is the **L+R+Z+X chord**, live
-anywhere -- every menu and both game loops poll it -- rather than a row on the
-Controls page: a stick being read as a pad has to be worked with the wrong bindings
-to reach a menu at all. The four buttons exist on both devices, it fires once per
-press, and it is not persisted, so each boot starts as a control pad.
+A device with an axis pair starts on it, since nothing else wants it. A device
+whose only candidate is the D-pad starts **Off**: that D-pad is also what steps the
+selection, and taking it away is the player's call. Switching the row on puts the
+cursor on that row -- it has been sitting wherever it was last left, and a cursor
+that appears somewhere the player is not looking reads as not having appeared. While it is pointed at the
+D-pad, the four directions stop stepping selections in game (`pad_fired` withholds
+them) -- menus read `pad_nav` and still navigate, and the map reads the ungated
+form because it steers a crosshair of its own.
 
-## One configuration, both interfaces
+## One page, not a tree
 
-The Actions sheet used to change shape with the Interface row above it: no Space in
-the Command Panel, no completion list, "Type Word" instead of "Type Letter". That
-made the same button answer to two names depending on a row on another page, and
-made a binding set under one interface look lost under the other. It is one set of
-buttons on one pad, so there is one configuration; a row whose job the current
-interface has no use for simply does nothing there.
+The Controls page carries everything: the Device name, the Interface row, the
+bindings that used to live behind `Actions...`, the Mouse row, Keyboard Caps and
+the three exits. `Chords...` is the only submenu left, sitting under the row that
+names the modifier it belongs to.
+
+The **Device row is a statement, not a selector**. It names whatever is plugged in,
+read fresh every frame, so hot-swapping a pad for a stick renames it and rebuilds
+the rows under it where it stands -- and a Twin Stick appears there the moment the
+L+R+Z+X chord says it is one. It prefers the first attached device whose bindings
+can be edited, since that is what a player opening the page came to configure, and
+falls back to the first attached device of any kind so a mouse or a gun on its own
+still gets described.
+
+Gone with the tree: the Interface description line (both interfaces share one
+configuration now, so the row picks a starting surface and nothing else), and the
+Static sheet's "Menu (fixed)" row, which said Start on every device that has one.
+Caps Lock went to Gameplay, where the other typing settings are -- it says what the
+keys produce, not what a button is bound to.
+
+## One button, one action
+
+Accept, Backspace/Cancel, Type, Space and the chord modifier draw from one pool --
+**A, B, C, X, Y, R** -- with one action each. Five actions over six buttons, so one
+is always spare: moving onto the spare just moves, and moving onto a used button
+swaps, handing that action the button the mover left. No two can ever hold the same
+button, including the modifier, which is what the Chord row cycling through the
+same pool is for.
+
+Z and L are outside the pool. They carry Map and the interface swap, both fixed,
+and a binding that could land on either would take away the way out of where the
+player is.
 
 ## Where the build departs from the workbook
 

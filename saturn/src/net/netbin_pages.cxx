@@ -139,6 +139,7 @@ void netbin_dial_page(void) {
     for (int i = 0; g_dialnum[i] && k.input_len < DIALNUM_MAX; i++) keyboard_type_char(&k, g_dialnum[i]);
     const char *err = "";
     int arow = 0;   // 0 = Dial; 1 = Controls
+    int last_hov = -1;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
@@ -149,6 +150,45 @@ void netbin_dial_page(void) {
         // left sitting on it -- drop it to Dial.
         if (!g_kbd_visible && arow < 0) arow = 0;
         bool accept = false, controls = false;
+        int fx, fy, fw, fh;
+        /* Sized here rather than in the draw below, because the hit tests want it
+           first. Taller when the numpad is up (gamepad), shrinking to the line
+           and the two rows once a real keyboard hides it. */
+        menu_box_fit("NETWORK", 24, g_kbd_visible ? 13 : 8, &fx, &fy, &fw, &fh);
+        /* The one place this page's positions are written down, so the pointer
+           and the draw cannot drift apart. */
+        const int npy0 = fy + 7;
+        const int npx  = fx + 2 + ((fw - 4) - (NP_COLS * 2 - 1)) / 2;
+        const int y_dial = g_kbd_visible ? fy + 8 + NP_ROWS : fy + 7;
+        /* A number dialled with a mouse or shot in with a gun: the keys are on
+           screen already, so the cursor picks them the way a thumb does. Hover
+           only on a frame the pointer moved, so a resting cursor cannot pin the
+           selection away from the pad. */
+        int hov = menu_pointer_row(y_dial, 2);
+        int nprow = -1, npcol = -1;
+        if (hov < 0 && g_kbd_visible) {
+            for (int r = 0; r < NP_ROWS && nprow < 0; r++)
+                for (int c = 0; c < NP_COLS; c++)
+                    if (np_valid(r, c) && menu_pointer_at(npx + c * 2, npy0 + r, 2)) {
+                        nprow = r; npcol = c; break;
+                    }
+        }
+        bool clicked = (hov >= 0 || nprow >= 0) && menu_pointer_act();
+        int hov_id = hov >= 0 ? hov : (nprow >= 0 ? -2 : -1);
+        if (hov_id != -1 && (hov_id != last_hov || clicked)) {
+            arow = hov >= 0 ? hov : -1;
+            if (nprow >= 0) { k.cursor_row = nprow; k.cursor_col = npcol; }
+        }
+        last_hov = hov_id;
+        if (clicked) {
+            if      (arow == 0) accept = true;
+            else if (arow == 1) controls = true;
+            else if (nprow >= 0 && k.input_len < DIALNUM_MAX)
+                keyboard_type_char(&k, np_char(nprow, npcol));
+        }
+        /* Right click and a gun shot off the screen rub out a digit, which is
+           where B goes on this page: there is no row here to leave by. */
+        if (menu_pointer_back() && k.input_len > 0) keyboard_backspace(&k);
         if      (ke.kind == SATURN_KEY_CHAR)      { if (k.input_len < DIALNUM_MAX) keyboard_type_char(&k, ke.ch); }
         else if (ke.kind == SATURN_KEY_BACKSPACE) { if (k.input_len > 0) keyboard_backspace(&k); }
         else if (ke.kind == SATURN_KEY_ENTER)     { if (arow == 1) controls = true; else accept = true; }
@@ -186,11 +226,6 @@ void netbin_dial_page(void) {
             }
         }
         menu_clear();
-        int fx, fy, fw, fh;
-        /* Taller when the numpad is up (gamepad), shrinking to the line and the
-           two rows once a real keyboard hides it. No controls hint on either --
-           only the confirm box still spells the buttons out. */
-        menu_box_fit("NETWORK", 24, g_kbd_visible ? 13 : 8, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "NETWORK");
         int y = fy + 4;
         menu_text(fx, fw, y++, 0, "Server dial number:");
@@ -201,7 +236,6 @@ void netbin_dial_page(void) {
         menu_textf(fx, fw, y++, DIALNUM_MAX + 1, "%s_", k.input);
         y++;
         if (g_kbd_visible) {
-            int npx = fx + 2 + ((fw - 4) - (NP_COLS * 2 - 1)) / 2;   // centre the pad
             for (int r = 0; r < NP_ROWS; r++) {
                 char rowbuf[NP_COLS * 2]; int p = 0;
                 for (int c = 0; c < NP_COLS; c++) { rowbuf[p++] = np_char(r, c); if (c < NP_COLS - 1) rowbuf[p++] = ' '; }
@@ -503,6 +537,15 @@ static void controls_sheet_page(DevKind dev, int sheet) {
         if (back || done) break;
         if (up)   sel = (sel - 1 + r_back + 1) % (r_back + 1);
         if (down) sel = (sel + 1) % (r_back + 1);
+        /* A click on a binding row is a step forward through its choices. The two
+           switch rows already answer a plain act, but a face button or a chord
+           slot cycles with Left and Right, which a pointing device does not have,
+           and this row draws no arrows to click instead -- the value column is the
+           button's own name and there is no room beside it. Forward only: a mouse
+           has one meaning per button here, and Back is already spoken for. */
+        if (clicked && sel != r_back && (rows[sel].kind == CK_FACE ||
+                                         rows[sel].kind == CK_CHORD ||
+                                         rows[sel].kind == CK_MSPEED)) right = true;
         if (sel == r_back) { if (act) break; }
         else if (left || right || (act && (rows[sel].kind == CK_MMODE ||
                                            rows[sel].kind == CK_CSRC))) {
@@ -530,7 +573,7 @@ static void controls_sheet_page(DevKind dev, int sheet) {
         menu_clear();
         menu_frame(fx, fy, fw, fh, CS_NAME[sheet]);
         int y = fy + 3;
-        menu_text(fx, fw, y++, 0, controller_kind_name(dev));
+        menu_text(fx, fw, y++, 0, controller_kind_label(dev));
         y++;
         for (int i = 0; i < nrows; i++)
             menu_rowf(fx, fw, y++, sel == i, CTL_ROW_W, "   %s%s",
@@ -549,8 +592,10 @@ static void controls_sheet_page(DevKind dev, int sheet) {
  | controls_page
  | Description: The Controls root. The Device row pages over every peripheral
  |   currently attached and nothing else, so the page always describes something
- |   the player can actually pick up; the Interface row under it is the persisted
- |   preference a game starts in, which L+R and the command module's Swap row then
+ |   the player can actually pick up, and names each by the model its port
+ |   reports rather than by the column it configures, so swapping a pad for a
+ |   wheel renames the row on the frame it happens; the Interface row under it
+ |   is the persisted preference a game starts in, which L+R and the command module's Swap row then
  |   change for the session. Under those sits the workbook's Static sheet, printed
  |   rather than offered, and then one submenu row per sheet the current device
  |   configures. Keyboard Caps is here because it stopped being a pad binding: a
@@ -572,7 +617,7 @@ static void controls_sheet_page(DevKind dev, int sheet) {
  |   paused; false on a genuine Ok/Cancel/B/Backspace/Start/Esc exit.
  | Author: suinevere
  | Dependencies: input.c (g_face_btn/g_chord_slot/mapping_reset_defaults),
- |   controller.h (controller_present/controller_kind_name), keyboard.c
+ |   controller.h (controller_present/controller_kind_label), keyboard.c
  |   (keyboard_get_caps/keyboard_set_caps), console_view.c
  |   (note_input_device/g_kbd_visible), menu.c, menu_layout.c, options.c
  |   (options_save), app_state.h (g_cmd_iface, IFACE_PANEL/IFACE_KEYBOARD),
@@ -586,7 +631,7 @@ static bool controls_page(void) {
     const int CTL_ROW_W   = 36;
     const int CTL_LABEL_W = 18;
     const int CTL_IFACE_W = 13;
-    const int CTL_DEV_W   = 13;
+    const int CTL_DEV_W   = 14;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     bool started_kbd = g_kbd_visible;
@@ -616,7 +661,7 @@ static bool controls_page(void) {
         int nrows    = r_caps + 4;
         if (sel < 0 || sel >= nrows) sel = 0;
         int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 13, &fx, &fy, &fw, &fh);
+        menu_box_fit("CONTROLS", CTL_ROW_W, CS_N + 12, &fx, &fy, &fw, &fh);
         /* The one place this page's row positions are written down, so the
            pointer hit-test and the draw below cannot drift apart. */
         int y_dev = fy + 3, y_iface = fy + 4, y_sheet0 = fy + 9;
@@ -648,8 +693,20 @@ static bool controls_page(void) {
         bool clicked = (hov >= 0) && menu_pointer_act();
         if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
         last_hov = hov;
+        /* The Device and Interface rows page with Left/Right, which a pointing
+           device does not have, so its way through them is the two arrows those
+           rows already draw. Both rows put the `<` at the same column; only the
+           value fields differ in width, so only the `>` does. */
+        const int CTL_ARROW_L = 15;
+        int step  = menu_pointer_step(fx, fw, CTL_ROW_W, y_dev, CTL_ARROW_L,
+                                      CTL_ARROW_L + 2 + CTL_DEV_W + 1);
+        int istep = menu_pointer_step(fx, fw, CTL_ROW_W, y_iface, CTL_ARROW_L,
+                                      CTL_ARROW_L + 2 + CTL_IFACE_W + 1);
+        if (step  < 0 || istep < 0) left  = true;
+        if (step  > 0 || istep > 0) right = true;
         bool act   = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
-                   || ke.kind == SATURN_KEY_ENTER || clicked;
+                   || ke.kind == SATURN_KEY_ENTER
+                   || (clicked && step == 0 && istep == 0);
         bool back  = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE
                    || menu_pointer_back();
         bool done  = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
@@ -690,7 +747,7 @@ static bool controls_page(void) {
         int y = y_dev;
         menu_rowf(fx, fw, y++, sel == R_DEV, CTL_ROW_W, "   Device:     %s %s %s",
                   ndev > 1 ? "<" : " ",
-                  menu_pad(controller_kind_name(dev), CTL_DEV_W),
+                  menu_pad(controller_kind_label(dev), CTL_DEV_W),
                   ndev > 1 ? ">" : " ");
         menu_rowf(fx, fw, y++, sel == R_IFACE, CTL_ROW_W, "   Interface:  %s %s %s",
                   g_cmd_iface > IFACE_KEYBOARD ? "<" : " ",
@@ -760,7 +817,15 @@ static bool keyboard_controls_page(void) {
     const int N = 6;
     static int last_sel = 0;   // held across visits; the six rows never change
     int sel = last_sel;
+    int last_hov = -1;
     bool switched = false;
+    int fx, fy, fw, fh;
+    /* Sized once, outside the loop: the hit tests below are measured off fx/fw
+       and cannot wait for the draw. The one place this page's row positions are
+       written down -- two lines of prose, a blank, the four toggles, a blank,
+       then Ok and Cancel. */
+    menu_box_fit("CONTROLS", 34, 12, &fx, &fy, &fw, &fh);
+    const int y_tog0 = fy + 7, y_ok = fy + 12;
     for (;;) {
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
@@ -772,7 +837,8 @@ static bool keyboard_controls_page(void) {
         bool right = g_pad->WasPressed(Button::Right) || ke.kind == SATURN_KEY_RIGHT;
         bool act = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                  || ke.kind == SATURN_KEY_ENTER;
-        bool back = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
+        bool back = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE
+                  || menu_pointer_back();
         bool done = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (back) {
             keyboard_set_insert(s_ins); keyboard_set_caps(s_caps);
@@ -781,6 +847,18 @@ static bool keyboard_controls_page(void) {
         }
         if (done) { options_save(); break; }
         if (menu_digit_row(ke, N, sel, left, right)) act = true;
+        /* Hover only on a frame the pointer moved, so a resting cursor cannot pin
+           `sel`; a click takes what it points at, and every row here either
+           toggles or acts on a click, so nothing needs an arrow. */
+        int hov = menu_pointer_row(y_tog0, 4);
+        if (hov < 0) {
+            int h2 = menu_pointer_row(y_ok, 2);
+            if (h2 >= 0) hov = 4 + h2;
+        }
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
+        if (clicked) act = true;
         last_sel = sel;   // after every move, so no exit path has to remember to
         bool toggle = left || right || act;
         if      (sel == 0 && toggle) keyboard_set_insert(!keyboard_get_insert());
@@ -793,8 +871,6 @@ static bool keyboard_controls_page(void) {
             keyboard_set_num(s_num); keyboard_set_scrolllock(s_scrl); break; }
 
         menu_clear();
-        int fx, fy, fw, fh;
-        menu_box_fit("CONTROLS", 34, 12, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "CONTROLS");
         int y = fy + 4;
         menu_text(fx, fw, y++, 0, "Insert: type-insert, caret arrows.");
@@ -868,13 +944,25 @@ static void display_options_page(void) {
     const int DSP_ROW_W   = 36;
     const int DSP_LABEL_W = 14;
     const int DSP_VALUE_W = 15;
+    /* Where a cycler row's two arrows sit, from the row's own left edge: three
+       columns of row number, the label field, then "< value >". The draw below
+       and menu_pointer_step read the same two numbers. */
+    const int DSP_ARROW_L = 3 + DSP_LABEL_W;
+    const int DSP_ARROW_R = DSP_ARROW_L + 2 + DSP_VALUE_W + 1;
     enum { DR_PALETTE, DR_BG, DR_TEXT, DR_OK, DR_CANCEL };
     static const int NROWS = 5;
     int rows[NROWS];
 
     static int last_sel = 0;   // held across visits; the five rows never change
     int sel = last_sel;
+    int last_hov = -1;
     DisplayState snapshot = g_display;
+    int fx, fy, fw, fh;
+    /* Sized once, outside the loop: the hit tests are measured off fx/fw and
+       cannot wait for the draw. The cycler rows run from y_row0, then a blank,
+       then Ok and Cancel. */
+    menu_box_fit("DISPLAY", DSP_ROW_W, NROWS + 3, &fx, &fy, &fw, &fh);
+    const int y_row0 = fy + 4, y_ok = fy + NROWS + 3;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
@@ -898,6 +986,24 @@ static void display_options_page(void) {
         bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+        /* Hover only on a frame the pointer moved, so a resting cursor cannot pin
+           `sel`; a click on a row's own arrow cycles that row rather than counting
+           as an Ok, which is the only way a pointing device can cycle anything. */
+        int hov = menu_pointer_row(y_row0, nrows - 2);
+        if (hov < 0) {
+            int h2 = menu_pointer_row(y_ok, 2);
+            if (h2 >= 0) hov = nrows - 2 + h2;
+        }
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
+        int step = 0;
+        for (int i = 0; i < nrows - 2 && step == 0; i++)
+            step = menu_pointer_step(fx, fw, DSP_ROW_W, y_row0 + i, DSP_ARROW_L, DSP_ARROW_R);
+        if (step < 0) left  = true;
+        if (step > 0) right = true;
+        if (clicked && step == 0) ok = true;
+        if (menu_pointer_back()) cancel = true;
         int row = rows[sel];
         last_sel = sel;   // every frame, so no exit path has to remember to
 
@@ -916,10 +1022,8 @@ static void display_options_page(void) {
         if (ok && row == DR_OK) { options_save(); break; }
 
         menu_clear();
-        int fx, fy, fw, fh;
-        menu_box_fit("DISPLAY", DSP_ROW_W, NROWS + 3, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "DISPLAY");
-        int y = fy + 4;
+        int y = y_row0;
         bool nums = !g_kbd_visible;
         for (int i = 0; i < nrows; i++) {
             const char *n = menu_num(nums, i);
@@ -978,10 +1082,16 @@ static void gameplay_page(void) {
     // so both sliders' arrows sit in the same two columns.
     const int GP_ROW_W   = 29;
     const int GP_VALUE_W = 10;
+    /* Where the two arrows sit in a slider row, counted from the row's own left
+       edge: three columns of row number, twelve of label, then "< value >" with
+       the value GP_VALUE_W wide. Both labels are twelve columns for this reason.
+       The draw below and menu_pointer_step read the same two numbers. */
+    const int GP_ARROW_L = 3 + 12;
+    const int GP_ARROW_R = GP_ARROW_L + 2 + GP_VALUE_W + 1;
     static const char *const NAMES[] = { "Easy", "Medium", "Hard" };
-    // Both things the difficulty governs, matching the CD build's wording: the
-    // Map row on the pause menu goes when Hard is picked, and this line is the
-    // only warning of it.
+    // Both things the difficulty governs, because the map is only reachable
+    // from the menu this page is a room off and a player turning Hard on has no
+    // other warning that the Map row is about to go.
     static const char *const DESC[]  = { "Full map; typeahead: walkthrough",
                                          "Explored map; typeahead: words",
                                          "No map; typeahead off" };
@@ -993,8 +1103,17 @@ static void gameplay_page(void) {
     const int nrows = 4;
     static int last_sel = 0;   // held across visits; the four rows never change
     int sel = last_sel;
+    int last_hov = -1;
     int diff  = g_difficulty;
     int verb  = g_verbosity;
+    int fx, fy, fw, fh;
+    /* Sized once, outside the loop: the hit tests below are measured off fx/fw
+       and cannot wait for the draw to compute them. */
+    menu_box_fit("GAMEPLAY", 34, 10, &fx, &fy, &fw, &fh);
+    /* The one place this page's row positions are written down, so the pointer
+       and the draw cannot drift apart. Each slider carries a description line
+       under it, which is why the rows are three apart rather than one. */
+    const int y_diff = fy + 4, y_verb = fy + 7, y_ok = fy + 10;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
@@ -1011,6 +1130,24 @@ static void gameplay_page(void) {
         bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+        /* Hover, only on a frame the pointer moved, so a resting cursor cannot pin
+           `sel` and lock the pad out of the page; a click lands on what it points
+           at. A slider's own < and > are what a pointing device steps it with --
+           it has no Left and Right of its own -- so a click on one of those is the
+           step and not also an Ok. */
+        int hov = -1;
+        if      (menu_pointer_row(y_diff, 1) == 0) hov = GR_DIFF;
+        else if (menu_pointer_row(y_verb, 1) == 0) hov = GR_VERB;
+        else if (menu_pointer_row(y_ok,   2) >= 0) hov = GR_OK + menu_pointer_row(y_ok, 2);
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
+        int step = menu_pointer_step(fx, fw, GP_ROW_W, y_diff, GP_ARROW_L, GP_ARROW_R);
+        if (step == 0) step = menu_pointer_step(fx, fw, GP_ROW_W, y_verb, GP_ARROW_L, GP_ARROW_R);
+        if (step < 0) left  = true;
+        if (step > 0) right = true;
+        if (clicked && step == 0) ok = true;
+        if (menu_pointer_back()) cancel = true;
         last_sel = sel;   // every frame, so no exit path has to remember to
 
         if (cancel || (ok && sel == GR_CANCEL)) break;
@@ -1025,10 +1162,8 @@ static void gameplay_page(void) {
         else if (sel == GR_VERB) { if (left && verb > VERB_SUPERBRIEF) verb--; if (right && verb < VERB_VERBOSE) verb++; }
 
         menu_clear();
-        int fx, fy, fw, fh;
-        menu_box_fit("GAMEPLAY", 34, 10, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "GAMEPLAY");
-        int y = fy + 4;
+        int y = y_diff;
         bool nums = !g_kbd_visible;
         menu_rowf(fx, fw, y, sel == GR_DIFF, GP_ROW_W, "%sDifficulty: %s %s %s",
                   menu_num(nums, GR_DIFF), diff > DIFF_EASY ? "<" : " ",
@@ -1081,6 +1216,12 @@ static void sound_options_page(void) {
     MenuBacking backing;
     const int SND_ROW_W   = 31;
     const int SND_LABEL_W = 14;
+    /* Where a level row's two arrows sit, from the row's own left edge: three
+       columns of row number, the label field, then "< n >". The draw below and
+       menu_pointer_step read the same two numbers, and the arrows exist at all
+       because a pointing device has no Left and Right to step a level with. */
+    const int SND_ARROW_L = 3 + SND_LABEL_W;
+    const int SND_ARROW_R = SND_ARROW_L + 4;
 
     int rows[SND_PAGE_ROW_MAX];
     // Always the synth and always something to test: this build has no disc to
@@ -1094,6 +1235,14 @@ static void sound_options_page(void) {
     int sidx = synth_song();
     const int s_song = sidx;
     bool previewed = false;
+    int last_hov = -1;
+    int fx, fy, fw, fh;
+    /* Sized once, outside the loop: the hit tests are measured off fx/fw and
+       cannot wait for the draw. The level rows run from y_row0, then a blank,
+       then Ok and Cancel; the netbin's row list never changes shape, so both hold
+       for the life of the page.  */
+    menu_box_fit("SOUND", 34, nrows + 4, &fx, &fy, &fw, &fh);
+    const int y_row0 = fy + 4, y_ok = fy + nrows + 3;
 
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
@@ -1111,6 +1260,24 @@ static void sound_options_page(void) {
         bool cancel = g_pad->WasPressed(Button::B) || ke.kind == SATURN_KEY_BACKSPACE;
         bool commit = g_pad->WasPressed(Button::START) || ke.kind == SATURN_KEY_ESCAPE;
         if (menu_digit_row(ke, nrows, sel, left, right)) ok = true;
+        /* Hover only on a frame the pointer moved, so a resting cursor cannot pin
+           `sel`; a click takes what it points at, and a click on a level row's own
+           arrow steps that level rather than counting as an Ok. */
+        int hov = menu_pointer_row(y_row0, nrows - 2);
+        if (hov < 0) {
+            int h2 = menu_pointer_row(y_ok, 2);
+            if (h2 >= 0) hov = nrows - 2 + h2;
+        }
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
+        int step = 0;
+        for (int i = 0; i < nrows - 2 && step == 0; i++)
+            step = menu_pointer_step(fx, fw, SND_ROW_W, y_row0 + i, SND_ARROW_L, SND_ARROW_R);
+        if (step < 0) left  = true;
+        if (step > 0) right = true;
+        if (clicked && step == 0) ok = true;
+        if (menu_pointer_back()) cancel = true;
         int row = rows[sel];
         last_row = row;   // every frame, so no exit path has to remember to
 
@@ -1143,10 +1310,8 @@ static void sound_options_page(void) {
         }
 
         menu_clear();
-        int fx, fy, fw, fh;
-        menu_box_fit("SOUND", 34, nrows + 4, &fx, &fy, &fw, &fh);
         menu_frame(fx, fy, fw, fh, "SOUND");
-        int y = fy + 4;
+        int y = y_row0;
         bool nums = !g_kbd_visible;
         for (int i = 0; i < nrows; i++) {
             const char *n = menu_num(nums, i);
@@ -1157,8 +1322,10 @@ static void sound_options_page(void) {
                               g_synth_level > 0 ? "On" : "Off");
                     break;
                 case SND_ROW_SYNTH:
-                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%d", n,
-                              menu_pad("Synth Music", SND_LABEL_W), g_synth_level);
+                    menu_rowf(fx, fw, y++, i == sel, SND_ROW_W, "%s%s%s %d %s", n,
+                              menu_pad("Synth Music", SND_LABEL_W),
+                              g_synth_level > 0 ? "<" : " ", g_synth_level,
+                              g_synth_level < 7 ? ">" : " ");
                     break;
                 case SND_ROW_TEST:
                     // The id and not the title: 14 columns after the padded
@@ -1236,6 +1403,7 @@ void netbin_pause_menu(void) {
         for (int i = 0; i < nitems; i++) if (items[i] == last_item) { sel = i; break; }
     };
     build();
+    int last_hov = -1;
     menu_sync();   // not a bare Synchronize: this frame must keep claiming NBG2
     bool need_fade_in = true;
     for (;;) {
@@ -1250,7 +1418,16 @@ void netbin_pause_menu(void) {
                  || g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)
                  || ke.kind == SATURN_KEY_ENTER;
         bool back = g_pad->WasPressed(Button::B) || g_pad->WasPressed(Button::START)
-                  || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE;
+                  || ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE
+                  || menu_pointer_back();
+        /* The rows sit one per line from y0 + 4, which is where the draw below
+           starts them. Hover only on a frame the pointer moved, so a resting
+           cursor cannot pin `sel`; a click takes the row it lands on. */
+        int hov = menu_pointer_row(y0 + 4, nitems);
+        bool clicked = (hov >= 0) && menu_pointer_act();
+        if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+        last_hov = hov;
+        if (clicked) act = true;
         int item = items[sel];
         last_item = item;   // every frame, so no exit path has to remember to
         if (back) break;

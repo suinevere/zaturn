@@ -40,10 +40,46 @@ back to another column. The flight stick's top/bottom-page cell says so out loud
 | Move selection | Dpad | Right Stick | Dpad | N/A (no mouse on/off) | Left Stick | — | — |
 | Mouse cursor move | Dpad | Right Stick | Analogue Stick | Movement | Left Stick | pointed at screen | mouse if available in other controller port |
 
+## Where the build departs from the workbook
+
+Two cells are answered differently on purpose, both about the buttons a pointing
+device has rather than about what the actions mean.
+
+- **The mouse: left and middle accept, right goes back.** The workbook reads the
+  right button as Accept and the middle as Backspace. SRL's names for those two
+  bits are its own reading of SGL's digital A/C/B bits, and the two candidate
+  layouts disagree about which outer button is which -- both agree only about the
+  middle bit. Rather than guess, the build gives one button one meaning
+  everywhere: `menu_pointer_act` takes left or middle, `menu_pointer_back` takes
+  right, and `pointer_fire`'s fallback table matches them.
+- **The light gun: a shot off the screen is Back, not Accept.** A gun has one
+  trigger and cannot point at a row it is not aiming at, so the shot that misses
+  the raster is the only Back it has. It fires as a right click, which is what
+  makes every page that honours one honour the other without a second path.
+
+## Every page answers a pointing device
+
+The rule is that nothing is reachable by a pad alone. Rows highlight on hover and
+activate on a click; a right click or an off-screen shot is Back; a slider or a
+pager is worked by clicking the `<` and `>` it already draws, because a mouse has
+no Left and Right of its own; a list's `^ more`/`v more` markers scroll it; the
+map's floor number grew a pair of arrows and its paper takes a click as "put the
+crosshair on the nearest room"; the save name editor grew a Done row, because a
+mouse has no Start to submit with. Yes/no questions are the two words themselves
+on the `menu_yesno` widget rather than a legend naming buttons -- a legend is
+unanswerable to a device that has none of them.
+
+The one place still pad-only is the in-game command panel's three modules
+(compass rose, word page, command list), which is a separate piece of work.
+
 ## How the Controls page is laid out
 
 One page per **connected** device, paged with the Device row; a device nobody has
-plugged in gets no page. Under it sits the Interface row (the persisted preference
+plugged in gets no page. The row names the model the port reports rather than the
+column it configures -- "3D Control Pad" and "Racing Wheel" both configure Analogue,
+and a page that called them the same thing could not tell the player which one they
+were holding -- and it is read every frame (`controller_kind_label`), so a hot-swap
+renames it where it stands. Under it sits the Interface row (the persisted preference
 a game starts in), then the Static sheet printed rather than offered, then one
 submenu row per sheet that device configures.
 
@@ -56,7 +92,7 @@ a trigger. The other four list their bindings and are read-only.
 
 | Device | Actions | Scrolling | Mouse Mode | Editable |
 |---|---|---|---|---|
-| 6 Pad | yes | yes | yes | yes |
+| Control Pad | yes | yes | yes | yes |
 | Flight Stick | yes | yes | yes | yes |
 | Analogue | yes | yes | yes | yes |
 | Mouse | yes | yes | no (always a cursor) | no |
@@ -112,13 +148,19 @@ does not mention. Each is listed with what shipped instead.
   "Left Stick", a control pad only "D-Pad", a Twin Stick only "Left Stick" -- its
   digital directions *are* its left stick. The table is `CSRC_NAME` in
   `controller.cxx`.
-- **The mouse reports a running total in a wrapping byte, not a per-frame delta.**
-  Movement is the difference against last frame, masked to the counter's width and
-  read back signed (`mouse_delta`). Taking the raw value slid the cursor on until
-  the mouse was carried back to where it started; taking the difference without
-  minding the wrap read -255 for a movement of one and snapped the cursor to
-  whichever edge was nearest. Y is added, not subtracted -- the reported sign
-  already runs the way the screen does.
+- **The mouse reports a running total in a sixteen-bit accumulator, not a per-frame
+  delta.** SGL's own handler (`_slPerSaturnMouse`, disassembled from `LIBSGL.A`) adds
+  each report's signed movement into the `PerPoint` x and y it already holds, and
+  zeroes both when the port's id changes. Movement is therefore the difference
+  against last frame, taken at that width (`mouse_delta`). Taking the raw value slid
+  the cursor on until the mouse was carried back to where it started; narrowing the
+  difference to a byte -- which it was -- gave the wrong sign to any frame that moved
+  more than 127 counts, which at a modern mouse's resolution is a couple of
+  millimetres of hand, so ordinary small movements and every frame of slowing down
+  threw the cursor backwards until it pinned against an edge. A difference larger
+  than one report can carry is the id-change reset landing between two frames and is
+  dropped. Y is added, not subtracted -- the reported sign already runs the way the
+  screen does.
 - **The mouse has a speed setting** on its own Mouse Mode sheet (that sheet has no
   on/off, which is the cell's "N/A"), five gain steps with 1:1 in the middle. Below
   1:1 the integer division would throw away every movement too small to make a

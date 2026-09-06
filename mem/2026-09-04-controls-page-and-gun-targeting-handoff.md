@@ -137,10 +137,14 @@ at it added acceleration and left the real fault in place.
 
 ## The mouse took three runs, and each fault had its own signature
 
-Consolidated into [[saturn-mouse-is-a-wrapping-byte-counter]]. Worth reading before
-touching `read_mouse` again: the reading is a running total in a wrapping byte, and
-the drift, the snap to a screen edge and the dead-feeling resolution were three
-different consequences of that one fact, not three bugs. `779a048` is the last of
+**Superseded on the width**: the counter is not a byte. Disassembling SGL's own
+`_slPerSaturnMouse` shows it accumulating into the sixteen-bit `PerPoint.x`/`.y`,
+so masking the difference to a byte was itself the fourth fault -- it gave the
+wrong sign to any frame moving more than 127 counts, which is a couple of
+millimetres of hand, and that was the snapping that outlived this handoff. See
+[[saturn-mouse-is-a-16bit-accumulator]]. What holds from here is the shape: the
+reading is a running total, and the drift, the snap to a screen edge and the
+dead-feeling resolution were consequences of that one fact, not separate bugs. `779a048` is the last of
 them.
 
 The methodological note: the first pass took "acceleration not implemented" at face

@@ -141,6 +141,168 @@ int menu_pointer_row(int y0, int n) {
     return (i >= 0 && i < n) ? i : -1;
 }
 
+/*----------------------
+ | menu_pointer_at
+ | Description: Whether the cursor is on row `y` inside the `n` cells starting at
+ |   column `x`. This is the hit test for something smaller than a row -- a page
+ |   arrow, a Yes cell, a scroll marker -- which menu_pointer_row cannot express.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: N/A
+ | Params: x -- first column; y -- the cell row; n -- how many columns wide
+ | Returns: nonzero when the cursor is inside that span
+ ----------------------*/
+int menu_pointer_at(int x, int y, int n) {
+    const DevPointer *p = controller_pointer();
+    if (!p->valid || p->row != y) return 0;
+    return (p->col >= x && p->col < x + n) ? 1 : 0;
+}
+
+/*----------------------
+ | menu_row_x
+ | Description: The first column a row drawn through menu_row/menu_rowf lands on.
+ |   Hit-testing anything inside a row has to be measured from here, and this
+ |   repeats draw_centered's arithmetic on purpose: the two must agree or a click
+ |   lands beside what it looks like it is on. Only correct for a row whose text is
+ |   no wider than `pad`, which is what every page's ROW_W is chosen to guarantee.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: x0 -- box left column; w -- box width; pad -- the row's padded width
+ | Returns: the row's first column
+ ----------------------*/
+int menu_row_x(int x0, int w, int pad) {
+    int x = x0 + 2 + ((w - 4) - pad) / 2;
+    if (x < x0 + 1) x = x0 + 1;
+    return x;
+}
+
+/*----------------------
+ | menu_pointer_step
+ | Description: Which way a click on a slider row's own `<`/`>` points. A pointing
+ |   device has no Left and Right of its own, so a row a pad steps with the D-pad
+ |   is unreachable to it unless the arrows it already draws are the thing clicked.
+ |   Each arrow's zone is two columns -- the glyph and the space beside it -- which
+ |   is wide enough to hit and still clear of the value between them.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: x0/w -- the box; pad -- the row's padded width; y -- the row;
+ |   loff/roff -- columns from the row's left edge to `<` and to `>`
+ | Returns: -1 for the left arrow, +1 for the right, 0 for neither
+ ----------------------*/
+int menu_pointer_step(int x0, int w, int pad, int y, int loff, int roff) {
+    if (!menu_pointer_act()) return 0;
+    int x = menu_row_x(x0, w, pad);
+    if (menu_pointer_at(x + loff, y, 2))     return -1;
+    if (menu_pointer_at(x + roff - 1, y, 2)) return  1;
+    return 0;
+}
+
+/*----------------------
+ | YESNO_GAP / YESNO_W
+ | Description: The columns between the Yes and No cells, and the width of the row
+ |   the two make together ("Yes" + gap + "No"). Named because the draw and the hit
+ |   test both measure from them.
+ | Author: suinevere
+ ----------------------*/
+static const int YESNO_GAP = 6;
+static const int YESNO_W   = 3 + YESNO_GAP + 2;
+
+/*----------------------
+ | menu_yesno_init
+ | Description: Starts a Yes/No widget with one of its cells lit.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: s -- the widget; yes_default -- nonzero to start on Yes
+ | Returns: N/A
+ ----------------------*/
+void menu_yesno_init(MenuYesNo *s, int yes_default) {
+    s->yes = yes_default ? 1 : 0;
+    s->hov = -1;
+}
+
+/*----------------------
+ | menu_yesno_draw
+ | Description: Draws the two cells on row `y`, the chosen one at full brightness.
+ |   Two prints rather than one composed row, because the two halves are in
+ |   different inks and draw_centered carries one.
+ | Author: suinevere
+ | Dependencies: text_map.h
+ | Globals: N/A
+ | Params: s -- the widget; x0/w -- the box; y -- the row
+ | Returns: N/A
+ ----------------------*/
+void menu_yesno_draw(const MenuYesNo *s, int x0, int w, int y) {
+    int x = menu_row_x(x0, w, YESNO_W);
+    (s->yes ? text_print_str : text_print_dim)(x, y, "Yes");
+    (s->yes ? text_print_dim : text_print_str)(x + 3 + YESNO_GAP, y, "No");
+}
+
+/*----------------------
+ | menu_yesno_input
+ | Description: One frame of a Yes/No box: polls the keyboard, reads the pad and
+ |   the cursor, moves the lit cell, and answers when the player commits. Left and
+ |   Right (and Up/Down, which cost nothing and are what a hand reaches for) move
+ |   between the cells; A, C, Start and Enter take whichever is lit; B, Backspace,
+ |   Esc, a right click and a gun shot off the screen are all No, because a Back
+ |   that was not also a No would leave the box with no way out. A click answers
+ |   the cell it lands on and nothing else: a stray click on the question itself
+ |   must not confirm something destructive. Hovering lights a cell only on the
+ |   frame the cursor arrives on it, so a resting cursor cannot pin the highlight
+ |   against the pad.
+ | Author: suinevere
+ | Dependencies: input.h, saturn_keyboard.h, console_view.h, controller.h
+ | Globals: g_pad
+ | Params: s -- the widget; x0/w -- the box; y -- the row the cells are on
+ | Returns: 1 yes, 0 no, -1 nothing decided this frame
+ ----------------------*/
+int menu_yesno_input(MenuYesNo *s, int x0, int w, int y) {
+    SaturnKeyEvent ke = saturn_keyboard_poll();
+    note_input_device(ke);
+
+    if (g_pad->WasPressed(Button::Left)  || g_pad->WasPressed(Button::Right) ||
+        g_pad->WasPressed(Button::Up)    || g_pad->WasPressed(Button::Down)  ||
+        ke.kind == SATURN_KEY_LEFT || ke.kind == SATURN_KEY_RIGHT ||
+        ke.kind == SATURN_KEY_UP   || ke.kind == SATURN_KEY_DOWN) s->yes = !s->yes;
+
+    int hov = menu_yesno_hit(x0, w, y);
+    bool clicked = (hov >= 0) && menu_pointer_act();
+    if (hov >= 0 && (hov != s->hov || clicked)) s->yes = hov;
+    s->hov = hov;
+    if (clicked) return s->yes;
+
+    if (ke.kind == SATURN_KEY_CHAR) {
+        if (ke.ch == 'y' || ke.ch == 'Y' || ke.ch == '1') return 1;
+        if (ke.ch == 'n' || ke.ch == 'N' || ke.ch == '2') return 0;
+    }
+    if (ke.kind == SATURN_KEY_ENTER) return s->yes;
+    if (ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE) return 0;
+    if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C) ||
+        g_pad->WasPressed(Button::START)) return s->yes;
+    if (g_pad->WasPressed(Button::B) || menu_pointer_back()) return 0;
+    return -1;
+}
+
+/*----------------------
+ | menu_yesno_hit
+ | Description: Which cell the cursor is over: 1 Yes, 0 No, -1 neither. Each zone
+ |   is its word plus one column of slack, and the gap between them keeps the two
+ |   from ever overlapping.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: x0/w -- the box; y -- the row the cells are on
+ | Returns: 1, 0 or -1
+ ----------------------*/
+int menu_yesno_hit(int x0, int w, int y) {
+    int x = menu_row_x(x0, w, YESNO_W);
+    if (menu_pointer_at(x, y, 4))                 return 1;
+    if (menu_pointer_at(x + 3 + YESNO_GAP, y, 3)) return 0;
+    return -1;
+}
+
 #ifdef NETBIN
 /*----------------------
  | menu_set_service
@@ -821,6 +983,18 @@ static int select_at(const char *title, const char *const *items, int count,
         if (hov >= 0 && (hov != last_hov || clicked)) sel = top + hov;
         last_hov = hov;
         if (clicked) pick = true;
+        /* The two scroll markers are the only thing on a long list a pointing
+           device could otherwise not reach: they say there is more and, clicked,
+           they are what fetches it, a page at a time. */
+        if (!clicked && menu_pointer_act()) {
+            int mx = menu_row_x(x0, w, 6);
+            if (top > 0 && menu_pointer_at(mx, y0 + 3, 6)) {
+                sel -= VIS; if (sel < 0) sel = 0;
+            } else if (top + vis_n < count &&
+                       menu_pointer_at(mx, y0 + 4 + vis_n, 6)) {
+                sel += VIS; if (sel > count - 1) sel = count - 1;
+            }
+        }
         bool cancel = allow_cancel && (g_pad->WasPressed(Button::B) || menu_pointer_back());
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
@@ -902,27 +1076,25 @@ int menu_select(const char *title, const char *const *items, int count) {
 
 /*----------------------
  | menu_confirm
- | Description: Sizes a box titled "CONFIRM" (menu_box_fit) to fit line1/line2
- |   against a 24-column floor -- the widest non-message row is the keyboard
- |   hint "Enter = Yes     Esc = No" (24 columns), the digit row is 15, and the
- |   floor is unconditional (pad wording is shorter, but sizing to it would grow
- |   the box the moment the player switched to a keyboard). Deliberately does
- |   not add MENU_DIGIT_COLS the way menu_select does: there the digits are a
- |   per-row prefix shifting every item's text rightward, so the columns add to
- |   the item width; here they are a standalone row prefixing nothing, and the
- |   24-column floor already covers it. Each loop iteration checks the keyboard
- |   (Enter/Esc/Backspace/Y/N/1/2) and the gamepad (A/C/Start = yes, B = no)
- |   before redrawing and calling menu_sync.
+ | Description: Modal Yes/No box. The answer is the two words themselves, drawn by
+ |   the menu_yesno widget and selectable with Left/Right, with a click, or with a
+ |   shot -- it used to be a legend spelling out which button meant which, which a
+ |   mouse and a gun could read and not answer. Sized to fit line1/line2 against a
+ |   16-column floor, unconditional so the box does not resize when the player
+ |   switches between the pad and a keyboard mid-prompt.
  |     Honours the g_menu_intro_fade one-shot the same way menu_select does, so a
  |   caller that reaches this from a black screen -- the save flow's overwrite
  |   question, between two pickers that each fade -- can have it arrive on a ramp
  |   rather than cut in. Every other caller leaves the one-shot at 0 and draws
- |   instantly, exactly as before. Fades nothing on the way out: this box answers
- |   a question and the caller decides what the answer costs.
+ |   instantly. Fades nothing on the way out: this box answers a question and the
+ |   caller decides what the answer costs.
+ |     Flushes the pointer as well as taking a Synchronize on the way in. The pad's
+ |   stale edge passes with that Synchronize; the click that opened the box is
+ |   module state that only clears on the next tick, and without the flush it lands
+ |   here as the answer.
  | Author: suinevere
- | Dependencies: menu_layout.c, console_view.cxx, input.h, saturn_keyboard.h,
- |   SRL
- | Globals: g_pad, g_kbd_visible
+ | Dependencies: menu_layout.c, console_view.cxx, controller.h, menu_yesno, SRL
+ | Globals: g_menu_intro_fade
  | Params: line1 -- first line of the question; line2 -- second line, or NULL
  | Returns: true if confirmed, false if declined
  ----------------------*/
@@ -935,34 +1107,25 @@ bool menu_confirm(const char *line1, const char *line2) {
     while (line2 && line2[l2]) l2++;
 
     int content_w = (l1 > l2 ? l1 : l2);
-    if (content_w < 24) content_w = 24;
+    if (content_w < 16) content_w = 16;
     int x0, y0, w, h;
-    menu_box_fit("CONFIRM", content_w, (l2 > 0 ? 5 : 4), &x0, &y0, &w, &h);
+    menu_box_fit("CONFIRM", content_w, (l2 > 0 ? 4 : 3), &x0, &y0, &w, &h);
+    int cy = y0 + 3;
+    int ay = cy + (l2 > 0 ? 3 : 2);
 
+    MenuYesNo yn;
+    menu_yesno_init(&yn, 1);
     SRL::Core::Synchronize();   // consume the edge that got us here
+    controller_pointer_flush();
     for (;;) {
-        SaturnKeyEvent ke = saturn_keyboard_poll();
-        note_input_device(ke);
-        if (ke.kind == SATURN_KEY_ENTER) return true;
-        if (ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE) return false;
-        if (ke.kind == SATURN_KEY_CHAR) {
-            if (ke.ch == 'y' || ke.ch == 'Y' || ke.ch == '1') return true;
-            if (ke.ch == 'n' || ke.ch == 'N' || ke.ch == '2') return false;
-        } else {
-            if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START))
-                return true;
-            if (g_pad->WasPressed(Button::B)) return false;
-        }
+        int ans = menu_yesno_input(&yn, x0, w, ay);
+        if (ans >= 0) return ans != 0;
 
         menu_clear();
         menu_frame(x0, y0, w, h, "CONFIRM");
-        int cy = y0 + 3;
         if (l1) menu_text(x0, w, cy, 0, line1);
         if (l2) menu_text(x0, w, cy + 1, 0, line2);
-        int hy = cy + (l2 > 0 ? 3 : 2);
-        if (!g_kbd_visible) menu_text(x0, w, hy, 0, "1) Yes    2) No");
-        menu_text(x0, w, hy + 1, 0,
-            hint("A / C = Yes     B = No", "Enter = Yes     Esc = No"));
+        menu_yesno_draw(&yn, x0, w, ay);
         menu_sync();
         if (intro) { menu_fade_in(intro); intro = 0; }
     }

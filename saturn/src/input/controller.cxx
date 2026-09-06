@@ -84,37 +84,43 @@ static const int MOUSE_TRAVEL_MAX = 40;
 
 /*----------------------
  | g_mouse_last / g_mouse_seen / MOUSE_JUMP_MAX
- | Description: The previous frame's raw mouse reading per port, and whether one
- |   has been taken yet. The Saturn mouse reports a running total rather than a
- |   per-frame delta -- the number stays where the hand left it -- so the movement
- |   this frame is the difference against last frame, and a reading that never
- |   changes is a hand that is not moving. Reading the raw value as the delta is
- |   what made the cursor slide on until the mouse was carried back to where it
- |   started; taking that difference without minding the wrap is what made it snap
- |   to an edge. See mouse_delta.
+ | Description: The previous frame's raw mouse reading per port, whether one has
+ |   been taken yet, and the most movement a single frame is allowed to claim.
+ |   SGL accumulates: its mouse handler adds each report's signed movement into
+ |   the sixteen-bit x and y already sitting in PerPoint, and zeroes both when the
+ |   port's id changes. So the reading is a running total -- the number stays
+ |   where the hand left it -- the movement this frame is the difference against
+ |   last frame, and a reading that never changes is a hand that is not moving.
+ |   Reading the raw value as the delta is what made the cursor slide on until the
+ |   mouse was carried back to where it started. One report carries a byte, its
+ |   sign and an overflow bit, so nothing honest exceeds MOUSE_JUMP_MAX; a bigger
+ |   jump is that hot-swap reset landing between two frames, and is dropped rather
+ |   than thrown at the cursor.
  | Author: suinevere
  ----------------------*/
 static int16_t g_mouse_last[PORT_N][2];
 static uint8_t g_mouse_seen[PORT_N];
+static const int MOUSE_JUMP_MAX = 512;
 
 /*----------------------
  | mouse_delta
  | Description: This frame's movement on one axis: the difference against last
- |   frame, read back into a signed byte. The running total the mouse reports
- |   counts in a byte and wraps, so a plain subtraction across the wrap reads -255
- |   for a movement of one and threw the cursor at whichever edge it was nearest --
- |   the snap to the top or bottom of a box. Masking first is right whatever width
- |   the counter really is, and bounds a single frame to +-127 as a side effect,
- |   which is far more than a hand covers in a sixtieth of a second.
+ |   frame, taken in the sixteen bits SGL's accumulator actually counts in.
+ |   Narrowing that difference to a byte -- which this did -- was the snap: a
+ |   frame that moved more than 127 counts came back with the wrong sign, and 127
+ |   counts is a couple of millimetres of hand at any modern mouse's resolution,
+ |   so ordinary small movements, and every frame of slowing down, threw the
+ |   cursor backwards until it pinned against a screen edge.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: now -- this frame's reading; last -- the previous one
- | Returns: the signed movement
+ | Returns: the signed movement, or 0 if it is too large to have been a hand
  ----------------------*/
 static int mouse_delta(int now, int last) {
-    int d = (now - last) & 0xFF;
-    return d > 127 ? d - 256 : d;
+    int d = (int) (int16_t) ((uint16_t) now - (uint16_t) last);
+    if (d > MOUSE_JUMP_MAX || d < -MOUSE_JUMP_MAX) return 0;
+    return d;
 }
 
 /*----------------------
@@ -372,6 +378,20 @@ DevKind controller_kind(int port) {
 }
 
 /*----------------------
+ | controller_kind_port
+ | Description: The first port carrying a device of kind `k`.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the DevKind to look for
+ | Returns: the port, or -1 when nothing of that kind is attached
+ ----------------------*/
+int controller_kind_port(DevKind k) {
+    for (int p = 0; p < PORT_N; p++) if (controller_kind(p) == k) return p;
+    return -1;
+}
+
+/*----------------------
  | controller_present
  | Description: Walks the ports looking for one classified as `k`.
  | Author: suinevere
@@ -381,13 +401,14 @@ DevKind controller_kind(int port) {
  | Returns: 1 if found, 0 otherwise
  ----------------------*/
 int controller_present(DevKind k) {
-    for (int p = 0; p < PORT_N; p++) if (controller_kind(p) == k) return 1;
-    return 0;
+    return controller_kind_port(k) >= 0 ? 1 : 0;
 }
 
 /*----------------------
  | controller_kind_name
- | Description: Indexes a fixed name table by kind.
+ | Description: Indexes a fixed name table by kind. This names the controls.xls
+ |   column, not the hardware: several models share one column, so a page that
+ |   wants to tell the player what they are holding wants controller_kind_label.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -396,11 +417,62 @@ int controller_present(DevKind k) {
  ----------------------*/
 const char *controller_kind_name(DevKind k) {
     static const char *N[DEV_KIND_N] = {
-        "None", "6 Pad", "Flight Stick", "Analogue",
+        "None", "Control Pad", "Flight Stick", "Analogue",
         "Mouse", "Twin Stick", "Light Gun", "Keyboard"
     };
     if (k < 0 || k >= DEV_KIND_N) return "None";
     return N[k];
+}
+
+/*----------------------
+ | controller_port_name
+ | Description: What the device on `port` calls itself, read from the id it
+ |   reports rather than from the column it was sorted into, so a 3D Control Pad
+ |   and a wheel do not both answer to "Analogue".
+ | Author: suinevere
+ | Dependencies: SRL (Input::Management)
+ | Globals: g_twin
+ | Params: port -- 0 to PORT_N - 1
+ | Returns: the model name; "None" for an empty or wedged port
+ ----------------------*/
+const char *controller_port_name(int port) {
+    using T = SRL::Input::PeripheralType;
+
+    if (port < 0 || port >= PORT_N) return "None";
+    uint8_t id = raw_id(port);
+    if (id == ID_WEDGED) return "None";
+
+    switch ((T) id) {
+        case T::Gamepad:      return g_twin ? "Twin Stick" : "Control Pad";
+        case T::MD3ButtonPad: return "MD 3-Button";
+        case T::MD6ButtonPad: return "MD 6-Button";
+        case T::AnalogPad:    return "Mission Stick";
+        case T::Analog3dPad:  return "3D Control Pad";
+        case T::Racing:       return "Racing Wheel";
+        case T::Mouse:        return "Netlink Mouse";
+        case T::ShuttleMouse: return "Shuttle Mouse";
+        case T::Gun:          return "Virtua Gun";
+        case T::MDGun:        return "MD Light Gun";
+        case T::Keyboard:     return "Keyboard";
+        default:              return "Unknown";
+    }
+}
+
+/*----------------------
+ | controller_kind_label
+ | Description: The name to show for a kind: the model actually plugged in, so
+ |   swapping a pad for a wheel renames the row on the frame it happens, falling
+ |   back to the column's own name when nothing of that kind is attached to read
+ |   a model off.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the DevKind to name
+ | Returns: its display string
+ ----------------------*/
+const char *controller_kind_label(DevKind k) {
+    int port = controller_kind_port(k);
+    return port >= 0 ? controller_port_name(port) : controller_kind_name(k);
 }
 
 /*----------------------
@@ -508,6 +580,14 @@ static void clamp_cursor(void) {
  | Description: Records a pointing-device click at the current cursor position and
  |   contributes the non-positional fallback action that button carries, keeping
  |   the fallback's identity so controller_pointer_consume can withdraw it.
+ |
+ |   The fallbacks follow the split menu_pointer_act and menu_pointer_back are
+ |   built on -- left and middle accept, right goes back -- rather than the mouse
+ |   column of controls.xls, which reads right as Accept and middle as Backspace.
+ |   SRL's names for those two bits are its own reading of SGL's digital bits and
+ |   the two candidate layouts disagree about them, so the only defensible thing
+ |   is to make one button mean one thing everywhere; back is the meaning a player
+ |   cannot work around by clicking something else.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: g_ptr, g_ptr_fallback
@@ -515,7 +595,7 @@ static void clamp_cursor(void) {
  | Returns: N/A
  ----------------------*/
 static void pointer_fire(int button) {
-    static const DevAction FALLBACK[3] = { DA_LETTER, DA_BACK, DA_ACCEPT };
+    static const DevAction FALLBACK[3] = { DA_LETTER, DA_ACCEPT, DA_BACK };
     g_ptr.hot    = 1;
     g_ptr.button = button;
     g_ptr_fallback = (int) FALLBACK[button];
@@ -700,9 +780,11 @@ static void read_mouse(int port) {
 /*----------------------
  | read_gun
  | Description: Places the cursor where a light gun is aimed and turns its trigger
- |   into a pointer click, except that a shot outside the bounds rectangle is the
- |   light gun column's "Shoot off screen" and accepts instead. The off-screen
- |   test is by coordinate and wants confirming against real hardware.
+ |   into a pointer click: on screen a left one, off screen a right one, which is
+ |   the same Back a mouse's right button gives. A gun has one trigger and no way
+ |   to point at a Cancel row it cannot see, so the shot that misses the raster is
+ |   the only Back it has. The off-screen test is by coordinate and wants
+ |   confirming against real hardware.
  | Author: suinevere
  | Dependencies: SRL (Input::Gun)
  | Globals: g_ptr
@@ -729,10 +811,7 @@ static void read_gun(int port) {
     if (!off && g.IsHeld(G::Button::Trigger)) g_ptr.held = 1;
 
     if (g.WasPressed(G::Button::Start)) mark(DA_MENU, 0);
-    if (g.WasPressed(G::Button::Trigger)) {
-        if (off) mark(DA_ACCEPT, 0);
-        else     pointer_fire(DEV_BTN_LEFT);
-    }
+    if (g.WasPressed(G::Button::Trigger)) pointer_fire(off ? DEV_BTN_RIGHT : DEV_BTN_LEFT);
 }
 
 /*----------------------

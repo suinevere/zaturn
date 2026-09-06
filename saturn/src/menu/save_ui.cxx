@@ -27,7 +27,8 @@ extern "C" {
 #include "saturn_backup.h"
 #include "saturn_keyboard.h"
 #include "input.h"
-#include "console_view.h"
+#include "console_view.h"
+#include "controller.h"
 #include "app_state.h"
 #include "saturn_glue.h"
 #include "map_model.h"
@@ -172,6 +173,7 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
 
     static int last_sel = 0;   // held across visits; SAVE_SLOTS never changes
     int sel = last_sel;
+    int last_hov = -1;
     int editing = 0;
     KeyboardState k;
     keyboard_reset(&k);
@@ -180,6 +182,41 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
     for (;;) {
         SaturnKeyEvent ke = saturn_keyboard_poll();
         note_input_device(ke);
+
+        /* Sized at the top of the frame rather than in the draw below, because
+           the pointer hit tests are measured off the box and cannot wait for it.
+           Nothing here reads this frame's input. */
+        const char *btitle = editing ? "NAME THIS SAVE" : "SAVE - PICK A SLOT";
+        int row_w = MENU_DIGIT_COLS + 10;
+        int edit_w = MENU_DIGIT_COLS + maxchars + 1;
+        if (edit_w > row_w) row_w = edit_w;
+        for (int i = 0; i < SAVE_SLOTS; i++) {
+            int n = 0;
+            while (slotname[i][n]) n++;
+            if (MENU_DIGIT_COLS + n > row_w) row_w = MENU_DIGIT_COLS + n;
+        }
+        int content_w;
+        int rows;
+        if (editing) {
+            int kb_w = KB_COLS * 2;
+            content_w = row_w;
+            if (kb_w > content_w) content_w = kb_w;
+            /* The two extra rows are the blank and the Done row: a mouse and a
+               gun have no Start button to submit a name with, so the submit has
+               to be something on screen they can point at. */
+            rows = SAVE_SLOTS + 1 + KB_ROWS + 2;
+        } else {
+            content_w = row_w;
+            rows = SAVE_SLOTS;
+        }
+        int x0, y0, w, h;
+        menu_box_fit(btitle, content_w, rows, &x0, &y0, &w, &h);
+        /* The one place this box's positions are written down, so the pointer and
+           the draw cannot drift apart. */
+        const int cy   = y0 + 3;
+        const int kby0 = cy + SAVE_SLOTS + 1;
+        const int kbx  = x0 + 2 + ((w - 4) - KB_COLS * 2) / 2;
+        const int y_done = kby0 + KB_ROWS + 1;
 
         if (!editing) {
             bool pick = false, cancel = false;
@@ -195,6 +232,14 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                     || g_pad->WasPressed(Button::START)) pick = true;
                 if (g_pad->WasPressed(Button::B) || menu_pointer_back()) cancel = true;
             }
+            /* Hover only on a frame the pointer moved, so a resting cursor cannot
+               pin the slot the pad is trying to move off; a click takes the slot
+               it lands on. */
+            int hov = menu_pointer_row(cy, SAVE_SLOTS);
+            bool clicked = (hov >= 0) && menu_pointer_act();
+            if (hov >= 0 && (hov != last_hov || clicked)) sel = hov;
+            last_hov = hov;
+            if (clicked) pick = true;
             last_sel = sel;   // after every move, so no exit path has to remember to
             if (cancel) { if (g_menu_page_fade) menu_fade_out(g_menu_page_fade); return 0; }
             if (pick) {
@@ -229,6 +274,31 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                 if (g_pad->WasPressed(Button::B))     { editing = 0; SRL::Core::Synchronize(); continue; }
                 if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::START)) submit = true;
             }
+            /* The on-screen keys are the mouse's and the gun's keyboard: a click
+               on one types it, a click on Done submits, and a right click or a
+               shot off the screen rubs out the last character -- or leaves the
+               name alone once there is nothing left to rub out, which is where B
+               goes. Without that last rule a pointing device could type a name
+               and never correct it. */
+            if (menu_pointer_act()) {
+                if (menu_pointer_row(y_done, 1) == 0) submit = true;
+                else {
+                    for (int r = 0; r < KB_ROWS; r++) {
+                        int hit = -1;
+                        for (int c = 0; c < KB_COLS; c++)
+                            if (menu_pointer_at(kbx + c * 2, kby0 + r, 2)) hit = c;
+                        if (hit >= 0) {
+                            k.cursor_row = r; k.cursor_col = hit;
+                            if (k.input_len < maxchars) keyboard_type(&k);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (menu_pointer_back()) {
+                if (k.input_len == 0) { editing = 0; SRL::Core::Synchronize(); continue; }
+                keyboard_backspace(&k);
+            }
             if (submit) {
                 int n = k.input_len;
                 if (n > maxchars) n = maxchars;
@@ -240,39 +310,10 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
             }
         }
 
-        const char *btitle = editing ? "NAME THIS SAVE" : "SAVE - PICK A SLOT";
-
-        // No cursor column any more -- the selected row is drawn in reverse
-        // video -- so a row is the digit prefix plus its label, and the widest
-        // slot name gets a say too, since a centred row that overran the box
-        // would be clipped rather than merely ragged.
-        int row_w = MENU_DIGIT_COLS + 10;
-        int edit_w = MENU_DIGIT_COLS + maxchars + 1;
-        if (edit_w > row_w) row_w = edit_w;
-        for (int i = 0; i < SAVE_SLOTS; i++) {
-            int n = 0;
-            while (slotname[i][n]) n++;
-            if (MENU_DIGIT_COLS + n > row_w) row_w = MENU_DIGIT_COLS + n;
-        }
-        int content_w;
-        int rows;
-        if (editing) {
-            int kb_w = KB_COLS * 2;
-            content_w = row_w;
-            if (kb_w > content_w) content_w = kb_w;
-            rows = SAVE_SLOTS + 1 + KB_ROWS;
-        } else {
-            content_w = row_w;
-            rows = SAVE_SLOTS;
-        }
-        int x0, y0, w, h;
-        menu_box_fit(btitle, content_w, rows, &x0, &y0, &w, &h);
-
         bool nums = !g_kbd_visible && !editing;
 
         menu_clear();
         menu_frame(x0, y0, w, h, btitle);
-        int cy = y0 + 3;
         for (int i = 0; i < SAVE_SLOTS; i++) {
             if (editing && i == sel) {
                 menu_rowf(x0, w, cy + i, 1, row_w, "%s%s_",
@@ -286,7 +327,6 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
         if (editing) {
             // Centred as one block, not row by row, so the cursor highlight can
             // still be addressed by column.
-            int kbx = x0 + 2 + ((w - 4) - KB_COLS * 2) / 2;
             for (int r = 0; r < KB_ROWS; r++) {
                 char rowbuf[KB_COLS * 2 + 1];
                 int p = 0;
@@ -295,12 +335,13 @@ int pick_slot_and_name(int device, int *out_slot, char *out_name, int maxchars) 
                     rowbuf[p++] = KB_LAYOUT[r][c];
                 }
                 rowbuf[p] = '\0';
-                text_print_dim(kbx, cy + SAVE_SLOTS + 1 + r, rowbuf);
+                text_print_dim(kbx, kby0 + r, rowbuf);
                 if (r == k.cursor_row) {
                     char sel[2] = { KB_LAYOUT[r][k.cursor_col], '\0' };
-                    text_print(kbx + k.cursor_col * 2 + 1, cy + SAVE_SLOTS + 1 + r, sel);
+                    text_print(kbx + k.cursor_col * 2 + 1, kby0 + r, sel);
                 }
             }
+            menu_row(x0, w, y_done, 1, row_w, "Done");
         }
         menu_sync();
         if (intro) { menu_fade_in(intro); intro = 0; }
@@ -363,7 +404,7 @@ int choose_dest(const char *title_dev, const char *title_slot,
             *out_slot = slot;
             return 1;
         }
-        menu_message(title_slot, "That slot is empty.", hint("A/C = back", "Enter = back"));
+        menu_message(title_slot, "That slot is empty.", "(press any button)");
         menu_wait();
     }
 }
@@ -497,12 +538,18 @@ static int any_save_present(void) {
  |
  |   menu_fade_clear before the box because boot holds the screen black for the
  |   splash to take over, and main re-arms that hold on the way past. The
- |   Synchronize before the loop eats the button edge that arrived with the call,
- |   as menu_confirm does, so an in-flight press cannot answer the question.
+ |   Synchronize before the loop eats the button edge that arrived with the call
+ |   and the flush beside it the click, as menu_confirm does, so nothing in flight
+ |   can answer the question.
+ |
+ |   The answer is a Yes/No on the question "Restart to the BIOS to free space?",
+ |   on the same widget every other confirmation uses, rather than the two lines of
+ |   button legend it used to print -- a legend is unanswerable to a mouse or a
+ |   gun, which have no B to read it with.
  | Author: suinevere
- | Dependencies: menu.h, menu_layout.h, saturn_backup.h, saturn_glue.h,
- |   map_model.h, input.h, console_view.h, saturn_keyboard.h, sega_sys.h
- | Globals: g_pad, g_kbd_visible
+ | Dependencies: menu.h (menu_yesno), menu_layout.h, saturn_backup.h,
+ |   saturn_glue.h, map_model.h, controller.h, console_view.h, sega_sys.h
+ | Globals: N/A
  | Params: N/A
  | Returns: N/A
  ----------------------*/
@@ -537,26 +584,26 @@ void save_space_warn(void) {
     int x0, y0, w, h;
     menu_box_fit("BACKUP MEMORY", MENU_ROW_TEXT_MAX, 5, &x0, &y0, &w, &h);
 
+    const int cy = y0 + 3;
+    const int ay = cy + 4;
+    /* Starts on No. The two answers are not equals: No carries on into the game
+       and Yes throws the session away to reach the BIOS, and a box that opens on
+       its way out is a box that a player still reading it can dismiss into. */
+    MenuYesNo yn;
+    menu_yesno_init(&yn, 0);
     SRL::Core::Synchronize();
+    controller_pointer_flush();
     for (;;) {
-        SaturnKeyEvent ke = saturn_keyboard_poll();
-        note_input_device(ke);
-        if (ke.kind == SATURN_KEY_ENTER) SYS_Exit(0);
-        if (ke.kind == SATURN_KEY_ESCAPE || ke.kind == SATURN_KEY_BACKSPACE) return;
-        if (ke.kind != SATURN_KEY_CHAR) {
-            if (g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::C)) SYS_Exit(0);
-            if (g_pad->WasPressed(Button::B) || menu_pointer_back()) return;
-        }
+        int ans = menu_yesno_input(&yn, x0, w, ay);
+        if (ans > 0) SYS_Exit(0);
+        if (ans == 0) return;
 
         menu_clear();
         menu_frame(x0, y0, w, h, "BACKUP MEMORY");
-        int cy = y0 + 3;
         menu_text(x0, w, cy, 0, line1);
         menu_text(x0, w, cy + 1, 0, line2);
-        menu_text(x0, w, cy + 3, 0,
-            hint("A / C = Restart to BIOS", "Enter = Restart to BIOS"));
-        menu_text(x0, w, cy + 4, 0,
-            hint("B = Continue without Saving", "Esc = Continue w/o Saving"));
+        menu_text(x0, w, cy + 3, 0, "Restart to the BIOS to free space?");
+        menu_yesno_draw(&yn, x0, w, ay);
         menu_sync();
     }
 }

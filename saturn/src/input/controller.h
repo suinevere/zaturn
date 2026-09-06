@@ -67,7 +67,8 @@ typedef enum {
  | Description: The one on-screen pointer, whichever device is driving it. `hot`
  |   is set only on the frame a pointing device fires, so a caller hit-tests on an
  |   edge instead of every frame the cursor rests somewhere, and `offscreen` marks
- |   the light gun's off-screen shot, which controls.xls assigns to Accept.
+ |   the light gun's off-screen shot, which fires as a right click -- the Back a
+ |   gun has no other way to give.
  | Author: suinevere
  ----------------------*/
 typedef struct {
@@ -110,8 +111,8 @@ int controller_hold_fired(int slot, int active);
 
 /*----------------------
  | DEV_BTN_LEFT / DEV_BTN_MIDDLE / DEV_BTN_RIGHT
- | Description: The DevPointer.button values. The light gun reports every shot as
- |   DEV_BTN_LEFT because it has one trigger.
+ | Description: The DevPointer.button values. The light gun has one trigger, so it
+ |   reports a shot on the raster as DEV_BTN_LEFT and one off it as DEV_BTN_RIGHT.
  | Author: suinevere
  ----------------------*/
 #define DEV_BTN_LEFT   0
@@ -185,6 +186,17 @@ int controller_any_fired(void);
 DevKind controller_kind(int port);
 
 /*----------------------
+ | controller_kind_port
+ | Description: The first port carrying a device of kind `k`.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the DevKind to look for
+ | Returns: the port, or -1 when none is attached
+ ----------------------*/
+int controller_kind_port(DevKind k);
+
+/*----------------------
  | controller_present
  | Description: Whether any port currently carries a device of kind `k`.
  | Author: suinevere
@@ -197,7 +209,8 @@ int controller_present(DevKind k);
 
 /*----------------------
  | controller_kind_name
- | Description: Display name of a DevKind, for the Controls page and diagnostics.
+ | Description: Display name of a DevKind -- the controls.xls column, not the
+ |   hardware. Use controller_kind_label to name what is actually plugged in.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
@@ -205,6 +218,31 @@ int controller_present(DevKind k);
  | Returns: its display string; "None" for DEV_NONE and anything out of range
  ----------------------*/
 const char *controller_kind_name(DevKind k);
+
+/*----------------------
+ | controller_port_name
+ | Description: The model name the device on `port` reports, so two devices
+ |   sharing a controls.xls column are still told apart on screen.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: port -- 0 to 11
+ | Returns: its display string; "None" for an empty or wedged port
+ ----------------------*/
+const char *controller_port_name(int port);
+
+/*----------------------
+ | controller_kind_label
+ | Description: The name to show for a kind: the model actually attached, or the
+ |   column's own name when nothing of that kind is. Re-read every frame, so a
+ |   hot-swap renames whatever is showing it.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: k -- the DevKind to name
+ | Returns: its display string
+ ----------------------*/
+const char *controller_kind_label(DevKind k);
 
 /*----------------------
  | controller_pointer

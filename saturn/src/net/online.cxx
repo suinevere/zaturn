@@ -108,16 +108,19 @@ static void pause_service(void *ctx) {
 
 /*----------------------
  | online_cancel_requested
- | Description: Reports the abort gesture -- Esc on the Saturn keyboard, or the
- |   L+R trigger chord on the gamepad (both triggers are unused for typing).
+ | Description: Reports the abort gesture -- Esc on the Saturn keyboard, the L+R
+ |   trigger chord on the gamepad (both triggers are unused for typing), or a
+ |   pointing device's Back: a right click, or a gun shot off the screen. A dial
+ |   that could only be called off with two shoulder buttons stranded anyone
+ |   holding a mouse.
  | Author: suinevere
- | Dependencies: saturn_keyboard.h, input.h (g_pad)
- | Globals: g_pad
+ | Dependencies: saturn_keyboard.h, input.h (g_pad), menu.h
  | Params: N/A
  | Returns: true if the player asked to abort this frame
  ----------------------*/
 static bool online_cancel_requested(void) {
     if (saturn_keyboard_poll().kind == SATURN_KEY_ESCAPE) return true;
+    if (menu_pointer_back()) return true;
     return g_pad->IsHeld(Button::L) && g_pad->IsHeld(Button::R);
 }
 
@@ -362,7 +365,7 @@ void online_mode(void) {
             snprintf(dial, sizeof(dial), "Dialing %s ... (attempt %d/%d)",
                      number, attempt, ONLINE_DIAL_ATTEMPTS);
             menu_message("ONLINE", dial,
-                         hint("L+R = cancel", "Esc = cancel"));
+                         hint("L+R or right click = cancel", "Esc = cancel"));
             // menu_sync, not a bare Synchronize: menu_message draws the box
             // once and this is the frame it is shown on, so the frame has to
             // keep claiming NBG2 or the border blinks out under the text.
@@ -375,12 +378,12 @@ void online_mode(void) {
 
         if (attempt < ONLINE_DIAL_ATTEMPTS) {
             menu_message("ONLINE", "No carrier. Retrying...",
-                         hint("L+R = cancel", "Esc = cancel"));
+                         hint("L+R or right click = cancel", "Esc = cancel"));
             bool cancelled = false;
             for (int f = 0; f < 180; f++) {
                 if (online_cancel_requested()) { cancelled = true; break; }
                 menu_message("ONLINE", "No carrier. Retrying...",
-                             hint("L+R = cancel", "Esc = cancel"));
+                             hint("L+R or right click = cancel", "Esc = cancel"));
                 menu_sync();
             }
             if (cancelled) { net_connect_close(); return; }

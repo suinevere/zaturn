@@ -19,7 +19,8 @@
 #include "soft_reset.h"
 #include "menu.h"
 #include "console_view.h"
-#include "input.h"
+#include "input.h"
+#include "controller.h"
 extern "C" {
 #include "menu_layout.h"
 #include "saturn_keyboard.h"
@@ -203,10 +204,13 @@ void check_soft_reset(void) {
  |   down for as long as the question is up: this is the one confirm that offers to
  |   end the session, and leaving the turn's words and a live-looking control
  |   surface behind it read as though the game were still waiting to be typed at.
- |   The box width is budgeted unconditionally for the widest row, the pad hint
- |   "(A) (C) (Start) = yes" (21 cols), so it does not resize when the player
- |   switches between pad and keyboard mid-prompt. Yes soft-resets to the title
- |   (never returns); No returns false so the caller resumes the game.
+ |   The answer is the menu_yesno widget every other confirmation uses -- the two
+ |   words, moved between with Left/Right and pickable with a click or a shot --
+ |   rather than the two lines of button legend this used to print, which a mouse
+ |   and a gun could read and not answer. It opens on No, because Yes ends the
+ |   session. Yes soft-resets to the title (never returns); No returns false so
+ |   the caller resumes the game. The width floor stays at 21 columns so the box
+ |   does not resize when the player switches between pad and keyboard mid-prompt.
  |
  |   menu_sync's own dash_hold_any is the whole of the NBG2 bookkeeping here. This
  |   loop used to call dash_hold as well, to keep the gamepad strip up behind the
@@ -230,32 +234,29 @@ bool confirm_return_to_title(const char *question) {
     int content_w = qlen;
     if (content_w < 21) content_w = 21;
     int x0, y0, w, h;
-    menu_box_fit("RETURN TO TITLE", content_w, 5, &x0, &y0, &w, &h);
+    menu_box_fit("RETURN TO TITLE", content_w, 4, &x0, &y0, &w, &h);
+    const int cy = y0 + 3;
+    const int ay = cy + 2;
+    /* Starts on No: Yes ends the session, and a box that opens on its way out is
+       one a player still reading the question can dismiss into. */
+    MenuYesNo yn;
+    menu_yesno_init(&yn, 0);
 
     // Before the debounce frame, not after it: the text shadow reaches VRAM on
     // OnAfterSync, so clearing after this Synchronize would show the turn's words
     // for the one frame the box is not drawn on yet.
     menu_clear();
     SRL::Core::Synchronize();
+    controller_pointer_flush();
     for (;;) {
-        SaturnKeyEvent ke = saturn_keyboard_poll();
-        note_input_device(ke);
-        bool yes = (ke.kind == SATURN_KEY_CHAR && (ke.ch == 'y' || ke.ch == 'Y' || ke.ch == '1'))
-                 || ke.kind == SATURN_KEY_ENTER
-                 || g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::START)
-                 || g_pad->WasPressed(Button::C);
-        bool no  = (ke.kind == SATURN_KEY_CHAR && (ke.ch == 'n' || ke.ch == 'N' || ke.ch == '2'))
-                 || ke.kind == SATURN_KEY_ESCAPE || g_pad->WasPressed(Button::B);
-        if (yes) { soft_reset_to_title(); }
-        if (no) { return false; }
+        int ans = menu_yesno_input(&yn, x0, w, ay);
+        if (ans > 0) { soft_reset_to_title(); }
+        if (ans == 0) { return false; }
 
         menu_clear();
         menu_frame(x0, y0, w, h, "RETURN TO TITLE");
-        int cx = x0 + 2, cy = y0 + 3;
-        text_print(cx, cy, "%s", question);
-        if (!g_kbd_visible) text_print(cx, cy + 2, "1) Yes    2) No");
-        text_print(cx, cy + 3, "%s", hint("(A) (C) (Start) = yes", "Y / Enter = yes"));
-        text_print(cx, cy + 4, "%s", hint("(B) = no", "N / Esc = no"));
+        menu_text(x0, w, cy, 0, question);
+        menu_yesno_draw(&yn, x0, w, ay);
         menu_sync();
     }
 }

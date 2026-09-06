@@ -23,6 +23,7 @@
 #include "soft_reset.h"
 #include "console_view.h"
 #include "menu.h"
+#include "controller.h"
 #include "../menu/options.h"
 #include "party.h"
 #include "map_layout.h"
@@ -245,7 +246,7 @@ static int map_ink_is_red(unsigned short c)
 #define MAP_ROW_TOP     (MAP_ROW_ROSTER - (PARTY_SEATS - 1))
 #define MAP_TEXT_LEFT   MAP_CLIP_X0
 #define MAP_TEXT_COLS   (MAP_CELL_W - MAP_CLIP_X0)
-#define MAP_PAGE_COLS   6
+#define MAP_PAGE_COLS   10
 
 /*----------------------
  | MAP_FLASH_SHIFT
@@ -502,6 +503,49 @@ static int put_uint(char *out, int at, unsigned int v)
     while (v != 0u && n < (int) sizeof tmp);
     while (n > 0) out[at++] = tmp[--n];
     return at;
+}
+
+/*----------------------
+ | page_field
+ | Description: Where the floor number and its two paging arrows sit on the
+ |   roster's row, and how many columns the number itself takes. The draw and the
+ |   pointer hit test both call this, so a click cannot land beside the arrow it
+ |   looks like it is on. The field ends three columns short of the drawing's
+ |   right edge, which is where the sheet starts to tear.
+ | Author: suinevere
+ | Dependencies: put_uint
+ | Globals: N/A
+ | Params: page/pages -- the current floor and the count; x -- receives the
+ |   field's first column; k -- receives the number's own width
+ | Returns: N/A
+ ----------------------*/
+static void page_field(int page, int pages, int *x, int *k)
+{
+    char pg[MAP_PAGE_COLS];
+    int n = put_uint(pg, 0, (unsigned int) (page + 1));
+    pg[n++] = '/';
+    n = put_uint(pg, n, (unsigned int) pages);
+    *k = n;
+    *x = MAP_TEXT_LEFT + MAP_TEXT_COLS - 3 - (n + 4);
+}
+
+/*----------------------
+ | map_cell_offset
+ | Description: The room offset a text cell falls on -- map_layout_cell run
+ |   backwards, rounded to the nearest room -- which is how a click on the paper
+ |   becomes a place to put the crosshair.
+ | Author: suinevere
+ | Dependencies: map_layout.h
+ | Globals: N/A
+ | Params: cell -- the column or row clicked; s -- the view's offset; centre --
+ |   MAP_CX or MAP_CY; base -- MAP_LEFT or MAP_TOP
+ | Returns: the room offset
+ ----------------------*/
+static int map_cell_offset(int cell, int s, int centre, int base)
+{
+    int rel = cell - base + MAP_CELLS / 2;
+    int q   = rel >= 0 ? rel / MAP_CELLS : -(((-rel) + MAP_CELLS - 1) / MAP_CELLS);
+    return s + q - centre;
 }
 
 /*----------------------
@@ -1060,11 +1104,22 @@ static void draw_once(int sx, int sy, int page, int hx, int hy) {
            edge and shares the roster's row: the corner itself is where the
            sheet starts to tear, and the two things that are on the screen
            whatever the map is showing belong on one line. */
-        k = put_uint(pg, 0, (unsigned int) (page + 1));
-        pg[k++] = '/';
-        k = put_uint(pg, k, (unsigned int) pages);
-        pg[k] = '\0';
-        text_print_str(MAP_TEXT_LEFT + MAP_TEXT_COLS - k - 3, MAP_ROW_ROSTER, pg);
+        {
+            int px;
+            page_field(page, pages, &px, &k);
+            k = put_uint(pg, 0, (unsigned int) (page + 1));
+            pg[k++] = '/';
+            k = put_uint(pg, k, (unsigned int) pages);
+            pg[k] = '\0';
+            text_print_str(px + 2, MAP_ROW_ROSTER, pg);
+            /* The arrows are the only thing on this screen a mouse or a gun can
+               turn a floor with: L and R are pad buttons and there is nothing
+               else here to point at. Drawn only when there is somewhere to go. */
+            if (pages > 1) {
+                text_print_str(px, MAP_ROW_ROSTER, "<");
+                text_print_str(px + k + 3, MAP_ROW_ROSTER, ">");
+            }
+        }
 
         text_flush();
     }
@@ -1297,7 +1352,7 @@ extern "C" void map_view_show(void) {
         note_input_device(ke);
         bool back = g_pad->WasPressed(Button::A) || g_pad->WasPressed(Button::B) ||
                     g_pad->WasPressed(Button::C) || g_pad->WasPressed(Button::START) ||
-                    ke.kind != SATURN_KEY_NONE;
+                    ke.kind != SATURN_KEY_NONE || menu_pointer_back();
         if (back) break;
 
         pad_repeat_update();
@@ -1311,6 +1366,25 @@ extern "C" void map_view_show(void) {
             if (pad_fired_raw(Button::Down))  ny++;
             if (pad_fired(Button::L))     np--;
             if (pad_fired(Button::R))     np++;
+            /* A click on an arrow turns the floor; a click anywhere on the paper
+               puts the crosshair on the room nearest it, which is the only way a
+               pointing device has of picking a room -- it has no D-pad to walk
+               one cell at a time with. The clamp below is what keeps a click off
+               the edge of the drawing from asking for a room that is not there. */
+            if (menu_pointer_act()) {
+                const DevPointer *pt = controller_pointer();
+                int px, pk;
+                page_field(page, pages, &px, &pk);
+                if (pages > 1 && pt->row == MAP_ROW_ROSTER &&
+                    pt->col >= px && pt->col <= px + 1)                    np--;
+                else if (pages > 1 && pt->row == MAP_ROW_ROSTER &&
+                         pt->col >= px + pk + 2 && pt->col <= px + pk + 3) np++;
+                else if (pt->row >= MAP_CLIP_Y0 && pt->row < MAP_ROW_ROSTER &&
+                         pt->col >= MAP_CLIP_X0 && pt->col < MAP_CELL_W) {
+                    nx = map_cell_offset(pt->col, sx, MAP_CX, MAP_LEFT);
+                    ny = map_cell_offset(pt->row, sy, MAP_CY, MAP_TOP);
+                }
+            }
             if (np < 0)       np = pages - 1;
             if (np >= pages)  np = 0;
             // np is only ever a request for "the floor below" or "the floor

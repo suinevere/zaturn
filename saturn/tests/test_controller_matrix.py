@@ -362,7 +362,7 @@ def test_cursor_is_an_arrow_with_a_top_left_tip():
 
 def test_any_button_dismisses_a_prompt():
     """"press any key" has to mean any key on anything, including a gun fired off
-    screen, which sets no click and only an action."""
+    screen -- which now reports as a right click, so both halves still count."""
     body = _body(_read(ROOT / "src" / "menu" / "menu.cxx"), "menu_wait")
     assert "AnyPressed" in body, "menu_wait no longer takes every pad button"
     assert "controller_any_fired" in body, "menu_wait no longer takes other devices"
@@ -394,11 +394,27 @@ def test_mouse_reading_is_a_position_not_a_delta():
 
 
 def test_the_mouse_wrap_cannot_fling_the_cursor():
-    """The counter wraps in a byte, so a plain subtraction across the wrap reads
-    -255 for a movement of one and throws the cursor at the nearest edge."""
-    body = _body(_read(SRC), "mouse_delta")
-    assert "0xFF" in body, "the difference is no longer masked to the counter's width"
-    assert "256" in body, "the masked difference is no longer read back as signed"
+    """SGL accumulates the mouse into a sixteen-bit field, so the difference has to
+    be read back at that width. Narrowed to a byte -- which it was -- every frame
+    that moved more than 127 counts came back with the wrong sign, and the cursor
+    pinned itself against whichever edge it reached."""
+    body = _nocomments(_body(_read(SRC), "mouse_delta"))
+    assert "int16_t" in body, "the difference is no longer read back as sixteen-bit signed"
+    assert "0xFF" not in body, "the difference is masked into a byte again"
+    assert "MOUSE_JUMP_MAX" in body, "an implausible jump is no longer dropped"
+
+
+def test_the_device_row_names_the_hardware():
+    """A page that says "Analogue" cannot tell a 3D Control Pad from a wheel, and a
+    name read once cannot follow a hot-swap. Both pages read the label live."""
+    src = _nocomments(_read(SRC))
+    assert "controller_port_name" in src, "the model name is no longer read off the id"
+    label = _nocomments(_body(_read(SRC), "controller_kind_label"))
+    assert "controller_port_name" in label, "the label no longer names what is attached"
+    assert "controller_kind_name" in label, "an unattached kind has nothing left to fall back to"
+    for page in ("menu/menu_pages.cxx", "net/netbin_pages.cxx"):
+        body = _nocomments(_read(ROOT / "src" / page))
+        assert "controller_kind_label" in body, page + " no longer names the attached device"
 
 
 def test_slow_mouse_movement_is_not_thrown_away():
@@ -494,3 +510,56 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_a_gun_shot_off_the_screen_goes_back():
+    """A gun has one trigger and cannot point at a Cancel row it is not aiming at,
+    so the shot that misses the raster is its Back -- the same right click a mouse
+    gives, so every page that honours one honours the other."""
+    body = _nocomments(_body(_read(SRC), "read_gun"))
+    assert "DEV_BTN_RIGHT" in body, "an off-screen shot no longer fires as a right click"
+    assert "DA_ACCEPT" not in body, "an off-screen shot still accepts"
+    fire = _nocomments(_body(_read(SRC), "pointer_fire"))
+    assert "DA_LETTER, DA_ACCEPT, DA_BACK" in fire,         "the fallback table no longer matches menu_pointer_act/back"
+
+
+def test_every_yes_no_box_is_answerable_by_pointer():
+    """A box that prints "B = no" is unanswerable to a mouse and a gun, which have
+    no B to read it with. Every yes/no question is the same two-cell widget."""
+    menu = _read(ROOT / "src" / "menu" / "menu.cxx")
+    for fn in ("menu_yesno_input", "menu_yesno_draw", "menu_yesno_hit"):
+        assert fn + "(" in menu, "menu.cxx lost " + fn
+    yn = _nocomments(_body(menu, "int menu_yesno_input"))
+    assert "menu_pointer_back" in yn, "Back no longer answers No"
+    assert "menu_pointer_act" in yn, "a click no longer picks a cell"
+    for path, fn in ((ROOT / "src" / "menu" / "menu.cxx", "bool menu_confirm"),
+                     (ROOT / "src" / "engine" / "soft_reset.cxx", "bool confirm_return_to_title"),
+                     (ROOT / "src" / "menu" / "save_ui.cxx", "void save_space_warn")):
+        body = _nocomments(_body(_read(path), fn))
+        assert "menu_yesno_input" in body, fn + " does not use the yes/no widget"
+        assert "hint(" not in body, fn + " still prints a button legend"
+
+
+def test_every_menu_page_answers_a_pointer():
+    """The audit this file exists for, applied to the pages rather than to the
+    device table: a page a mouse or a gun cannot work is a page that strands
+    whoever is holding one, and they are reachable from every menu."""
+    pages = {
+        "menu/menu_pages.cxx": ["network_page", "controls_sheet_page", "controls_page",
+                                "keyboard_controls_page", "sound_options_page",
+                                "display_options_page", "credits_page",
+                                "gameplay_page", "options_menu"],
+        "net/netbin_pages.cxx": ["netbin_dial_page", "controls_page",
+                                 "keyboard_controls_page", "display_options_page",
+                                 "gameplay_page", "sound_options_page",
+                                 "netbin_pause_menu"],
+        "menu/save_ui.cxx":     ["pick_slot_and_name", "save_space_warn"],
+        "video/map_view.cxx":   ["map_view_show"],
+        "menu/menu.cxx":        ["select_at"],
+    }
+    for path, fns in pages.items():
+        src = _read(ROOT / "src" / path)
+        for fn in fns:
+            body = _nocomments(_body(src, fn))
+            hit = ("menu_pointer_" in body) or ("menu_yesno_input" in body)
+            assert hit, path + ": " + fn + " answers no pointing device"

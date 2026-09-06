@@ -82,6 +82,56 @@ bool menu_pointer_act(void);
 bool menu_pointer_back(void);
 int  menu_pointer_row(int y0, int n);
 
+/*----------------------
+ | menu_pointer_at / menu_row_x / menu_pointer_step
+ | Description: Hit tests for the parts of a row. menu_pointer_at asks whether the
+ |   cursor is inside `n` columns from (x, y); menu_row_x says where a row drawn
+ |   through menu_row/menu_rowf with that pad actually starts, which is what those
+ |   columns are measured from; menu_pointer_step folds the two into the question a
+ |   slider row asks -- did a click land on my `<` or my `>` -- since a pointing
+ |   device has no Left and Right of its own and would otherwise be unable to move
+ |   any row a pad steps.
+ | Author: suinevere
+ | Dependencies: controller.h
+ | Globals: N/A
+ | Params: x/y/n -- a span of cells; x0/w -- the box; pad -- the row's padded
+ |   width; loff/roff -- columns from the row's left edge to its two arrows
+ | Returns: at is nonzero inside the span; row_x is a column; step is -1, +1 or 0
+ ----------------------*/
+int menu_pointer_at(int x, int y, int n);
+int menu_row_x(int x0, int w, int pad);
+int menu_pointer_step(int x0, int w, int pad, int y, int loff, int roff);
+
+/*----------------------
+ | MenuYesNo
+ | Description: The state of one Yes/No box: which cell is lit, and which the
+ |   cursor was over last frame. The second is what stops a resting cursor pinning
+ |   the highlight so the pad cannot move it, and it belongs to the box rather than
+ |   to the module because two boxes can be open one inside the other.
+ | Author: suinevere
+ ----------------------*/
+typedef struct { int yes; int hov; } MenuYesNo;
+
+/*----------------------
+ | menu_yesno_init / menu_yesno_draw / menu_yesno_input / menu_yesno_hit
+ | Description: A two-cell Yes/No answer, drawn as the words themselves rather than
+ |   as a legend of which button does what: Left/Right move the lit cell, A/C/Start
+ |   and Enter take it, B/Backspace/Esc/a right click/a gun shot off the screen are
+ |   No, and a click takes the cell it lands on. Any page asking a yes/no question
+ |   uses these rather than printing its own prompt, so every one of them answers a
+ |   mouse and a gun the same way.
+ | Author: suinevere
+ | Dependencies: input.h, saturn_keyboard.h, controller.h
+ | Globals: g_pad
+ | Params: s -- the widget; yes_default -- which cell starts lit; x0/w -- the box;
+ |   y -- the row the cells are drawn on
+ | Returns: input gives 1 yes, 0 no, -1 undecided; hit gives 1, 0 or -1
+ ----------------------*/
+void menu_yesno_init(MenuYesNo *s, int yes_default);
+void menu_yesno_draw(const MenuYesNo *s, int x0, int w, int y);
+int  menu_yesno_input(MenuYesNo *s, int x0, int w, int y);
+int  menu_yesno_hit(int x0, int w, int y);
+
 #ifdef NETBIN
 /*----------------------
  | MenuServiceFn
@@ -280,9 +330,11 @@ void menu_message(const char *title, const char *line1, const char *line2);
  | Description: Modal, scrollable list menu titled `title` over `count` items
  |   in `items`. Navigable by gamepad (D-pad to move, A/C/Start to pick, B to
  |   cancel) or keyboard (number keys pick a visible row directly, Enter picks
- |   the highlighted item, Backspace/Esc cancels). Draws no controls hint of its
- |   own -- only menu_confirm still spells the buttons out. Polls the soft-reset
- |   chord every loop.
+ |   the highlighted item, Backspace/Esc cancels), by mouse (hover to highlight,
+ |   click to pick, right click to cancel, click a scroll marker to page) and by
+ |   gun. Draws no controls hint: no page does now, since the one that used to --
+ |   menu_confirm -- draws the answer itself instead. Polls the soft-reset chord
+ |   every loop.
  | Author: suinevere
  | Dependencies: menu_layout.c, console_view.cxx, input.h, saturn_keyboard.h,
  |   soft_reset.h, SRL
@@ -330,13 +382,13 @@ int menu_select_final(const char *title, const char *const *items, int count, in
 /*----------------------
  | menu_confirm
  | Description: Modal Yes/No confirmation box showing `line1` and an optional
- |   `line2`. Accepts C/A/Start/Enter/Y as yes and B/N/Esc/Backspace as no.
- |   Unlike confirm_return_to_title, only reports the answer -- it does not act
- |   on it.
+ |   `line2`, answered on a menu_yesno widget: the words Yes and No, moved between
+ |   with Left/Right, taken with C/A/Start/Enter/Y, declined with B/N/Esc/Backspace,
+ |   and either one pickable by clicking or shooting it. Unlike
+ |   confirm_return_to_title, only reports the answer -- it does not act on it.
  | Author: suinevere
- | Dependencies: menu_layout.c, console_view.cxx, input.h, saturn_keyboard.h,
- |   SRL
- | Globals: g_pad, g_kbd_visible
+ | Dependencies: menu_layout.c, console_view.cxx, controller.h, menu_yesno, SRL
+ | Globals: g_menu_intro_fade
  | Params: line1 -- first line of the question; line2 -- second line, or NULL
  | Returns: true if confirmed, false if declined
  ----------------------*/

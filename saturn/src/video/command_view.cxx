@@ -31,6 +31,7 @@
 #include "app_state.h"
 #include "input.h"
 #include "dash_view.h"
+#include "sentence_shape.h"
 #ifndef NETBIN
 #include "video/item_art.h"
 #endif
@@ -695,7 +696,7 @@ static int cv_refill_words(CommandPanel &p, TrieNode *root, CommandWords &w) {
             core_n = g_cv_ncand;
         } else if (p.slot == CP_SLOT_VERB) {
             g_cv_ncand = cv_build_verb_cands(root, g_cv_cand, &core_n);
-        } else if (p.slot == CP_SLOT_NOUN || p.slot == CP_SLOT_NOUN2) {
+        } else if (p.slot == CP_SLOT_NOUN) {
             prev = cv_last_word(p, root);
             g_cv_ncand = cv_build_noun_cands(root, prev, g_cv_cand, &core_n);
         } else if (p.slot == CP_SLOT_PREP) {
@@ -1217,58 +1218,64 @@ static void cv_overlay_dpad(CommandPanel &p, int count) {
 }
 
 /*----------------------
- | cv_verb_wants_prep
- | Description: Whether the sentence's verb has a TYPE_PREP transition in the
- |   trie -- the flag cp_pick needs when the noun slot closes. At the verb slot
- |   itself the verb being picked right now (still absent from p.line) is
- |   `picking`; afterwards it is the sentence's first word.
+ | cv_next_slot
+ | Description: The slot the next pick should open, read off the story's own verb
+ |   grammar: the sentence so far plus the word about to be picked, matched
+ |   against the rows that verb allows. SHAPE_FREE -- a verb the grammar does not
+ |   describe, a sentence an override took off it, a story whose grammar table is
+ |   not Infocom-format, or Hard, where no trie and no shape table are built at
+ |   all -- falls back to the chain this file used to hardcode, so a story whose
+ |   grammar cannot be read is served no worse than before.
  | Author: suinevere
- | Dependencies: typeahead.h, command_panel.h
+ | Dependencies: sentence_shape.h, command_panel.h
  | Globals: N/A
- | Params: p -- panel state; root -- typeahead trie, may be null; picking -- the
- |   word about to be picked, used only at the verb slot
- | Returns: 1 if the verb takes a preposition, 0 otherwise
+ | Params: p -- panel state; picking -- the word about to be picked, null when
+ |   the line is being re-read rather than added to
+ | Returns: one of CP_SLOT_VERB..CP_SLOT_DONE
  ----------------------*/
-static int cv_verb_wants_prep(const CommandPanel &p, TrieNode *root, const char *picking) {
-    char buf[CP_WORD_MAX + 1];
-    const char *verb_text;
-    DictionaryWord *verb;
-    NextWordLink *l;
-    if (root == 0) return 0;
-    if (p.slot == CP_SLOT_VERB) {
-        verb_text = picking;
-    } else {
-        int i = 0;
-        while (i < p.line_len && p.line[i] != ' ' && i < CP_WORD_MAX) { buf[i] = p.line[i]; i++; }
-        buf[i] = '\0';
-        verb_text = buf;
+static int cv_next_slot(const CommandPanel &p, const char *picking) {
+    const char *words[CP_SLOT_POS_MAX];
+    char buf[CP_SLOT_POS_MAX][CP_WORD_MAX + 1];
+    ShapeSlot s;
+    int n = 0, i = 0, len = 0;
+
+    while (i < p.line_len && n < CP_SLOT_POS_MAX - 1) {
+        if (p.line[i] == ' ') {
+            if (len > 0) { buf[n][len] = '\0'; words[n] = buf[n]; n++; len = 0; }
+        } else if (len < CP_WORD_MAX) {
+            buf[n][len++] = p.line[i];
+        }
+        i++;
     }
-    verb = find_exact_word(root, verb_text);
-    if (verb == 0) return 0;
-    for (l = verb->next_words; l != 0; l = l->next)
-        if (l->target_word->type == TYPE_PREP) return 1;
-    return 0;
+    if (len > 0 && n < CP_SLOT_POS_MAX - 1) { buf[n][len] = '\0'; words[n] = buf[n]; n++; }
+    if (picking != 0 && picking[0] != '\0' && n < CP_SLOT_POS_MAX) words[n++] = picking;
+
+    shape_next(words, n, &s);
+    if (s.kind == SHAPE_PREP) return CP_SLOT_PREP;
+    if (s.kind == SHAPE_NOUN) return CP_SLOT_NOUN;
+    if (s.kind == SHAPE_END)  return CP_SLOT_DONE;
+    return (n <= 1) ? CP_SLOT_NOUN : CP_SLOT_DONE;
 }
 
 /*----------------------
  | cv_word_accept
  | Description: Type Word in the word module: the cell under the cursor is picked,
- |   with wants_prep resolved via cv_verb_wants_prep. What reaches the command is
- |   cv_submit_form's spelling, not the cell's -- the cell shows the six
+ |   with the slot that follows it resolved via cv_next_slot. What reaches the
+ |   command is cv_submit_form's spelling, not the cell's -- the cell shows the six
  |   characters a v3 dictionary entry holds and the sentence should read in full.
- |   The grammar lookup still uses the cell's own text, since that is the form the
- |   trie is keyed by.
+ |   The grammar lookup still uses the cell's own text, since six characters is
+ |   what the story's grammar table is keyed by.
  | Author: suinevere
- | Dependencies: command_panel.h, typeahead.h, room_model.h
+ | Dependencies: command_panel.h, sentence_shape.h, room_model.h
  | Globals: N/A
  | Params: p -- panel state; w -- the word window currently drawn; m -- the room
- |   snapshot; root -- typeahead trie, may be null
+ |   snapshot
  | Returns: N/A
  ----------------------*/
 static void cv_word_accept(CommandPanel &p, const CommandWords &w,
-                           const RoomModel &m, TrieNode *root) {
+                           const RoomModel &m) {
     char submit[CP_WORD_MAX + 24];
-    int wants_prep;
+    int next;
     if (p.cursor < 0 || p.cursor >= w.n || w.word[p.cursor] == 0) return;
     /* A lobby word is the whole answer, so it goes as it stands and goes now.
        Neither of the two steps skipped has anything to say here: the grammar
@@ -1279,9 +1286,9 @@ static void cv_word_accept(CommandPanel &p, const CommandWords &w,
         cp_pick_whole(&p, w.word[p.cursor]);
         return;
     }
-    wants_prep = cv_verb_wants_prep(p, root, w.word[p.cursor]);
+    next = cv_next_slot(p, w.word[p.cursor]);
     cv_submit_form(w.word[p.cursor], m, submit, (int) sizeof submit);
-    cp_pick(&p, submit, wants_prep);
+    cp_pick(&p, submit, next);
 }
 
 /*----------------------
@@ -1321,7 +1328,7 @@ static bool cv_pointer_travel(CommandPanel &p, const unsigned char *exits) {
     if (d < 0) return false;
     if (exits[d] != RM_EXIT_OPEN && exits[d] != RM_EXIT_MAYBE) return false;
 
-    cp_pick(&p, room_model_dir_word(d), 0);
+    cp_pick(&p, room_model_dir_word(d), CP_SLOT_DONE);
     controller_pointer_consume();
     return true;
 }
@@ -1383,13 +1390,12 @@ static void cv_cmd_accept(CommandPanel &p, const RoomModel &m) {
  |   branching on cp_overlay_takes_noun itself, so Type Word can never leave the
  |   overlay stuck open with no word to offer and no close to fall back on.
  | Author: suinevere
- | Dependencies: room_model.h, command_panel.h, typeahead.h
+ | Dependencies: room_model.h, command_panel.h, sentence_shape.h
  | Globals: N/A
- | Params: p -- panel state; m -- the room snapshot; root -- typeahead trie,
- |   may be null
+ | Params: p -- panel state; m -- the room snapshot
  | Returns: N/A
  ----------------------*/
-static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *root) {
+static void cv_overlay_accept(CommandPanel &p, const RoomModel &m) {
     char word[8] = {0};
     char submit[32] = {0};
     int has = 0;
@@ -1399,7 +1405,7 @@ static void cv_overlay_accept(CommandPanel &p, const RoomModel &m, TrieNode *roo
        already in hand here, so it is read straight off rather than searched
        for. */
     if (has) room_model_full_word(m.carried[p.cursor], word, submit, (int) sizeof submit);
-    cp_pick(&p, has ? submit : 0, has ? cv_verb_wants_prep(p, root, word) : 0);
+    cp_pick(&p, has ? submit : 0, has ? cv_next_slot(p, word) : CP_SLOT_DONE);
 }
 
 /*----------------------
@@ -1458,7 +1464,7 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
 
     if (p.overlay) {
         cv_overlay_dpad(p, m.ncarried);
-        if (pad_fired(face_button(FA_TYPE))) cv_overlay_accept(p, m, root);
+        if (pad_fired(face_button(FA_TYPE))) cv_overlay_accept(p, m);
         if (pad_fired(face_button(FA_BACK))) cp_overlay_close(&p);
     } else {
         unsigned char flat[RM_DIR_N];
@@ -1515,11 +1521,11 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
            null is "nothing moved" and must leave the line alone, not clear it. */
         if (chord_fired(CA_RECALL, -1)) {
             const char *h = history_recall_text(1);
-            if (h != 0) cp_load_line(&p, h);
+            if (h != 0) { cp_load_line(&p, h); cp_set_slot(&p, cv_next_slot(p, 0)); }
         }
         if (chord_fired(CA_RECALL, +1)) {
             const char *h = history_recall_text(0);
-            if (h != 0) cp_load_line(&p, h);
+            if (h != 0) { cp_load_line(&p, h); cp_set_slot(&p, cv_next_slot(p, 0)); }
         }
 
         /* The D-pad is the cursor AND the direction half of every chord, so it
@@ -1538,15 +1544,16 @@ void command_edit(KeyboardState &k, CommandPanel &p, const RoomModel &m,
                 int d = p.cursor;
                 if (d >= 0 && d < RM_DIR_N &&
                     (exits[d] == RM_EXIT_OPEN || exits[d] == RM_EXIT_MAYBE))
-                    cp_pick(&p, room_model_dir_word(d), 0);
+                    cp_pick(&p, room_model_dir_word(d), CP_SLOT_DONE);
             }
-            else if (p.box == CP_BOX_WORD) cv_word_accept(p, w, m, root);
+            else if (p.box == CP_BOX_WORD) cv_word_accept(p, w, m);
             else if (p.box == CP_BOX_CMD)  cv_cmd_accept(p, m);
         }
         if (pad_fired(face_button(FA_ACCEPT))) cp_submit(&p);
         if (pad_fired(face_button(FA_BACK))) {
             int before = p.box, before_cursor = p.cursor;
             cp_back(&p);
+            cp_set_slot(&p, cv_next_slot(p, 0));
             /* Back out of an empty word module lands in travel, which has to be
                placed on a real direction like any other arrival there. */
             if (p.box == CP_BOX_TRAVEL && before != CP_BOX_TRAVEL &&

@@ -46,6 +46,7 @@ extern "C" {
 #include "typeahead.h"
 #include "typeahead_extract.h"
 #include "typeahead_solution.h"
+#include "sentence_shape.h"
 #include "netbin_story.h"
 #include "music.h"
 }
@@ -260,6 +261,7 @@ static int g_online_diff = -1;
  ----------------------*/
 extern "C" void online_typeahead_release(void) {
     if (g_online_ta) { destroy_typeahead(g_online_ta); g_online_ta = nullptr; }
+    shape_destroy();
     g_online_diff = -1;
 }
 
@@ -284,6 +286,7 @@ extern "C" void online_typeahead_release(void) {
 void ensure_online_typeahead(void) {
     if (g_online_ta != nullptr && g_online_diff == g_difficulty) return;
     if (g_online_ta) { destroy_typeahead(g_online_ta); g_online_ta = nullptr; }
+    shape_destroy();
     g_online_ta = create_trie_node();
     g_online_diff = g_difficulty;
     if (g_difficulty == DIFF_HARD) return;
@@ -294,6 +297,7 @@ void ensure_online_typeahead(void) {
     int have_solution = apply_solution_overlay(g_online_ta, netbin_story_data(),
                                                netbin_story_size());
     typeahead_add_abbreviations(g_online_ta);
+    shape_build(netbin_story_data(), netbin_story_size(), g_online_ta);
     // Easy restricts context suggestions to the winning path, and it is a
     // no-op unless this is called: typeahead.c holds the mode in file statics
     // that start at zero, so a netbin that skipped this ranked as Normal
@@ -325,6 +329,7 @@ void ensure_online_typeahead(void) {
                           ? apply_solution_overlay(g_online_ta, story, len) : 0;
 
         typeahead_add_abbreviations(g_online_ta);
+        shape_build(story, len, g_online_ta);
 
         typeahead_set_easy(g_difficulty == DIFF_EASY, have_solution);
         SRL::Memory::HighWorkRam::Free(story);

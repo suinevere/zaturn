@@ -38,12 +38,18 @@ extern "C" {
 enum { CP_BOX_TRAVEL = 0, CP_BOX_WORD, CP_BOX_CMD, CP_BOX_N };
 
 /*----------------------
- | CP_SLOT_VERB .. CP_SLOT_DONE
- | Description: The sentence slots, in the order they fill. DONE means the
- |   command is complete and has been marked for submission.
+ | CP_SLOT_VERB .. CP_SLOT_DONE / CP_SLOT_POS_MAX
+ | Description: What the panel is waiting for, rather than where in a fixed chain
+ |   it stands: a verb, an object, a preposition, or DONE, meaning the command is
+ |   complete and has been marked for submission. A sentence can want two
+ |   prepositions and two objects, so the same value comes round twice and the
+ |   order they fill in is the caller's to supply. CP_SLOT_POS_MAX is the most
+ |   words one command can be built from -- verb, prep, noun, prep, noun -- and so
+ |   how many places the per-position cursor memory holds.
  | Author: suinevere
  ----------------------*/
-enum { CP_SLOT_VERB = 0, CP_SLOT_NOUN, CP_SLOT_PREP, CP_SLOT_NOUN2, CP_SLOT_DONE };
+enum { CP_SLOT_VERB = 0, CP_SLOT_NOUN, CP_SLOT_PREP, CP_SLOT_DONE };
+#define CP_SLOT_POS_MAX 5
 
 /*----------------------
  | CP_ACT_NONE / CP_ACT_MAP / CP_ACT_MENU / CP_ACT_SWAP
@@ -68,13 +74,14 @@ typedef struct {
     int  slot;
     int  cursor;
     int  top;       /* first candidate row showing in the word module */
-    /* Where the cursor was left in each slot's own list, so a slot change puts
-       it back rather than at the top. One entry per fillable slot; DONE has no
-       list and so no place to remember. Survives cp_reset, which re-points the
-       verb slot's entry at wherever the cursor actually is rather than moving the
-       cursor to it. */
-    int  slot_cursor[CP_SLOT_DONE];
-    int  slot_top[CP_SLOT_DONE];
+    /* Where the cursor was left at each word POSITION, so moving on puts it back
+       rather than at the top. Indexed by the word count at the time, not by the
+       slot kind: a sentence can hold two objects, and the second must not open on
+       the row the first was left at. Survives cp_reset, which re-points position
+       zero at wherever the cursor actually is rather than moving the cursor to
+       it. */
+    int  slot_cursor[CP_SLOT_POS_MAX];
+    int  slot_top[CP_SLOT_POS_MAX];
     char line[CP_LINE_MAX];
     int  line_len;
     int  submitted;
@@ -142,20 +149,49 @@ void cp_move(CommandPanel *p, int d, int count);
 /*----------------------
  | cp_pick
  | Description: Appends `word` to the command, space-separated, and advances the
- |   slot. wants_prep is consulted only when leaving the noun slot: set, the
- |   preposition slot opens; clear, the command is complete. A pick made from the
- |   travel module completes immediately, since a direction is a whole command.
- |   Marks `submitted` when the command is complete. A pick made from the
- |   inventory overlay hands focus back to the word module on its way out, since
- |   the cursor it leaves behind is a word cell.
+ |   slot named by `next_slot`, which the caller has already read off the story's
+ |   grammar -- this file holds no chain of its own, since only the caller can
+ |   know whether a preposition belongs before the next object or the sentence is
+ |   finished. A pick made from the travel module completes immediately whatever
+ |   is passed, since a direction is a whole command. Marks `submitted` when the
+ |   command is complete. A pick made from the inventory overlay hands focus back
+ |   to the word module on its way out, since the cursor it leaves behind is a
+ |   word cell.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
- | Params: p -- panel state; word -- the word picked; wants_prep -- 1 when the
- |   story's grammar says this verb takes a preposition
+ | Params: p -- panel state; word -- the word picked; next_slot -- the slot to
+ |   open after this word, one of CP_SLOT_*
  | Returns: N/A
  ----------------------*/
-void cp_pick(CommandPanel *p, const char *word, int wants_prep);
+void cp_pick(CommandPanel *p, const char *word, int next_slot);
+
+/*----------------------
+ | cp_set_slot
+ | Description: Points the panel at `slot`, taking back that position's remembered
+ |   cursor -- the caller's way of saying what the sentence wants next after a
+ |   change this file cannot resolve on its own, which is every change that is not
+ |   a pick: a Back, a recalled line, a tab override that took the sentence off
+ |   grammar. Out-of-range values are ignored rather than stored.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; slot -- one of CP_SLOT_*
+ | Returns: N/A
+ ----------------------*/
+void cp_set_slot(CommandPanel *p, int slot);
+
+/*----------------------
+ | cp_word_count
+ | Description: How many space-separated words the command holds, which is the
+ |   position the next pick fills and the index its place is remembered at.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: the word count, 0 for an empty line
+ ----------------------*/
+int cp_word_count(const CommandPanel *p);
 
 /*----------------------
  | cp_pick_whole
@@ -192,8 +228,9 @@ void cp_submit(CommandPanel *p);
 /*----------------------
  | cp_load_line
  | Description: Replaces the command with `text`, leaving the panel as though
- |   those words had been picked one at a time -- the slot is derived from the
- |   word count -- so Back unwinds a recalled command like a built one. Null or
+ |   those words had been picked one at a time, so Back unwinds a recalled command
+ |   like a built one. The slot is VERB on an empty line and NOUN otherwise; a
+ |   caller that knows the story's grammar corrects it with cp_set_slot. Null or
  |   empty clears to the verb slot. Focus is not moved.
  | Author: suinevere
  | Dependencies: N/A

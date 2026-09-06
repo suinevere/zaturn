@@ -49,6 +49,7 @@ EXPECTED = {
     "src/input/numpad.c",
     "src/input/typeahead.c",
     "src/input/typeahead_extract.c",
+    "src/input/sentence_shape.c",
     "src/input/typeahead_solution_zork1.c",
     "src/input/netbin_story.c",
     "src/system/saturn_backup.cxx",

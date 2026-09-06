@@ -7,6 +7,25 @@
 #include "command_panel.h"
 
 /*----------------------
+ | cp_word_count
+ | Description: Counts the runs of non-space in the line, so a run of spaces
+ |   separates one word rather than several.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state
+ | Returns: the word count
+ ----------------------*/
+int cp_word_count(const CommandPanel *p) {
+    int i, n = 0, in_word = 0;
+    for (i = 0; i < p->line_len; i++) {
+        if (p->line[i] == ' ') in_word = 0;
+        else if (!in_word) { in_word = 1; n++; }
+    }
+    return n;
+}
+
+/*----------------------
  | slot_remember / slot_restore
  | Description: Save the word module's place in the slot being left, and take
  |   back the place held in the slot being entered. Two halves of one rule: each
@@ -27,9 +46,10 @@
  | Returns: N/A
  ----------------------*/
 static void slot_remember(CommandPanel *p) {
-    if (p->slot >= 0 && p->slot < CP_SLOT_DONE) {
-        p->slot_cursor[p->slot] = p->cursor;
-        p->slot_top[p->slot]    = p->top;
+    int pos = cp_word_count(p);
+    if (pos >= 0 && pos < CP_SLOT_POS_MAX) {
+        p->slot_cursor[pos] = p->cursor;
+        p->slot_top[pos]    = p->top;
     }
 }
 
@@ -38,9 +58,11 @@ static void slot_restore(CommandPanel *p) {
     // the cursor for: the sentence is going out and the player is staying where
     // they are. This used to drop the cursor to cell 0, which is the last word of
     // every finished command yanking the selection to the top of the list.
-    if (p->slot < 0 || p->slot >= CP_SLOT_DONE) return;
-    p->cursor = p->slot_cursor[p->slot];
-    p->top    = p->slot_top[p->slot];
+    int pos = cp_word_count(p);
+    if (p->slot == CP_SLOT_DONE) return;
+    if (pos < 0 || pos >= CP_SLOT_POS_MAX) return;
+    p->cursor = p->slot_cursor[pos];
+    p->top    = p->slot_top[pos];
     if (p->cursor < 0 || p->cursor >= CP_WORD_CELLS) p->cursor = 0;
     if (p->top < 0) p->top = 0;
 }
@@ -70,7 +92,7 @@ static void slot_restore(CommandPanel *p) {
  ----------------------*/
 void cp_init(CommandPanel *p) {
     int i;
-    for (i = 0; i < CP_SLOT_DONE; i++) { p->slot_cursor[i] = 0; p->slot_top[i] = 0; }
+    for (i = 0; i < CP_SLOT_POS_MAX; i++) { p->slot_cursor[i] = 0; p->slot_top[i] = 0; }
     p->box = CP_BOX_WORD;
     p->cursor = 0;
     p->top = 0;
@@ -81,9 +103,12 @@ void cp_init(CommandPanel *p) {
 void cp_reset(CommandPanel *p) {
     if (p->overlay) cp_overlay_close(p);
     p->slot = CP_SLOT_VERB;
-    if (p->box == CP_BOX_WORD) slot_remember(p);
     p->line[0] = '\0';
     p->line_len = 0;
+    // After the line is cleared, not before: the place being re-pointed is the
+    // one the next sentence opens on, which is position zero, and the word count
+    // is what names it now that the places are kept per position.
+    if (p->box == CP_BOX_WORD) slot_remember(p);
     p->submitted = 0;
 }
 
@@ -125,41 +150,39 @@ void cp_move(CommandPanel *p, int d, int count) {
 
 /*----------------------
  | cp_pick
- | Description: Appends `word` to the command, space-separated, and advances the
- |   slot. wants_prep is consulted only when leaving the noun slot: set, the
- |   preposition slot opens; clear, the command is complete. A pick made from the
- |   travel module completes immediately, since a direction is a whole command.
- |   Marks `submitted` when the command is complete. While the overlay is up,
- |   this is also its sole close path: a pick that cannot land -- the panel is
- |   waiting for a verb, or `word` is empty -- closes the overlay instead of
- |   being silently dropped, so the picking button can never leave it stuck open.
+ | Description: Appends `word` to the command, space-separated, and opens the slot
+ |   the caller names. An out-of-range `next_slot` is read as DONE rather than
+ |   stored, since a slot the panel cannot draw would strand the player in it. A
+ |   pick made from the travel module completes immediately, since a direction is
+ |   a whole command. Marks `submitted` when the command is complete. While the
+ |   overlay is up, this is also its sole close path: a pick that cannot land --
+ |   the panel is waiting for a verb, or `word` is empty -- closes the overlay
+ |   instead of being silently dropped, so the picking button can never leave it
+ |   stuck open.
  | Author: suinevere
  | Dependencies: N/A
  | Globals: N/A
  | Params: p -- panel state; word -- the word picked, may be null or empty when
- |   the overlay had nothing to offer; wants_prep -- 1 when the story's grammar
- |   says this verb takes a preposition
+ |   the overlay had nothing to offer; next_slot -- the slot to open after this
+ |   word, one of CP_SLOT_*
  | Returns: N/A
  ----------------------*/
-void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
+void cp_pick(CommandPanel *p, const char *word, int next_slot) {
     int i = 0;
     int empty = (word == 0 || word[0] == '\0');
     if (p->overlay && (!cp_overlay_takes_noun(p) || empty)) { cp_overlay_close(p); return; }
     if (empty) return;
+    // Before the word is appended, not after: the place being put away belongs to
+    // the position the player is leaving, and appending is what moves it on.
+    slot_remember(p);
     if (p->line_len > 0 && p->line_len < CP_LINE_MAX - 1) p->line[p->line_len++] = ' ';
     while (word[i] && p->line_len < CP_LINE_MAX - 1) p->line[p->line_len++] = word[i++];
     p->line[p->line_len] = '\0';
 
     if (p->box == CP_BOX_TRAVEL) { p->slot = CP_SLOT_DONE; p->submitted = 1; p->overlay = 0; return; }
 
-    slot_remember(p);
-    switch (p->slot) {
-        case CP_SLOT_VERB:  p->slot = CP_SLOT_NOUN; break;
-        case CP_SLOT_NOUN:  p->slot = wants_prep ? CP_SLOT_PREP : CP_SLOT_DONE; break;
-        case CP_SLOT_PREP:  p->slot = CP_SLOT_NOUN2; break;
-        case CP_SLOT_NOUN2: p->slot = CP_SLOT_DONE; break;
-        default: break;
-    }
+    p->slot = (next_slot >= CP_SLOT_VERB && next_slot <= CP_SLOT_DONE)
+            ? next_slot : CP_SLOT_DONE;
     slot_restore(p);
     // A pick made from the overlay filled a noun slot, and the sentence carries
     // on in the word module -- the cursor slot_restore just set is a word cell,
@@ -169,6 +192,24 @@ void cp_pick(CommandPanel *p, const char *word, int wants_prep) {
     if (p->overlay) p->box = CP_BOX_WORD;
     p->overlay = 0;
     if (p->slot == CP_SLOT_DONE) p->submitted = 1;
+}
+
+/*----------------------
+ | cp_set_slot
+ | Description: Sets the slot and takes back that word position's remembered
+ |   cursor, which is the same second half cp_pick performs -- the caller having
+ |   worked out what the sentence wants next by a route this file has no access
+ |   to.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: p -- panel state; slot -- one of CP_SLOT_*
+ | Returns: N/A
+ ----------------------*/
+void cp_set_slot(CommandPanel *p, int slot) {
+    if (slot < CP_SLOT_VERB || slot > CP_SLOT_DONE) return;
+    p->slot = slot;
+    slot_restore(p);
 }
 
 void cp_pick_whole(CommandPanel *p, const char *word) {
@@ -206,12 +247,13 @@ void cp_submit(CommandPanel *p) {
  | cp_load_line
  | Description: Replaces the command with `text` and leaves the panel in the
  |   state it would have been in had the player picked those words one at a
- |   time, so Back unwinds a recalled command exactly like a built one: the slot
- |   is derived from the word count along the VERB -> NOUN -> (PREP -> NOUN2) ->
- |   DONE chain. Two words land on DONE rather than PREP because whether the verb
- |   takes a preposition is the trie's answer, not this file's, and a recalled
- |   line has no pick to ask on; a verb that does wants one more Back than it
- |   would have taken. An empty or null `text` clears the line to the verb slot.
+ |   time, so Back unwinds a recalled command exactly like a built one. The slot
+ |   is VERB on an empty line and NOUN otherwise, which is the most this file can
+ |   honestly say: what a half-finished sentence wants next is the story's answer,
+ |   not this one's, and a recalled line has no pick to ask it on. A caller that
+ |   knows the grammar corrects it with cp_set_slot, and one that does not is no
+ |   worse served than the fixed chain left it. An empty or null `text` clears the
+ |   line to the verb slot.
  |   Focus is left where it was -- a recall is not a reason to move the player
  |   off the module they were reading. Truncates at CP_LINE_MAX, which equals
  |   KB_INPUT_MAX, so nothing the history can hold is ever cut.
@@ -231,10 +273,7 @@ void cp_load_line(CommandPanel *p, const char *text) {
     }
     p->line[i] = '\0';
     p->line_len = i;
-    p->slot = (words == 0) ? CP_SLOT_VERB
-            : (words == 1) ? CP_SLOT_NOUN
-            : (words == 3) ? CP_SLOT_NOUN2
-                           : CP_SLOT_DONE;
+    p->slot = (words == 0) ? CP_SLOT_VERB : CP_SLOT_NOUN;
     slot_restore(p);
     p->overlay = 0;
     p->submitted = 0;
@@ -257,12 +296,13 @@ void cp_back(CommandPanel *p) {
         if (p->box == CP_BOX_WORD) p->box = CP_BOX_TRAVEL;
         return;
     }
+    // Before the word comes off, for the reason cp_pick remembers before putting
+    // one on: the place belongs to the position being left.
+    slot_remember(p);
     for (i = p->line_len - 1; i >= 0; i--) if (p->line[i] == ' ') break;
     p->line_len = (i < 0) ? 0 : i;
     p->line[p->line_len] = '\0';
-    slot_remember(p);
-    if (p->slot > CP_SLOT_VERB) p->slot--;
-    if (p->slot > CP_SLOT_NOUN && p->line_len == 0) p->slot = CP_SLOT_VERB;
+    p->slot = (p->line_len == 0) ? CP_SLOT_VERB : CP_SLOT_NOUN;
     slot_restore(p);
     p->submitted = 0;
 }
@@ -284,7 +324,7 @@ void cp_overlay_open(CommandPanel *p) { p->overlay = 1; p->cursor = 0; }
 void cp_overlay_close(CommandPanel *p) { p->overlay = 0; p->cursor = 0; }
 
 int cp_overlay_takes_noun(const CommandPanel *p) {
-    return p->overlay && (p->slot == CP_SLOT_NOUN || p->slot == CP_SLOT_NOUN2);
+    return p->overlay && p->slot == CP_SLOT_NOUN;
 }
 
 /*----------------------

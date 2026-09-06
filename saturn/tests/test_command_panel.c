@@ -39,27 +39,63 @@ int main(void) {
     cp_focus(&p, +1);
     assert(p.box == CP_BOX_CMD);
 
-    /* Two-slot command: verb then noun, no preposition wanted. */
+    /* Two-slot command: the caller says the sentence ends after the noun. */
     cp_reset(&p);
-    cp_pick(&p, "take", 0);
+    cp_pick(&p, "take", CP_SLOT_NOUN);
     assert(p.slot == CP_SLOT_NOUN);
     assert(strcmp(p.line, "take") == 0);
-    cp_pick(&p, "lamp", 0);
+    assert(cp_word_count(&p) == 1);
+    cp_pick(&p, "lamp", CP_SLOT_DONE);
     assert(p.slot == CP_SLOT_DONE);
     assert(strcmp(p.line, "take lamp") == 0);
     assert(p.submitted == 1);
 
-    /* Four-slot command: the caller reports the grammar wants a preposition. */
+    /* A preposition before the FIRST object, which the old fixed chain could not
+       express at all. */
     cp_reset(&p);
-    cp_pick(&p, "put", 0);
-    cp_pick(&p, "coffin", 1);
+    cp_pick(&p, "look", CP_SLOT_PREP);
     assert(p.slot == CP_SLOT_PREP);
+    cp_pick(&p, "at", CP_SLOT_NOUN);
+    assert(p.slot == CP_SLOT_NOUN);
     assert(p.submitted == 0);
-    cp_pick(&p, "in", 0);
-    assert(p.slot == CP_SLOT_NOUN2);
-    cp_pick(&p, "boat", 0);
-    assert(strcmp(p.line, "put coffin in boat") == 0);
+    cp_pick(&p, "lamp", CP_SLOT_DONE);
+    assert(strcmp(p.line, "look at lamp") == 0);
     assert(p.submitted == 1);
+
+    /* Five positions -- verb, prep, noun, prep, noun -- which is the longest shape
+       a v3 grammar row describes. */
+    cp_reset(&p);
+    cp_pick(&p, "dig", CP_SLOT_PREP);
+    cp_pick(&p, "in", CP_SLOT_NOUN);
+    cp_pick(&p, "sand", CP_SLOT_PREP);
+    cp_pick(&p, "with", CP_SLOT_NOUN);
+    assert(cp_word_count(&p) == 4);
+    cp_pick(&p, "shovel", CP_SLOT_DONE);
+    assert(strcmp(p.line, "dig in sand with shovel") == 0);
+    assert(p.submitted == 1);
+
+    /* The second object does not inherit the first object's remembered row: the
+       places are kept per word position, not per slot kind. */
+    cp_reset(&p);
+    p.box = CP_BOX_WORD;
+    cp_pick(&p, "put", CP_SLOT_NOUN);
+    p.cursor = 7;
+    cp_pick(&p, "coffin", CP_SLOT_PREP);
+    p.cursor = 2;
+    cp_pick(&p, "in", CP_SLOT_NOUN);
+    assert(p.cursor != 7);
+
+    /* Back leaves the slot for the caller to set, and cp_set_slot is how it does:
+       the panel has no grammar to re-derive one from. */
+    cp_reset(&p);
+    p.box = CP_BOX_WORD;
+    cp_pick(&p, "put", CP_SLOT_NOUN);
+    cp_pick(&p, "lamp", CP_SLOT_PREP);
+    cp_back(&p);
+    assert(strcmp(p.line, "put") == 0);
+    assert(cp_word_count(&p) == 1);
+    cp_set_slot(&p, CP_SLOT_NOUN);
+    assert(p.slot == CP_SLOT_NOUN);
 
     /* cp_reset leaves the player where they are: same module, same cell. It is
        what a sent command runs through, so a direction picked off the rose can be
@@ -67,7 +103,7 @@ int main(void) {
     cp_reset(&p);
     while (p.box != CP_BOX_TRAVEL) cp_focus(&p, -1);   /* reset no longer aims it */
     p.cursor = 5;
-    cp_pick(&p, "north", 0);
+    cp_pick(&p, "north", CP_SLOT_DONE);
     assert(p.submitted == 1);
     cp_reset(&p);
     assert(p.box == CP_BOX_TRAVEL);
@@ -79,8 +115,8 @@ int main(void) {
        the word module hands focus to travel. */
     cp_reset(&p);
     p.box = CP_BOX_WORD;
-    cp_pick(&p, "put", 0);
-    cp_pick(&p, "coffin", 1);
+    cp_pick(&p, "put", CP_SLOT_NOUN);
+    cp_pick(&p, "coffin", CP_SLOT_PREP);
     cp_back(&p);
     assert(strcmp(p.line, "put") == 0);
     assert(p.slot == CP_SLOT_NOUN);
@@ -94,7 +130,7 @@ int main(void) {
     /* Travel submits a whole command in one pick, whatever slot was showing. */
     cp_reset(&p);
     while (p.box != CP_BOX_TRAVEL) cp_focus(&p, -1);
-    cp_pick(&p, "north", 0);
+    cp_pick(&p, "north", CP_SLOT_DONE);
     assert(strcmp(p.line, "north") == 0);
     assert(p.slot == CP_SLOT_DONE);
     assert(p.submitted == 1);
@@ -116,7 +152,7 @@ int main(void) {
        the line without disturbing the module it was picked from. */
     cp_reset(&p);
     while (p.box != CP_BOX_TRAVEL) cp_focus(&p, -1);
-    cp_pick(&p, "north", 0);
+    cp_pick(&p, "north", CP_SLOT_DONE);
     assert(strcmp(p.line, "north") == 0);
     cp_reset(&p);
     assert(p.line_len == 0);
@@ -258,11 +294,11 @@ int main(void) {
     assert(p.overlay == 0);
     assert(p.line_len == 0);
 
-    cp_pick(&p, "take", 0);
+    cp_pick(&p, "take", CP_SLOT_NOUN);
     assert(p.slot == CP_SLOT_NOUN);
     cp_overlay_open(&p);
     assert(cp_overlay_takes_noun(&p) == 1);
-    cp_pick(&p, "lamp", 0);
+    cp_pick(&p, "lamp", CP_SLOT_DONE);
     assert(strcmp(p.line, "take lamp") == 0);
     assert(p.overlay == 0);
 
@@ -270,34 +306,34 @@ int main(void) {
     assert(p.slot == CP_SLOT_VERB);
     cp_overlay_open(&p);
     assert(cp_overlay_takes_noun(&p) == 0);
-    cp_pick(&p, "lamp", 0);
+    cp_pick(&p, "lamp", CP_SLOT_DONE);
     assert(p.line_len == 0);
     assert(p.slot == CP_SLOT_VERB);
     assert(p.overlay == 0);
 
     cp_reset(&p);
-    cp_pick(&p, "take", 0);
+    cp_pick(&p, "take", CP_SLOT_NOUN);
     assert(p.slot == CP_SLOT_NOUN);
     cp_overlay_open(&p);
     assert(cp_overlay_takes_noun(&p) == 1);
-    cp_pick(&p, "lamp", 0);
+    cp_pick(&p, "lamp", CP_SLOT_DONE);
     assert(strcmp(p.line, "take lamp") == 0);
     assert(p.slot == CP_SLOT_DONE);
     assert(p.overlay == 0);
 
     cp_reset(&p);
-    cp_pick(&p, "take", 0);
+    cp_pick(&p, "take", CP_SLOT_NOUN);
     assert(p.slot == CP_SLOT_NOUN);
     cp_overlay_open(&p);
     assert(cp_overlay_takes_noun(&p) == 1);
-    cp_pick(&p, 0, 0);
+    cp_pick(&p, 0, CP_SLOT_DONE);
     assert(p.overlay == 0);
     assert(strcmp(p.line, "take") == 0);
     assert(p.slot == CP_SLOT_NOUN);
 
     /* cp_submit sends a line the grammar chain has not finished with. */
     cp_reset(&p);
-    cp_pick(&p, "read", 0);
+    cp_pick(&p, "read", CP_SLOT_NOUN);
     assert(p.slot == CP_SLOT_NOUN);
     assert(p.submitted == 0);
     cp_submit(&p);
@@ -316,7 +352,7 @@ int main(void) {
        neither the module nor the cell. */
     cp_reset(&p);
     p.box = CP_BOX_WORD;
-    cp_pick(&p, "read", 0);
+    cp_pick(&p, "read", CP_SLOT_NOUN);
     p.cursor = 3;
     cp_submit(&p);
     assert(p.submitted == 1);
@@ -329,7 +365,7 @@ int main(void) {
     /* Backing up after a send takes the submit back with the word. */
     cp_reset(&p);
     p.box = CP_BOX_WORD;
-    cp_pick(&p, "read", 0);
+    cp_pick(&p, "read", CP_SLOT_NOUN);
     cp_submit(&p);
     assert(p.submitted == 1);
     cp_back(&p);
@@ -341,7 +377,7 @@ int main(void) {
     cp_load_line(&p, "take lamp");
     assert(strcmp(p.line, "take lamp") == 0);
     assert(p.line_len == 9);
-    assert(p.slot == CP_SLOT_DONE);
+    assert(p.slot == CP_SLOT_NOUN);
     assert(p.submitted == 0);
     /* and Back unwinds it a word at a time, like a built one */
     cp_back(&p);
@@ -352,15 +388,15 @@ int main(void) {
     assert(p.slot == CP_SLOT_NOUN);
     cp_reset(&p);
     cp_load_line(&p, "put lamp in");
-    assert(p.slot == CP_SLOT_NOUN2);
+    assert(p.slot == CP_SLOT_NOUN);
     cp_reset(&p);
     cp_load_line(&p, "put lamp in case");
-    assert(p.slot == CP_SLOT_DONE);
+    assert(p.slot == CP_SLOT_NOUN);
 
     /* Runs of spaces are one separator, not one word each. */
     cp_reset(&p);
     cp_load_line(&p, "take  lamp");
-    assert(p.slot == CP_SLOT_DONE);
+    assert(p.slot == CP_SLOT_NOUN);
 
     /* Empty and null clear back to the verb slot -- the step past the newest
        history entry arrives as "". */
@@ -377,7 +413,7 @@ int main(void) {
     cp_init(&p);                        /* a clean slate: cp_reset keeps the rows */
     p.cursor = 4;                       /* part-way down the verb list */
     p.top    = 1;
-    cp_pick(&p, "take", 0);
+    cp_pick(&p, "take", CP_SLOT_NOUN);
     assert(p.slot == CP_SLOT_NOUN);
     assert(p.cursor == 0);              /* the noun list has its own place */
     assert(p.top == 0);
@@ -386,7 +422,7 @@ int main(void) {
        exactly where it found it -- the command goes out, the player stays. */
     p.cursor = 3;
     p.top    = 2;
-    cp_pick(&p, "lamp", 0);
+    cp_pick(&p, "lamp", CP_SLOT_DONE);
     assert(p.slot == CP_SLOT_DONE);
     assert(p.submitted == 1);
     assert(p.cursor == 3);
@@ -400,7 +436,7 @@ int main(void) {
     assert(p.cursor == 3);
     assert(p.top == 2);
     p.cursor = 9;
-    cp_pick(&p, "take", 0);             /* leaving VERB remembers cell 9... */
+    cp_pick(&p, "take", CP_SLOT_NOUN);             /* leaving VERB remembers cell 9... */
     assert(p.slot == CP_SLOT_NOUN);
     assert(p.cursor == 3);              /* ...and takes back the noun list's 3 */
     assert(p.top == 2);

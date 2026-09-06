@@ -62,6 +62,7 @@ extern "C" {
 #include "music.h"
 #include "typeahead.h"
 #include "typeahead_extract.h"
+#include "sentence_shape.h"
 #include "typeahead_solution.h"
 }
 #include "app_state.h"
@@ -155,6 +156,7 @@ static const uint8_t* g_map_story = nullptr;
  ----------------------*/
 extern "C" void saturn_typeahead_release(void) {
     if (g_typeahead_root) { destroy_typeahead(g_typeahead_root); g_typeahead_root = nullptr; }
+    shape_destroy();
     g_ta_story = nullptr;
     g_ta_diff  = -1;
     g_map_story = nullptr;
@@ -195,12 +197,14 @@ static void ensure_typeahead() {
     const uint8_t* story = saturn_story_data(&len);
     if (g_typeahead_root && story == g_ta_story && g_ta_diff == g_difficulty) return;
     if (g_typeahead_root) { destroy_typeahead(g_typeahead_root); g_typeahead_root = nullptr; }
+    shape_destroy();
     g_typeahead_root = create_trie_node();
     int have_solution = 0;
     if (g_typeahead_root != nullptr && story != nullptr && len > 0 && g_difficulty != DIFF_HARD) {
         build_typeahead_from_story(g_typeahead_root, story, len);
         have_solution = apply_solution_overlay(g_typeahead_root, story, len);
         typeahead_add_abbreviations(g_typeahead_root);
+        shape_build(story, len, g_typeahead_root);
     }
     typeahead_set_easy(g_difficulty == DIFF_EASY, have_solution);
     if (story != nullptr && len > 0) room_model_bind(story, len);

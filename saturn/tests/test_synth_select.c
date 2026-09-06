@@ -27,6 +27,11 @@
 #include <stdio.h>
 #include <assert.h>
 
+/* Kept in step with SYNTH_SWITCH_SILENCE in synth.c, which is static to it.
+   Two numbers rather than one because the constant is an implementation
+   detail; if they part, the assertions below say so on the first run. */
+#define SYNTH_SWITCH_SILENCE_TICKS 12
+
 static unsigned short g_regs[SCSP_REG_WORDS];
 static signed char    g_wave[SCSP_WAVE_BYTES];
 
@@ -56,6 +61,43 @@ static void test_a_different_song_replaces_the_one_playing(void) {
     synth_start_song(1);
     assert(synth_song() == 1);
     assert(synth_playing());
+}
+
+static void test_switching_tune_does_not_leave_the_old_notes_holding(void) {
+    /* Reported from the Sound page: "when switching tracks in sound menu, old
+       notes hold until new note of new song plays."
+
+       The pitched envelope decays at zero, by design -- a held note has to
+       sustain until the tracker lets it go. tracker_stop() only clears a flag,
+       so nothing let it go: every voice sounding at the moment of a switch
+       stayed keyed until the incoming tune happened to write that same voice,
+       which for a voice the new tune rests on is never. synth_stop() and
+       synth_pause() both release the voices; this path was the one that did
+       not, which is what three copies of a loop cost. */
+    bind_fresh();
+    if (synth_song_count() < 2) return;
+    synth_start_song(0);
+    for (int i = 0; i < 40; i++) synth_tick();
+    int sounding = 0;
+    for (int v = 0; v < SCSP_VOICES; v++) if (KEYED_ON(v)) sounding++;
+    assert(sounding > 0);               /* or the test proves nothing */
+
+    synth_start_song(1);
+    for (int v = 0; v < SCSP_VOICES; v++)
+        assert(!KEYED_ON(v));           /* before the new tune writes a note */
+
+    /* And it stays quiet long enough for the release to finish. Releasing the
+       voices was the first half of this; the second was reported straight
+       after -- the outgoing notes were still fading when the incoming tune's
+       first row landed on the very next tick. */
+    for (int i = 0; i < SYNTH_SWITCH_SILENCE_TICKS; i++) {
+        synth_tick();
+        for (int v = 0; v < SCSP_VOICES; v++) assert(!KEYED_ON(v));
+    }
+    synth_tick();
+    int now = 0;
+    for (int v = 0; v < SCSP_VOICES; v++) if (KEYED_ON(v)) now++;
+    assert(now > 0);                    /* and then it does start */
 }
 
 static void test_asking_for_the_playing_song_again_does_not_restart_it(void) {
@@ -128,6 +170,7 @@ static void test_resuming_a_stopped_synth_stays_stopped(void) {
 int main(void) {
     test_start_uses_the_default();
     test_a_different_song_replaces_the_one_playing();
+    test_switching_tune_does_not_leave_the_old_notes_holding();
     test_asking_for_the_playing_song_again_does_not_restart_it();
     test_a_track_number_picks_a_tune_and_zero_stops();
     test_nothing_the_synth_plays_is_short();

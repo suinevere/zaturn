@@ -138,4 +138,30 @@ enum {
 int sound_page_rows(int has_cd, int has_blb, int synth_active, int can_test,
                     int *rows, int max);
 
+/*----------------------
+ | menu_list_step
+ | Description: Moves a cursor through a list of things, wrapping at both ends.
+ |   For a LIST and not for a level: the rows of every menu already wrap, and
+ |   the track list was the one thing on the Sound page that stopped dead at
+ |   each end, which is what got reported. A volume is a scale rather than a
+ |   list and must keep clamping -- 7 stepping to 0 is a surprise nobody wants
+ |   from a right press.
+ |
+ |   Inline in the header because both Sound pages need it and they are in
+ |   different builds: menu_pages.cxx is the disc's and netbin_pages.cxx is the
+ |   browser's, and the two carried their own copy of this arithmetic already.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: index -- where the cursor is; count -- how many entries there are;
+ |   left, right -- whether either was pressed this frame
+ | Returns: the new index, unchanged when the list is empty
+ ----------------------*/
+static inline int menu_list_step(int index, int count, int left, int right) {
+    if (count <= 0) return index;
+    if (left)  index = (index - 1 + count) % count;
+    if (right) index = (index + 1) % count;
+    return index;
+}
+
 #endif

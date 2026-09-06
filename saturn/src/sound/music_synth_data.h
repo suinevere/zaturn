@@ -105,7 +105,7 @@ extern "C" {
  |   disc tune reads pairs that are not there.
  | Author: suinevere
  ----------------------*/
-#define MUSIC_SYNTH_PAIRS    183
+#define MUSIC_SYNTH_PAIRS    180
 
 /*----------------------
  | MUSIC_SYNTH_DEFAULT

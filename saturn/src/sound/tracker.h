@@ -127,6 +127,22 @@ void tracker_tick(void);
  ----------------------*/
 int tracker_playing(void);
 
+/*----------------------
+ | tracker_hold
+ | Description: Holds the sequencer silent for a number of ticks before it
+ |   plays its first row. Not a musical rest: it is the gap a tune change needs
+ |   so the voices the outgoing tune left are done releasing before the
+ |   incoming one keys anything. Releasing them is not enough on its own --
+ |   the release takes time by design, and without this the new tune starts
+ |   over the top of the old one still fading.
+ | Author: suinevere
+ | Dependencies: N/A
+ | Globals: N/A
+ | Params: frames -- V-blank ticks to stay silent for
+ | Returns: N/A
+ ----------------------*/
+void tracker_hold(int frames);
+
 #ifdef __cplusplus
 }
 #endif

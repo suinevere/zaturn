@@ -21,9 +21,16 @@
  |   in 4-0; register 0x0A carries DL in bits 9-5 and RR in 4-0. DL is full
  |   attenuation, so D1R alone runs the strike to silence and D2R is never
  |   reached -- SCSP_EG_PERC_D1R is therefore the length of a drum hit.
+ |
+ |   The pitched envelope is split across the two registers because only one of
+ |   its rates is a dial: 0x08 keeps the instant attack and the zero decay a
+ |   held note wants, and 0x0A carries SCSP_EG_SUSTAINED_RR, which is how
+ |   quickly the note ends once the tracker lets it go. Both fields were 31 --
+ |   the maximum -- until "very sharp release" was reported.
  | Author: suinevere
  ----------------------*/
-#define SCSP_EG_SUSTAINED       0x001F
+#define SCSP_EG_SUSTAINED_A     0x001F
+#define SCSP_EG_SUSTAINED_DL    ((unsigned short)(SCSP_EG_SUSTAINED_RR & 0x1F))
 #define SCSP_EG_PERCUSSIVE      ((unsigned short)(0xF81Fu | ((SCSP_EG_PERC_D1R & 0x1F) << 6)))
 #define SCSP_EG_PERCUSSIVE_DL   0x03FF
 
@@ -218,8 +225,8 @@ void scsp_key_on(int voice, unsigned short pitch, int wave, int level, int percu
     s[0x02 / 2] = (unsigned short)(sa & 0xFFFFu);
     s[0x04 / 2] = 0;
     s[0x06 / 2] = (unsigned short)(len - 1);
-    s[0x08 / 2] = percussive ? SCSP_EG_PERCUSSIVE : SCSP_EG_SUSTAINED;
-    s[0x0A / 2] = percussive ? SCSP_EG_PERCUSSIVE_DL : SCSP_EG_SUSTAINED;
+    s[0x08 / 2] = percussive ? SCSP_EG_PERCUSSIVE : SCSP_EG_SUSTAINED_A;
+    s[0x0A / 2] = percussive ? SCSP_EG_PERCUSSIVE_DL : SCSP_EG_SUSTAINED_DL;
     s[0x0C / 2] = 0x0000;
     s[0x0E / 2] = 0x0000;
     s[0x10 / 2] = pitch;

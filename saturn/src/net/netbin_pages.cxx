@@ -1350,8 +1350,7 @@ static void sound_options_page(void) {
         }
         else if (row == SND_ROW_TEST) {
             int n = synth_song_count();
-            if (left  && sidx > 0)     sidx--;
-            if (right && sidx < n - 1) sidx++;
+            sidx = menu_list_step(sidx, n, left, right);
             // Only an actual press plays. Merely arriving on this row must not
             // restart the tune the player came in listening to.
             if (left || right || ok) { synth_start_song(sidx); previewed = true; }

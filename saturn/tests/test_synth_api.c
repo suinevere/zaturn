@@ -57,10 +57,17 @@ static void test_init_leaves_the_slots_silent(void) {
 }
 
 static void test_start_then_tick_keys_a_voice_on(void) {
+    /* Ticked past the lead-in rather than once. Starting a tune now holds the
+       sequencer silent for a few frames first, so the voices the outgoing tune
+       left have finished releasing before the incoming one keys anything --
+       "still hearing notes from the previous track selecting new track, okay
+       if there's a silence between the two". A boot start pays the same gap
+       and nobody hears a fault in it. What this test is for is unchanged: the
+       tracker has to actually reach the chip. */
     bind_fresh();
     synth_start();
     assert(synth_playing());
-    synth_tick();
+    for (int i = 0; i < 16; i++) synth_tick();
     assert((SLOT_WORD(0, 0x00) & (1u << 11)) != 0);
 }
 
@@ -82,7 +89,7 @@ static void test_stop_keys_every_voice_off(void) {
 static void test_level_scales_sounding_voices_without_restarting_them(void) {
     bind_fresh();
     synth_start();
-    synth_tick();
+    for (int i = 0; i < 16; i++) synth_tick();   /* past the lead-in silence */
     unsigned short pitch_before = SLOT_WORD(0, 0x10);
     synth_set_level(7);
     unsigned short loud = SLOT_WORD(0, 0x16);

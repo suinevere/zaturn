@@ -30,6 +30,34 @@ RATE = 44100
 # The engine's own base: a 256-sample table clocked at the SCSP's 44100 Hz.
 BASE_HZ = RATE / float(mid2pat.CHANNELS and 256)
 
+# The pitched voices' release, kept in step with SCSP_EG_SUSTAINED_RR in
+# saturn/src/sound/scsp.h. Both numbers are here rather than one, because a
+# host cannot read a C header and a model that silently disagrees with the chip
+# is worse than no model: the release was the chip's maximum rate for as long as
+# this synth has existed and the preview never showed it, since the preview had
+# no release at all. saturn/tests/test_release_envelope.py fails if they part.
+#
+# The rate is turned into a time on the chip's own scale -- four steps to a
+# factor of two, and rate 17 measured at a 4 ms half-life for the drum.
+SUSTAINED_RR = 7
+PERC_D1R_RATE = 17
+PERC_D1R_HALFLIFE_S = 0.004
+
+
+def release_halflife(rate):
+    """/*----------------------
+     | release_halflife
+     | Description: How long a released note takes to fall by half at a given
+     |     SCSP rate, on the geometric scale scsp.h records: four steps to a
+     |     factor of two, anchored on the one rate this project has measured.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: PERC_D1R_RATE, PERC_D1R_HALFLIFE_S
+     | Params: rate -- an SCSP envelope rate, 0 slowest to 31 fastest
+     | Returns: seconds
+     ----------------------*/"""
+    return PERC_D1R_HALFLIFE_S * 2.0 ** ((PERC_D1R_RATE - rate) / 4.0)
+
 
 def voice_tables():
     """The same tables the build uploads: four tonal, then the percussion one.
@@ -53,6 +81,9 @@ def render(cells, speed, frac, ch_wave, seconds):
     amp = [0.0] * nvoices
     wave_of = [0] * nvoices
     env = [1.0] * nvoices
+    releasing = [False] * nvoices
+    # Per-sample factor for the pitched release, from the rate above.
+    release_step = 0.5 ** (1.0 / (release_halflife(SUSTAINED_RR) * RATE))
     # Where the next percussion hit starts, as scsp.c rotates it: the chip
     # restarts a slot from its start address every key-on, so a fixed one would
     # replay the same bytes on every strike.
@@ -66,7 +97,10 @@ def render(cells, speed, frac, ch_wave, seconds):
             if note == 0:
                 continue
             if note == 1:
-                amp[ch] = 0.0
+                # Released, not silenced. The chip runs its release rate down
+                # from wherever the note was; the model does the same, so a rest
+                # is a note ending rather than a note stopping.
+                releasing[ch] = True
                 continue
             index = note - 2
             semi, octv = index % 12, index // 12 - 2
@@ -78,6 +112,7 @@ def render(cells, speed, frac, ch_wave, seconds):
             # one table sample per output sample whatever the table's length.
             step[ch] = 2.0 ** (semi / 12.0 + octv)
             env[ch] = 1.0
+            releasing[ch] = False
             if wave_of[ch] == mid2pat.WAVE_NOISE:
                 phase[ch] = float(noise_start)
                 noise_start += genwaves.NOISE_STRIDE
@@ -97,7 +132,9 @@ def render(cells, speed, frac, ch_wave, seconds):
                 acc += table[int(phase[ch])] * amp[ch] * env[ch]
                 # The percussion voice decays by itself: the pattern data never
                 # keys it off, so the chip's envelope has to end the hit.
-                if wave_of[ch] == mid2pat.WAVE_NOISE:
+                if releasing[ch]:
+                    env[ch] *= release_step
+                elif wave_of[ch] == mid2pat.WAVE_NOISE:
                     # Half-life about 4 ms, measured off the chip. The 22 ms this
                     # used to be barely showed while the drum was quiet and the
                     # drum was not sounding on hardware at all; at full output it

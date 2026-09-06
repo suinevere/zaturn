@@ -37,6 +37,10 @@ int tracker_playing(void) {
     return g_playing;
 }
 
+void tracker_hold(int frames) {
+    if (frames > 0) g_countdown = frames;
+}
+
 void tracker_tick(void) {
     if (!g_playing) return;
 

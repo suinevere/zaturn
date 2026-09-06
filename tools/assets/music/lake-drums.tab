@@ -1,0 +1,31 @@
+# Shadowgate, Subterranean Cavern -- drums, authored rather than transcribed.
+#
+# The sequence carries no drum channel at all. This is the owner's request:
+# "lake should have a x.x. (1.2.) snare beat the entire time" -- two snares a
+# bar, evenly spaced, from the first bar to the last.
+#
+# 4/4: one line a bar, four beats, / between beats. A beat is four slots (a
+# sixteenth each) or eight written out (a thirty-second each).
+#   h hat   s snare   k kick   . rest   xN repeats the line
+#
+# The meter is measured, not assumed. Carrying every voice's sounding pitch
+# forward and asking which row offset the tune repeats itself at, 32 rows --
+# four beats, 1.33 s at this tempo -- matches 0.454 of the tune against the
+# next best 0.352 at half that and 0.222 at eight times it. 1152 rows is
+# therefore 36 bars, which is the repeat count below.
+#
+# Snares on beats one and three, which the owner's own count confirms rather
+# than my choosing: "12/9s repeat". The tune's longest repeat under a phrase is
+# 192 rows -- six bars, 8.0 s, self-matching 0.209 against the next candidate's
+# 0.171 -- and two snares a bar across that phrase is exactly twelve strikes,
+# looping six times over the 1152 rows. So the figure asked for and the figure
+# the music already repeats on are the same figure.
+#
+# If it is the wrong two of the four beats, this line is the only thing to
+# change: move the s to the beat you want and keep the four groups. Nothing
+# else reads this file.
+#
+# tab_hits does NOT loop a tablature -- past its end there are simply no
+# strikes -- so the count has to cover the tune. 36 bars is exactly max_rows.
+
+s.../..../s.../.... x36

@@ -102,8 +102,18 @@ def test_a_planned_tune_keeps_its_triangle_inside_the_staircase():
 def test_lake_and_shadow7_agree_about_the_bass_they_share():
     # The two are the same piece sequenced twice. shadow7's channels were
     # separate to begin with and it has always planned; lake's melody and bass
-    # share a channel. If the separation is right, both put the same bass line
-    # on the triangle -- which is a claim nothing about lake alone can make.
+    # share a channel. If the separation and lake's octave correction are right,
+    # both put the same bass on the triangle -- which is a claim nothing about
+    # lake alone can make, and worth more than the band measurement, which
+    # cannot see which voice is playing a line.
+    #
+    # The BASS only, and that is the point. Their third voices legitimately
+    # differ: shadow7 writes the lead's echo at a delay of twelve rows, and
+    # lake writes an exact unison duplicate of it at no delay at all. Two
+    # sequencers, one piece, two ideas about the same part -- so a test that
+    # demanded every voice agree was demanding the sequences be identical, and
+    # it was that demand, not the measurement, that kept an octave correction
+    # on shadow7's echo until someone heard it.
     songs, _ = mid2pat.load_manifest(MANIFEST)
     got = {}
     for sid in ("lake", "shadow7"):
@@ -113,7 +123,7 @@ def test_lake_and_shadow7_agree_about_the_bass_they_share():
         notes = [row[lane][0] - 2 for row in song["cells"] if row[lane][0] >= 2]
         got[sid] = (min(notes), max(notes))
     assert got["lake"] == got["shadow7"], (
-        "lake's bass is on %s and shadow7's on %s; they are the same piece, so "
+        "lake's bass spans %s and shadow7's %s; they are the same piece, so "
         "either the separation or lake's octave correction is wrong"
         % (got["lake"], got["shadow7"]))
 
@@ -141,3 +151,32 @@ def test_separating_a_part_leaves_a_tune_that_did_not_need_it_alone():
         after, lanes = mid2pat.plan_lanes(parts, slots)
         assert lanes is not None, sid
         assert after is parts, "%s was separated and did not need to be" % sid
+
+
+def test_no_octave_correction_lands_on_a_lane_that_echoes_another():
+    # shadow7's third voice is its lead delayed twelve rows at pitch offset
+    # zero -- an echo, which is what the NES does with its second pulse channel
+    # and what echo_delay exists to find. An octave correction was put on it
+    # from the band measurement, which cannot tell an echo from a harmony: it
+    # scored 0.105 with the correction and 0.236 without, and the one it
+    # preferred was reported from the chip as "an odd third instrument
+    # repeating main track but it doesn't sound good/right".
+    #
+    # An echo is the same line heard again. Moving it off its own pitch is not
+    # a correction, it is a different part.
+    songs, _ = mid2pat.load_manifest(MANIFEST)
+    for record in songs:
+        octaves = record.get("octaves") or []
+        if not any(octaves):
+            continue
+        song = mid2pat.convert_song(record)
+        lanes = song["lanes"] or []
+        for answer, lead, delay in song["echoes"]:
+            for lane, part in enumerate(lanes):
+                if part != answer or lane >= len(octaves):
+                    continue
+                assert not octaves[lane], (
+                    "%s puts an octave correction on lane %d, which echoes "
+                    "lane carrying part %s at a delay of %d rows -- an echo is "
+                    "the same line and belongs at the same pitch"
+                    % (record["id"], lane, lead, delay))

@@ -564,7 +564,7 @@ def echo_delay(parts, lead, answer, max_shift=16):
 
 def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             bpm_override=0.0, fold="off", drum_tab=None, tab_beats=4,
-            octaves=None):
+            octaves=None, levels=None):
     """Run the whole reduction and return everything both callers need.
 
     The offline preview renders from this, and the build emits C from it, so
@@ -635,6 +635,15 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
     lane_oct = [0] * CHANNELS
     for ch in range(min(tonal_slots, len(octaves or ()))):
         lane_oct[ch] = 12 * int(octaves[ch])
+    # Per-tune levels, where CH_VOL's own answer does not fit this arrangement.
+    # A sequence holding its lead longer than the one CH_VOL was swept against
+    # is a louder lead at the same DISDL, and that is a property of the
+    # sequence rather than of the voicing -- so it is corrected here and not
+    # there. Measured: dropping the lead a step globally takes castle-halls
+    # from 0.16 to 0.54 and corridor from 0.15 to 0.53, so the global answer is
+    # right and this is the exception to it.
+    lane_vol = list(levels) if levels else list(CH_VOL)
+    lane_vol = (lane_vol + list(CH_VOL))[:CHANNELS]
 
     cells = []
     previous = [None] * CHANNELS
@@ -652,7 +661,7 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             elif pitch != previous[ch]:
                 index = (pitch + shift + lane_oct[ch] - BASE_MIDI) + 24
                 index = max(MIN_INDEX, min(MAX_INDEX, index))
-                row.append((index + 2, (ch_wave[ch] << 4) | CH_VOL[ch]))
+                row.append((index + 2, (ch_wave[ch] << 4) | lane_vol[ch]))
             else:
                 row.append((0, 0))
             previous[ch] = pitch
@@ -669,7 +678,7 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             fast = ((r + 1 < len(hits) and hits[r + 1])
                     or (r > 0 and hits[r - 1]))
             on_beat = fast or (r % max(1, grid // 8)) == 0
-            vol = CH_VOL[last] - (0 if on_beat else DRUM_UNACCENTED_DROP)
+            vol = lane_vol[last] - (0 if on_beat else DRUM_UNACCENTED_DROP)
             vol = max(0, min(7, vol))
             snare = hit and not (hit - {DRUM_SNARE_NOTE})
             drop = (DRUM_FAST_SEMITONES if fast else DRUM_DARK_SEMITONES) if snare else 0
@@ -683,7 +692,7 @@ def convert(midi, grid=16, speed_arg=0, max_rows=0, no_drums=False,
             "has_drums": has_drums, "tonal_slots": tonal_slots,
             "lanes": lanes, "echoes": echoes,
             "ch_wave": ch_wave, "shift": shift, "thick": thick,
-            "octaves": [o // 12 for o in lane_oct]}
+            "octaves": [o // 12 for o in lane_oct], "levels": lane_vol}
 
 
 def pack_patterns(cells):
@@ -844,6 +853,33 @@ def main():
     return 0
 
 
+def _levels(entry):
+    """/*----------------------
+     | _levels
+     | Description: One DISDL level per voice for a tune that CH_VOL's global
+     |     answer does not suit, or None for that answer. Three bits, and the
+     |     steps are about 6 dB, so this is a coarse dial and the only one the
+     |     chip offers per voice -- the finer trim is a waveform table's own
+     |     amplitude, which is shared by every tune and so cannot be this.
+     | Author: suinevere
+     | Dependencies: N/A
+     | Globals: CHANNELS, CH_VOL
+     | Params: entry -- one songs.json record
+     | Returns: a list of CHANNELS ints, or None
+     ----------------------*/"""
+    got = entry.get("levels")
+    if got is None:
+        return None
+    if not isinstance(got, list) or len(got) > CHANNELS:
+        raise SystemExit("%s: levels must be a list of at most %d numbers"
+                         % (entry.get("id"), CHANNELS))
+    for v in got:
+        if not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 7:
+            raise SystemExit("%s: a level is a DISDL value from 0 to 7, not %r"
+                             % (entry.get("id"), v))
+    return (got + list(CH_VOL))[:CHANNELS]
+
+
 def convert_song(record):
     """/*----------------------
      | convert_song
@@ -862,7 +898,7 @@ def convert_song(record):
                    max_rows=record["max_rows"], no_drums=False,
                    bpm_override=record["bpm"], fold=record["fold"],
                    drum_tab=record["drums_tab"], tab_beats=record["tab_beats"],
-                   octaves=record.get("octaves"))
+                   octaves=record.get("octaves"), levels=record.get("levels"))
 
 
 def _octaves(entry):
@@ -925,6 +961,7 @@ def load_manifest(path):
             "bpm": float(s.get("bpm", 0.0)),
             "fold": s.get("fold", "off"),
             "octaves": _octaves(s),
+            "levels": _levels(s),
             "max_rows": int(s.get("max_rows", 0)),
             "drums_tab": str(root / tab) if tab else None,
             "tab_beats": int(s.get("tab_beats", 4)),

@@ -107,6 +107,47 @@ void synth_start(void) {
     synth_start_song(MUSIC_SYNTH_DEFAULT);
 }
 
+/*----------------------
+ | release_voices
+ | Description: Lets go of every voice. The pitched envelope sustains at zero
+ |   decay -- a held note has to last until the tracker keys it off -- so a
+ |   voice nobody releases holds its note for as long as the chip is powered.
+ |   Three paths need that and each had its own copy of this loop until one of
+ |   them turned out not to: switching tune called tracker_stop(), which only
+ |   clears a flag, and every voice sounding at that moment stayed keyed until
+ |   the incoming tune wrote that same voice -- never, for a voice it rests on.
+ |   Reported from the Sound page as old notes holding across a track change.
+ | Author: suinevere
+ | Dependencies: scsp.h
+ | Globals: g_voice_on
+ | Params: N/A
+ | Returns: N/A
+ ----------------------*/
+/*----------------------
+ | SYNTH_SWITCH_SILENCE
+ | Description: How long the sequencer stays silent when it is handed a
+ |   different tune, in V-blank ticks. Releasing the outgoing tune's voices is
+ |   not enough: a release takes time on purpose -- SCSP_EG_SUSTAINED_RR is
+ |   about a 23 ms half-life, so a note is inaudible some six of those later --
+ |   and the incoming tune's first row lands on the very next tick, on top of
+ |   it. Reported twice: once as notes that held forever, and again as notes
+ |   that held under the new tune once they were being released at all.
+ |
+ |   Twelve ticks is 200 ms at 60 Hz, comfortably past the fade with the gap
+ |   audible as a gap, which is what was asked for -- "okay if there's a
+ |   silence between the two". It costs the same 200 ms at boot and on a room
+ |   whose mood moves, where a beat of quiet before new music is not a fault.
+ | Author: suinevere
+ ----------------------*/
+#define SYNTH_SWITCH_SILENCE 12
+
+static void release_voices(void) {
+    for (int v = 0; v < SCSP_VOICES; v++) {
+        scsp_key_off(v);
+        g_voice_on[v] = 0;
+    }
+}
+
 void synth_start_song(int index) {
     const TrackerSong *song;
     if (index < 0 || index >= song_bank_count()) index = MUSIC_SYNTH_DEFAULT;
@@ -116,10 +157,12 @@ void synth_start_song(int index) {
        be walking at that moment -- synth_tick runs on the V-blank -- so asking
        for it while the tracker is live is a read under a reader. */
     tracker_stop();
+    release_voices();
     song = song_bank_at(index);
     g_song = index;
     g_paused = 0;
     tracker_start(song, synth_note_on);
+    tracker_hold(SYNTH_SWITCH_SILENCE);
 }
 
 int synth_song(void) {
@@ -144,19 +187,13 @@ int synth_track_is_short(int track) {
 void synth_stop(void) {
     tracker_stop();
     g_paused = 0;
-    for (int v = 0; v < SCSP_VOICES; v++) {
-        scsp_key_off(v);
-        g_voice_on[v] = 0;
-    }
+    release_voices();
 }
 
 void synth_pause(void) {
     if (g_paused) return;
     g_paused = 1;
-    for (int v = 0; v < SCSP_VOICES; v++) {
-        scsp_key_off(v);
-        g_voice_on[v] = 0;
-    }
+    release_voices();
 }
 
 void synth_resume(void) {

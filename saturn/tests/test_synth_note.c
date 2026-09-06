@@ -113,6 +113,15 @@ static void test_pulses_are_two_level(void) {
 }
 
 int main(void) {
+    /* The waveform tables are .bss built at boot, not .rodata linked in --
+       that trade took 5,120 bytes off the netbin image. Nothing reads them
+       before synth_waves_build() runs, so a test that reads them without
+       calling it measures a page of zeros, which is what this one did from the
+       day of that change until someone built it again. Declared here the way
+       synth.c declares it: synth_waves.c is deliberately free of includes so a
+       host compiler can build it and diff its output against genwaves.py. */
+    extern void synth_waves_build(void);
+    synth_waves_build();
     test_published_semitone_table();
     test_octave_occupies_bits_14_to_11();
     test_negative_octaves_wrap_into_four_bits();

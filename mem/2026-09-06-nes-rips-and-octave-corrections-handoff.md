@@ -5,22 +5,29 @@ metadata:
   type: project
 ---
 
-Branch `synth-music`, four commits ahead of `origin/main` at `8978fb8`
+Branch `synth-music`, fifteen commits ahead of `origin/main` at `d44614d`
 (`d66e5d8` the matching and the octave corrections, `2e8902f` the re-measured
-mood map, `2244695` this note, `8978fb8` the part separation). The owner's
+mood map, `8978fb8` the part separation, `3c6fa85` the release envelope and
+lake's third voice, `027ed33` per-tune levels, `e65bfa6` the held notes,
+`4734f5c` the wrapping list, the rest this note). The owner's
 unstaged `MEDNAFEN_ALLOWMULTI=1` in `saturn/run_with_mednafen.bat`, their
 `tools/scspprobe/src/probe_song.h` pointing at `lake` -- which is how they heard
 it -- and the untracked `out.wav` are all theirs and untouched.
 
-676 host tests pass and 9 skip. The one failure is the same pre-existing
+688 host tests pass and 3 skip, and all seven C sound tests pass built both
+with and without `-DNETBIN` -- those are built by hand and have no runner, which
+is how one of them went a whole session asserting a page of zeros. The one
+failure is the same pre-existing
 `test_lwram_budget.py::test_every_frame_lies_inside_its_archive` -- Lurking's
 eight areas have no `.CGL` staged -- which is art-v2's and was failing before
-this session as it was before the last two. **Note what the skips are**: six of
-them are the netbin and heap budget tests, which skip when `BuildDrop` holds no
-image, and it holds none. **No budget has been measured against a built image
-this session, before or after any of this.** The generator's own arithmetic says
-the tune data shrank from 21,262 to 21,078 bytes, so the direction is safe, but
-that is arithmetic and not a link map.
+this session as it was before the last two.
+
+The three skips are the netbin budget tests, which want a `zaturn.netbin` in
+`BuildDrop` and there is none. **The heap budgets do now measure a real link
+map**: the owner built a disc part way through, and they pass. The netbin's
+image size is still only the generator's own arithmetic -- the tune data is
+21,072 bytes against 21,262 when the session started, so the direction is safe,
+but that is arithmetic and not a link map.
 
 Continues [[lwram-sound-and-image-trim-handoff]], which is still the current
 note for the hardware fault and its four wrong theories, for the LWRAM sound
@@ -104,22 +111,26 @@ Where it stands after this session's corrections:
 
 | tune | L1 | |
 |---|---|---|
-| shadow7 | 0.104 | was 0.234 |
-| title | 0.127 | |
-| castle-halls | 0.138 | the one everything was tuned on |
-| corridor | 0.150 | |
+| lake | 0.129 | was 0.993 |
+| title | 0.130 | |
+| corridor | 0.151 | |
+| castle-halls | 0.160 | the one everything was tuned on |
 | dragon | 0.198 | |
-| lake | 0.268 | was 0.993, then 0.194 while it was still broken -- see below |
-| court | 0.282 | **was 0.719**, and still on the pitch-order fallback |
+| shadow7 | 0.236 | scored 0.104 with an octave correction on its echo -- see below |
+| court | 0.287 | **was 0.719**, and still on the pitch-order fallback |
 | overworld | 0.636 | |
-| halls | 0.646 | |
-| shadow8 | 0.925 | |
+| halls | 0.651 | |
+| shadow8 | 0.926 | |
 | banquet | 0.943 | |
 
-Read that table with the section below beside it. **A low number here does not
-mean a tune is right**, and `lake` is the proof: it scored 0.194 while playing
-its melody on a triangle so far above the table's range that the waveform was
-gone, and 0.268 once fixed.
+Read that table with the sections below beside it. **A low number here does not
+mean a tune is right, and a higher one does not mean it is wrong.** Two proofs,
+both heard on the chip: `lake` scored 0.194 while playing its melody on a
+triangle so far above the table's range that the waveform was gone, and
+`shadow7` scored 0.104 with an octave correction that had turned its lead's echo
+into a parallel line, against 0.236 without. Both times the measurement preferred
+the version that sounded wrong. It is an instrument for level and timbre, and it
+cannot see which voice is playing what.
 
 **Seven tunes agree with their own original.** The voicing generalises, and that
 is the headline: the entryway theme was not a special case and none of those six
@@ -135,7 +146,8 @@ lane, `[bass, lead, harmony]` -- and three tunes carry one:
   on `shadow7`'s exactly, and those two are the same piece.
 * `court` `[1]`. Same fault, 0.102 and 0.269 in the two lowest bands against
   0.003 and 0.078.
-* `shadow7` `[0, 0, -1]`. Its harmony an octave high.
+* ~~`shadow7` `[0, 0, -1]`~~ **WITHDRAWN.** That lane is not a harmony, it is
+  the lead's echo -- delayed twelve rows at pitch offset zero. See below.
 
 Each was accepted only because the **whole profile converges band by band**, not
 because the number fell. Four other proposals from the same sweep were rejected
@@ -184,15 +196,18 @@ now.
     tools\assets\songs.bat lake                            hear one, a second
     python tools\gen_synth_moods.py --report               the mood map
 
-After any change to a tune, regenerate both:
+After any change to a tune, regenerate both -- **the moods FIRST**:
 
+    python tools\gen_synth_moods.py
     python tools\assets\mid2pat.py --manifest tools\assets\music\songs.json ^
            --out saturn\src\sound\music_synth_data.c --pat saturn\cd\data\BG\MUSIC.PAT
-    python tools\gen_synth_moods.py
 
-The second is not optional: the mood map is measured off the renders, so
-changing how a tune renders invalidates it. Doing it this session moved tracks
-15, 17 and 25.
+Neither is optional and the order is not free. The mood map is measured off the
+renders, so changing how a tune renders invalidates it -- doing it this session
+moved tracks 15, 17 and 25 -- and `mid2pat` bakes `track_songs.json` into
+`MUSIC_TRACK_SONG` in the generated C, so running it first ships the *previous*
+map. This note carried the order the wrong way round for most of the session and
+the committed table was one revision stale until a dirty working tree caught it.
 
 ## The owner listened to lake, and all three reports were one fault
 
@@ -270,6 +285,196 @@ its rows and is one of the best-measuring tunes, and two pulse channels doubling
 a lead is what an NES does. `echo_delay` never detects it because it searches
 delays 1 to 16 and a unison duplicate is delay 0, so the two never come to share
 a duty. If the harshness outlives the triangle fix, that is where to look.
+
+## The treble, three more reports, and only one was the timbre
+
+After the fix above, from the chip again: "treble note needs to be more flute
+like, seems too high pitch, very sharp release not rounded or soft release."
+
+**The table is right and it is not a flute.** Measured the way the entryway
+theme's duty was measured -- strongest peak above 380 Hz as the fundamental,
+energy at 2f..7f against it:
+
+| | h2 | h3 | h4 | h5 | h6 | h7 |
+|---|---|---|---|---|---|---|
+| Subterranean Cavern | 0.031 | 0.305 | 0.018 | 0.207 | 0.019 | 0.144 |
+| 50% square | 0.001 | 0.333 | 0.002 | 0.198 | 0.005 | 0.146 |
+| NES triangle | 0.002 | 0.109 | 0.002 | 0.037 | 0.002 | 0.018 |
+| the soundtrack's own **Flute** | 0.089 | 0.247 | 0.056 | 0.152 | 0.039 | 0.120 |
+
+lake's lead is a 50% square to three decimals, and so is the flute cue -- odd
+harmonics, nothing like a triangle. **On this machine a flute is a pulse with a
+different envelope**, which is the answer to "more flute like" and it is the
+same answer as the third report.
+
+**The release was the chip's maximum.** `SCSP_EG_SUSTAINED` was `0x001F`: bits
+4-0 of register 0x0A are RR, and 31 is the fastest rate the field has. Every
+pitched note has stopped rather than ended for as long as this synth has
+existed. It is now `SCSP_EG_SUSTAINED_RR`, a named dial at 7.
+
+**Why it was never caught: the model reproduced it.** `preview.render` did
+`amp[ch] = 0.0` on key-off -- instant, no release at all -- so the preview
+agreed with the chip about a fault they both had. It models the release now,
+which is what makes the dial turnable in a second through `songs.bat` instead of
+a thirty-second disc. The rate lives in two places, a C header and a Python
+module, because a host cannot read the header;
+`saturn/tests/test_release_envelope.py` fails if they part.
+
+**The time is extrapolated, not measured.** `scsp.h` records that the envelope
+scale is geometric at about four steps to a factor of two, and the percussion
+decay is the only rate this project has ever measured -- 17, a half-life of
+about 4 ms. On that scale 7 is about 23 ms, inaudible some 90 ms after the note
+is let go. **Nobody has heard it.** Raise toward 31 for a shorter tail, lower for
+longer, and do not go below 4: the bottom of a Yamaha rate field is where "no
+change" lives and a voice that never releases never stops. A slow release costs
+nothing on a held line -- the voices are monophonic and the next key-on restarts
+the envelope -- so it is heard only at rests, which is where a release is heard.
+
+The attack is still `AR` 31, instant, and was deliberately left: it changes the
+articulation of every note rather than only the ends, and one dial at a time.
+
+**"Too high pitch" was the third voice in unison with the second.** After the
+separation, lake's lane 2 sat at 32..49 -- the same semitones as its lead --
+where `shadow7` puts the same line at 20..37, an octave below. `lake` takes
+`octaves [1, 0, -1]` and now agrees with shadow7 **voice for voice**: 19..30,
+32..49, 20..37 in both. `test_part_planning.py` pins all three lanes now, not
+just the bass. That also dissolves the unison doubling flagged in the section
+above, so `echo_delay`'s blind spot at delay 0 is no longer reachable from lake
+-- it is still there, and `corridor` still runs into it.
+
+**One thing found while checking the C tests, which are not in the pytest run
+and which nobody had built since the image trim.** `test_synth_note` has been
+asserting that the waveform tables are a page of zeros: they moved from
+`.rodata` to `.bss` built at boot last session -- the 5,120-byte trim -- and the
+test reads them without calling `synth_waves_build()`. Repaired. All seven C
+sound tests now pass, built both with and without `-DNETBIN`. **They are built
+by hand and no runner exists**, which is how this went unnoticed; the command is
+in the plan doc at `docs/superpowers/plans/2026-09-04-sh2-synth-music.md`.
+
+## "Flute too loud compared to other notes"
+
+Measured, and it is not what the release did. Lake's lead carried **0.260 of the
+tune's energy in the 440-880 Hz octave where the NES original carries 0.178**,
+and 0.030 against 0.018 in the octave above it, with the bass band starved to
+match -- 0.376 where the original has 0.483.
+
+One DISDL step down on the lead:
+
+| band | 110-220 | 220-440 | 440-880 | 880-1k7 | 1k7-3k5 | L1 |
+|---|---|---|---|---|---|---|
+| NES | 0.483 | 0.263 | 0.178 | 0.018 | 0.026 | |
+| lead at 5 | 0.376 | 0.264 | 0.260 | 0.030 | 0.041 | 0.224 |
+| lead at 4 | 0.539 | 0.271 | 0.131 | 0.018 | 0.022 | **0.132** |
+
+Every band moves toward the original and 880-1k7 lands on it exactly. The true
+answer is between the two -- 110-220 overshoots and 440-880 undershoots -- which
+is the 6 dB granularity of a three-bit field, and the only per-voice dial the
+chip has. The finer trim this project already uses for the drum is the waveform
+table's own amplitude, and that cannot be it: the tables are shared by every
+tune and uploaded once.
+
+**Not taken globally.** Swept across all eleven tunes with a recording, dropping
+the lead a step everywhere costs `castle-halls` 0.16 to 0.54, `corridor` 0.15 to
+0.53, `title` 0.13 to 0.29 and `shadow7` 0.11 to 0.26, for a mean that goes
+0.401 to 0.487. CH_VOL's global answer is right and lake is the exception to it:
+a sequence that holds its lead longer is a louder lead at the same level, which
+belongs to the sequence and not to the voicing. So `levels` joins `octaves` as a
+per-tune field, exactly one tune carries one, and the other ten are
+byte-identical.
+
+lake is now 0.132 -- third best in the catalogue, from worst-but-three.
+
+**The release was ruled out rather than assumed.** It was the newest change and
+the obvious suspect. Swept from the chip's fastest rate to 5, it moves lake by
+0.015 and the catalogue mean not at all; it very slightly *improves* lake. The
+balance was already like this.
+
+## Two faults in the Sound page itself
+
+**Old notes held across a track change.** Reported as "when switching tracks in
+sound menu, old notes hold until new note of new song plays", and it reads
+straight off the code. The pitched envelope decays at zero -- a held note has to
+sustain until the tracker keys it off -- and `tracker_stop()` sets `g_playing = 0`
+and nothing else. So every voice sounding at the moment of a switch stayed keyed
+until the incoming tune happened to write that same voice, which for a voice the
+new tune rests on is never.
+
+`synth_stop()` and `synth_pause()` each carried their own copy of the loop that
+releases the voices. `synth_start_song()` carried none. Three copies, one
+missing -- there is one `release_voices()` now and all three call it.
+`test_synth_select.c` fails without the fix.
+
+Note the interaction with the release rate: a switch used to be a click, and now
+that RR is 7 rather than 31 it is a short fade. Both were wrong before; one made
+the other visible.
+
+**The track list did not wrap.** Every menu's rows already come round with a
+modulo; the list of tunes and tracks was the one thing on that page that stopped
+dead at each end. `menu_list_step` in `menu_layout.h`, used by both Sound pages
+-- the disc's and the browser's are separate builds and each had its own copy of
+the arithmetic, which is the same shape as the bug above.
+
+The level rows still clamp on purpose. A volume is a scale rather than a list,
+and 7 stepping to 0 off one right press is a surprise nobody asked for.
+
+## A silence between tunes, an echo put back, and lake's snare
+
+**Releasing the voices was only half of the track change.** Reported again:
+"still hearing notes from the previous track selecting new track, okay if
+there's a silence between the two." A release takes time on purpose -- 23 ms to
+half power -- and `tracker_start` sets its countdown to zero, so the incoming
+tune's first row lands on the very next tick, on top of the outgoing fade.
+`tracker_hold(SYNTH_SWITCH_SILENCE)` now holds the sequencer quiet for twelve
+ticks, 200 ms, comfortably past the fade and audible as the gap that was asked
+for. It costs the same 200 ms at boot and on a room whose mood moves, which is
+not a fault. Two tests in `test_synth_api.c` ticked exactly once after a start
+and had to learn to tick past it.
+
+**shadow7's third voice is an echo, and an octave correction had been put on
+it.** Measured: its part 1 is part 0 delayed twelve rows at pitch offset **zero**
+on 713 rows -- which is what `echo_delay` exists to find, and what the NES does
+with its second pulse channel. An echo is the same line heard again and belongs
+at the same pitch. The band measurement scored 0.105 with the correction and
+0.236 without, **preferred the wrong one for the third time**, and the owner
+heard it as "an odd third instrument repeating main track". Withdrawn, and
+`test_part_planning.py` now refuses an octave correction on any lane the echo
+detection has linked.
+
+That is the third time the octave-band profile has been wrong about a lane
+question -- lake's aliased triangle, court's, and now this. **It is an
+instrument for level and timbre and not for which voice plays what.**
+
+The lake/shadow7 voice-for-voice test came off with it, back to the bass claim
+the separation actually proved. Their third voices legitimately differ: shadow7
+writes the lead's echo at twelve rows' delay, lake writes an exact unison
+duplicate at no delay. Two sequencers, one piece, two ideas about the same part
+-- and it was the test demanding they agree, not the measurement, that kept the
+correction on shadow7 until someone listened.
+
+**`lake` has a snare now**, and neither the meter nor the figure is a guess.
+Carrying every voice's sounding pitch forward and asking what row offset the
+tune repeats at: 32 rows -- four beats, 1.33 s -- self-matches 0.454 against
+0.352 for the next candidate, so it is 4/4 and 1152 rows is 36 bars. Its
+strongest *phrase* is 192 rows: six bars, 8.0 s, 0.209 against 0.171. Two snares
+a bar across that phrase is **exactly the twelve strikes the owner counted**
+("12/9s repeat"), looping six times over the tune. `music/lake-drums.tab`, one
+line, `x36`, and the tab is the file to edit if it is the wrong two of the four
+beats.
+
+Note `tab_hits` does not loop a tablature: past its end there are no strikes, so
+the repeat count has to cover `max_rows`.
+
+**The trills are not closed.** "the trills for the held notes are either too
+quick/they don't sound right". What is measured: lake's cells contain **no trill
+figure at all** -- no A-B-A inside six rows on any lane -- so it is not being
+introduced by the conversion. The source has 102 onsets on channel 0 arriving
+under three rows apart, but **92 of them straddle the register split**: they are
+the bass and the melody, written on one channel, landing two rows apart. Those
+the separation now handles correctly. That leaves **ten genuine fast figures
+inside the melody, at two rows -- 83 ms, the finest a 32nd grid at this tempo
+offers**, which is the source's own timing and not a quantisation artifact.
+Whether 83 ms is too quick needs the original, and isolating an ornament from a
+four-voice mix is not something the band measurement can do.
 
 ## Open
 

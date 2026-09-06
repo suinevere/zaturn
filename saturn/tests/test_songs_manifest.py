@@ -169,22 +169,25 @@ def test_an_octave_correction_moves_only_its_own_lane():
     songs, _ = mid2pat.load_manifest(MANIFEST)
     lake = [s for s in songs if s["id"] == "lake"][0]
     assert lake["octaves"][0] == 1, "lake's measured correction has been lost"
+    assert any(lake["octaves"]), "lake carries no correction at all"
     with_it = mid2pat.convert_song(lake)
     without = mid2pat.convert_song(dict(lake, octaves=[0, 0, 0, 0]))
     assert len(with_it["cells"]) == len(without["cells"])
-    moved = 0
+    moved = [0] * mid2pat.CHANNELS
     for a, b in zip(with_it["cells"], without["cells"]):
         for lane, ((na, wa), (nb, wb)) in enumerate(zip(a, b)):
             assert wa == wb, "an octave changed a waveform or a level"
-            if lane == 0:
-                if na >= 2 and nb >= 2:
-                    assert na - nb == 12, "the bass did not move one octave"
-                    moved += 1
-                else:
-                    assert na == nb
+            want = 12 * lake["octaves"][lane]
+            if na >= 2 and nb >= 2:
+                assert na - nb == want, (
+                    "lane %d moved %d semitones and its correction is %d"
+                    % (lane, na - nb, want))
+                moved[lane] += 1
             else:
-                assert na == nb, "lane %d moved and should not have" % lane
-    assert moved > 0, "no bass note moved at all"
+                assert na == nb, "lane %d gained or lost a note" % lane
+    for lane, octaves in enumerate(lake["octaves"]):
+        if octaves:
+            assert moved[lane] > 0, "lane %d has a correction and no note "                                    "moved" % lane
 
 
 def test_an_octave_correction_is_refused_when_it_is_not_one():
@@ -196,6 +199,58 @@ def test_an_octave_correction_is_refused_when_it_is_not_one():
                "songs": [{"id": "a", "name": "A", "midi": src.name, "cd": True,
                           "octaves": bad if isinstance(bad, list) else [bad]}]}
         p = src.parent / "songs-test-octaves.json"
+        p.write_text(json.dumps(doc), encoding="utf-8")
+        try:
+            with pytest.raises(SystemExit):
+                mid2pat.load_manifest(p)
+        finally:
+            p.unlink()
+
+
+def test_a_level_override_reaches_the_cells_and_stops_there():
+    # "flute too loud compared to other notes", measured: lake's lead carried
+    # 0.260 of the tune's energy in the 440-880 Hz octave where the NES
+    # original carries 0.178, and one DISDL step down puts it on 0.131. The
+    # global CH_VOL stays as it is -- taking that step for every tune moves
+    # castle-halls from 0.16 to 0.54 -- so what is pinned here is that the
+    # override reaches lake and reaches nothing else.
+    songs, _ = mid2pat.load_manifest(MANIFEST)
+    lake = [s for s in songs if s["id"] == "lake"][0]
+    assert lake["levels"] is not None, "lake's measured level override is gone"
+    assert lake["levels"][1] == mid2pat.CH_VOL[1] - 1, (
+        "lake's lead is no longer one step under the global level")
+
+    got = mid2pat.convert_song(lake)
+    seen = [set() for _ in range(mid2pat.CHANNELS)]
+    for row in got["cells"]:
+        for lane, (note, wv) in enumerate(row):
+            if note >= 2:
+                seen[lane].add(wv & 0x0F)
+    for lane, levels in enumerate(seen):
+        if levels:
+            assert levels == {lake["levels"][lane]}, (
+                "lane %d emits levels %s and its override says %d"
+                % (lane, sorted(levels), lake["levels"][lane]))
+
+    for other in songs:
+        if other["levels"] is not None:
+            continue
+        song = mid2pat.convert_song(other)
+        for row in song["cells"]:
+            for lane, (note, wv) in enumerate(row):
+                if note >= 2 and song["ch_wave"][lane] != mid2pat.WAVE_NOISE:
+                    assert (wv & 0x0F) == mid2pat.CH_VOL[lane], (
+                        "%s has no override and lane %d is not at CH_VOL"
+                        % (other["id"], lane))
+
+
+def test_a_level_that_is_not_a_disdl_value_is_refused():
+    src = pathlib.Path(mid2pat.load_manifest(MANIFEST)[0][0]["midi"])
+    for bad in (8, -1, 2.5, "6", [0, 0, 0, 0, 0]):
+        doc = {"default": "a",
+               "songs": [{"id": "a", "name": "A", "midi": src.name, "cd": True,
+                          "levels": bad if isinstance(bad, list) else [bad]}]}
+        p = src.parent / "songs-test-levels.json"
         p.write_text(json.dumps(doc), encoding="utf-8")
         try:
             with pytest.raises(SystemExit):

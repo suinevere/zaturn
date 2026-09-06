@@ -141,6 +141,40 @@ extern "C" {
 #endif
 
 /*----------------------
+ | SCSP_EG_SUSTAINED_RR
+ | Description: The release rate of the pitched envelope, register 0x0A bits
+ |   4-0. Higher is faster and the scale is the same geometric one
+ |   SCSP_EG_PERC_D1R sits on -- about four steps to a factor of two in time.
+ |
+ |   This was 31, the field's maximum, which is a note that stops rather than
+ |   ends: the owner's report on the lake tune was "very sharp release, not
+ |   rounded or soft release", and 31 is as sharp as the chip can be. The
+ |   percussion decay is the one calibration point either envelope has -- rate
+ |   17 is a half-life of about 4 ms, measured on the chip -- so on four steps
+ |   to a doubling, 7 is about 23 ms, and a note is inaudible some 90 ms after
+ |   it is let go.
+ |
+ |   That arithmetic is an EXTRAPOLATION from one measured point and has not
+ |   been heard. It is a dial: raise it toward 31 for a shorter tail, lower it
+ |   toward 7's neighbours for a longer one, and re-measure rather than trust
+ |   the number above. Do not take it below 4 -- the bottom of a Yamaha rate
+ |   field is where "no change" lives, and a voice that never releases is a
+ |   voice that never stops.
+ |
+ |   A slow release costs nothing on a held line: these voices are monophonic
+ |   and the next key-on restarts the envelope. It is heard only at rests,
+ |   which is where a release is heard at all.
+ |
+ |   tools/assets/preview.py models the same decay so a change can be heard
+ |   through songs.bat in a second; test_release_envelope.py fails if the two
+ |   drift apart.
+ | Author: suinevere
+ ----------------------*/
+#ifndef SCSP_EG_SUSTAINED_RR
+#define SCSP_EG_SUSTAINED_RR   7
+#endif
+
+/*----------------------
  | SCSP_REG_WORDS
  | Description: How many 16-bit words the register window spans: the 32 slots
  |   (0x000-0x3FF) plus the common control block that starts at 0x400. A host

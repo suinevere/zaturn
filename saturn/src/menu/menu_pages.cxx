@@ -1209,8 +1209,7 @@ void sound_options_page(void) {
         else if (row == SND_ROW_TEST) {
             int n = synth_on ? synth_song_count() : an;
             int *at = synth_on ? &sidx : &tidx;
-            if (left  && *at > 0)     (*at)--;
-            if (right && *at < n - 1) (*at)++;
+            *at = menu_list_step(*at, n, left, right);
             // Only an actual press previews. Merely arriving on this row must
             // not cut the music the player came in listening to -- which is the
             // rule the row this was recovered from was written around.

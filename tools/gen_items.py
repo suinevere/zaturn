@@ -31,6 +31,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
+import gen_emit  # noqa: E402
 import zstory  # noqa: E402
 
 Z3 = ROOT / "tools" / "assets" / "Z3" / "ZORK1.Z3"
@@ -176,7 +177,7 @@ def main(argv):
      | Returns: 0
      ----------------------*/"""
     rows = resolve(load_binding(), story())
-    OUT.write_text(emit(rows), newline="\n")
+    gen_emit.write_if_changed(OUT, emit(rows))
     print(f"{OUT.relative_to(ROOT)}: {len(rows)} objects bound")
     return 0
 

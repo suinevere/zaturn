@@ -45,6 +45,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import art_frames
 import game_genre as genre_vocab
+import gen_emit
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CSV = ROOT / "analysis" / "zork_bg" / "room_backgrounds.csv"
@@ -467,9 +468,7 @@ def main(argv):
                      f'{genre_vocab.map_bg(stem)} }},')
     lines.append("};")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with OUT.open("w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(lines) + "\n")
+    gen_emit.write_if_changed(OUT, "\n".join(lines) + "\n")
     print(f"Wrote {OUT.relative_to(ROOT)}: {1 + len(assigned)} games, "
           f"{len(frames)} pictures")
     for stem, _r, _s, rows in assigned:

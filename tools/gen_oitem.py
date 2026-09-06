@@ -33,6 +33,7 @@ OUT_FIX = ROOT / "saturn" / "tests" / "fixtures" / "oitem_sums.inc"
 
 sys.path.insert(0, str(ROOT / "analysis"))
 sys.path.insert(0, str(ROOT / "tools"))
+import gen_emit  # noqa: E402
 import zork_cgl  # noqa: E402
 from extract_bg import BG_MANIFEST  # noqa: E402
 
@@ -151,7 +152,7 @@ def main(argv):
     for off, length, _ in recs:
         lines.append(f"    {{ {off}UL, {length}UL }},")
     lines.append("};")
-    OUT_INC.write_text("\n".join(lines) + "\n", newline="\n")
+    gen_emit.write_if_changed(OUT_INC, "\n".join(lines) + "\n")
 
     fix = [
         "/*----------------------",
@@ -167,7 +168,7 @@ def main(argv):
         px = recs[i][2]
         pal = saturn_palette(recs[PIC_N + i][2])
         fix.append(f"    {{ {i}, {fnv1a(px)}UL, {fnv1a(pal)}UL }},")
-    OUT_FIX.write_text("\n".join(fix) + "\n", newline="\n")
+    gen_emit.write_if_changed(OUT_FIX, "\n".join(fix) + "\n")
 
     print(f"{OUT_INC.relative_to(ROOT)}: {len(recs)} records")
     print(f"{OUT_FIX.relative_to(ROOT)}: {PIC_N} pictures")

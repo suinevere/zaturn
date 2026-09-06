@@ -38,6 +38,13 @@ INC = ROOT / "saturn" / "src" / "engine" / "map_atlas_data.inc"
 Z3 = ROOT / "saturn" / "cd" / "data" / "Z3"
 sys.path.insert(0, str(ROOT / "tools"))
 
+
+# See tools/tests/test_gen_map_marks.py: the scan tools need OpenCV and
+# pymupdf, and an uncollectable module fails the whole run instead of
+# naming what it skipped.
+pytest.importorskip("cv2", reason="opencv-python is not installed (pip install -e .[maps])")
+pytest.importorskip("pymupdf", reason="pymupdf is not installed (pip install -e .[maps])")
+
 import mapscan  # noqa: E402
 
 VERT = ("up", "down")

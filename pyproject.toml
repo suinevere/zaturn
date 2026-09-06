@@ -17,6 +17,15 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
 ]
+# What tools/mapscan.py and tools/gen_map_atlas.py read the InvisiClues scans
+# with. Optional because nothing on the disc needs them at build time -- but
+# six test modules and the generator/Python destination cross-check cannot run
+# without them, and they were recorded nowhere but a docstring until now.
+maps = [
+    "opencv-python>=4.9.0",
+    "pymupdf>=1.24.0",
+    "numpy>=1.26.0",
+]
 
 [project.scripts]
 saturn-translate-mcp = "saturn_translate.server:main"

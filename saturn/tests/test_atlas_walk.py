@@ -34,6 +34,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 INC = ROOT / "saturn" / "src" / "engine" / "map_atlas_data.inc"
 sys.path.insert(0, str(ROOT / "tools"))
 
+
+# See tools/tests/test_gen_map_marks.py: the scan tools need OpenCV and
+# pymupdf, and an uncollectable module fails the whole run instead of
+# naming what it skipped.
+pytest.importorskip("cv2", reason="opencv-python is not installed (pip install -e .[maps])")
+pytest.importorskip("pymupdf", reason="pymupdf is not installed (pip install -e .[maps])")
+
 import gen_map_atlas as G  # noqa: E402
 
 

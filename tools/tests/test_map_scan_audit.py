@@ -12,7 +12,15 @@ SOUTH at 3, UP at 8 and DOWN at 9.
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+# See test_gen_map_marks.py: the scan tools need OpenCV and pymupdf, and an
+# uncollectable module fails the run instead of naming what it skipped.
+pytest.importorskip("cv2", reason="opencv-python is not installed (pip install -e .[maps])")
+pytest.importorskip("pymupdf", reason="pymupdf is not installed (pip install -e .[maps])")
+
 import gen_map_marks
 
 NORTH, SOUTH, UP, DOWN = 0, 3, 8, 9

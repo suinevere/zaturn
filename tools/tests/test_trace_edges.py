@@ -11,6 +11,11 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+# See test_gen_map_marks.py.
+pytest.importorskip("cv2", reason="opencv-python is not installed (pip install -e .[maps])")
+pytest.importorskip("pymupdf", reason="pymupdf is not installed (pip install -e .[maps])")
+
 import mapscan
 import trace_edges
 

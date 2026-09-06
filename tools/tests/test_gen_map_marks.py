@@ -16,6 +16,14 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+# The scan tools read the maps out of PDFs with OpenCV; without those two this
+# file cannot be imported at all, and an uncollectable module fails the whole
+# run rather than saying which tests are not being run. Install them with
+# `pip install -e .[maps]`.
+pytest.importorskip("cv2", reason="opencv-python is not installed (pip install -e .[maps])")
+pytest.importorskip("pymupdf", reason="pymupdf is not installed (pip install -e .[maps])")
+
 import gen_map_marks
 import mapscan
 import zil_exits

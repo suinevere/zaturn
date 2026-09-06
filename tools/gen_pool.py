@@ -194,11 +194,22 @@ def scene_evidence(name_to_idx):
      | Returns: scene -> evidence record
      ----------------------*/"""
     inc = INC.read_text(encoding="utf-8")
+    pool = re.search(r"PRES_POOL\[PRES_POOL_N\] = \{(.*?)\n\};", inc, re.S)
     tbl = re.search(r"GAME_PRES_ZORK1\[256\] = \{(.*?)\n\};", inc, re.S)
-    if tbl is None:
-        raise SystemExit("gen_pool: GAME_PRES_ZORK1 not found in the .inc")
-    rows = re.findall(r"\{\s*(\d+),\s*(\d+),\s*(\d+)\s*\}", tbl.group(1))
-    pres = {i: (int(img), int(trk)) for i, (img, trk, _se) in enumerate(rows)}
+    if pool is None or tbl is None:
+        raise SystemExit("gen_pool: PRES_POOL or GAME_PRES_ZORK1 not found in "
+                         "the .inc")
+    # A room names a SLOT and the slot carries the picture and the track. Read
+    # as triples, the room table yields nothing at all and every scene falls
+    # through to its analogue, which is a silent loss of all fourteen measured
+    # defaults -- so both halves are parsed and an empty one is fatal.
+    slots = [(int(img), int(trk)) for img, trk, _fx in
+             re.findall(r"\{\s*(\d+),\s*(\d+),\s*(\d+)\s*\}", pool.group(1))]
+    rooms = [int(n) for n in re.findall(r"\d+", tbl.group(1))]
+    if not slots or not rooms:
+        raise SystemExit("gen_pool: PRES_POOL or GAME_PRES_ZORK1 parsed as "
+                         "empty -- the table's shape changed under this regex")
+    pres = {obj: slots[s] for obj, s in enumerate(rooms) if s < len(slots)}
 
     scenes = json.loads(SCENES.read_text(encoding="utf-8"))
     ev = collections.defaultdict(lambda: {"images": collections.Counter(),

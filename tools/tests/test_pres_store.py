@@ -308,8 +308,13 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_picture_outside_the_pool_is_refused(self):
+        # Counted off the pool rather than named: 999 was outside it while the
+        # supply was 74 pictures and inside it at 1,942, so the assertion went
+        # on reading the same while it had stopped testing anything.
+        beyond = len(store.pool()["images"]) + 1
         r = self.post("/api/assign",
-                      {"game": self.GAME, "obj": self.obj, "image": 999, "track": 11})
+                      {"game": self.GAME, "obj": self.obj, "image": beyond,
+                       "track": 11})
         self.assertEqual(r.status_code, 400)
 
     def test_track_that_is_not_on_the_disc_is_refused(self):

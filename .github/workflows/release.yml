@@ -13,6 +13,20 @@ on:
 permissions:
   contents: write   # needed to create / upload to releases
 
+env:
+  # TEMPORARY, and the only line to change to end it.
+  #
+  # "true" publishes the SCSP probe AS zaturn.netbin, so suin.uk serves the
+  # probe without anything changing at the other end. That is the whole point:
+  # the netbin's music is wrong only when PlanetWeb hands the machine over, the
+  # probe is the only thing that can see the chip in that state, and it has to
+  # arrive by the same route the client does to see it.
+  #
+  # While this is "true" a tagged release ships the probe under the client's
+  # name. Anyone pulling zaturn.netbin from the release gets a slot sweep, not a
+  # game. Set it to "false" the moment the sound question is answered.
+  SHIP_PROBE_AS_CLIENT: "true"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -135,6 +149,17 @@ jobs:
           echo "scspfx.netbin: $sz bytes"
           test "$sz" -gt 0
 
+      # Deliberately after "Assert build outputs", so the client is still built
+      # and still checked on every run while this is on -- what changes is only
+      # which of the two goes out under that name.
+      - name: Publish the probe AS zaturn.netbin (temporary; see SHIP_PROBE_AS_CLIENT)
+        if: env.SHIP_PROBE_AS_CLIENT == 'true'
+        run: |
+          set -e
+          cp tools/scspfx/BuildDrop/scspfx.netbin "saturn/BuildDrop/zaturn.netbin"
+          echo "::warning title=Probe shipped as client::zaturn.netbin in this release is the SCSP probe, not the game. SHIP_PROBE_AS_CLIENT is true in .github/workflows/release.yml."
+          stat -c'zaturn.netbin is now the probe: %s bytes' "saturn/BuildDrop/zaturn.netbin"
+
       - name: Package release zip
         id: package
         run: |
@@ -242,7 +267,6 @@ jobs:
           gh release upload "$TAG" "${{ steps.package.outputs.zip_path }}" --clobber
           gh release upload "$TAG" "${{ steps.kit.outputs.zip_path }}" --clobber
           gh release upload "$TAG" "saturn/BuildDrop/zaturn.netbin" --clobber
-          gh release upload "$TAG" "tools/scspfx/BuildDrop/scspfx.netbin" --clobber
 
       # Tells suin-uk a new pair is available. Deliberately last: a dispatch fired
       # before the upload finished would send sync-zaturn.yml after an asset that is
